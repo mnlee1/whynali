@@ -1,0 +1,18 @@
+name: 뉴스 수집 Cron
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # 2시간마다
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  collect-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 뉴스 수집 API 호출
+        run: |
+          curl -X GET https://whynali-git-develop-mnlee1s-projects.vercel.app/api/cron/collect-news \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60 \
+            --retry 2

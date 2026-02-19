@@ -1,20 +1,2 @@
 {
-    "crons": [
-        {
-            "path": "/api/cron/collect-news",
-            "schedule": "0 9 * * *"
-        },
-        {
-            "path": "/api/cron/collect-community",
-            "schedule": "0 12 * * *"
-        },
-        {
-            "path": "/api/cron/auto-link",
-            "schedule": "0 15 * * *"
-        },
-        {
-            "path": "/api/cron/recalculate-heat",
-            "schedule": "0 18 * * *"
-        }
-    ]
 }
