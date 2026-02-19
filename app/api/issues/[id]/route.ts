@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server'
 
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params
     // TODO: Supabase에서 이슈 상세 조회
-    
+
     return NextResponse.json({
-        id: params.id,
+        id,
         title: '',
         description: '',
         status: '',
