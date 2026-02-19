@@ -2,8 +2,8 @@ name: 뉴스 수집 Cron (Production)
 
 on:
   # schedule:
-  #   - cron: '0 */2 * * *'  # main 배포 후 활성화
-  workflow_dispatch:  # 수동 실행 가능
+  #   - cron: '*/30 * * * *'  # main 배포 후 활성화
+  workflow_dispatch:
 
 jobs:
   collect-news:

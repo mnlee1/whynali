@@ -2,7 +2,7 @@ name: 커뮤니티 수집 Cron (Production)
 
 on:
   # schedule:
-  #   - cron: '*/30 * * * *'  # main 배포 후 활성화
+  #   - cron: '*/3 * * * *'  # main 배포 후 활성화
   workflow_dispatch:
 
 jobs:

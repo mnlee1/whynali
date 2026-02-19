@@ -2,7 +2,7 @@ name: 화력 분석 Cron (Develop)
 
 on:
   schedule:
-    - cron: '30 * * * *'  # 매시간 30분
+    - cron: '*/10 * * * *'  # 10분마다 (원래 기획)
   workflow_dispatch:
 
 jobs:
