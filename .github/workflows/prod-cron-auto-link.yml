@@ -1,17 +1,17 @@
-name: 자동 연결 Cron (Develop)
+name: 자동 연결 Cron (Production)
 
 on:
-  schedule:
-    - cron: '15 * * * *'  # 매시간 15분
+  # schedule:
+  #   - cron: '15 * * * *'  # main 배포 후 활성화
   workflow_dispatch:
 
 jobs:
   auto-link:
     runs-on: ubuntu-latest
     steps:
-      - name: 자동 연결 API 호출
+      - name: 자동 연결 API 호출 (Production)
         run: |
-          curl -X GET https://whynali-git-develop-mnlee1s-projects.vercel.app/api/cron/auto-link \
+          curl -X GET ${{ secrets.PROD_URL }}/api/cron/auto-link \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \

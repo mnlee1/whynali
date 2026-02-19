@@ -1,17 +1,17 @@
-name: 커뮤니티 수집 Cron (Develop)
+name: 커뮤니티 수집 Cron (Production)
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'  # 30분마다
+  # schedule:
+  #   - cron: '*/30 * * * *'  # main 배포 후 활성화
   workflow_dispatch:
 
 jobs:
   collect-community:
     runs-on: ubuntu-latest
     steps:
-      - name: 커뮤니티 수집 API 호출
+      - name: 커뮤니티 수집 API 호출 (Production)
         run: |
-          curl -X GET https://whynali-git-develop-mnlee1s-projects.vercel.app/api/cron/collect-community \
+          curl -X GET ${{ secrets.PROD_URL }}/api/cron/collect-community \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
