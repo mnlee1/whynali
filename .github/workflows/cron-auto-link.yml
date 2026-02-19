@@ -2,7 +2,7 @@ name: 자동 연결 Cron (Develop)
 
 on:
   schedule:
-    - cron: '15 * * * *'  # 매시간 15분
+    - cron: '*/5 * * * *'  # 5분마다 (원래 기획)
   workflow_dispatch:
 
 jobs:

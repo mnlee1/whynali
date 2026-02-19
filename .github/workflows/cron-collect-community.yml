@@ -2,7 +2,7 @@ name: 커뮤니티 수집 Cron (Develop)
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # 30분마다
+    - cron: '*/3 * * * *'  # 3분마다 (원래 기획)
   workflow_dispatch:
 
 jobs:

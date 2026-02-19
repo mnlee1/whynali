@@ -2,7 +2,7 @@ name: 자동 연결 Cron (Production)
 
 on:
   # schedule:
-  #   - cron: '15 * * * *'  # main 배포 후 활성화
+  #   - cron: '*/5 * * * *'  # main 배포 후 활성화
   workflow_dispatch:
 
 jobs:
