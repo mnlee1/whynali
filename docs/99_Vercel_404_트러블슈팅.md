@@ -87,3 +87,30 @@ ID: icn1::26qs6-1771462248900-07167efab680
 
 - [Vercel NOT_FOUND](https://vercel.com/docs/errors/NOT_FOUND)
 - [Vercel KB: Why is my deployed project giving 404?](https://vercel.com/kb/guide/why-is-my-deployed-project-giving-404)
+
+---
+
+## No Output Directory named "public" found
+
+### 증상
+
+빌드는 성공했는데 배포 단계에서:
+
+```
+Error: No Output Directory named "public" found after the Build completed.
+Configure the Output Directory in your Project Settings.
+```
+
+### 원인
+
+Next.js는 결과물을 `.next` 등으로 내보내지, `public`이라는 이름의 단일 출력 디렉터리를 만들지 않음. 그런데 Vercel 프로젝트 설정에서 **Output Directory**가 `public`으로 지정돼 있으면 이 오류 발생.
+
+### 해결
+
+1. **Vercel 대시보드**  
+   [vercel.com](https://vercel.com) → 해당 프로젝트 → **Settings** → **General**  
+   **Build & Development Settings**에서 **Output Directory** 값을 **비운다**(Next.js는 비워두면 프레임워크 기본값 사용).
+
+2. **프로젝트에 vercel.json**  
+   루트에 `vercel.json`이 있고 `"framework": "nextjs"`로 두면, Next.js 프로젝트로 인식되어 출력 디렉터리 오인식이 줄어듦.  
+   `builds`나 `outputDirectory: "public"` 같은 건 넣지 말 것(Next.js 프리셋을 덮어써서 같은 오류가 날 수 있음).
