@@ -1,0 +1,85 @@
+name: Dooray push notification
+on:
+    push:
+        branches: [main, master, dev, jy]
+jobs:
+    notify:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 2
+
+            - name: Get changed files
+              id: changed
+              run: |
+                  git diff --name-only HEAD^ HEAD > changed_files.txt
+                  cat changed_files.txt
+                  echo "files<<EOF" >> $GITHUB_OUTPUT
+                  cat changed_files.txt >> $GITHUB_OUTPUT
+                  echo "EOF" >> $GITHUB_OUTPUT
+
+            - name: Check common files
+              id: check
+              run: |
+                  if grep -qE '(common|shared|components/common|utils/common|styles/common)' changed_files.txt; then
+                      echo "is_common=true" >> $GITHUB_OUTPUT
+                  else
+                      echo "is_common=false" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Notify Dooray (common files)
+              if: steps.check.outputs.is_common == 'true'
+              env:
+                  DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+              run: |
+                  if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
+                  REPO="${{ github.repository }}"
+                  BRANCH="${GITHUB_REF#refs/heads/}"
+                  COMMIT="${{ github.sha }}"
+                  MSG="${{ github.event.head_commit.message }}"
+                  ACTOR="${{ github.actor }}"
+                  COMMIT_URL="https://github.com/$REPO/commit/$COMMIT"
+                  FILES=$(cat changed_files.txt | sed 's/^/• /' | tr '\n' '\n')
+                  BODY=$(cat <<EOF
+                  {
+                      "botName": "Git 알림",
+                      "text": "🚨 공통 파일이 업데이트되었습니다!",
+                      "attachments": [{
+                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL\n\n⚠️ 팀원 여러분, git pull 하세요!",
+                          "color": "red"
+                      }]
+                  }
+                  EOF
+                  )
+                  curl -s -X POST "$DOORAY_WEBHOOK_URL" \
+                      -H "Content-Type: application/json" \
+                      -d "$BODY"
+
+            - name: Notify Dooray (normal push)
+              if: steps.check.outputs.is_common == 'false'
+              env:
+                  DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+              run: |
+                  if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
+                  REPO="${{ github.repository }}"
+                  BRANCH="${GITHUB_REF#refs/heads/}"
+                  COMMIT="${{ github.sha }}"
+                  MSG="${{ github.event.head_commit.message }}"
+                  ACTOR="${{ github.actor }}"
+                  COMMIT_URL="https://github.com/$REPO/commit/$COMMIT"
+                  BODY=$(cat <<EOF
+                  {
+                      "botName": "Git 알림",
+                      "text": "📢 새로운 커밋이 푸시되었습니다",
+                      "attachments": [{
+                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL",
+                          "color": "blue"
+                      }]
+                  }
+                  EOF
+                  )
+                  curl -s -X POST "$DOORAY_WEBHOOK_URL" \
+                      -H "Content-Type: application/json" \
+                      -d "$BODY"
