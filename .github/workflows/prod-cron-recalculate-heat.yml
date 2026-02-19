@@ -1,17 +1,17 @@
-name: 화력 분석 Cron (Develop)
+name: 화력 분석 Cron (Production)
 
 on:
-  schedule:
-    - cron: '30 * * * *'  # 매시간 30분
+  # schedule:
+  #   - cron: '30 * * * *'  # main 배포 후 활성화
   workflow_dispatch:
 
 jobs:
   recalculate-heat:
     runs-on: ubuntu-latest
     steps:
-      - name: 화력 분석 API 호출
+      - name: 화력 분석 API 호출 (Production)
         run: |
-          curl -X GET https://whynali-git-develop-mnlee1s-projects.vercel.app/api/cron/recalculate-heat \
+          curl -X GET ${{ secrets.PROD_URL }}/api/cron/recalculate-heat \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
