@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: 화력 분석 API 호출 (Production)
         run: |
-          curl -X GET ${{ secrets.PROD_URL }}/api/cron/recalculate-heat \
+          curl -X GET https://whynali.vercel.app/api/cron/recalculate-heat \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
