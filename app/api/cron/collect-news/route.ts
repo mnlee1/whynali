@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { collectNaverNews } from '@/lib/collectors/naver-news'
+import { incrementApiUsage, isWarningThreshold, getUsagePercentage } from '@/lib/api-usage-tracker'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -20,6 +21,17 @@ export async function GET(request: NextRequest) {
 
         const totalCollected = results.reduce((sum, count) => sum + count, 0)
 
+        // API 사용량 추적
+        await incrementApiUsage('naver_news', totalCollected)
+
+        // 80% 경고 확인
+        const isWarning = await isWarningThreshold('naver_news')
+        const usagePercentage = await getUsagePercentage('naver_news')
+
+        if (isWarning) {
+            console.warn(`⚠️  네이버 API 사용량 경고: ${usagePercentage.toFixed(1)}% (80% 초과)`)
+        }
+
         return NextResponse.json({
             success: true,
             collected: totalCollected,
@@ -27,6 +39,10 @@ export async function GET(request: NextRequest) {
                 acc[cat] = results[i]
                 return acc
             }, {}),
+            apiUsage: {
+                percentage: usagePercentage,
+                warning: isWarning,
+            },
             timestamp: new Date().toISOString(),
         })
     } catch (error) {
