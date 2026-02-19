@@ -1,5 +1,4 @@
 {
-    "framework": "nextjs"
     "framework": "nextjs",
     "crons": [
         {
