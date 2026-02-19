@@ -1,12 +1,3 @@
-export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
-    return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">이슈 상세</h1>
-            <p className="text-sm md:text-base text-gray-600">이슈 ID: {id}</p>
-            <p className="text-sm md:text-base text-gray-600 mt-4">
-                화력, 타임라인, 댓글, 투표 등 API 연동 예정
-            </p>
 /**
  * app/issue/[id]/page.tsx
  * 
@@ -40,11 +31,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     }
 
     // 화력 레벨 (낮음/보통/높음)
-    const getHeatLevel = (heat: number): string => {
+    const getHeatLevel = (heat: number | null): string => {
+        if (!heat) return '낮음'
         if (heat >= 70) return '높음'
         if (heat >= 30) return '보통'
         return '낮음'
     }
+
+    const heatIndex = issue.heat_index ?? 0
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8 max-w-4xl">
@@ -61,9 +55,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <h1 className="text-2xl md:text-3xl font-bold mb-2">
                     {issue.title}
                 </h1>
-                {issue.summary && (
+                {issue.description && (
                     <p className="text-gray-600 leading-relaxed">
-                        {issue.summary}
+                        {issue.description}
                     </p>
                 )}
             </div>
@@ -74,7 +68,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <span className="text-sm font-semibold text-gray-700">화력 지수</span>
                     <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-orange-600">
-                            {issue.heat_index.toFixed(1)}
+                            {heatIndex.toFixed(1)}
                         </span>
                         <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">
                             {getHeatLevel(issue.heat_index)}
