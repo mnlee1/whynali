@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     /* 같은 타입 → 취소(삭제) */
     if (existing?.type === type) {
-        const { error } = await supabase.from('reactions').delete().eq('id', existing.id)
+        const { error } = await supabase.from('reactions').delete().eq('id', existing!.id)
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ action: 'removed', type })
     }
