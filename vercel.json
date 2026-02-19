@@ -2,19 +2,19 @@
     "crons": [
         {
             "path": "/api/cron/collect-news",
-            "schedule": "0 */2 * * *"
+            "schedule": "0 9 * * *"
         },
         {
             "path": "/api/cron/collect-community",
-            "schedule": "0 * * * *"
+            "schedule": "0 12 * * *"
         },
         {
             "path": "/api/cron/auto-link",
-            "schedule": "15 * * * *"
+            "schedule": "0 15 * * *"
         },
         {
             "path": "/api/cron/recalculate-heat",
-            "schedule": "30 * * * *"
+            "schedule": "0 18 * * *"
         }
     ]
 }
