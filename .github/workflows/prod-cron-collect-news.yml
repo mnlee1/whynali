@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: 뉴스 수집 API 호출 (Production)
         run: |
-          curl -X GET ${{ secrets.PROD_URL }}/api/cron/collect-news \
+          curl -X GET https://whynali.vercel.app/api/cron/collect-news \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \

@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: 커뮤니티 수집 API 호출
         run: |
-          curl -X GET https://whynali-git-develop-mnlee1s-projects.vercel.app/api/cron/collect-community \
+          curl -X GET https://dev-whynali.vercel.app/api/cron/collect-community \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \

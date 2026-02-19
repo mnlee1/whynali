@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: 자동 연결 API 호출
         run: |
-          curl -X GET https://whynali-git-develop-mnlee1s-projects.vercel.app/api/cron/auto-link \
+          curl -X GET https://dev-whynali.vercel.app/api/cron/auto-link \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
