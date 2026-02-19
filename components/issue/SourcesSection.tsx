@@ -52,8 +52,9 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
         })
     }
 
-    // 신뢰도 배지
-    const getCredibilityBadge = (credibility: number): JSX.Element => {
+    // 신뢰도 배지 (뉴스 전용, 커뮤니티는 해당 없음)
+    const getCredibilityBadge = (credibility?: number) => {
+        if (!credibility) return null
         if (credibility >= 0.8) {
             return <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">높음</span>
         }
@@ -101,14 +102,13 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             <div key={item.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition">
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                     <a
-                                        href={item.url}
+                                        href={item.link}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-base font-medium hover:text-blue-600 underline flex-1"
                                     >
                                         {item.title}
                                     </a>
-                                    {getCredibilityBadge(item.credibility)}
                                 </div>
                                 <div className="text-xs text-gray-500">
                                     {item.source} · {formatDate(item.published_at)}
@@ -136,11 +136,11 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                                         {item.title}
                                     </a>
                                     <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                                        {item.site}
+                                        {item.source_site}
                                     </span>
                                 </div>
                                 <div className="text-xs text-gray-500 flex items-center gap-3">
-                                    <span>{formatDate(item.scraped_at)}</span>
+                                    <span>{formatDate(item.written_at)}</span>
                                     {item.view_count > 0 && (
                                         <span>조회 {item.view_count.toLocaleString()}</span>
                                     )}
