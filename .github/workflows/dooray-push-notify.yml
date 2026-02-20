@@ -46,7 +46,9 @@ jobs:
                       "botName": "Git 알림",
                       "text": "🚨 공통 파일이 업데이트되었습니다!",
                       "attachments": [{
-                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n🔗 커밋: [보기]($COMMIT_URL)\n\n⚠️ 팀원 여러분, git pull 하세요!",
+                          "title": "커밋 보기",
+                          "titleLink": "$COMMIT_URL",
+                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n\n⚠️ 팀원 여러분, git pull 하세요!",
                           "color": "red"
                       }]
                   }
@@ -73,7 +75,9 @@ jobs:
                       "botName": "Git 알림",
                       "text": "📢 새로운 커밋이 푸시되었습니다",
                       "attachments": [{
-                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG\n🔗 커밋: [보기]($COMMIT_URL)",
+                          "title": "커밋 보기",
+                          "titleLink": "$COMMIT_URL",
+                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG",
                           "color": "blue"
                       }]
                   }
