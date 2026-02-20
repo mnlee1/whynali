@@ -48,7 +48,7 @@ jobs:
                       "attachments": [{
                           "title": "커밋 보기",
                           "titleLink": "$COMMIT_URL",
-                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n\n⚠️ 팀원 여러분, git pull 하세요!",
+                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL\n\n⚠️ 팀원 여러분, git pull 하세요!",
                           "color": "red"
                       }]
                   }
@@ -77,7 +77,7 @@ jobs:
                       "attachments": [{
                           "title": "커밋 보기",
                           "titleLink": "$COMMIT_URL",
-                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG",
+                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL",
                           "color": "blue"
                       }]
                   }
