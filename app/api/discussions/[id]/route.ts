@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseAdminClient } from '@/lib/supabase-server'
 
 /* GET /api/discussions/:id */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
         .from('discussion_topics')
         .select('*')
         .eq('id', id)

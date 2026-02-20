@@ -1,12 +1,47 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import type { User } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase/client'
 import Nav from './Nav'
 import SearchBar from './SearchBar'
 
 export default function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    const [user, setUser] = useState<User | null>(null)
+    const router = useRouter()
+
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => setUser(user ?? null))
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+            setUser(session?.user ?? null)
+        })
+
+        return () => subscription.unsubscribe()
+    }, [])
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut()
+        setUser(null)
+        router.push('/')
+        router.refresh()
+    }
+
+    const AuthButton = () => user ? (
+        <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
+        >
+            로그아웃
+        </button>
+    ) : (
+        <Link href="/login" className="px-4 py-2 text-sm border rounded hover:bg-gray-50">
+            로그인
+        </Link>
+    )
 
     return (
         <header className="bg-white border-b sticky top-0 z-50">
@@ -22,9 +57,7 @@ export default function Header() {
                         <Nav />
                         <div className="flex items-center gap-4">
                             <SearchBar />
-                            <button className="px-4 py-2 text-sm border rounded hover:bg-gray-50">
-                                로그인
-                            </button>
+                            <AuthButton />
                         </div>
                     </div>
 
@@ -65,9 +98,7 @@ export default function Header() {
                         <Nav mobile onNavigate={() => setMobileMenuOpen(false)} />
                         <div className="mt-4 pt-4 border-t space-y-3">
                             <SearchBar />
-                            <button className="w-full px-4 py-2 text-sm border rounded hover:bg-gray-50">
-                                로그인
-                            </button>
+                            <AuthButton />
                         </div>
                     </div>
                 )}

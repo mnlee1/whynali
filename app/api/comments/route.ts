@@ -1,27 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
 
 /* GET /api/comments?issue_id=&limit=&offset= */
+/* GET /api/comments?discussion_topic_id=&limit=&offset= */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
+    const discussion_topic_id = searchParams.get('discussion_topic_id')
     const limit = Number(searchParams.get('limit') ?? 20)
     const offset = Number(searchParams.get('offset') ?? 0)
 
-    if (!issue_id) {
-        return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
+    if (!issue_id && !discussion_topic_id) {
+        return NextResponse.json(
+            { error: 'issue_id 또는 discussion_topic_id가 필요합니다.' },
+            { status: 400 }
+        )
     }
 
-    const supabase = await createSupabaseServerClient()
-    const { data, error, count } = await supabase
+    const admin = createSupabaseAdminClient()
+
+    let query = admin
         .from('comments')
         .select('*', { count: 'exact' })
-        .eq('issue_id', issue_id)
         .eq('visibility', 'public')
         .is('parent_id', null)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+
+    if (issue_id) {
+        query = query.eq('issue_id', issue_id)
+    } else {
+        query = query.eq('discussion_topic_id', discussion_topic_id!)
+    }
+
+    const { data, error, count } = await query
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })

@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 투표 선택지 비율 바: --vote-pct CSS 변수로 너비 제어 */
+.vote-bar {
+    width: var(--vote-pct, 0%);
+}
