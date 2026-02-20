@@ -1,6 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/safety'
+
+/* GET /api/reactions?issue_id= — 타입별 집계 + 현재 사용자 반응 */
+export async function GET(request: NextRequest) {
+    const issue_id = request.nextUrl.searchParams.get('issue_id')
+
+    if (!issue_id) {
+        return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
+    }
+
+    const admin = createSupabaseAdminClient()
+
+    const { data, error } = await admin
+        .from('reactions')
+        .select('type, user_id')
+        .eq('issue_id', issue_id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const counts: Record<string, number> = {}
+    for (const row of data ?? []) {
+        counts[row.type] = (counts[row.type] ?? 0) + 1
+    }
+
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const userReaction = user
+        ? ((data ?? []).find((r) => r.user_id === user.id)?.type ?? null)
+        : null
+
+    return NextResponse.json({ counts, userReaction })
+}
 
 /* POST /api/reactions — 토글 (없으면 추가, 같은 타입이면 취소, 다른 타입이면 교체) */
 export async function POST(request: NextRequest) {
