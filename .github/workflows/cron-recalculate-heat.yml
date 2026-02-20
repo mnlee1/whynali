@@ -1,0 +1,18 @@
+name: 화력 분석 Cron (Develop)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # 10분마다 (원래 기획)
+  workflow_dispatch:
+
+jobs:
+  recalculate-heat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 화력 분석 API 호출
+        run: |
+          curl -X GET https://dev-whynali.vercel.app/api/cron/recalculate-heat \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60 \
+            --retry 2

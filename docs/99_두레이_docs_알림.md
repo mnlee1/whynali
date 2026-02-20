@@ -1,6 +1,6 @@
-# 저장소 푸시 시 두레이 메신저 알림 (풀 받아야 할 때)
+# 저장소 푸시/PR 시 두레이 메신저 알림
 
-`mnlee1/whynali` 등 해당 저장소에 누군가 푸시를 해서 원격에 변동이 생겼을 때, 두레이(Dooray) 메신저로 알림을 받아 풀을 받을 타이밍을 놓치지 않도록 하는 설정 방법이다.
+해당 저장소에 푸시가 발생하거나 Pull Request가 열리/머지/닫힐 때 두레이(Dooray) 메신저로 알림을 받도록 하는 설정 방법이다. 푸시 알림으로 풀 타이밍을 놓치지 않고, PR 알림으로 리뷰·머지 상황을 확인할 수 있다.
 
 ---
 
@@ -17,7 +17,8 @@ URL은 비밀로 유지하고 저장소에 커밋하지 않는다.
 
 ## 2. 알림을 받는 방식: GitHub Actions
 
-원격 저장소에 **push가 발생할 때마다** (누가 push했든, 어떤 파일이 바뀌었든) 워크플로가 실행되어 두레이로 알림을 보낸다. 팀원이 push해도 알림이 오므로, 풀을 받아야 하는 상황을 알 수 있다.
+- **푸시 알림** (`dooray-push-notify.yml`): 원격에 push가 발생할 때마다 두레이로 알림. 커밋 링크는 마크다운 `[보기](URL)` 형식으로 보내 두레이 메신저에서 **클릭 가능한 링크**로 표시된다.
+- **PR 알림** (`dooray-pr-notify.yml`): PR이 열림/다시 열림/머지/닫힘/새 커밋 푸시될 때 두레이로 알림. attachment의 `title`+`titleLink`와 본문 마크다운 링크로 **PR 링크 클릭 가능**.
 
 ---
 
@@ -82,7 +83,7 @@ jobs:
                       "botName": "Git 알림",
                       "text": "🚨 공통 파일이 업데이트되었습니다!",
                       "attachments": [{
-                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL\n\n⚠️ 팀원 여러분, git pull 하세요!",
+                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n🔗 커밋: [보기]($COMMIT_URL)\n\n⚠️ 팀원 여러분, git pull 하세요!",
                           "color": "red"
                       }]
                   }
@@ -109,7 +110,7 @@ jobs:
                       "botName": "Git 알림",
                       "text": "📢 새로운 커밋이 푸시되었습니다",
                       "attachments": [{
-                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL",
+                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG\n🔗 커밋: [보기]($COMMIT_URL)",
                           "color": "blue"
                       }]
                   }
@@ -124,6 +125,11 @@ jobs:
 - `branches`는 사용하는 기본 브랜치에 맞게 수정한다. 예시에는 `main`, `master`, `dev` 포함.
 - **공통 파일 감지**: 변경된 파일 중 `common`, `shared` 등이 경로에 포함되면 강조 알림(빨간색), 일반 커밋은 기본 알림(파란색).
 - 공통 파일 패턴은 `grep -qE '(common|shared|components/common|utils/common|styles/common)'` 부분을 프로젝트에 맞게 수정하면 된다.
+- 커밋 URL은 마크다운 `[보기](URL)`로 전송해 두레이에서 링크가 클릭 가능하게 표시된다.
+
+### 3.3 PR 알림 워크플로
+
+`.github/workflows/dooray-pr-notify.yml`이 있으면 PR 이벤트(opened, closed, reopened, synchronize) 시 같은 `DOORAY_WEBHOOK_URL`로 알림이 전송된다. 별도 설정 없이 시크릿만 있으면 동작한다. PR 제목을 attachment의 `title`로, `titleLink`에 PR URL을 넣어 제목 클릭 시 GitHub PR 페이지로 이동한다.
 
 ---
 
@@ -140,7 +146,7 @@ jobs:
 
 👤 작업자: mnlee1
 💬 커밋 메시지: 공통 헤더 스타일 수정
-🔗 커밋 링크: https://github.com/mnlee1/whynali/commit/abc123...
+🔗 커밋: 보기  (클릭 시 해당 커밋 페이지로 이동)
 
 ⚠️ 팀원 여러분, git pull 하세요!
 ```
@@ -153,14 +159,27 @@ jobs:
 👤 작업자: mnlee1
 📝 브랜치: dev
 💬 커밋 메시지: 이슈 목록 페이지 작업
-🔗 커밋 링크: https://github.com/mnlee1/whynali/commit/def456...
+🔗 커밋: 보기  (클릭 시 해당 커밋 페이지로 이동)
+```
+
+### 4.3 PR 알림 시
+
+```
+새 PR이 열렸습니다
+
+#42 이슈 목록 API 연동  (제목 클릭 시 PR 페이지로 이동)
+👤 작성자: mnlee1
+📂 저장소: mnlee1/whynali
+🌿 브랜치: feature/issue-list
+
+🔗 PR 보기  (클릭 시 PR 페이지로 이동)
 ```
 
 ---
 
 ## 5. 정리
 
-- **공통 파일 변경 시**: 빨간색 강조 알림 + 변경된 파일 목록 표시 + "git pull 하세요" 안내
-- **일반 커밋 푸시 시**: 파란색 기본 알림 + 작업자, 브랜치, 커밋 메시지, 링크
-- **공통 파일 패턴**: 워크플로의 `grep -qE` 부분에서 `common`, `shared` 등을 프로젝트 구조에 맞게 수정 가능
+- **푸시 알림**: 공통 파일 변경 시 빨간색 강조 + 변경 파일 목록; 일반 푸시 시 파란색 + 작업자/브랜치/커밋 메시지. 커밋 링크는 마크다운 링크로 전송되어 두레이에서 클릭 가능.
+- **PR 알림**: opened/closed/reopened/synchronize 시 알림. PR 제목과 "PR 보기"가 클릭 가능한 링크로 표시됨.
+- **공통 파일 패턴**: `dooray-push-notify.yml`의 `grep -qE` 부분을 프로젝트 구조에 맞게 수정 가능.
 - Webhook URL은 반드시 비밀로 두고, 저장소에는 넣지 않는다.
