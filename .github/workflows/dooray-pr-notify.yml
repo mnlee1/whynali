@@ -1,0 +1,55 @@
+# whynali/.github/workflows/dooray-pr-notify.yml
+#
+# Pull Request 이벤트(열림/머지/닫힘) 발생 시 두레이 메신저로 알림을 보냅니다.
+# DOORAY_WEBHOOK_URL 시크릿이 있어야 동작합니다.
+
+name: Dooray PR notification
+on:
+    pull_request:
+        types: [opened, closed, reopened, synchronize]
+jobs:
+    notify:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Notify Dooray (PR)
+              env:
+                  DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+                  PR_ACTION: ${{ github.event.action }}
+                  PR_TITLE: ${{ github.event.pull_request.title }}
+                  PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+                  PR_URL: ${{ github.event.pull_request.html_url }}
+                  PR_STATE: ${{ github.event.pull_request.state }}
+                  PR_MERGED: ${{ github.event.pull_request.merged }}
+                  PR_NUM: ${{ github.event.pull_request.number }}
+                  REPO: ${{ github.repository }}
+                  BRANCH: ${{ github.head_ref }}
+              run: |
+                  if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
+                  case "$PR_ACTION" in
+                      opened)   TITLE="새 PR이 열렸습니다"; COLOR="blue";;
+                      closed)
+                          if [ "$PR_MERGED" = "true" ]; then
+                              TITLE="PR이 머지되었습니다"
+                              COLOR="green"
+                          else
+                              TITLE="PR이 닫혔습니다"
+                              COLOR="gray"
+                          fi
+                          ;;
+                      reopened) TITLE="PR이 다시 열렸습니다"; COLOR="blue";;
+                      synchronize) TITLE="PR에 새 커밋이 푸시되었습니다"; COLOR="default";;
+                      *) TITLE="PR 알림"; COLOR="default";;
+                  esac
+                  ATTACH_TITLE="#${PR_NUM} ${PR_TITLE}"
+                  ATTACH_TEXT="👤 작성자: ${PR_AUTHOR}"$'\n'"📂 저장소: ${REPO}"$'\n'"🌿 브랜치: ${BRANCH}"$'\n\n'"🔗 [PR 보기](${PR_URL})"
+                  BODY=$(jq -n \
+                      --arg bot "Git 알림" \
+                      --arg text "$TITLE" \
+                      --arg atitle "$ATTACH_TITLE" \
+                      --arg url "$PR_URL" \
+                      --arg atext "$ATTACH_TEXT" \
+                      --arg color "$COLOR" \
+                      '{botName: $bot, text: $text, attachments: [{title: $atitle, titleLink: $url, text: $atext, color: $color}]}')
+                  curl -s -X POST "$DOORAY_WEBHOOK_URL" \
+                      -H "Content-Type: application/json" \
+                      -d "$BODY"
