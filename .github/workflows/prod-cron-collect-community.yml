@@ -1,0 +1,18 @@
+name: 커뮤니티 수집 Cron (Production)
+
+on:
+  # schedule:
+  #   - cron: '*/3 * * * *'  # main 배포 후 활성화
+  workflow_dispatch:
+
+jobs:
+  collect-community:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 커뮤니티 수집 API 호출 (Production)
+        run: |
+          curl -X GET https://whynali.vercel.app/api/cron/collect-community \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60 \
+            --retry 2

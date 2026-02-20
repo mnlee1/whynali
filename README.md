@@ -101,3 +101,4 @@ whynali-02/
 ## 라이선스
 
 Private
+# Vercel 재배포 테스트
