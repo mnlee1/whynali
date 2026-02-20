@@ -219,7 +219,20 @@ git push
 
 ## 7. Pull Request (PR) 만들기
 
-### 7.1 GitHub에서 PR 생성
+### 7.0 Cursor 안에서 PR 진행
+
+Cursor는 VS Code 기반이라 **GitHub Pull Requests** 확장을 쓰면 PR 생성·리뷰·머지를 에디터 안에서 할 수 있다.
+
+1. **확장 설치**: Cursor 왼쪽 사이드바 **Extensions**(또는 `Cmd+Shift+X`) → "GitHub Pull Requests" 검색 → **Install** (제작: GitHub).
+2. **로그인**: 설치 후 사이드바에 **GitHub** 아이콘 표시. 클릭 후 **Sign in to GitHub**으로 계정 연동.
+3. **PR 보기/만들기**:  
+   - **Source Control**(`Cmd+Shift+G`)에서 브랜치 푸시 후 상단 **Create Pull Request** 버튼으로 바로 PR 생성.  
+   - 또는 왼쪽 **GitHub** 패널에서 **Pull Requests** 목록 확인, **+** 로 새 PR 생성.
+4. **리뷰·머지**: GitHub 패널에서 PR 선택해 코멘트·승인·머지(권한 있을 때) 가능.
+
+브라우저 없이 Cursor만으로 PR 라이프사이클을 처리할 수 있다. 웹이 필요하면 아래 7.1처럼 GitHub에서 진행하면 된다.
+
+### 7.1 GitHub 웹에서 PR 생성
 
 1. GitHub 저장소 페이지 접속
 2. `Pull requests` 탭 클릭
