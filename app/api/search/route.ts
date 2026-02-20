@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseAdminClient } from '@/lib/supabase-server'
 
 /* GET /api/search?q=&limit=&offset= */
 export async function GET(request: NextRequest) {
@@ -12,10 +12,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '검색어는 2자 이상 입력해 주세요.' }, { status: 400 })
     }
 
-    const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
 
     const [issueResult, discussionResult] = await Promise.all([
-        supabase
+        admin
             .from('issues')
             .select('id, title, status, category, created_at')
             .ilike('title', `%${q}%`)
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1),
 
-        supabase
+        admin
             .from('discussion_topics')
             .select('id, issue_id, body, created_at')
             .ilike('body', `%${q}%`)
