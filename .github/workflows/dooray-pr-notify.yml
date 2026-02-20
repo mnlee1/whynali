@@ -22,7 +22,8 @@ jobs:
                   PR_MERGED: ${{ github.event.pull_request.merged }}
                   PR_NUM: ${{ github.event.pull_request.number }}
                   REPO: ${{ github.repository }}
-                  BRANCH: ${{ github.head_ref }}
+                  BASE_REF: ${{ github.event.pull_request.base.ref }}
+                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
               run: |
                   if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
                   case "$PR_ACTION" in
@@ -40,16 +41,24 @@ jobs:
                       synchronize) TITLE="PR에 새 커밋이 푸시되었습니다"; COLOR="default";;
                       *) TITLE="PR 알림"; COLOR="default";;
                   esac
-                  ATTACH_TITLE="#${PR_NUM} ${PR_TITLE}"
-                  ATTACH_TEXT="👤 작성자: ${PR_AUTHOR}"$'\n'"📂 저장소: ${REPO}"$'\n'"🌿 브랜치: ${BRANCH}"$'\n\n'"🔗 [PR 보기](${PR_URL})"
+                  BRANCH_INFO="${HEAD_REF} → ${BASE_REF}"
+                  ATTACH_TEXT="👤 작성자: ${PR_AUTHOR}"$'\n'"📂 저장소: ${REPO}"$'\n'"🌿 브랜치: ${BRANCH_INFO}"$'\n'
                   BODY=$(jq -n \
                       --arg bot "Git 알림" \
                       --arg text "$TITLE" \
-                      --arg atitle "$ATTACH_TITLE" \
+                      --arg atitle "#${PR_NUM} ${PR_TITLE}" \
                       --arg url "$PR_URL" \
                       --arg atext "$ATTACH_TEXT" \
                       --arg color "$COLOR" \
-                      '{botName: $bot, text: $text, attachments: [{title: $atitle, titleLink: $url, text: $atext, color: $color}]}')
+                      --arg linkTitle "PR 보기" \
+                      '{
+                          botName: $bot,
+                          text: $text,
+                          attachments: [
+                              { title: $atitle, titleLink: $url, text: $atext, color: $color },
+                              { title: $linkTitle, titleLink: $url, color: $color }
+                          ]
+                      }')
                   curl -s -X POST "$DOORAY_WEBHOOK_URL" \
                       -H "Content-Type: application/json" \
                       -d "$BODY"
