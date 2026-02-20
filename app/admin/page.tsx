@@ -22,6 +22,18 @@ export default function AdminPage() {
             href: '/admin/collections',
             color: 'bg-green-500',
         },
+        {
+            title: '토론 주제 관리',
+            description: '토론 주제 승인·숨김·직접 생성',
+            href: '/admin/discussions',
+            color: 'bg-purple-500',
+        },
+        {
+            title: '세이프티 관리',
+            description: '금칙어 관리·검토 대기 댓글 처리',
+            href: '/admin/safety',
+            color: 'bg-red-500',
+        },
     ]
 
     return (

@@ -1,35 +1,29 @@
-export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
-    return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">이슈 상세</h1>
-            <p className="text-sm md:text-base text-gray-600">이슈 ID: {id}</p>
-            <p className="text-sm md:text-base text-gray-600 mt-4">
-                화력, 타임라인, 댓글, 투표 등 API 연동 예정
-            </p>
 /**
  * app/issue/[id]/page.tsx
- * 
- * [이슈 상세 페이지]
- * 
+ *
  * 특정 이슈의 상세 정보를 보여줍니다.
  * - 담당 A: 기본 정보, 화력 지수, 타임라인, 출처(뉴스·커뮤니티)
- * - 담당 B: 댓글, 투표 (추후 연동 예정)
+ * - 담당 B: 감정·투표·댓글 블록
  */
 
-import { getIssue } from '@/lib/api/issues'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import TimelineSection from '@/components/issue/TimelineSection'
 import SourcesSection from '@/components/issue/SourcesSection'
+import ReactionsSection from '@/components/issue/ReactionsSection'
+import VoteSection from '@/components/issue/VoteSection'
+import CommentsSection from '@/components/issue/CommentsSection'
 
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
-    // 이슈 기본 정보 가져오기
-    let issue = null
-    try {
-        const response = await getIssue(id)
-        issue = response.data
-    } catch (err) {
+    const admin = createSupabaseAdminClient()
+    const { data: issue, error: issueError } = await admin
+        .from('issues')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+    if (issueError || !issue) {
         return (
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
@@ -39,7 +33,10 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         )
     }
 
-    // 화력 레벨 (낮음/보통/높음)
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const userId = user?.id ?? null
+
     const getHeatLevel = (heat: number): string => {
         if (heat >= 70) return '높음'
         if (heat >= 30) return '보통'
@@ -61,9 +58,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <h1 className="text-2xl md:text-3xl font-bold mb-2">
                     {issue.title}
                 </h1>
-                {issue.summary && (
+                {issue.description && (
                     <p className="text-gray-600 leading-relaxed">
-                        {issue.summary}
+                        {issue.description}
                     </p>
                 )}
             </div>
@@ -74,13 +71,19 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <span className="text-sm font-semibold text-gray-700">화력 지수</span>
                     <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-orange-600">
-                            {issue.heat_index.toFixed(1)}
+                            {(issue.heat_index ?? 0).toFixed(1)}
                         </span>
                         <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">
                             {getHeatLevel(issue.heat_index)}
                         </span>
                     </div>
                 </div>
+            </div>
+
+            {/* 감정 표현 */}
+            <div className="mb-8">
+                <h2 className="text-xl font-bold mb-4">감정 표현</h2>
+                <ReactionsSection issueId={id} userId={userId} />
             </div>
 
             {/* 타임라인 섹션 */}
@@ -95,14 +98,17 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <SourcesSection issueId={id} />
             </div>
 
-            {/* 담당 B 영역: 댓글·투표 */}
+            {/* 투표 */}
+            <div className="mb-8">
+                <h2 className="text-xl font-bold mb-4">투표</h2>
+                <VoteSection issueId={id} userId={userId} />
+            </div>
+
+            {/* 댓글 */}
             <div className="mt-12 pt-8 border-t border-gray-200">
-                <h2 className="text-xl font-bold mb-4">댓글 & 투표</h2>
-                <p className="text-sm text-gray-500">
-                    담당 B가 구현할 영역입니다.
-                </p>
+                <h2 className="text-xl font-bold mb-4">댓글</h2>
+                <CommentsSection issueId={id} userId={userId} />
             </div>
         </div>
     )
 }
-
