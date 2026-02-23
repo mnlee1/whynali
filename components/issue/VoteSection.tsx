@@ -126,15 +126,25 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 const myChoiceId = userVotes[vote.id] ?? null
                 const isProcessing = submitting === vote.id
 
+                const isClosed = vote.phase === '마감'
+
                 return (
                     <div key={vote.id} className="p-4 border border-gray-200 rounded-lg">
                         {vote.title && (
                             <p className="font-semibold text-sm mb-1">{vote.title}</p>
                         )}
                         {vote.phase && (
-                            <span className="inline-block text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded mb-3">
+                            <span className={[
+                                'inline-block text-xs px-2 py-0.5 rounded mb-3',
+                                isClosed
+                                    ? 'bg-red-100 text-red-600'
+                                    : 'bg-green-100 text-green-700',
+                            ].join(' ')}>
                                 {vote.phase}
                             </span>
+                        )}
+                        {isClosed && (
+                            <p className="text-xs text-gray-400 mb-2">종료된 투표입니다.</p>
                         )}
                         <div className="space-y-2">
                             {choices.map((choice) => {
@@ -147,13 +157,13 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                                     <button
                                         key={choice.id}
                                         onClick={() => handleVote(vote.id, choice.id)}
-                                        disabled={!userId || isProcessing}
+                                        disabled={!userId || isProcessing || isClosed}
                                         className={[
                                             'w-full text-left px-3 py-2 rounded border text-sm transition-colors overflow-hidden relative',
                                             isSelected
                                                 ? 'border-blue-500 bg-blue-50 text-blue-800 font-medium'
                                                 : 'border-gray-200 bg-white text-gray-700',
-                                            !userId || isProcessing
+                                            !userId || isProcessing || isClosed
                                                 ? 'cursor-not-allowed opacity-60'
                                                 : 'hover:border-gray-400 cursor-pointer',
                                         ].join(' ')}

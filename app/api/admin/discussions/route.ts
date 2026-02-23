@@ -34,11 +34,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { issue_id, content } = body
+        const { issue_id, content, approval_status = '승인' } = body
 
         if (!issue_id || !content?.trim()) {
             return NextResponse.json(
                 { error: 'issue_id와 내용이 필요합니다.' },
+                { status: 400 }
+            )
+        }
+
+        const validStatuses = ['대기', '승인', '반려']
+        if (!validStatuses.includes(approval_status)) {
+            return NextResponse.json(
+                { error: 'approval_status는 대기|승인|반려 중 하나여야 합니다.' },
                 { status: 400 }
             )
         }
@@ -49,8 +57,8 @@ export async function POST(request: NextRequest) {
                 issue_id,
                 body: content.trim(),
                 is_ai_generated: false,
-                approval_status: '승인',
-                approved_at: new Date().toISOString(),
+                approval_status,
+                approved_at: approval_status === '승인' ? new Date().toISOString() : null,
             })
             .select()
             .single()

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     let query = admin
         .from('discussion_topics')
         .select('*, issues(id, title)', { count: 'exact' })
-        .eq('approval_status', '승인')
+        .in('approval_status', ['승인', '종료'])
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
