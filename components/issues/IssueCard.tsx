@@ -60,37 +60,28 @@ export default function IssueCard({ issue }: IssueCardProps) {
 
     return (
         <Link href={`/issue/${issue.id}`}>
-            <div className="block p-4 border rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                {/* 상단: 카테고리, 상태 */}
+            <article className="block p-4 bg-white border border-neutral-200 rounded-lg hover:border-neutral-300 hover:shadow-sm transition-all">
                 <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs text-gray-500">{issue.category}</span>
-                    <span className={`text-xs px-2 py-1 rounded ${statusColor}`}>
+                    <span className="text-xs text-neutral-500">{issue.category}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${statusColor}`}>
                         {issue.status}
                     </span>
                 </div>
-
-                {/* 제목 */}
-                <h3 className="text-base md:text-lg font-semibold mb-2 line-clamp-2">
-                    {issue.title}
-                </h3>
+                <h3 className="text-base font-semibold text-neutral-900 mb-2 line-clamp-2">
 
                 {/* 설명 (있으면) */}
+                    {issue.title}
+                </h3>
                 {issue.description && (
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    <p className="text-sm text-neutral-600 mb-3 line-clamp-2">
                         {issue.description}
                     </p>
                 )}
-
-                {/* 하단: 화력, 날짜 */}
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center gap-2">
-                        <span>
-                            화력: {issue.heat_index ?? 0} ({heatLevel})
-                        </span>
-                    </div>
+                <div className="flex items-center justify-between text-xs text-neutral-500">
+                    <span>화력: {issue.heat_index ?? 0} ({heatLevel})</span>
                     <span>{formatDate(issue.created_at)}</span>
                 </div>
-            </div>
+            </article>
         </Link>
     )
 }

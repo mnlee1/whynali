@@ -1,25 +1,34 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
 type OAuthProvider = 'google' | 'kakao'
 
-export default function LoginPage() {
+function LoginForm() {
+    const searchParams = useSearchParams()
     const [loading, setLoading] = useState<OAuthProvider | null>(null)
-    const [error, setError] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(
+        () => searchParams.get('error') ?? null
+    )
 
     const handleOAuth = async (provider: OAuthProvider) => {
         setLoading(provider)
         setError(null)
-        const { error } = await supabase.auth.signInWithOAuth({
+        const options: { redirectTo: string; scopes?: string } = {
+            redirectTo: `${window.location.origin}/auth/callback`,
+        }
+        if (provider === 'kakao') {
+            options.scopes = 'profile_nickname profile_image'
+        }
+        const { error: err } = await supabase.auth.signInWithOAuth({
             provider,
-            options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
-            },
+            options,
         })
-        if (error) {
-            setError(error.message)
+        if (err) {
+            setError(err.message)
             setLoading(null)
         }
     }
@@ -76,11 +85,31 @@ export default function LoginPage() {
                     </svg>
                     {loading === 'kakao' ? '연결 중...' : 'Kakao로 로그인'}
                 </button>
+
+                <Link
+                    href="/auth/naver"
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#03C75A] text-white rounded-lg text-sm font-medium hover:bg-[#02b350] disabled:opacity-60 transition-colors border border-transparent"
+                >
+                    <span className="w-5 h-5 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
+                    네이버로 로그인
+                </Link>
             </div>
 
             <p className="text-xs text-gray-400 text-center mt-6">
                 로그인 시 서비스 이용약관에 동의하는 것으로 간주됩니다.
             </p>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="container mx-auto px-4 py-12 max-w-sm text-center">
+                <p className="text-gray-500">로딩 중...</p>
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
     )
 }

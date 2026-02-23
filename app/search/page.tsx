@@ -17,7 +17,7 @@ export default async function SearchPage({
 
     if (!query || query.length < 2) {
         return (
-            <div className="container mx-auto px-4 py-6 md:py-8 max-w-3xl">
+            <div className="container mx-auto px-4 py-6 md:py-8">
                 <h1 className="text-2xl font-bold mb-4">검색</h1>
                 <p className="text-sm text-gray-500">검색어를 2자 이상 입력해 주세요.</p>
             </div>
@@ -48,7 +48,7 @@ export default async function SearchPage({
     const totalCount = issues.length + discussions.length
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8 max-w-3xl">
+        <div className="container mx-auto px-4 py-6 md:py-8">
             <h1 className="text-2xl font-bold mb-1">검색 결과</h1>
             <p className="text-sm text-gray-500 mb-6">
                 "{query}" — {totalCount > 0 ? `${totalCount}개 결과` : '결과 없음'}
