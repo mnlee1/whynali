@@ -62,7 +62,7 @@ export interface DiscussionTopic {
     issue_id: string
     body: string
     is_ai_generated: boolean
-    approval_status: '대기' | '승인' | '반려'
+    approval_status: '대기' | '승인' | '반려' | '종료'
     approved_at?: string
     created_at: string
 }
