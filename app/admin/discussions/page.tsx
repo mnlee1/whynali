@@ -41,10 +41,11 @@ function formatDate(dateString: string): string {
 export default function AdminDiscussionsPage() {
     const [topics, setTopics] = useState<DiscussionTopic[]>([])
     const [total, setTotal] = useState(0)
-    const [filter, setFilter] = useState<FilterStatus>('')
+    const [filter, setFilter] = useState<FilterStatus>('대기')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
+    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
     /* 신규 생성 폼 */
     const [showCreateForm, setShowCreateForm] = useState(false)
@@ -52,6 +53,8 @@ export default function AdminDiscussionsPage() {
     const [newContent, setNewContent] = useState('')
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
+
+    const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
 
     const loadTopics = useCallback(async (status: FilterStatus) => {
         setLoading(true)
@@ -62,8 +65,16 @@ export default function AdminDiscussionsPage() {
             const res = await fetch(`/api/admin/discussions?${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setTopics(json.data ?? [])
+            const data: DiscussionTopic[] = json.data ?? []
+            /* 전체 탭일 때 대기 → 승인 → 반려 순 정렬 */
+            if (!status) {
+                data.sort((a, b) =>
+                    (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
+                )
+            }
+            setTopics(data)
             setTotal(json.total ?? 0)
+            setLastRefreshedAt(new Date())
         } catch (e) {
             setError(e instanceof Error ? e.message : '조회 실패')
         } finally {
@@ -75,9 +86,12 @@ export default function AdminDiscussionsPage() {
         loadTopics(filter)
     }, [filter, loadTopics])
 
-    const handleAction = async (id: string, action: '승인' | '반려') => {
-        const label = action === '승인' ? '승인' : '숨김(반려)'
-        if (!window.confirm(`이 토론 주제를 ${label} 처리하시겠습니까?`)) return
+    const handleAction = async (id: string, action: '승인' | '반려' | '복구') => {
+        const confirmMsg =
+            action === '승인' ? '이 토론 주제를 승인하시겠습니까?' :
+            action === '반려' ? '이 토론 주제를 반려 처리하시겠습니까?' :
+            '이 토론 주제를 대기 상태로 복구하시겠습니까?'
+        if (!window.confirm(confirmMsg)) return
         setProcessingId(id)
         try {
             const res = await fetch(`/api/admin/discussions/${id}`, {
@@ -87,12 +101,15 @@ export default function AdminDiscussionsPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
+            const nextStatus =
+                action === '승인' ? '승인' :
+                action === '반려' ? '반려' : '대기'
             setTopics((prev) =>
                 prev.map((t) =>
                     t.id === id
                         ? {
                               ...t,
-                              approval_status: action,
+                              approval_status: nextStatus as '승인' | '반려' | '대기',
                               approved_at: action === '승인' ? new Date().toISOString() : null,
                           }
                         : t
@@ -100,22 +117,6 @@ export default function AdminDiscussionsPage() {
             )
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
-        } finally {
-            setProcessingId(null)
-        }
-    }
-
-    const handleDelete = async (id: string) => {
-        if (!window.confirm('토론 주제를 완전히 삭제하시겠습니까? 복구 불가합니다.')) return
-        setProcessingId(id)
-        try {
-            const res = await fetch(`/api/admin/discussions/${id}`, { method: 'DELETE' })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-            setTopics((prev) => prev.filter((t) => t.id !== id))
-            setTotal((prev) => Math.max(0, prev - 1))
-        } catch (e) {
-            alert(e instanceof Error ? e.message : '삭제 실패')
         } finally {
             setProcessingId(null)
         }
@@ -155,7 +156,12 @@ export default function AdminDiscussionsPage() {
                     </Link>
                     <h1 className="text-2xl font-bold mt-1">토론 주제 관리</h1>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-3">
+                    {lastRefreshedAt && (
+                        <span className="text-xs text-gray-400">
+                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    )}
                     <button
                         onClick={() => loadTopics(filter)}
                         className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
@@ -244,99 +250,133 @@ export default function AdminDiscussionsPage() {
                 </div>
             )}
 
-            {/* 스켈레톤 */}
-            {loading ? (
-                <div className="space-y-3">
-                    {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-4 border rounded-lg space-y-2">
-                            <div className="h-3 w-2/3 bg-gray-100 rounded animate-pulse" />
-                            <div className="h-3 w-1/4 bg-gray-100 rounded animate-pulse" />
-                        </div>
-                    ))}
-                </div>
-            ) : topics.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-12">
-                    해당 상태의 토론 주제가 없습니다.
-                </p>
-            ) : (
-                <ul className="space-y-3">
-                    {topics.map((topic) => {
-                        const isProcessing = processingId === topic.id
-                        return (
-                            <li
-                                key={topic.id}
-                                className="p-4 border border-gray-200 rounded-lg bg-white"
-                            >
-                                {/* 상단: 배지 + 날짜 */}
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span
-                                        className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_STYLE[topic.approval_status]}`}
-                                    >
-                                        {topic.approval_status}
-                                    </span>
-                                    {topic.is_ai_generated && (
-                                        <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
-                                            AI 생성
-                                        </span>
-                                    )}
-                                    <span className="text-xs text-gray-400 ml-auto">
-                                        {formatDate(topic.created_at)}
-                                    </span>
-                                </div>
-
-                                {/* 본문 */}
-                                <p className="text-sm text-gray-800 mb-2 line-clamp-2">
-                                    {topic.body}
-                                </p>
-
-                                {/* 연결 이슈 + 액션 버튼 */}
-                                <div className="flex items-center justify-between">
-                                    <div className="text-xs text-gray-400">
-                                        {topic.issues ? (
-                                            <Link
-                                                href={`/issue/${topic.issues.id}`}
-                                                target="_blank"
-                                                className="text-blue-500 hover:underline"
-                                            >
-                                                {topic.issues.title}
-                                            </Link>
-                                        ) : (
-                                            <span>이슈 연결 없음</span>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {topic.approval_status !== '승인' && (
-                                            <button
-                                                onClick={() => handleAction(topic.id, '승인')}
-                                                disabled={isProcessing}
-                                                className="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                            >
-                                                승인
-                                            </button>
-                                        )}
-                                        {topic.approval_status !== '반려' && (
-                                            <button
-                                                onClick={() => handleAction(topic.id, '반려')}
-                                                disabled={isProcessing}
-                                                className="text-xs px-3 py-1.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
-                                            >
-                                                숨김
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => handleDelete(topic.id)}
-                                            disabled={isProcessing}
-                                            className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                        >
-                                            {isProcessing ? '처리 중...' : '삭제'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </li>
-                        )
-                    })}
-                </ul>
-            )}
+            {/* 토론 주제 목록 */}
+            <div className="border rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                토론 내용
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                연결 이슈
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                생성 유형
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                승인 상태
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                생성일
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                액션
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {loading ? (
+                            [1, 2, 3].map((i) => (
+                                <tr key={i}>
+                                    <td colSpan={6} className="px-4 py-3">
+                                        <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
+                                    </td>
+                                </tr>
+                            ))
+                        ) : topics.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">
+                                    해당 상태의 토론 주제가 없습니다.
+                                </td>
+                            </tr>
+                        ) : (
+                            topics.map((topic) => {
+                                const isProcessing = processingId === topic.id
+                                return (
+                                    <tr key={topic.id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 text-sm text-gray-800 max-w-xs">
+                                            <p className="line-clamp-2">{topic.body}</p>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                            {topic.issues ? (
+                                                <Link
+                                                    href={`/issue/${topic.issues.id}`}
+                                                    target="_blank"
+                                                    className="text-blue-600 hover:underline"
+                                                >
+                                                    {topic.issues.title}
+                                                </Link>
+                                            ) : (
+                                                <span className="text-gray-400">연결 없음</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {topic.is_ai_generated ? (
+                                                <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
+                                                    AI 생성
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs px-2 py-0.5 bg-gray-50 text-gray-500 rounded border border-gray-200">
+                                                    직접 생성
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 text-xs rounded ${STATUS_STYLE[topic.approval_status]}`}>
+                                                {topic.approval_status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-gray-500">
+                                            {formatDate(topic.created_at)}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                            <div className="flex gap-2">
+                                                {topic.approval_status === '대기' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleAction(topic.id, '승인')}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                        >
+                                                            승인
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAction(topic.id, '반려')}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                        >
+                                                            반려
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {topic.approval_status === '승인' && (
+                                                    <button
+                                                        onClick={() => handleAction(topic.id, '반려')}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                    >
+                                                        반려
+                                                    </button>
+                                                )}
+                                                {topic.approval_status === '반려' && (
+                                                    <button
+                                                        onClick={() => handleAction(topic.id, '복구')}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
+                                                    >
+                                                        복구
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     )
 }

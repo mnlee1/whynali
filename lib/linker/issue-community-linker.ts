@@ -4,6 +4,7 @@
  * [이슈-커뮤니티 자동 연결]
  * 
  * 수집된 커뮤니티 데이터를 키워드 기반으로 이슈와 자동 연결합니다.
+ * community_data.issue_id FK를 직접 UPDATE합니다.
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
@@ -33,57 +34,44 @@ async function linkCommunityToIssue(
         return 0
     }
 
-    const { data: existingLinks } = await supabaseAdmin
-        .from('source_links')
-        .select('source_id')
-        .eq('issue_id', issueId)
-        .eq('source_type', 'community')
-
-    const existingCommunityIds = new Set(
-        existingLinks?.map((link) => link.source_id) || []
-    )
-
+    /* 아직 이슈에 연결되지 않은 최근 커뮤니티 500건 조회 */
     const { data: community } = await supabaseAdmin
         .from('community_data')
         .select('id, title')
-        .order('scraped_at', { ascending: false })
+        .is('issue_id', null)
+        .order('written_at', { ascending: false })
         .limit(500)
 
     if (!community || community.length === 0) {
         return 0
     }
 
-    const matchedCommunity = community.filter((item) => {
-        if (existingCommunityIds.has(item.id)) return false
+    const matchedIds = community
+        .filter((item) => {
+            const titleLower = item.title.toLowerCase()
+            const matchCount = keywords.filter((kw) =>
+                titleLower.includes(kw.toLowerCase())
+            ).length
+            return matchCount >= Math.max(1, Math.floor(keywords.length * 0.3))
+        })
+        .slice(0, 20)
+        .map((item) => item.id)
 
-        const titleLower = item.title.toLowerCase()
-        const matchCount = keywords.filter((kw) =>
-            titleLower.includes(kw.toLowerCase())
-        ).length
-
-        return matchCount >= Math.max(1, Math.floor(keywords.length * 0.3))
-    })
-
-    if (matchedCommunity.length === 0) {
+    if (matchedIds.length === 0) {
         return 0
     }
 
-    const linksToInsert = matchedCommunity.slice(0, 20).map((item) => ({
-        issue_id: issueId,
-        source_type: 'community' as const,
-        source_id: item.id,
-    }))
-
     const { error } = await supabaseAdmin
-        .from('source_links')
-        .insert(linksToInsert)
+        .from('community_data')
+        .update({ issue_id: issueId })
+        .in('id', matchedIds)
 
     if (error) {
         console.error(`이슈 ${issueId} 커뮤니티 연결 에러:`, error)
         return 0
     }
 
-    return linksToInsert.length
+    return matchedIds.length
 }
 
 export async function linkAllCommunityToIssues(): Promise<LinkResult[]> {

@@ -15,11 +15,13 @@ function isProtectedPath(pathname: string) {
 }
 
 export async function middleware(request: NextRequest) {
-    const response = NextResponse.next()
+    const { pathname } = request.nextUrl
 
-    if (!isProtectedPath(request.nextUrl.pathname) || request.method === 'GET') {
-        return response
+    if (!isProtectedPath(pathname) || request.method === 'GET') {
+        return NextResponse.next()
     }
+
+    let supabaseResponse = NextResponse.next({ request })
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,8 +32,12 @@ export async function middleware(request: NextRequest) {
                     return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
+                    cookiesToSet.forEach(({ name, value }) =>
+                        request.cookies.set(name, value)
+                    )
+                    supabaseResponse = NextResponse.next({ request })
                     cookiesToSet.forEach(({ name, value, options }) =>
-                        response.cookies.set(name, value, options)
+                        supabaseResponse.cookies.set(name, value, options)
                     )
                 },
             },
@@ -44,7 +50,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    return response
+    return supabaseResponse
 }
 
 export const config = {

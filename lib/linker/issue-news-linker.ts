@@ -4,12 +4,7 @@
  * [이슈-뉴스 자동 연결]
  * 
  * 수집된 뉴스를 키워드 기반으로 이슈와 자동 연결합니다.
- * 
- * 주요 로직:
- * 1. 승인된 모든 이슈 조회
- * 2. 각 이슈의 제목에서 키워드 추출
- * 3. 미연결 뉴스 중 키워드가 포함된 뉴스 검색
- * 4. source_links 테이블에 연결 저장
+ * news_data.issue_id FK를 직접 UPDATE합니다.
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
@@ -20,9 +15,6 @@ interface LinkResult {
     linkedCount: number
 }
 
-/**
- * 텍스트에서 2글자 이상 키워드 추출 (간단한 공백 기반)
- */
 function extractKeywords(text: string): string[] {
     const words = text
         .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
@@ -32,9 +24,6 @@ function extractKeywords(text: string): string[] {
     return Array.from(new Set(words))
 }
 
-/**
- * 특정 이슈에 뉴스 자동 연결
- */
 async function linkNewsToIssue(
     issueId: string,
     issueTitle: string
@@ -45,21 +34,11 @@ async function linkNewsToIssue(
         return 0
     }
 
-    // 이미 연결된 뉴스 ID 조회
-    const { data: existingLinks } = await supabaseAdmin
-        .from('source_links')
-        .select('source_id')
-        .eq('issue_id', issueId)
-        .eq('source_type', 'news')
-
-    const existingNewsIds = new Set(
-        existingLinks?.map((link) => link.source_id) || []
-    )
-
-    // 키워드가 포함된 뉴스 검색
+    /* 아직 이슈에 연결되지 않은 최근 뉴스 500건 조회 */
     const { data: news } = await supabaseAdmin
         .from('news_data')
         .select('id, title')
+        .is('issue_id', null)
         .order('created_at', { ascending: false })
         .limit(500)
 
@@ -67,39 +46,32 @@ async function linkNewsToIssue(
         return 0
     }
 
-    // 매칭되는 뉴스 필터링
-    const matchedNews = news.filter((item) => {
-        if (existingNewsIds.has(item.id)) return false
+    const matchedIds = news
+        .filter((item) => {
+            const titleLower = item.title.toLowerCase()
+            const matchCount = keywords.filter((kw) =>
+                titleLower.includes(kw.toLowerCase())
+            ).length
+            return matchCount >= Math.max(1, Math.floor(keywords.length * 0.3))
+        })
+        .slice(0, 20)
+        .map((item) => item.id)
 
-        const titleLower = item.title.toLowerCase()
-        const matchCount = keywords.filter((kw) =>
-            titleLower.includes(kw.toLowerCase())
-        ).length
-
-        return matchCount >= Math.max(1, Math.floor(keywords.length * 0.3))
-    })
-
-    if (matchedNews.length === 0) {
+    if (matchedIds.length === 0) {
         return 0
     }
 
-    // source_links에 삽입
-    const linksToInsert = matchedNews.slice(0, 20).map((item) => ({
-        issue_id: issueId,
-        source_type: 'news' as const,
-        source_id: item.id,
-    }))
-
     const { error } = await supabaseAdmin
-        .from('source_links')
-        .insert(linksToInsert)
+        .from('news_data')
+        .update({ issue_id: issueId })
+        .in('id', matchedIds)
 
     if (error) {
         console.error(`이슈 ${issueId} 뉴스 연결 에러:`, error)
         return 0
     }
 
-    return linksToInsert.length
+    return matchedIds.length
 }
 
 /**

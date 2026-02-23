@@ -57,6 +57,12 @@ export default function Header() {
                         <Nav />
                         <div className="flex items-center gap-4">
                             <SearchBar />
+                            <Link
+                                href="/admin"
+                                className="px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded hover:bg-gray-700"
+                            >
+                                관리자
+                            </Link>
                             <AuthButton />
                         </div>
                     </div>
@@ -98,6 +104,13 @@ export default function Header() {
                         <Nav mobile onNavigate={() => setMobileMenuOpen(false)} />
                         <div className="mt-4 pt-4 border-t space-y-3">
                             <SearchBar />
+                            <Link
+                                href="/admin"
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="block px-3 py-2 text-sm font-medium bg-gray-900 text-white rounded text-center hover:bg-gray-700"
+                            >
+                                관리자
+                            </Link>
                             <AuthButton />
                         </div>
                     </div>
