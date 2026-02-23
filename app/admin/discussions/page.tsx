@@ -8,25 +8,27 @@ interface DiscussionTopic {
     body: string
     issue_id: string
     is_ai_generated: boolean
-    approval_status: '대기' | '승인' | '반려'
+    approval_status: '대기' | '승인' | '반려' | '종료'
     approved_at: string | null
     created_at: string
     issues: { id: string; title: string } | null
 }
 
-type FilterStatus = '' | '대기' | '승인' | '반려'
+type FilterStatus = '' | '대기' | '승인' | '반려' | '종료'
 
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
     { value: '', label: '전체' },
     { value: '대기', label: '대기' },
     { value: '승인', label: '승인' },
     { value: '반려', label: '반려' },
+    { value: '종료', label: '종료' },
 ]
 
 const STATUS_STYLE: Record<string, string> = {
     '대기': 'bg-yellow-100 text-yellow-700',
     '승인': 'bg-green-100 text-green-700',
     '반려': 'bg-red-100 text-red-700',
+    '종료': 'bg-gray-100 text-gray-600',
 }
 
 function formatDate(dateString: string): string {
@@ -54,7 +56,13 @@ export default function AdminDiscussionsPage() {
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
 
-    const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
+    /* 수정 폼 */
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [editDraft, setEditDraft] = useState('')
+    const [submittingEdit, setSubmittingEdit] = useState(false)
+    const [editError, setEditError] = useState<string | null>(null)
+
+    const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2, '종료': 3 }
 
     const loadTopics = useCallback(async (status: FilterStatus) => {
         setLoading(true)
@@ -86,10 +94,47 @@ export default function AdminDiscussionsPage() {
         loadTopics(filter)
     }, [filter, loadTopics])
 
-    const handleAction = async (id: string, action: '승인' | '반려' | '복구') => {
+    const handleEditStart = (topic: DiscussionTopic) => {
+        setEditingId(topic.id)
+        setEditDraft(topic.body)
+        setEditError(null)
+    }
+
+    const handleEditCancel = () => {
+        setEditingId(null)
+        setEditDraft('')
+        setEditError(null)
+    }
+
+    const handleEditSave = async (id: string) => {
+        if (!editDraft.trim() || submittingEdit) return
+        setSubmittingEdit(true)
+        setEditError(null)
+        try {
+            const res = await fetch(`/api/admin/discussions/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: editDraft.trim() }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            setTopics((prev) =>
+                prev.map((t) => t.id === id ? { ...t, body: json.data.body } : t)
+            )
+            setEditingId(null)
+            setEditDraft('')
+        } catch (e) {
+            setEditError(e instanceof Error ? e.message : '수정 실패')
+        } finally {
+            setSubmittingEdit(false)
+        }
+    }
+
+    const handleAction = async (id: string, action: '승인' | '반려' | '복구' | '종료') => {
         const confirmMsg =
             action === '승인' ? '이 토론 주제를 승인하시겠습니까?' :
             action === '반려' ? '이 토론 주제를 반려 처리하시겠습니까?' :
+            action === '종료' ? '이 토론 주제를 종료하시겠습니까? 댓글 작성이 차단됩니다.' :
             '이 토론 주제를 대기 상태로 복구하시겠습니까?'
         if (!window.confirm(confirmMsg)) return
         setProcessingId(id)
@@ -103,13 +148,14 @@ export default function AdminDiscussionsPage() {
             if (!res.ok) throw new Error(json.error)
             const nextStatus =
                 action === '승인' ? '승인' :
-                action === '반려' ? '반려' : '대기'
+                action === '반려' ? '반려' :
+                action === '종료' ? '종료' : '대기'
             setTopics((prev) =>
                 prev.map((t) =>
                     t.id === id
                         ? {
                               ...t,
-                              approval_status: nextStatus as '승인' | '반려' | '대기',
+                              approval_status: nextStatus as DiscussionTopic['approval_status'],
                               approved_at: action === '승인' ? new Date().toISOString() : null,
                           }
                         : t
@@ -293,10 +339,43 @@ export default function AdminDiscussionsPage() {
                         ) : (
                             topics.map((topic) => {
                                 const isProcessing = processingId === topic.id
+                                const isEditing = editingId === topic.id
                                 return (
                                     <tr key={topic.id} className="hover:bg-gray-50">
                                         <td className="px-4 py-3 text-sm text-gray-800 max-w-xs">
-                                            <p className="line-clamp-2">{topic.body}</p>
+                                            {isEditing ? (
+                                                <div className="space-y-1">
+                                                    <textarea
+                                                        value={editDraft}
+                                                        onChange={(e) => setEditDraft(e.target.value)}
+                                                        rows={3}
+                                                        maxLength={500}
+                                                        className="w-full px-2 py-1 text-sm border border-blue-400 rounded resize-none focus:outline-none"
+                                                    />
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-gray-400 flex-1">{editDraft.length}/500</span>
+                                                        <button
+                                                            onClick={() => handleEditSave(topic.id)}
+                                                            disabled={!editDraft.trim() || submittingEdit}
+                                                            className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                        >
+                                                            {submittingEdit ? '저장 중...' : '저장'}
+                                                        </button>
+                                                        <button
+                                                            onClick={handleEditCancel}
+                                                            disabled={submittingEdit}
+                                                            className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                                        >
+                                                            취소
+                                                        </button>
+                                                    </div>
+                                                    {editError && (
+                                                        <p className="text-xs text-red-500">{editError}</p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="line-clamp-2">{topic.body}</p>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {topic.issues ? (
@@ -331,44 +410,63 @@ export default function AdminDiscussionsPage() {
                                             {formatDate(topic.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            <div className="flex gap-2">
-                                                {topic.approval_status === '대기' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleAction(topic.id, '승인')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                                        >
-                                                            승인
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleAction(topic.id, '반려')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                                        >
-                                                            반려
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {topic.approval_status === '승인' && (
+                                            {!isEditing && (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {/* 수정 버튼: 모든 상태에서 노출 */}
                                                     <button
-                                                        onClick={() => handleAction(topic.id, '반려')}
+                                                        onClick={() => handleEditStart(topic)}
                                                         disabled={isProcessing}
-                                                        className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                        className="text-xs px-2.5 py-1.5 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 disabled:opacity-50"
                                                     >
-                                                        반려
+                                                        수정
                                                     </button>
-                                                )}
-                                                {topic.approval_status === '반려' && (
-                                                    <button
-                                                        onClick={() => handleAction(topic.id, '복구')}
-                                                        disabled={isProcessing}
-                                                        className="text-xs px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
-                                                    >
-                                                        복구
-                                                    </button>
-                                                )}
-                                            </div>
+                                                    {topic.approval_status === '대기' && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '승인')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                            >
+                                                                승인
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '반려')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                            >
+                                                                반려
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {topic.approval_status === '승인' && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '종료')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                                            >
+                                                                종료
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '반려')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                            >
+                                                                반려
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {(topic.approval_status === '반려' || topic.approval_status === '종료') && (
+                                                        <button
+                                                            onClick={() => handleAction(topic.id, '복구')}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
+                                                        >
+                                                            복구
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 )

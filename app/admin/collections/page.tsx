@@ -135,7 +135,7 @@ export default function AdminCollectionsPage() {
                     <button
                         onClick={fetchStats}
                         disabled={loading}
-                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
                     >
                         {loading ? '로딩 중…' : '새로고침'}
                     </button>
