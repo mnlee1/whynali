@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
             parent_id: parent_id ?? null,
             user_id: user.id,
             body: sanitizeText(content),
-            visibility,
+            visibility: pendingReview ? 'pending' : 'public',
         })
         .select()
         .single()
