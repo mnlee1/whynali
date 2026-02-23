@@ -10,13 +10,27 @@ interface VoteSectionProps {
 
 type VoteWithChoices = Vote & { vote_choices: VoteChoice[] }
 
-export default function VoteSection({ issueId, userId }: VoteSectionProps) {
+export default function VoteSection({ issueId, userId: serverUserId }: VoteSectionProps) {
+    const [userId, setUserId] = useState<string | null>(serverUserId)
     const [votes, setVotes] = useState<VoteWithChoices[]>([])
     /* vote_id → 선택한 vote_choice_id */
     const [userVotes, setUserVotes] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState<string | null>(null) // 처리 중인 vote_id
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (serverUserId) {
+            setUserId(serverUserId)
+            return
+        }
+        fetch('/api/auth/me')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.id) setUserId(data.id)
+            })
+            .catch(() => {})
+    }, [serverUserId])
 
     const loadVotes = useCallback(async () => {
         try {

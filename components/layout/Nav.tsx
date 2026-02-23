@@ -17,13 +17,13 @@ export default function Nav({ mobile = false, onNavigate }: NavProps) {
 
     if (mobile) {
         return (
-            <nav className="flex flex-col gap-3">
+            <nav className="flex flex-col gap-1">
                 {categories.map((cat) => (
                     <Link
                         key={cat.href}
                         href={cat.href}
                         onClick={onNavigate}
-                        className="text-base py-2 hover:text-blue-600 active:text-blue-600"
+                        className="text-base py-2 text-neutral-700 hover:text-neutral-900"
                     >
                         {cat.name}
                     </Link>
@@ -33,12 +33,12 @@ export default function Nav({ mobile = false, onNavigate }: NavProps) {
     }
 
     return (
-        <nav className="flex gap-4 lg:gap-6">
+        <nav className="flex items-center gap-5">
             {categories.map((cat) => (
                 <Link
                     key={cat.href}
                     href={cat.href}
-                    className="text-sm hover:text-blue-600 whitespace-nowrap"
+                    className="text-sm text-neutral-600 hover:text-neutral-900 whitespace-nowrap"
                 >
                     {cat.name}
                 </Link>

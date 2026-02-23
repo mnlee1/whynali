@@ -22,7 +22,7 @@ export interface TimelinePoint {
     created_at: string
 }
 
-// 댓글
+// 댓글 (API에서 users 조인 시 display_name 포함 가능)
 export interface Comment {
     id: string
     issue_id?: string
@@ -35,6 +35,8 @@ export interface Comment {
     parent_id?: string
     created_at: string
     updated_at: string
+    /** 작성자 표시명. 없으면 UI에서 user_id 마스킹 표시 */
+    display_name?: string | null
 }
 
 // 투표
@@ -60,7 +62,7 @@ export interface DiscussionTopic {
     issue_id: string
     body: string
     is_ai_generated: boolean
-    approval_status: '대기' | '승인' | '반려' | '종료'
+    approval_status: '대기' | '승인' | '반려'
     approved_at?: string
     created_at: string
 }

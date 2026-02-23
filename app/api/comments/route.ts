@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
+import { toUserMessage } from '@/lib/api-errors'
+import { ensurePublicUser } from '@/lib/ensure-user'
 
 /* GET /api/comments?issue_id=&limit=&offset= */
 /* GET /api/comments?discussion_topic_id=&limit=&offset= */
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     let query = admin
         .from('comments')
-        .select('*', { count: 'exact' })
+        .select('*, users(display_name)', { count: 'exact' })
         .eq('visibility', 'public')
         .is('parent_id', null)
         .order('created_at', { ascending: false })
@@ -34,11 +36,17 @@ export async function GET(request: NextRequest) {
         query = query.eq('discussion_topic_id', discussion_topic_id!)
     }
 
-    const { data, error, count } = await query
+    const { data: rawData, error, count } = await query
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: toUserMessage(error.message) }, { status: 500 })
     }
+
+    type Row = (typeof rawData)[number] & { users?: { display_name: string | null } | null }
+    const data = (rawData ?? []).map((row: Row) => {
+        const { users, ...comment } = row
+        return { ...comment, display_name: users?.display_name ?? null }
+    })
 
     return NextResponse.json({ data, total: count ?? 0 })
 }
@@ -50,6 +58,14 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const admin = createSupabaseAdminClient()
+    try {
+        await ensurePublicUser(supabase, admin, user)
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : ''
+        return NextResponse.json({ error: toUserMessage(msg, 'comment') }, { status: 500 })
     }
 
     const { allowed, reason: limitReason } = checkRateLimit(user.id)
@@ -77,9 +93,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
 
-    const visibility = pendingReview ? 'pending_review' : 'public'
+    if (issue_id) {
+        const { data: issue } = await admin.from('issues').select('id').eq('id', issue_id).maybeSingle()
+        if (!issue) {
+            return NextResponse.json({ error: '해당 이슈를 찾을 수 없습니다.' }, { status: 404 })
+        }
+    }
+    if (discussion_topic_id) {
+        const { data: topic } = await admin.from('discussion_topics').select('id').eq('id', discussion_topic_id).maybeSingle()
+        if (!topic) {
+            return NextResponse.json({ error: '해당 토론 주제를 찾을 수 없습니다.' }, { status: 404 })
+        }
+    }
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
         .from('comments')
         .insert({
             issue_id: issue_id ?? null,
@@ -93,7 +120,7 @@ export async function POST(request: NextRequest) {
         .single()
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: toUserMessage(error.message, 'comment') }, { status: 500 })
     }
 
     if (pendingReview) {

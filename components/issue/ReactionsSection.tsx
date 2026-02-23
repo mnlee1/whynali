@@ -12,12 +12,26 @@ type CountMap = Partial<Record<ReactionType, number>>
 
 const REACTIONS: ReactionType[] = ['좋아요', '싫어요', '화나요', '팝콘각', '응원', '애도', '사이다']
 
-export default function ReactionsSection({ issueId, userId }: ReactionsSectionProps) {
+export default function ReactionsSection({ issueId, userId: serverUserId }: ReactionsSectionProps) {
+    const [userId, setUserId] = useState<string | null>(serverUserId)
     const [counts, setCounts] = useState<CountMap>({})
     const [userReaction, setUserReaction] = useState<ReactionType | null>(null)
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (serverUserId) {
+            setUserId(serverUserId)
+            return
+        }
+        fetch('/api/auth/me')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.id) setUserId(data.id)
+            })
+            .catch(() => {})
+    }, [serverUserId])
 
     const loadReactions = useCallback(async () => {
         try {
@@ -98,6 +112,7 @@ export default function ReactionsSection({ issueId, userId }: ReactionsSectionPr
             {!userId && (
                 <p className="text-sm text-gray-500 mt-3">
                     <a href="/login" className="text-blue-600 underline">로그인</a>하면 감정을 표현할 수 있습니다.
+                    로그인했는데도 이 문구가 보이면 페이지를 새로고침해 보세요.
                 </p>
             )}
         </div>
