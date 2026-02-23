@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase/client'
+import { createBrowserClient } from '@supabase/ssr'
 import Nav from './Nav'
 import SearchBar from './SearchBar'
 
@@ -16,11 +16,18 @@ export default function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     const [user, setUser] = useState<User | null>(null)
     const router = useRouter()
+    const sbRef = useRef(
+        createBrowserClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        )
+    )
 
     useEffect(() => {
-        supabase.auth.getUser().then((result) => setUser(result.data.user ?? null))
+        const sb = sbRef.current
+        sb.auth.getUser().then((result) => setUser(result.data.user ?? null))
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+        const { data: { subscription } } = sb.auth.onAuthStateChange((_, session) => {
             setUser(session?.user ?? null)
         })
 
@@ -28,7 +35,7 @@ export default function Header() {
     }, [])
 
     const handleLogout = async () => {
-        await supabase.auth.signOut()
+        await sbRef.current.auth.signOut()
         setUser(null)
         router.push('/')
         router.refresh()
