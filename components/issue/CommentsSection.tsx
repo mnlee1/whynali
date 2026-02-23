@@ -9,6 +9,8 @@ interface CommentsSectionProps {
     /** 토론 주제 댓글: discussionTopicId 전달 */
     discussionTopicId?: string
     userId: string | null
+    /** 토론 종료 시 true — 댓글 작성 폼 비활성화 */
+    isClosed?: boolean
 }
 
 const PAGE_SIZE = 20
@@ -32,7 +34,7 @@ function maskUserId(userId: string): string {
     return `사용자 …${userId.slice(-4)}`
 }
 
-export default function CommentsSection({ issueId, discussionTopicId, userId }: CommentsSectionProps) {
+export default function CommentsSection({ issueId, discussionTopicId, userId, isClosed = false }: CommentsSectionProps) {
     const [comments, setComments] = useState<Comment[]>([])
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
@@ -46,6 +48,8 @@ export default function CommentsSection({ issueId, discussionTopicId, userId }: 
     const [writeError, setWriteError] = useState<string | null>(null)
     /* 에러 종류: 'rate_limit' | 'validation' | null */
     const [writeErrorType, setWriteErrorType] = useState<'rate_limit' | 'validation' | null>(null)
+    /* 검토 대기 안내 메시지 */
+    const [pendingNotice, setPendingNotice] = useState<string | null>(null)
     /* Rate Limit 카운트다운 (초) */
     const [rateLimitCountdown, setRateLimitCountdown] = useState(0)
     const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -117,6 +121,7 @@ export default function CommentsSection({ issueId, discussionTopicId, userId }: 
         setSubmittingWrite(true)
         setWriteError(null)
         setWriteErrorType(null)
+        setPendingNotice(null)
         try {
             const res = await fetch('/api/comments', {
                 method: 'POST',
@@ -137,7 +142,7 @@ export default function CommentsSection({ issueId, discussionTopicId, userId }: 
                 return
             }
             if (res.status === 400) {
-                /* 검증 오류: 금칙어·길이 초과 등 */
+                /* 검증 오류: 길이 초과·빈 내용 등 */
                 setWriteErrorType('validation')
                 setWriteError(json.error ?? '입력 내용을 확인해 주세요.')
                 return
@@ -148,6 +153,13 @@ export default function CommentsSection({ issueId, discussionTopicId, userId }: 
             }
 
             setDraft('')
+
+            if (json.pending) {
+                /* 금칙어 포함 → 검토 대기 상태로 저장됨, 목록 갱신 없음 */
+                setPendingNotice(json.message ?? '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.')
+                return
+            }
+
             setOffset(0)
             await loadComments(0, false)
         } catch {
@@ -328,7 +340,11 @@ export default function CommentsSection({ issueId, discussionTopicId, userId }: 
 
             {/* 작성 폼 */}
             <div className="pt-4 border-t border-gray-100">
-                {userId ? (
+                {isClosed ? (
+                    <p className="text-sm text-gray-400 text-center py-3">
+                        종료된 토론입니다. 댓글을 작성할 수 없습니다.
+                    </p>
+                ) : userId ? (
                     <div className="space-y-2">
                         {/* Rate Limit 에러: 카운트다운 박스 */}
                         {writeErrorType === 'rate_limit' && writeError && (
@@ -344,6 +360,12 @@ export default function CommentsSection({ issueId, discussionTopicId, userId }: 
                         {/* 검증/기타 에러: 빨간 텍스트 */}
                         {writeErrorType !== 'rate_limit' && writeError && (
                             <p className="text-sm text-red-500">{writeError}</p>
+                        )}
+                        {/* 검토 대기 안내: 금칙어 포함 시 저장 후 표시 */}
+                        {pendingNotice && (
+                            <p className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-300 rounded px-3 py-2">
+                                {pendingNotice}
+                            </p>
                         )}
                         <textarea
                             value={draft}

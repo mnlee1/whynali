@@ -65,13 +65,25 @@ export async function collectNaverNews(category: string): Promise<number> {
     }))
 
     if (newsData.length > 0) {
-        const { error } = await supabaseAdmin.from('news_data').insert(newsData)
+        /* 이미 저장된 link 필터링 (중복 방지) */
+        const links = newsData.map((n) => n.link)
+        const { data: existing } = await supabaseAdmin
+            .from('news_data')
+            .select('link')
+            .in('link', links)
+        const existingLinks = new Set(existing?.map((e) => e.link) || [])
+        const newNews = newsData.filter((n) => !existingLinks.has(n.link))
 
-        if (error) {
-            console.error('뉴스 저장 에러:', error)
-            throw error
+        if (newNews.length > 0) {
+            const { error } = await supabaseAdmin.from('news_data').insert(newNews)
+            if (error) {
+                console.error('뉴스 저장 에러:', error)
+                throw error
+            }
         }
+
+        return newNews.length
     }
 
-    return newsData.length
+    return 0
 }

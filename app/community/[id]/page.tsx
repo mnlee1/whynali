@@ -11,7 +11,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
         .from('discussion_topics')
         .select('*, issues(id, title)')
         .eq('id', id)
-        .eq('approval_status', '승인')
+        .in('approval_status', ['승인', '종료'])
         .single()
 
     if (error || !topic) {
@@ -43,11 +43,16 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
             {/* 토론 주제 본문 */}
             <div className="p-5 border border-gray-200 rounded-lg mb-6">
                 {/* 상태 배지 행
-                    표시 규칙: approval_status='승인' → 진행중(초록)
-                    관리자가 반려 처리 시 이 페이지 자체가 404로 전환됨 */}
+                    표시 규칙: '승인' → 진행중(초록), '종료' → 종료(회색)
+                    관리자가 반려 처리 시 이 페이지는 404로 전환됨 */}
                 <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded border border-green-200">
-                        진행중
+                    <span className={[
+                        'text-xs px-2 py-0.5 rounded border',
+                        topic.approval_status === '종료'
+                            ? 'bg-gray-50 text-gray-500 border-gray-200'
+                            : 'bg-green-50 text-green-700 border-green-200',
+                    ].join(' ')}>
+                        {topic.approval_status === '종료' ? '종료' : '진행중'}
                     </span>
                     {topic.is_ai_generated && (
                         <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
@@ -83,7 +88,11 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
             {/* 댓글 */}
             <div className="pt-2">
                 <h2 className="text-lg font-bold mb-4">댓글</h2>
-                <CommentsSection discussionTopicId={id} userId={userId} />
+                <CommentsSection
+                    discussionTopicId={id}
+                    userId={userId}
+                    isClosed={topic.approval_status === '종료'}
+                />
             </div>
         </div>
     )

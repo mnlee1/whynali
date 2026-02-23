@@ -64,10 +64,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'issue_id 또는 discussion_topic_id가 필요합니다.' }, { status: 400 })
     }
 
-    const { valid, reason } = validateContent(content, 'comment')
-    if (!valid) {
+    /* DB 금칙어 조회 (실패 시 빈 배열로 폴백 — 하드코딩 금칙어는 항상 적용) */
+    const adminClient = createSupabaseAdminClient()
+    const { data: dbRules } = await adminClient
+        .from('safety_rules')
+        .select('value')
+        .eq('kind', 'banned_word')
+    const dbBannedWords = (dbRules ?? []).map((r: { value: string }) => r.value)
+
+    const { valid, pendingReview, reason } = validateContent(content, 'comment', dbBannedWords)
+    if (!valid && !pendingReview) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
+
+    const visibility = pendingReview ? 'pending_review' : 'public'
 
     const { data, error } = await supabase
         .from('comments')
@@ -77,12 +87,21 @@ export async function POST(request: NextRequest) {
             parent_id: parent_id ?? null,
             user_id: user.id,
             body: sanitizeText(content),
+            visibility,
         })
         .select()
         .single()
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (pendingReview) {
+        return NextResponse.json({
+            data,
+            message: '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',
+            pending: true,
+        }, { status: 201 })
     }
 
     return NextResponse.json({ data }, { status: 201 })
