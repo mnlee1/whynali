@@ -39,6 +39,7 @@ export default function CommentsSection({
     issueId,
     discussionTopicId,
     userId: serverUserId,
+    isClosed = false,
 }: CommentsSectionProps) {
     const [userId, setUserId] = useState<string | null>(serverUserId)
     const [comments, setComments] = useState<Comment[]>([])
