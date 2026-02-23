@@ -34,6 +34,12 @@ export default function AdminPage() {
             href: '/admin/safety',
             color: 'bg-red-500',
         },
+        {
+            title: '운영 로그',
+            description: '관리자 액션 이력 조회',
+            href: '/admin/logs',
+            color: 'bg-gray-500',
+        },
     ]
 
     return (

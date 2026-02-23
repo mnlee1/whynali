@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error
 
+        await writeAdminLog('금칙어 추가', 'safety_rule', data.id)
         return NextResponse.json({ data }, { status: 201 })
     } catch {
         return NextResponse.json({ error: '금칙어 추가 실패' }, { status: 500 })
@@ -74,6 +76,7 @@ export async function DELETE(request: NextRequest) {
 
         if (error) throw error
 
+        await writeAdminLog('금칙어 삭제', 'safety_rule', id)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '금칙어 삭제 실패' }, { status: 500 })
