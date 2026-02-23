@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             )
         }
 
+        await writeAdminLog('댓글 공개', 'comment', id)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: '공개 처리 실패' }, { status: 500 })
@@ -47,6 +49,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
         if (error) throw error
 
+        await writeAdminLog('댓글 삭제', 'comment', id)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '삭제 처리 실패' }, { status: 500 })

@@ -19,11 +19,16 @@ export function sanitizeText(text: string): string {
     return text.trim().replace(/<[^>]*>/g, '')
 }
 
-/* ── 4. validate: 길이·금칙어 검사 ── */
+/* ── 4. validate: 길이·금칙어 검사 ──
+   - valid: false + pendingReview 없음 → 즉시 거부 (400)
+   - valid: false + pendingReview: true → 금칙어 포함, 검토 대기 저장 가능
+   - valid: true → 정상 저장
+   - extraBannedWords: DB safety_rules에서 조회한 추가 금칙어 목록 */
 export function validateContent(
     text: string,
-    type: ContentType
-): { valid: boolean; reason?: string } {
+    type: ContentType,
+    extraBannedWords: string[] = []
+): { valid: boolean; pendingReview?: boolean; reason?: string } {
     const cleaned = sanitizeText(text)
 
     if (!cleaned) {
@@ -34,9 +39,10 @@ export function validateContent(
         return { valid: false, reason: `최대 ${LENGTH_LIMITS[type]}자까지 입력 가능합니다.` }
     }
 
-    const hasBannedWord = BANNED_WORDS.some((word) => cleaned.includes(word))
+    const allBannedWords = [...BANNED_WORDS, ...extraBannedWords]
+    const hasBannedWord = allBannedWords.some((word) => cleaned.includes(word))
     if (hasBannedWord) {
-        return { valid: false, reason: '사용할 수 없는 단어가 포함되어 있습니다.' }
+        return { valid: false, pendingReview: true, reason: '사용할 수 없는 단어가 포함되어 있습니다.' }
     }
 
     return { valid: true }

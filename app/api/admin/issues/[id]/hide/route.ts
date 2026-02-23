@@ -1,8 +1,4 @@
-/**
- * app/api/admin/issues/[id]/reject/route.ts
- * 
- * [관리자 - 이슈 거부 API]
- */
+/** app/api/admin/issues/[id]/hide/route.ts — [관리자 - 이슈 숨김 API] */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
@@ -20,6 +16,7 @@ export async function POST(
             .from('issues')
             .update({
                 approval_status: '반려',
+                approved_at: null,
             })
             .eq('id', id)
             .select()
@@ -29,9 +26,9 @@ export async function POST(
 
         return NextResponse.json({ data })
     } catch (error) {
-        console.error('이슈 거부 에러:', error)
+        console.error('이슈 숨김 에러:', error)
         return NextResponse.json(
-            { error: 'REJECT_ERROR', message: '이슈 거부 실패' },
+            { error: 'HIDE_ERROR', message: '이슈 숨김 실패' },
             { status: 500 }
         )
     }
