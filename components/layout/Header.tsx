@@ -18,7 +18,7 @@ export default function Header() {
     const router = useRouter()
 
     useEffect(() => {
-        supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null))
+        supabase.auth.getUser().then((result) => setUser(result.data.user ?? null))
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
             setUser(session?.user ?? null)
