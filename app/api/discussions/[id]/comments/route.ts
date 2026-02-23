@@ -12,9 +12,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     const offset = Number(searchParams.get('offset') ?? 0)
 
     const supabase = await createSupabaseServerClient()
-    const { data, error, count } = await supabase
+    const { data: rawData, error, count } = await supabase
         .from('comments')
-        .select('*', { count: 'exact' })
+        .select('*, users(display_name)', { count: 'exact' })
         .eq('discussion_topic_id', discussion_topic_id)
         .eq('visibility', 'public')
         .is('parent_id', null)
@@ -24,6 +24,12 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    type Row = (typeof rawData)[number] & { users?: { display_name: string | null } | null }
+    const data = (rawData ?? []).map((row: Row) => {
+        const { users, ...comment } = row
+        return { ...comment, display_name: users?.display_name ?? null }
+    })
 
     return NextResponse.json({ data, total: count ?? 0 })
 }

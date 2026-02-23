@@ -44,7 +44,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     }
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8 max-w-4xl">
+        <div className="container mx-auto px-4 py-6 md:py-8">
             {/* 이슈 헤더 */}
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/safety'
+import { toUserMessage } from '@/lib/api-errors'
+import { ensurePublicUser } from '@/lib/ensure-user'
 
 /* GET /api/reactions?issue_id= — 타입별 집계 + 현재 사용자 반응 */
 export async function GET(request: NextRequest) {
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest) {
         .select('type, user_id')
         .eq('issue_id', issue_id)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return NextResponse.json({ error: toUserMessage(error.message) }, { status: 500 })
 
     const counts: Record<string, number> = {}
     for (const row of data ?? []) {
@@ -42,6 +44,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
+    const admin = createSupabaseAdminClient()
+    await ensurePublicUser(supabase, admin, user)
+
     const { allowed, reason } = checkRateLimit(user.id)
     if (!allowed) {
         return NextResponse.json({ error: reason }, { status: 429 })
@@ -59,28 +64,38 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '유효하지 않은 감정 타입입니다.' }, { status: 400 })
     }
 
-    const { data: existing } = await supabase
+    const { data: existing } = await admin
         .from('reactions')
         .select('id, type')
         .eq('issue_id', issue_id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
     /* 같은 타입 → 취소(삭제) */
     if (existing?.type === type) {
-        const { error } = await supabase.from('reactions').delete().eq('id', existing!.id)
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        const { error } = await admin.from('reactions').delete().eq('id', existing!.id)
+        if (error) return NextResponse.json({ error: toUserMessage(error.message) }, { status: 500 })
         return NextResponse.json({ action: 'removed', type })
     }
 
-    /* 다른 타입 존재 → 교체(upsert) */
-    const { data, error } = await supabase
+    /* 다른 타입 존재 → update, 없으면 insert (upsert 제거로 ON CONFLICT 오류 방지) */
+    if (existing) {
+        const { data, error } = await admin
+            .from('reactions')
+            .update({ type })
+            .eq('id', existing.id)
+            .select()
+            .single()
+        if (error) return NextResponse.json({ error: toUserMessage(error.message) }, { status: 500 })
+        return NextResponse.json({ action: 'changed', data })
+    }
+
+    const { data, error } = await admin
         .from('reactions')
-        .upsert({ issue_id, user_id: user.id, type }, { onConflict: 'issue_id,user_id' })
+        .insert({ issue_id, user_id: user.id, type })
         .select()
         .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    return NextResponse.json({ action: existing ? 'changed' : 'added', data })
+    if (error) return NextResponse.json({ error: toUserMessage(error.message) }, { status: 500 })
+    return NextResponse.json({ action: 'added', data })
 }

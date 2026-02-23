@@ -21,7 +21,7 @@ export default function SearchBar() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="검색"
-                className="w-full md:w-48 px-3 py-2 md:py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full md:w-40 px-3 py-1.5 text-sm border border-neutral-200 rounded-md bg-neutral-50 focus:outline-none focus:border-neutral-400 focus:bg-white"
             />
         </form>
     )

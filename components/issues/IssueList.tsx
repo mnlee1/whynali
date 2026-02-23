@@ -87,87 +87,83 @@ export default function IssueList({ category }: IssueListProps) {
 
     return (
         <div className="space-y-4">
-            {/* 검색 & 필터 영역 */}
-            <div className="flex flex-col md:flex-row gap-3">
-                {/* 검색창 */}
+            <div className="flex flex-col sm:flex-row gap-2 mb-6">
                 <input
                     type="text"
                     placeholder="이슈 검색..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
-                    className="flex-1 px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 text-sm border border-neutral-200 rounded-md bg-white focus:outline-none focus:border-neutral-400"
                 />
-
-                {/* 상태 필터 */}
-                <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                    <option value="">전체 상태</option>
-                    <option value="점화">점화</option>
-                    <option value="논란중">논란중</option>
-                    <option value="종결">종결</option>
-                </select>
-
-                {/* 정렬 */}
-                <select
-                    value={sortOption}
-                    onChange={(e) => setSortOption(e.target.value as 'latest' | 'heat')}
-                    className="px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                    <option value="latest">최신순</option>
-                    <option value="heat">화력순</option>
-                </select>
+                <div className="flex gap-2">
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-3 py-2 text-sm border border-neutral-200 rounded-md bg-white focus:outline-none focus:border-neutral-400"
+                    >
+                        <option value="">전체 상태</option>
+                        <option value="점화">점화</option>
+                        <option value="논란중">논란중</option>
+                        <option value="종결">종결</option>
+                    </select>
+                    <select
+                        value={sortOption}
+                        onChange={(e) => setSortOption(e.target.value as 'latest' | 'heat')}
+                        className="px-3 py-2 text-sm border border-neutral-200 rounded-md bg-white focus:outline-none focus:border-neutral-400"
+                    >
+                        <option value="latest">최신순</option>
+                        <option value="heat">화력순</option>
+                    </select>
+                </div>
+            {/* 에러 */}
             </div>
 
-            {/* 에러 */}
             {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
+                <div className="p-4 mb-4 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
+            {/* 로딩 (첫 로딩만) */}
                     {error}
                 </div>
             )}
 
-            {/* 로딩 (첫 로딩만) */}
             {loading && issues.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-12 text-neutral-500 text-sm">
+                    {/* 빈 목록 */}
                     로딩 중...
                 </div>
             )}
 
-            {/* 빈 목록 */}
+            {/* 이슈 카드 리스트 */}
             {!loading && issues.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-12 text-neutral-500 text-sm">
                     이슈가 없습니다.
                 </div>
             )}
 
-            {/* 이슈 카드 리스트 */}
             {issues.length > 0 && (
                 <div className="space-y-3">
+                    {/* 이슈 카드 리스트 */}
                     {issues.map((issue) => (
                         <IssueCard key={issue.id} issue={issue} />
                     ))}
                 </div>
             )}
 
-            {/* 더 보기 버튼 */}
             {issues.length < total && (
-                <div className="text-center pt-4">
+                <div className="text-center pt-6">
+                    {/* 결과 개수 표시 */}
                     <button
                         onClick={() => fetchIssues(false)}
                         disabled={loading}
-                        className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                        className="px-5 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? '로딩 중...' : '더 보기'}
                     </button>
                 </div>
             )}
 
-            {/* 결과 개수 표시 */}
             {issues.length > 0 && (
-                <div className="text-center text-sm text-gray-500">
+                <div className="text-center pt-2 text-xs text-neutral-400">
                     {issues.length} / {total}
                 </div>
             )}
