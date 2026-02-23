@@ -6,16 +6,17 @@ export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ id: string }> }
 
 /* PATCH /api/admin/discussions/:id
-   body: { action: '승인' | '반려' } */
+   body: { action: '승인' | '반려' | '복구' } */
 export async function PATCH(request: NextRequest, { params }: Params) {
     try {
         const { id } = await params
         const body = await request.json()
         const { action } = body
 
-        if (action !== '승인' && action !== '반려') {
+        const VALID_ACTIONS = ['승인', '반려', '복구'] as const
+        if (!VALID_ACTIONS.includes(action)) {
             return NextResponse.json(
-                { error: 'action은 "승인" 또는 "반려"여야 합니다.' },
+                { error: 'action은 승인 | 반려 | 복구 중 하나여야 합니다.' },
                 { status: 400 }
             )
         }
@@ -23,7 +24,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         const updatePayload =
             action === '승인'
                 ? { approval_status: '승인', approved_at: new Date().toISOString() }
-                : { approval_status: '반려', approved_at: null }
+                : action === '반려'
+                ? { approval_status: '반려', approved_at: null }
+                : { approval_status: '대기', approved_at: null }   // 복구 → 대기
 
         const { data, error } = await supabaseAdmin
             .from('discussion_topics')

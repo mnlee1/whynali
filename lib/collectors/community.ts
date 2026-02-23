@@ -23,30 +23,32 @@ async function fetchHtml(url: string): Promise<string> {
     return response.text()
 }
 
-function parseRelativeTimeToIso(relative: string): string {
+/** "16:44" 또는 "25.02.20" 형태의 더쿠 시간 문자열을 ISO 변환 */
+function parseTheqooTime(timeText: string): string {
     const now = new Date()
-    const m = relative.match(/(\d+)\s*분/)
-    if (m) {
-        now.setMinutes(now.getMinutes() - parseInt(m[1], 10))
-        return now.toISOString()
+    const trimmed = timeText.trim()
+
+    /* HH:MM 형식 (당일 게시글) */
+    const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/)
+    if (timeMatch) {
+        const d = new Date(now)
+        d.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0)
+        return d.toISOString()
     }
-    const h = relative.match(/(\d+)\s*시간/)
-    if (h) {
-        now.setHours(now.getHours() - parseInt(h[1], 10))
-        return now.toISOString()
+
+    /* YY.MM.DD 형식 (이전 게시글) */
+    const dateMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{2})$/)
+    if (dateMatch) {
+        const year = 2000 + parseInt(dateMatch[1], 10)
+        const month = parseInt(dateMatch[2], 10) - 1
+        const day = parseInt(dateMatch[3], 10)
+        return new Date(year, month, day).toISOString()
     }
-    const d = relative.match(/(\d+)\s*일/)
-    if (d) {
-        now.setDate(now.getDate() - parseInt(d[1], 10))
-        return now.toISOString()
-    }
+
     return now.toISOString()
 }
 
-/**
- * 더쿠(theqoo.net) 메타데이터 수집.
- * 실제 HTML 구조에 맞게 셀렉터 조정 필요.
- */
+/** 더쿠(theqoo.net) 스퀘어 게시판 메타데이터 수집 */
 export async function collectTheqoo(): Promise<number> {
     const baseUrl = 'https://theqoo.net'
     const listUrl = `${baseUrl}/square`
@@ -55,52 +57,58 @@ export async function collectTheqoo(): Promise<number> {
         const html = await fetchHtml(listUrl)
         const $ = cheerio.load(html)
         const posts: CommunityPostRow[] = []
+        const now = new Date().toISOString()
 
-        $('.bd_lst .bd_li').each((_, el) => {
+        /* 일반 게시글: .bd_lst tbody tr 중 notice/notice_expand 클래스 없는 것 */
+        $('.bd_lst tbody tr').each((_, el) => {
             const $el = $(el)
-            const titleEl = $el.find('.tit a')
+            if (
+                $el.hasClass('notice') ||
+                $el.hasClass('notice_expand') ||
+                $el.hasClass('nofn')
+            ) return
+
+            const titleEl = $el.find('td.title a').first()
             const title = titleEl.text().trim()
             const href = titleEl.attr('href')
             if (!title || !href) return
 
-            const url = href.startsWith('http') ? href : `${baseUrl}${href.startsWith('/') ? '' : '/'}${href}`
-            const viewText = $el.find('.count .num').first().text().trim()
-            const commentText = $el.find('.reply_num, .cmt_num').text().trim()
-            const view_count = parseInt(viewText.replace(/[^0-9]/g, ''), 10) || 0
-            const comment_count = parseInt(commentText.replace(/[^0-9]/g, ''), 10) || 0
-            const timeText = $el.find('.date, .time').text().trim() || ''
-            const written_at = timeText ? parseRelativeTimeToIso(timeText) : new Date().toISOString()
+            const url = href.startsWith('http') ? href : `${baseUrl}${href}`
+            const replyText = $el.find('td.title .replyNum').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(replyText, 10) || 0
+            const viewText = $el.find('td.m_no').last().text().replace(/[^0-9]/g, '')
+            const view_count = parseInt(viewText, 10) || 0
+            const timeText = $el.find('td.time').text().trim()
+            const written_at = timeText ? parseTheqooTime(timeText) : now
 
-            posts.push({
-                title,
-                url,
-                view_count,
-                comment_count,
-                written_at,
-                source_site: '더쿠',
-            })
+            posts.push({ title, url, view_count, comment_count, written_at, source_site: '더쿠' })
         })
 
-        if (posts.length === 0) {
-            return 0
-        }
+        if (posts.length === 0) return 0
 
-        const { error } = await supabaseAdmin.from('community_data').insert(posts)
-        if (error) {
-            console.error('더쿠 저장 에러:', error)
-            throw error
-        }
-        return posts.length
+        /* 이미 저장된 URL 필터링 (UNIQUE 제약 없이 중복 방지) */
+        const urls = posts.map((p) => p.url)
+        const { data: existing } = await supabaseAdmin
+            .from('community_data')
+            .select('url')
+            .in('url', urls)
+        const existingUrls = new Set(existing?.map((e) => e.url) || [])
+        const newPosts = posts.filter((p) => !existingUrls.has(p.url))
+
+        if (newPosts.length === 0) return 0
+
+        const { error } = await supabaseAdmin
+            .from('community_data')
+            .insert(newPosts)
+        if (error) throw error
+        return newPosts.length
     } catch (error) {
         console.error('더쿠 수집 에러:', error)
         return 0
     }
 }
 
-/**
- * 네이트판 메타데이터 수집.
- * 실제 HTML 구조에 맞게 셀렉터 조정 필요.
- */
+/** 네이트판(pann.nate.com) 랭킹 메타데이터 수집 */
 export async function collectNatePann(): Promise<number> {
     const baseUrl = 'https://pann.nate.com'
     const listUrl = `${baseUrl}/talk/ranking`
@@ -109,57 +117,51 @@ export async function collectNatePann(): Promise<number> {
         const html = await fetchHtml(listUrl)
         const $ = cheerio.load(html)
         const posts: CommunityPostRow[] = []
+        const now = new Date().toISOString()
 
-        $('.postListItem, .list-content li, [data-type="post"]').each((_, el) => {
+        /* ul.post_wrap > li 구조 */
+        $('ul.post_wrap li').each((_, el) => {
             const $el = $(el)
-            const titleEl = $el.find('a[href*="/talk/"]').first()
-            const title = titleEl.text().trim()
+            const titleEl = $el.find('dt h2 a').first()
+            const title = titleEl.attr('title')?.trim() || titleEl.text().trim()
             const href = titleEl.attr('href')
             if (!title || !href) return
 
-            const url = href.startsWith('http') ? href : `${baseUrl}${href.startsWith('/') ? '' : '/'}${href}`
-            const viewEl = $el.find('.count, .hit, .view')
-            const commentEl = $el.find('.reply, .comment, .cmt')
-            const view_count = parseInt(viewEl.text().replace(/[^0-9]/g, ''), 10) || 0
-            const comment_count = parseInt(commentEl.text().replace(/[^0-9]/g, ''), 10) || 0
-            const timeEl = $el.find('.date, .time')
-            const written_at = timeEl.length
-                ? parseRelativeTimeToIso(timeEl.text().trim())
-                : new Date().toISOString()
+            const url = href.startsWith('http') ? href : `${baseUrl}${href}`
+            const repleText = $el.find('.reple-num').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(repleText, 10) || 0
+            const countText = $el.find('.count').text().replace('조회', '').replace(/[^0-9]/g, '')
+            const view_count = parseInt(countText, 10) || 0
 
-            posts.push({
-                title,
-                url,
-                view_count,
-                comment_count,
-                written_at,
-                source_site: '네이트판',
-            })
+            posts.push({ title, url, view_count, comment_count, written_at: now, source_site: '네이트판' })
         })
 
-        if (posts.length === 0) {
-            return 0
-        }
+        if (posts.length === 0) return 0
 
-        const { error } = await supabaseAdmin.from('community_data').insert(posts)
-        if (error) {
-            console.error('네이트판 저장 에러:', error)
-            throw error
-        }
-        return posts.length
+        /* 이미 저장된 URL 필터링 (UNIQUE 제약 없이 중복 방지) */
+        const urls = posts.map((p) => p.url)
+        const { data: existing } = await supabaseAdmin
+            .from('community_data')
+            .select('url')
+            .in('url', urls)
+        const existingUrls = new Set(existing?.map((e) => e.url) || [])
+        const newPosts = posts.filter((p) => !existingUrls.has(p.url))
+
+        if (newPosts.length === 0) return 0
+
+        const { error } = await supabaseAdmin
+            .from('community_data')
+            .insert(newPosts)
+        if (error) throw error
+        return newPosts.length
     } catch (error) {
         console.error('네이트판 수집 에러:', error)
         return 0
     }
 }
 
-/**
- * 더쿠 + 네이트판 통합 수집 (3분 Cron용).
- */
+/** 더쿠 + 네이트판 통합 수집 (3분 Cron용) */
 export async function collectAllCommunity(): Promise<{ theqoo: number; natePann: number }> {
-    const [theqoo, natePann] = await Promise.all([
-        collectTheqoo(),
-        collectNatePann(),
-    ])
+    const [theqoo, natePann] = await Promise.all([collectTheqoo(), collectNatePann()])
     return { theqoo, natePann }
 }
