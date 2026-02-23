@@ -29,18 +29,37 @@ function formatRelativeTime(dateString: string): string {
     return new Date(dateString).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
 }
 
-/* user_id 마지막 4자리로 익명 표시 */
-function maskUserId(userId: string): string {
-    return `사용자 …${userId.slice(-4)}`
+/** 작성자 표시: display_name이 있으면 사용, 없으면 익명. 뒷4자리로 서로 구분 가능 (99_댓글_작성자_표시_정책 §3.5) */
+function authorLabel(comment: Comment): string {
+    if (comment.display_name?.trim()) return comment.display_name.trim()
+    return `사용자 …${comment.user_id.slice(-4)}`
 }
 
-export default function CommentsSection({ issueId, discussionTopicId, userId, isClosed = false }: CommentsSectionProps) {
+export default function CommentsSection({
+    issueId,
+    discussionTopicId,
+    userId: serverUserId,
+}: CommentsSectionProps) {
+    const [userId, setUserId] = useState<string | null>(serverUserId)
     const [comments, setComments] = useState<Comment[]>([])
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (serverUserId) {
+            setUserId(serverUserId)
+            return
+        }
+        fetch('/api/auth/me')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.id) setUserId(data.id)
+            })
+            .catch(() => {})
+    }, [serverUserId])
 
     /* 작성 */
     const [draft, setDraft] = useState('')
@@ -263,7 +282,7 @@ export default function CommentsSection({ issueId, discussionTopicId, userId, is
                                 {/* 작성자 + 시간 */}
                                 <div className="flex items-center justify-between mb-1">
                                     <span className="text-xs text-gray-500">
-                                        {maskUserId(comment.user_id)}
+                                        {authorLabel(comment)}
                                     </span>
                                     <div className="flex items-center gap-3">
                                         <span className="text-xs text-gray-400">
@@ -402,6 +421,7 @@ export default function CommentsSection({ issueId, discussionTopicId, userId, is
                 ) : (
                     <p className="text-sm text-gray-500 text-center py-3">
                         <a href="/login" className="text-blue-600 underline">로그인</a>하면 댓글을 작성할 수 있습니다.
+                        로그인했는데도 이 문구가 보이면 페이지를 새로고침해 보세요.
                     </p>
                 )}
             </div>

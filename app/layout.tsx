@@ -1,6 +1,15 @@
+/**
+ * app/layout.tsx
+ *
+ * [루트 레이아웃]
+ *
+ * 상단 헤더, 메인, 하단 푸터. 공통 레이아웃(97_1단계_기초픽스 §5.2 기준).
+ */
+
 import type { Metadata } from 'next'
 import './globals.css'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
     title: '왜난리 - 한국 이슈 내비게이션',
@@ -14,11 +23,12 @@ export default function RootLayout({
 }) {
     return (
         <html lang="ko">
-            <body>
+            <body className="min-h-screen bg-white text-neutral-900 antialiased">
                 <Header />
-                <main className="min-h-screen">
+                <main className="min-h-screen flex flex-col">
                     {children}
                 </main>
+                <Footer />
             </body>
         </html>
     )

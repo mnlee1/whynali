@@ -55,6 +55,7 @@ function formatDate(dateString: string): string {
     })
 }
 
+/** 검토 대기 목록에서 작성자 익명 표시. 뒷4자리로 서로 구분 (99_댓글_작성자_표시_정책 §3.5) */
 function maskUserId(userId: string): string {
     return `사용자 …${userId.slice(-4)}`
 }

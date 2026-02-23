@@ -16,7 +16,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
 
     if (error || !topic) {
         return (
-            <div className="container mx-auto px-4 py-6 md:py-8 max-w-3xl">
+            <div className="container mx-auto px-4 py-6 md:py-8">
                 <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
                     토론 주제를 찾을 수 없습니다.
                 </div>
@@ -34,7 +34,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
     const issueData = topic.issues as { id: string; title: string } | null
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8 max-w-3xl">
+        <div className="container mx-auto px-4 py-6 md:py-8">
             {/* 뒤로가기 */}
             <Link href="/community" className="inline-block text-sm text-gray-500 hover:text-gray-700 mb-4">
                 ← 커뮤니티 목록
