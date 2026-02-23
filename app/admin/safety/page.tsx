@@ -19,6 +19,33 @@ interface PendingComment {
     created_at: string
 }
 
+const MOCK_PENDING: PendingComment[] = [
+    {
+        id: 'mock-1',
+        body: '야 이 사람들 진짜 말이 안 되네 ㅋㅋ 욕설테스트 넣으면 바로 걸리나?',
+        user_id: 'aaaabbbbcccc1111',
+        issue_id: null,
+        discussion_topic_id: 'mock-topic-1',
+        created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    },
+    {
+        id: 'mock-2',
+        body: '비속어샘플 포함된 댓글입니다. 관리자 검토가 필요한 내용이에요.',
+        user_id: 'ddddeeeeffffaaaa',
+        issue_id: 'mock-issue-1',
+        discussion_topic_id: null,
+        created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    },
+    {
+        id: 'mock-3',
+        body: '스팸단어 반복 광고 스팸단어 클릭 유도 게시물입니다.',
+        user_id: 'gggghhhhiiiijjjj',
+        issue_id: 'mock-issue-2',
+        discussion_topic_id: null,
+        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    },
+]
+
 function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleString('ko-KR', {
         month: 'short',
@@ -49,6 +76,9 @@ export default function AdminSafetyPage() {
     const [pendingLoading, setPendingLoading] = useState(true)
     const [pendingError, setPendingError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
+
+    /* 마지막 갱신 시각 */
+    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
     /* ── 금칙어 로드 ── */
     const loadRules = useCallback(async () => {
@@ -86,6 +116,7 @@ export default function AdminSafetyPage() {
     useEffect(() => {
         loadRules()
         loadPending()
+        setLastRefreshedAt(new Date())
     }, [loadRules, loadPending])
 
     /* ── 금칙어 추가 ── */
@@ -170,12 +201,19 @@ export default function AdminSafetyPage() {
                     </Link>
                     <h1 className="text-2xl font-bold mt-1">세이프티 관리</h1>
                 </div>
-                <button
-                    onClick={() => { loadRules(); loadPending() }}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                >
-                    새로고침
-                </button>
+                <div className="flex items-center gap-3">
+                    {lastRefreshedAt && (
+                        <span className="text-xs text-gray-400">
+                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    )}
+                    <button
+                        onClick={() => { loadRules(); loadPending(); setLastRefreshedAt(new Date()) }}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                    >
+                        새로고침
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -300,67 +338,89 @@ export default function AdminSafetyPage() {
                                 </div>
                             ))}
                         </div>
-                    ) : pending.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-8">
-                            검토 대기 댓글이 없습니다.
-                        </p>
                     ) : (
-                        <ul className="space-y-3 max-h-96 overflow-y-auto">
-                            {pending.map((comment) => {
-                                const isProcessing = processingId === comment.id
-                                const contextLink = comment.issue_id
-                                    ? `/issue/${comment.issue_id}`
-                                    : comment.discussion_topic_id
-                                    ? `/community/${comment.discussion_topic_id}`
-                                    : null
+                        <>
+                            {pending.length === 0 && (
+                                <p className="text-sm text-gray-400 text-center py-4 mb-2">
+                                    검토 대기 댓글이 없습니다.
+                                </p>
+                            )}
+                            {(pending.length > 0 ? pending : MOCK_PENDING).length > 0 && (
+                                <>
+                                    {pending.length === 0 && (
+                                        <div className="mb-2 px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs text-gray-500 inline-block">
+                                            예시 데이터 (실제 대기 댓글 없음)
+                                        </div>
+                                    )}
+                                    <ul className="space-y-3 max-h-96 overflow-y-auto">
+                                        {(pending.length > 0 ? pending : MOCK_PENDING).map((comment) => {
+                                            const isMock = comment.id.startsWith('mock-')
+                                            const isProcessing = processingId === comment.id
+                                            const contextLink = comment.issue_id
+                                                ? `/issue/${comment.issue_id}`
+                                                : comment.discussion_topic_id
+                                                ? `/community/${comment.discussion_topic_id}`
+                                                : null
 
-                                return (
-                                    <li
-                                        key={comment.id}
-                                        className="p-3 border border-yellow-200 bg-yellow-50 rounded"
-                                    >
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-xs text-gray-500">
-                                                {maskUserId(comment.user_id)}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                {contextLink && (
-                                                    <Link
-                                                        href={contextLink}
-                                                        target="_blank"
-                                                        className="text-xs text-blue-500 hover:underline"
-                                                    >
-                                                        원문 보기
-                                                    </Link>
-                                                )}
-                                                <span className="text-xs text-gray-400">
-                                                    {formatDate(comment.created_at)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <p className="text-sm text-gray-800 mb-3 leading-relaxed">
-                                            {comment.body}
-                                        </p>
-                                        <div className="flex gap-2 justify-end">
-                                            <button
-                                                onClick={() => handleApprove(comment.id)}
-                                                disabled={isProcessing}
-                                                className="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                            >
-                                                {isProcessing ? '처리 중...' : '공개'}
-                                            </button>
-                                            <button
-                                                onClick={() => handleReject(comment.id)}
-                                                disabled={isProcessing}
-                                                className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                            >
-                                                삭제
-                                            </button>
-                                        </div>
-                                    </li>
-                                )
-                            })}
-                        </ul>
+                                            return (
+                                                <li
+                                                    key={comment.id}
+                                                    className={`p-3 border rounded ${isMock ? 'border-gray-200 bg-gray-50 opacity-70' : 'border-yellow-200 bg-yellow-50'}`}
+                                                >
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-gray-500">
+                                                                {maskUserId(comment.user_id)}
+                                                            </span>
+                                                            {isMock && (
+                                                                <span className="text-xs px-1.5 py-0.5 bg-gray-200 text-gray-500 rounded">
+                                                                    예시
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {contextLink && !isMock && (
+                                                                <Link
+                                                                    href={contextLink}
+                                                                    target="_blank"
+                                                                    className="text-xs text-blue-500 hover:underline"
+                                                                >
+                                                                    원문 보기
+                                                                </Link>
+                                                            )}
+                                                            <span className="text-xs text-gray-400">
+                                                                {formatDate(comment.created_at)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-sm text-gray-800 mb-3 leading-relaxed">
+                                                        {comment.body}
+                                                    </p>
+                                                    {!isMock && (
+                                                        <div className="flex gap-2 justify-end">
+                                                            <button
+                                                                onClick={() => handleApprove(comment.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                            >
+                                                                {isProcessing ? '처리 중...' : '공개'}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleReject(comment.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                            >
+                                                                삭제
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
+                                </>
+                            )}
+                        </>
                     )}
                 </div>
 

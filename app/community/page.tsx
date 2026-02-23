@@ -113,8 +113,13 @@ export default function CommunityPage() {
                                 >
                                     {/* 상태 배지 행 */}
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded border border-green-200">
-                                            진행중
+                                        <span className={[
+                                            'text-xs px-2 py-0.5 rounded border',
+                                            topic.approval_status === '종료'
+                                                ? 'bg-gray-50 text-gray-500 border-gray-200'
+                                                : 'bg-green-50 text-green-700 border-green-200',
+                                        ].join(' ')}>
+                                            {topic.approval_status === '종료' ? '종료' : '진행중'}
                                         </span>
                                         {topic.is_ai_generated && (
                                             <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
