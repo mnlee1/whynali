@@ -18,7 +18,7 @@ function getClient(): BrowserClient {
     return _client
 }
 
-export const supabase = new Proxy({} as BrowserClient, {
+export const supabase: BrowserClient = new Proxy({} as BrowserClient, {
     get(_, prop) {
         return getClient()[prop as keyof BrowserClient]
     },
