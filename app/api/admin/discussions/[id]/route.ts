@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { sanitizeText } from '@/lib/safety'
+import { requireAdmin } from '@/lib/admin'
+import { sanitizeText, validateContent, loadBannedWords } from '@/lib/safety'
 import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +12,9 @@ type Params = { params: Promise<{ id: string }> }
    상태 변경: { action: '승인' | '반려' | '복구' | '종료' }
    내용 수정: { content: string } */
 export async function PATCH(request: NextRequest, { params }: Params) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { id } = await params
         const reqBody = await request.json()
@@ -18,13 +22,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
         /* ── 내용 수정 ── */
         if (content !== undefined) {
+            const dbBannedWords = await loadBannedWords(supabaseAdmin)
+            const { valid, reason } = validateContent(content, 'discussion', dbBannedWords)
+            if (!valid) {
+                return NextResponse.json({ error: reason }, { status: 400 })
+            }
             const sanitized = sanitizeText(content)
-            if (!sanitized) {
-                return NextResponse.json({ error: '내용을 입력해 주세요.' }, { status: 400 })
-            }
-            if (sanitized.length > 500) {
-                return NextResponse.json({ error: '최대 500자까지 입력 가능합니다.' }, { status: 400 })
-            }
 
             const { data, error } = await supabaseAdmin
                 .from('discussion_topics')
@@ -38,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 return NextResponse.json({ error: '토론 주제를 찾을 수 없습니다.' }, { status: 404 })
             }
 
-            await writeAdminLog('수정', 'discussion_topic', id)
+            await writeAdminLog('수정', 'discussion_topic', id, auth.adminEmail)
             return NextResponse.json({ data })
         }
 
@@ -79,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: '토론 주제를 찾을 수 없습니다.' }, { status: 404 })
         }
 
-        await writeAdminLog(action, 'discussion_topic', id)
+        await writeAdminLog(action, 'discussion_topic', id, auth.adminEmail)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: '처리 실패' }, { status: 500 })
@@ -88,6 +91,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 /* DELETE /api/admin/discussions/:id — 완전 삭제 */
 export async function DELETE(request: NextRequest, { params }: Params) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { id } = await params
 
@@ -98,7 +104,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
         if (error) throw error
 
-        await writeAdminLog('삭제', 'discussion_topic', id)
+        await writeAdminLog('삭제', 'discussion_topic', id, auth.adminEmail)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '삭제 실패' }, { status: 500 })

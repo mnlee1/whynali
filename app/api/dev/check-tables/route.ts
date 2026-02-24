@@ -24,6 +24,10 @@ const EXPECTED_TABLES = [
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+    }
+
     const results: { table: string; exists: boolean; error?: string }[] = []
 
     for (const table of EXPECTED_TABLES) {

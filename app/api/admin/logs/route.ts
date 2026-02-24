@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
 /* GET /api/admin/logs?target_type=&action=&limit=&offset= */
 export async function GET(request: NextRequest) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { searchParams } = request.nextUrl
         const targetType = searchParams.get('target_type')

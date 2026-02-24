@@ -10,17 +10,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { linkAllNewsToIssues } from '@/lib/linker/issue-news-linker'
 import { linkAllCommunityToIssues } from '@/lib/linker/issue-community-linker'
+import { verifyCronRequest } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const authError = verifyCronRequest(request)
+    if (authError) return authError
 
     try {
         const startTime = Date.now()
@@ -30,14 +27,10 @@ export async function GET(request: NextRequest) {
             linkAllCommunityToIssues(),
         ])
 
-        const totalNewsLinked = newsResults.reduce(
-            (sum, r) => sum + r.linkedCount,
-            0
-        )
-        const totalCommunityLinked = communityResults.reduce(
-            (sum, r) => sum + r.linkedCount,
-            0
-        )
+        const totalNewsLinked = newsResults.reduce((sum, r) => sum + r.linkedCount, 0)
+        const totalNewsUnlinked = newsResults.reduce((sum, r) => sum + r.unlinkedCount, 0)
+        const totalCommunityLinked = communityResults.reduce((sum, r) => sum + r.linkedCount, 0)
+        const totalCommunityUnlinked = communityResults.reduce((sum, r) => sum + r.unlinkedCount, 0)
 
         const elapsed = Date.now() - startTime
 
@@ -46,11 +39,13 @@ export async function GET(request: NextRequest) {
             news: {
                 issuesProcessed: newsResults.length,
                 totalLinked: totalNewsLinked,
+                totalUnlinked: totalNewsUnlinked,
                 details: newsResults,
             },
             community: {
                 issuesProcessed: communityResults.length,
                 totalLinked: totalCommunityLinked,
+                totalUnlinked: totalCommunityUnlinked,
                 details: communityResults,
             },
             elapsed: `${elapsed}ms`,

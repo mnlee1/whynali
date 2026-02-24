@@ -20,7 +20,7 @@ export default function SearchBar() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="검색"
+                placeholder="지금 이슈 검색"
                 className="w-full md:w-40 px-3 py-1.5 text-sm border border-neutral-200 rounded-md bg-neutral-50 focus:outline-none focus:border-neutral-400 focus:bg-white"
             />
         </form>

@@ -8,10 +8,14 @@
 
 import { NextResponse } from 'next/server'
 import { getTodayUsage, getUsageStats, getUsagePercentage } from '@/lib/api-usage-tracker'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const apiName = 'naver_news'
 

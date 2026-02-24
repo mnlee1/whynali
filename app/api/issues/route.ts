@@ -1,23 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { parseLimitOffset, parseEnum } from '@/lib/parse-params'
 import type { IssueCategory, IssueStatus } from '@/types/issue'
 
 export const dynamic = 'force-dynamic'
 
+const VALID_CATEGORIES: readonly IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
+const VALID_STATUSES: readonly IssueStatus[] = ['점화', '논란중', '종결']
+const VALID_SORTS = ['latest', 'heat'] as const
+
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
-    const category = searchParams.get('category') as IssueCategory | null
-    const status = searchParams.get('status') as IssueStatus | null
+
+    const pagination = parseLimitOffset(searchParams, { defaultLimit: 20, maxLimit: 100 })
+    if (pagination.error) return pagination.error
+
+    const rawCategory = searchParams.get('category')
+    const rawStatus = searchParams.get('status')
+    const rawSort = searchParams.get('sort')
+
+    const categoryResult = parseEnum(rawCategory, VALID_CATEGORIES, '사회', false)
+    const statusResult = parseEnum(rawStatus, VALID_STATUSES, '점화', false)
+    const sortResult = parseEnum(rawSort, VALID_SORTS, 'latest', false)
+
+    const category = rawCategory ? categoryResult.value : null
+    const status = rawStatus ? statusResult.value : null
+    const sort = sortResult.value
+    const { limit, offset } = pagination
     const q = searchParams.get('q')
-    const sort = searchParams.get('sort') || 'latest'
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100)
-    const offset = parseInt(searchParams.get('offset') || '0', 10)
 
     try {
         let query = supabaseAdmin
             .from('issues')
             .select('*', { count: 'exact' })
             .eq('approval_status', '승인')
+            .eq('visibility_status', 'visible')
 
         if (category) {
             query = query.eq('category', category)
