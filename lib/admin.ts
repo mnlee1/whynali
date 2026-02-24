@@ -51,6 +51,11 @@ type RequireAdminResult =
  *   if (auth.error) return auth.error
  */
 export async function requireAdmin(): Promise<RequireAdminResult> {
+    // SKIP_ADMIN_CHECK=true 이면 인증/인가 없이 통과 (개발·테스트용)
+    if (process.env.SKIP_ADMIN_CHECK === 'true') {
+        return { adminEmail: 'skip@admin.local', error: null }
+    }
+
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
