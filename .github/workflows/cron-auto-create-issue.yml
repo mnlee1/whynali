@@ -1,0 +1,18 @@
+name: 이슈 후보 자동 생성 Cron (Develop)
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # 30분마다 (뉴스 수집 주기와 동일)
+  workflow_dispatch:
+
+jobs:
+  auto-create-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 이슈 후보 자동 생성 API 호출
+        run: |
+          curl -X GET https://dev-whynali.vercel.app/api/cron/auto-create-issue \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60 \
+            --retry 2

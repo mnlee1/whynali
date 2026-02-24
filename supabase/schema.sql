@@ -104,6 +104,7 @@ CREATE TABLE news_data (
     link TEXT,
     source TEXT,
     published_at TIMESTAMPTZ,
+    category TEXT CHECK (category IN ('연예', '스포츠', '정치', '사회', '기술')),
     issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -150,6 +151,7 @@ CREATE INDEX idx_comments_visibility ON comments(visibility);
 CREATE INDEX idx_comments_created_at ON comments(created_at);
 CREATE INDEX idx_timeline_points_issue_id ON timeline_points(issue_id);
 CREATE INDEX idx_news_data_issue_id ON news_data(issue_id);
+CREATE INDEX idx_news_data_category ON news_data(category);
 CREATE INDEX idx_news_data_created_at ON news_data(created_at);
 CREATE INDEX idx_community_data_issue_id ON community_data(issue_id);
 CREATE INDEX idx_community_data_created_at ON community_data(created_at);

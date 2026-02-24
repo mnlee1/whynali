@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,9 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { id } = await params
 

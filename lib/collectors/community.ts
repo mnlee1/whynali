@@ -86,22 +86,14 @@ export async function collectTheqoo(): Promise<number> {
 
         if (posts.length === 0) return 0
 
-        /* 이미 저장된 URL 필터링 (UNIQUE 제약 없이 중복 방지) */
-        const urls = posts.map((p) => p.url)
-        const { data: existing } = await supabaseAdmin
+        /* url UNIQUE 제약 + onConflict ignoreDuplicates로 원자적 중복 방지
+           (migration: add_unique_constraints_for_collectors.sql) */
+        const { error, data: upserted } = await supabaseAdmin
             .from('community_data')
-            .select('url')
-            .in('url', urls)
-        const existingUrls = new Set(existing?.map((e) => e.url) || [])
-        const newPosts = posts.filter((p) => !existingUrls.has(p.url))
-
-        if (newPosts.length === 0) return 0
-
-        const { error } = await supabaseAdmin
-            .from('community_data')
-            .insert(newPosts)
+            .upsert(posts, { onConflict: 'url', ignoreDuplicates: true })
+            .select('id')
         if (error) throw error
-        return newPosts.length
+        return upserted?.length ?? 0
     } catch (error) {
         console.error('더쿠 수집 에러:', error)
         return 0
@@ -138,22 +130,14 @@ export async function collectNatePann(): Promise<number> {
 
         if (posts.length === 0) return 0
 
-        /* 이미 저장된 URL 필터링 (UNIQUE 제약 없이 중복 방지) */
-        const urls = posts.map((p) => p.url)
-        const { data: existing } = await supabaseAdmin
+        /* url UNIQUE 제약 + onConflict ignoreDuplicates로 원자적 중복 방지
+           (migration: add_unique_constraints_for_collectors.sql) */
+        const { error, data: upserted } = await supabaseAdmin
             .from('community_data')
-            .select('url')
-            .in('url', urls)
-        const existingUrls = new Set(existing?.map((e) => e.url) || [])
-        const newPosts = posts.filter((p) => !existingUrls.has(p.url))
-
-        if (newPosts.length === 0) return 0
-
-        const { error } = await supabaseAdmin
-            .from('community_data')
-            .insert(newPosts)
+            .upsert(posts, { onConflict: 'url', ignoreDuplicates: true })
+            .select('id')
         if (error) throw error
-        return newPosts.length
+        return upserted?.length ?? 0
     } catch (error) {
         console.error('네이트판 수집 에러:', error)
         return 0

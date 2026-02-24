@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
 /* GET /api/admin/safety/pending — visibility='pending_review' 댓글 목록 */
 export async function GET() {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { data, error, count } = await supabaseAdmin
             .from('comments')
