@@ -62,27 +62,23 @@ export async function collectNaverNews(category: string): Promise<number> {
         link: item.link,
         source: extractSource(item.link),
         published_at: new Date(item.pubDate).toISOString(),
+        category,  // 이 줄 추가
     }))
 
     if (newsData.length > 0) {
-        /* 이미 저장된 link 필터링 (중복 방지) */
-        const links = newsData.map((n) => n.link)
-        const { data: existing } = await supabaseAdmin
+        /* link UNIQUE 제약 + onConflict ignoreDuplicates로 원자적 중복 방지
+           (migration: add_unique_constraints_for_collectors.sql) */
+        const { error, data: upserted } = await supabaseAdmin
             .from('news_data')
-            .select('link')
-            .in('link', links)
-        const existingLinks = new Set(existing?.map((e) => e.link) || [])
-        const newNews = newsData.filter((n) => !existingLinks.has(n.link))
+            .upsert(newsData, { onConflict: 'link', ignoreDuplicates: true })
+            .select('id')
 
-        if (newNews.length > 0) {
-            const { error } = await supabaseAdmin.from('news_data').insert(newNews)
-            if (error) {
-                console.error('뉴스 저장 에러:', error)
-                throw error
-            }
+        if (error) {
+            console.error('뉴스 저장 에러:', error)
+            throw error
         }
 
-        return newNews.length
+        return upserted?.length ?? 0
     }
 
     return 0

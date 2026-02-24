@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 
 interface AdminLog {
     id: string
@@ -37,89 +36,6 @@ const ACTION_BADGE: Record<string, string> = {
 }
 
 const PAGE_SIZE = 50
-
-const MOCK_LOGS: AdminLog[] = [
-    {
-        id: 'mock-1',
-        action: '승인',
-        target_type: 'discussion_topic',
-        target_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-    },
-    {
-        id: 'mock-2',
-        action: '금칙어 추가',
-        target_type: 'safety_rule',
-        target_id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    },
-    {
-        id: 'mock-3',
-        action: '댓글 공개',
-        target_type: 'comment',
-        target_id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 28).toISOString(),
-    },
-    {
-        id: 'mock-4',
-        action: '반려',
-        target_type: 'discussion_topic',
-        target_id: 'd4e5f6a7-b8c9-0123-defa-234567890123',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    },
-    {
-        id: 'mock-5',
-        action: '투표 생성',
-        target_type: 'vote',
-        target_id: 'e5f6a7b8-c9d0-1234-efab-345678901234',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    },
-    {
-        id: 'mock-6',
-        action: '수정',
-        target_type: 'discussion_topic',
-        target_id: 'f6a7b8c9-d0e1-2345-fabc-456789012345',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    },
-    {
-        id: 'mock-7',
-        action: '댓글 삭제',
-        target_type: 'comment',
-        target_id: 'a7b8c9d0-e1f2-3456-abcd-567890123456',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    },
-    {
-        id: 'mock-8',
-        action: '종료',
-        target_type: 'discussion_topic',
-        target_id: 'b8c9d0e1-f2a3-4567-bcde-678901234567',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    },
-    {
-        id: 'mock-9',
-        action: '금칙어 삭제',
-        target_type: 'safety_rule',
-        target_id: 'c9d0e1f2-a3b4-5678-cdef-789012345678',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    },
-    {
-        id: 'mock-10',
-        action: '투표 마감',
-        target_type: 'vote',
-        target_id: 'd0e1f2a3-b4c5-6789-defa-890123456789',
-        admin_id: null,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-    },
-]
 
 function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleString('ko-KR', {
@@ -179,13 +95,10 @@ export default function AdminLogsPage() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
-            <div className="flex items-center justify-between mb-6">
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-700">
-                        ← 관리자 홈
-                    </Link>
-                    <h1 className="text-2xl font-bold mt-1">운영 로그</h1>
+                    <h1 className="text-2xl font-bold">운영 로그</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
@@ -225,7 +138,7 @@ export default function AdminLogsPage() {
                     </button>
                 ))}
                 <span className="ml-auto text-sm text-gray-500 self-center">
-                    총 {total > 0 ? total.toLocaleString() : `${MOCK_LOGS.length} (예시)`}건
+                    총 {total.toLocaleString()}건
                 </span>
             </div>
 
@@ -235,7 +148,7 @@ export default function AdminLogsPage() {
                 </div>
             )}
 
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -255,53 +168,38 @@ export default function AdminLogsPage() {
                                     </td>
                                 </tr>
                             ))
-                        ) : (() => {
-                            const isMock = logs.length === 0
-                            const displayLogs = isMock ? MOCK_LOGS : logs
-                            return (
-                                <>
-                                    {isMock && (
-                                        <tr>
-                                            <td colSpan={5} className="px-4 py-2 bg-gray-50 border-b border-gray-100">
-                                                <span className="text-xs text-gray-400">
-                                                    아직 기록된 로그가 없습니다. 아래는 예시 데이터입니다.
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    )}
-                                    {displayLogs.map((log) => (
-                                        <tr
-                                            key={log.id}
-                                            className={[
-                                                'hover:bg-gray-50',
-                                                isMock ? 'opacity-60' : '',
-                                            ].join(' ')}
-                                        >
-                                            <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                                                {formatDate(log.created_at)}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={[
-                                                    'text-xs px-2 py-0.5 rounded font-medium',
-                                                    ACTION_BADGE[log.action] ?? 'bg-gray-100 text-gray-600',
-                                                ].join(' ')}>
-                                                    {log.action}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-600">
-                                                {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-gray-400 font-mono">
-                                                {log.target_id ? `…${log.target_id.slice(-8)}` : '—'}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-gray-400">
-                                                {log.admin_id ? `…${log.admin_id.slice(-4)}` : '시스템'}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </>
-                            )
-                        })()}
+                        ) : logs.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
+                                    기록된 로그가 없습니다.
+                                </td>
+                            </tr>
+                        ) : (
+                            logs.map((log) => (
+                                <tr key={log.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                                        {formatDate(log.created_at)}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className={[
+                                            'text-xs px-2 py-0.5 rounded font-medium',
+                                            ACTION_BADGE[log.action] ?? 'bg-gray-100 text-gray-600',
+                                        ].join(' ')}>
+                                            {log.action}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                        {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">
+                                        {log.target_id ? `…${log.target_id.slice(-8)}` : '—'}
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-400">
+                                        {log.admin_id ? `…${log.admin_id.slice(-4)}` : '시스템'}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>

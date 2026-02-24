@@ -125,9 +125,16 @@ export async function GET(request: NextRequest) {
     }
 
     if (existing) {
-        if (!existing.user_metadata?.provider_id) {
+        const needsUpdate =
+            !existing.user_metadata?.provider_id ||
+            existing.user_metadata?.provider !== 'naver'
+        if (needsUpdate) {
             await admin.auth.admin.updateUserById(existing.id, {
-                user_metadata: { ...existing.user_metadata, provider_id: naverId },
+                user_metadata: {
+                    ...existing.user_metadata,
+                    provider: 'naver',
+                    provider_id: naverId,
+                },
             })
         }
     } else {

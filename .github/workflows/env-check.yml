@@ -1,0 +1,47 @@
+name: 배포 환경변수 검증
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  verify-env-secrets:
+    name: 필수 환경변수 secrets 존재 확인
+    runs-on: ubuntu-latest
+    steps:
+      - name: 필수 secrets 누락 여부 검사
+        run: |
+          MISSING=""
+
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "  누락: $name"
+              MISSING="$MISSING $name"
+            else
+              echo "  확인: $name"
+            fi
+          }
+
+          echo "=== 필수 환경변수 검증 ==="
+          check_secret "NEXT_PUBLIC_SUPABASE_URL"    "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+          check_secret "NEXT_PUBLIC_SUPABASE_ANON_KEY" "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+          check_secret "SUPABASE_SERVICE_ROLE_KEY"   "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          check_secret "NAVER_CLIENT_ID"             "${{ secrets.NAVER_CLIENT_ID }}"
+          check_secret "NAVER_CLIENT_SECRET"         "${{ secrets.NAVER_CLIENT_SECRET }}"
+          check_secret "CRON_SECRET"                 "${{ secrets.CRON_SECRET }}"
+          check_secret "ADMIN_EMAILS"                "${{ secrets.ADMIN_EMAILS }}"
+
+          if [ -n "$MISSING" ]; then
+            echo ""
+            echo "누락된 secrets:$MISSING"
+            echo "Repository Settings > Secrets and variables > Actions 에서 추가하세요."
+            exit 1
+          fi
+
+          echo ""
+          echo "모든 필수 환경변수 secrets 확인 완료."

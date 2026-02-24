@@ -4,14 +4,37 @@ import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
 import { toUserMessage } from '@/lib/api-errors'
 import { ensurePublicUser } from '@/lib/ensure-user'
 
-/* GET /api/comments?issue_id=&limit=&offset= */
-/* GET /api/comments?discussion_topic_id=&limit=&offset= */
+/* comment_likes 에서 userId 기준 { commentId → 'like'|'dislike' } 맵 조회 */
+async function getUserLikesMap(
+    admin: ReturnType<typeof createSupabaseAdminClient>,
+    userId: string,
+    commentIds: string[]
+): Promise<Record<string, 'like' | 'dislike'>> {
+    if (commentIds.length === 0) return {}
+    const { data } = await admin
+        .from('comment_likes')
+        .select('comment_id, type')
+        .eq('user_id', userId)
+        .in('comment_id', commentIds)
+    const map: Record<string, 'like' | 'dislike'> = {}
+    for (const row of data ?? []) {
+        map[row.comment_id] = row.type as 'like' | 'dislike'
+    }
+    return map
+}
+
+/* GET /api/comments?issue_id=&limit=&offset=&sort=latest|likes|dislikes&best=true */
+/* GET /api/comments?discussion_topic_id=&limit=&offset=&sort=latest|likes|dislikes */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
     const discussion_topic_id = searchParams.get('discussion_topic_id')
     const limit = Number(searchParams.get('limit') ?? 20)
     const offset = Number(searchParams.get('offset') ?? 0)
+    /* sort: latest(기본) | likes(좋아요순) | dislikes(싫어요순) */
+    const sort = searchParams.get('sort') ?? 'latest'
+    /* best=true: score(좋아요-싫어요) 상위 3개만 반환 (베스트 댓글 영역용) */
+    const best = searchParams.get('best') === 'true'
 
     if (!issue_id && !discussion_topic_id) {
         return NextResponse.json(
@@ -22,18 +45,33 @@ export async function GET(request: NextRequest) {
 
     const admin = createSupabaseAdminClient()
 
+    const orderColumn =
+        sort === 'likes'    ? 'like_count'    :
+        sort === 'dislikes' ? 'dislike_count' :
+        'created_at'
+
     let query = admin
         .from('comments')
         .select('*, users(display_name)', { count: 'exact' })
         .eq('visibility', 'public')
         .is('parent_id', null)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1)
+        .order(orderColumn, { ascending: false })
 
     if (issue_id) {
         query = query.eq('issue_id', issue_id)
     } else {
         query = query.eq('discussion_topic_id', discussion_topic_id!)
+    }
+
+    /* 베스트 댓글: score 상위 3개. like_count 내림차순 + dislike_count 오름차순으로 근사 */
+    if (best) {
+        query = query
+            .gt('like_count', 0)
+            .order('like_count', { ascending: false })
+            .order('dislike_count', { ascending: true })
+            .limit(3)
+    } else {
+        query = query.range(offset, offset + limit - 1)
     }
 
     const { data: rawData, error, count } = await query
@@ -43,10 +81,20 @@ export async function GET(request: NextRequest) {
     }
 
     type Row = (typeof rawData)[number] & { users?: { display_name: string | null } | null }
-    const data = (rawData ?? []).map((row: Row) => {
+    const baseData = (rawData ?? []).map((row: Row) => {
         const { users, ...comment } = row
         return { ...comment, display_name: users?.display_name ?? null }
     })
+
+    /* 로그인 유저이면 댓글별 좋아요/싫어요 상태 병합 */
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    let userLikes: Record<string, 'like' | 'dislike'> = {}
+    if (user) {
+        userLikes = await getUserLikesMap(admin, user.id, baseData.map((c) => c.id))
+    }
+
+    const data = baseData.map((c) => ({ ...c, userLikeType: userLikes[c.id] ?? null }))
 
     return NextResponse.json({ data, total: count ?? 0 })
 }
@@ -114,7 +162,7 @@ export async function POST(request: NextRequest) {
             parent_id: parent_id ?? null,
             user_id: user.id,
             body: sanitizeText(content),
-            visibility: pendingReview ? 'pending' : 'public',
+            visibility: pendingReview ? 'pending_review' : 'public',
         })
         .select()
         .single()

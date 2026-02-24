@@ -19,6 +19,7 @@ export interface TimelinePoint {
     occurred_at: string
     source_url?: string
     stage: '발단' | '전개' | '파생' | '진정'
+    title?: string | null  // 이벤트 한 줄 요약
     created_at: string
 }
 

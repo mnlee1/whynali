@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { parseEnum, parseUrl } from '@/lib/parse-params'
+import type { TimelineStage } from '@/types/issue'
 
 export const dynamic = 'force-dynamic'
+
+const VALID_STAGES: readonly TimelineStage[] = ['발단', '전개', '파생', '진정']
 
 export async function GET(
     request: NextRequest,
@@ -12,7 +16,7 @@ export async function GET(
     try {
         const { data, error } = await supabaseAdmin
             .from('timeline_points')
-            .select('id, occurred_at, source_url, stage, created_at')
+            .select('id, occurred_at, source_url, stage, title, created_at')
             .eq('issue_id', id)
             .order('occurred_at', { ascending: true })
 
@@ -36,26 +40,33 @@ export async function POST(
 
     try {
         const body = await request.json()
-        const { occurred_at, source_url, stage } = body
+        const { occurred_at, source_url, stage, title } = body
 
-        if (!source_url || typeof source_url !== 'string') {
+        const stageResult = parseEnum(stage ?? null, VALID_STAGES, '발단', false)
+        const stageValue = stageResult.value
+
+        let occurredAt: string
+        try {
+            occurredAt = occurred_at ? new Date(occurred_at).toISOString() : new Date().toISOString()
+        } catch {
             return NextResponse.json(
-                { error: 'VALIDATION_ERROR', message: 'source_url 필수' },
+                { error: 'INVALID_PARAM', message: 'occurred_at이 올바른 날짜 형식이 아닙니다.' },
                 { status: 400 }
             )
         }
 
-        const validStages = ['발단', '전개', '파생', '진정']
-        const stageValue = validStages.includes(stage) ? stage : '발단'
-        const occurredAt = occurred_at ? new Date(occurred_at).toISOString() : new Date().toISOString()
+        const urlResult = parseUrl(source_url ?? null, 'source_url')
+        if (urlResult.error) return urlResult.error
+        const sourceUrlValue = urlResult.value
 
         const { data, error } = await supabaseAdmin
             .from('timeline_points')
             .insert({
                 issue_id: id,
                 occurred_at: occurredAt,
-                source_url: source_url.trim(),
+                source_url: sourceUrlValue,
                 stage: stageValue,
+                title: title ? String(title).trim() : null,
             })
             .select()
             .single()

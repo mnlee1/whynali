@@ -10,7 +10,16 @@ interface ReactionsSectionProps {
 
 type CountMap = Partial<Record<ReactionType, number>>
 
-const REACTIONS: ReactionType[] = ['좋아요', '싫어요', '화나요', '팝콘각', '응원', '애도', '사이다']
+const REACTION_META: { type: ReactionType; emoji: string; label: string }[] = [
+    { type: '좋아요',     emoji: '👍', label: '좋아요' },
+    { type: '싫어요',     emoji: '👎', label: '싫어요' },
+    { type: '화나요',     emoji: '😡', label: '화나요' },
+    { type: '팝콘각',     emoji: '🍿', label: '팝콘각' },
+    { type: '응원',       emoji: '📣', label: '응원' },
+    { type: '애도',       emoji: '🕯️', label: '애도' },
+    { type: '사이다',     emoji: '🥤', label: '사이다' },
+]
+const REACTIONS = REACTION_META.map((r) => r.type)
 
 export default function ReactionsSection({ issueId, userId: serverUserId }: ReactionsSectionProps) {
     const [userId, setUserId] = useState<string | null>(serverUserId)
@@ -83,7 +92,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
         <div>
             {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
             <div className="flex gap-2 flex-wrap">
-                {REACTIONS.map((type) => {
+                {REACTION_META.map(({ type, emoji, label }) => {
                     const count = counts[type] ?? 0
                     const selected = userReaction === type
                     return (
@@ -91,19 +100,31 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                             key={type}
                             onClick={() => handleClick(type)}
                             disabled={!userId || submitting}
+                            title={label}
                             className={[
-                                'flex flex-col items-center px-3 py-2 rounded-lg border text-sm min-w-[60px] transition-colors',
+                                'flex flex-col items-center px-3 py-2 rounded-xl border transition-colors min-w-[60px]',
                                 selected
-                                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold'
-                                    : 'border-gray-200 bg-white text-gray-600',
+                                    ? 'border-violet-400 bg-violet-50 scale-105'
+                                    : 'border-gray-200 bg-white',
                                 !userId || submitting
                                     ? 'opacity-60 cursor-not-allowed'
-                                    : 'hover:border-gray-400 cursor-pointer',
+                                    : 'hover:border-gray-300 hover:scale-105 cursor-pointer',
                             ].join(' ')}
                         >
-                            <span>{type}</span>
+                            <span className="text-xl leading-none">{emoji}</span>
+                            <span className={[
+                                'text-xs mt-1',
+                                selected ? 'text-violet-700 font-semibold' : 'text-gray-500',
+                            ].join(' ')}>
+                                {label}
+                            </span>
                             {count > 0 && (
-                                <span className="text-xs mt-0.5 text-gray-500">{count}</span>
+                                <span className={[
+                                    'text-xs tabular-nums',
+                                    selected ? 'text-violet-600 font-medium' : 'text-gray-400',
+                                ].join(' ')}>
+                                    {count.toLocaleString()}
+                                </span>
                             )}
                         </button>
                     )

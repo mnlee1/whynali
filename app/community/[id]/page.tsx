@@ -1,6 +1,15 @@
+/**
+ * app/community/[id]/page.tsx
+ *
+ * 토론 주제 상세 페이지.
+ * - 이슈 댓글과 시각적으로 구분된 토론 영역
+ * - 철학적 관점 유도 안내 문구와 질문 스타터 칩 제공
+ * - 세이프티봇 연동 댓글 작성
+ */
+
 import Link from 'next/link'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
-import CommentsSection from '@/components/issue/CommentsSection'
+import DiscussionComments from '@/components/issue/DiscussionComments'
 
 export default async function DiscussionTopicPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -32,67 +41,75 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
     const userId = user?.id ?? null
 
     const issueData = topic.issues as { id: string; title: string } | null
+    const isClosed = topic.approval_status === '종료'
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
             {/* 뒤로가기 */}
-            <Link href="/community" className="inline-block text-sm text-gray-500 hover:text-gray-700 mb-4">
+            <Link href="/community" className="inline-block text-sm text-gray-400 hover:text-gray-600 mb-4">
                 ← 커뮤니티 목록
             </Link>
 
-            {/* 토론 주제 본문 */}
-            <div className="p-5 border border-gray-200 rounded-lg mb-6">
-                {/* 상태 배지 행
-                    표시 규칙: '승인' → 진행중(초록), '종료' → 종료(회색)
-                    관리자가 반려 처리 시 이 페이지는 404로 전환됨 */}
+            {/* 토론 주제 카드 — 보라색 계열로 이슈 댓글과 시각 구분 */}
+            <div className="p-5 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl mb-4">
                 <div className="flex items-center gap-2 mb-3">
                     <span className={[
-                        'text-xs px-2 py-0.5 rounded border',
-                        topic.approval_status === '종료'
+                        'text-xs px-2 py-0.5 rounded border font-medium',
+                        isClosed
                             ? 'bg-gray-50 text-gray-500 border-gray-200'
-                            : 'bg-green-50 text-green-700 border-green-200',
+                            : 'bg-purple-100 text-purple-700 border-purple-300',
                     ].join(' ')}>
-                        {topic.approval_status === '종료' ? '종료' : '진행중'}
+                        {isClosed ? '종료' : '토론 중'}
                     </span>
                     {topic.is_ai_generated && (
-                        <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
-                            AI 생성 주제
+                        <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-200">
+                            AI 제안 주제
                         </span>
                     )}
                 </div>
-                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+
+                {/* 토론 주제 본문 */}
+                <p className="text-base md:text-lg font-semibold text-gray-800 leading-relaxed whitespace-pre-wrap mb-3">
                     {topic.body}
                 </p>
-                <p className="text-xs text-gray-400 mt-3">
+
+                <p className="text-xs text-gray-400">
                     {new Date(topic.created_at).toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
+                        year: 'numeric', month: 'long', day: 'numeric',
                     })}
                 </p>
             </div>
 
             {/* 연결된 이슈 */}
             {issueData && (
-                <div className="mb-8 flex items-center gap-2">
-                    <span className="text-sm text-gray-500">연결된 이슈:</span>
+                <div className="mb-6 flex items-center gap-2 px-1">
+                    <span className="text-xs text-gray-400">연결 이슈:</span>
                     <Link
                         href={`/issue/${issueData.id}`}
-                        className="text-sm text-blue-600 underline hover:text-blue-800"
+                        className="text-sm text-purple-600 underline underline-offset-2 hover:text-purple-800"
                     >
                         {issueData.title} →
                     </Link>
                 </div>
             )}
 
-            {/* 댓글 */}
-            <div className="pt-2">
-                <h2 className="text-lg font-bold mb-4">댓글</h2>
-                <CommentsSection
-                    discussionTopicId={id}
-                    userId={userId}
-                    isClosed={topic.approval_status === '종료'}
-                />
+            {/* 토론 댓글 영역 */}
+            <div className="border border-purple-100 rounded-xl overflow-hidden">
+                {/* 토론 영역 헤더 */}
+                <div className="px-4 py-3 bg-purple-50 border-b border-purple-100">
+                    <p className="text-sm font-semibold text-purple-800">의견 나누기</p>
+                    <p className="text-xs text-purple-600 mt-0.5">
+                        단순한 찬반이 아닌, 다양한 관점에서 생각을 공유해보세요.
+                    </p>
+                </div>
+
+                <div className="p-4">
+                    <DiscussionComments
+                        discussionTopicId={id}
+                        userId={userId}
+                        isClosed={isClosed}
+                    />
+                </div>
             </div>
         </div>
     )

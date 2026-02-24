@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,14 +10,19 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { id } = await params
 
+        /* 복구 시 approval_status를 대기로 되돌리고, visibility도 visible로 복원 */
         const { data, error } = await supabaseAdmin
             .from('issues')
             .update({
                 approval_status: '대기',
                 approved_at: null,
+                visibility_status: 'visible',
             })
             .eq('id', id)
             .select()

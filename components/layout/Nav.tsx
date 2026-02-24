@@ -1,4 +1,8 @@
+'use client'
+
+import { Fragment } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 interface NavProps {
     mobile?: boolean
@@ -6,6 +10,8 @@ interface NavProps {
 }
 
 export default function Nav({ mobile = false, onNavigate }: NavProps) {
+    const pathname = usePathname()
+
     const categories = [
         { name: '연예', href: '/entertain' },
         { name: '스포츠', href: '/sports' },
@@ -18,31 +24,41 @@ export default function Nav({ mobile = false, onNavigate }: NavProps) {
     if (mobile) {
         return (
             <nav className="flex flex-col gap-1">
-                {categories.map((cat) => (
-                    <Link
-                        key={cat.href}
-                        href={cat.href}
-                        onClick={onNavigate}
-                        className="text-base py-2 text-neutral-700 hover:text-neutral-900"
-                    >
-                        {cat.name}
-                    </Link>
-                ))}
+                {categories.map((cat) => {
+                    const isActive = pathname === cat.href || pathname.startsWith(cat.href + '/')
+                    return (
+                        <Link
+                            key={cat.href}
+                            href={cat.href}
+                            onClick={onNavigate}
+                            className={`text-base py-2 hover:text-neutral-900 ${isActive ? 'text-neutral-900 font-bold' : 'text-neutral-700 font-normal'}`}
+                        >
+                            {cat.name}
+                        </Link>
+                    )
+                })}
             </nav>
         )
     }
 
     return (
         <nav className="flex items-center gap-5">
-            {categories.map((cat) => (
-                <Link
-                    key={cat.href}
-                    href={cat.href}
-                    className="text-sm text-neutral-600 hover:text-neutral-900 whitespace-nowrap"
-                >
-                    {cat.name}
-                </Link>
-            ))}
+            {categories.map((cat) => {
+                const isActive = pathname === cat.href || pathname.startsWith(cat.href + '/')
+                return (
+                    <Fragment key={cat.href}>
+                        {cat.name === '커뮤니티' && (
+                            <span className="w-px h-4 bg-neutral-300" />
+                        )}
+                        <Link
+                            href={cat.href}
+                            className={`text-sm hover:text-neutral-900 whitespace-nowrap ${isActive ? 'text-neutral-900 font-bold' : 'text-neutral-600 font-normal'}`}
+                        >
+                            {cat.name}
+                        </Link>
+                    </Fragment>
+                )
+            })}
         </nav>
     )
 }

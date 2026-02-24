@@ -1,8 +1,31 @@
+/**
+ * app/api/votes/[id]/vote/route.ts
+ *
+ * 투표 참여/취소 API
+ *
+ * user_votes insert/delete와 vote_choices count 증감을 단일 DB 트랜잭션으로 처리.
+ * vote_participate / vote_cancel RPC 함수 사용 (supabase/migrations/add_vote_atomic_functions.sql).
+ * 중간 실패 시 카운트 불일치가 발생하지 않는다.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/safety'
 
 type Params = { params: Promise<{ id: string }> }
+
+/* DB 함수 에러 코드 → HTTP 상태 매핑 */
+const RPC_ERROR_MAP: Record<string, { status: number; message: string }> = {
+    VOTE_NOT_ACTIVE: { status: 409, message: '진행 중인 투표가 아닙니다.' },
+    INVALID_CHOICE:  { status: 400, message: '유효하지 않은 선택지입니다.' },
+    ALREADY_VOTED:   { status: 409, message: '이미 투표하셨습니다. 재투표는 불가합니다.' },
+    VOTE_NOT_FOUND:  { status: 404, message: '투표 기록이 없습니다.' },
+}
+
+function resolveRpcError(error: { message?: string }): { status: number; message: string } {
+    const code = Object.keys(RPC_ERROR_MAP).find((k) => error.message?.includes(k))
+    return code ? RPC_ERROR_MAP[code] : { status: 500, message: '처리 중 오류가 발생했습니다.' }
+}
 
 /* POST /api/votes/:id/vote — 투표 참여 */
 export async function POST(request: NextRequest, { params }: Params) {
@@ -26,44 +49,17 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'vote_choice_id가 필요합니다.' }, { status: 400 })
     }
 
-    /* 해당 선택지가 이 투표에 속하는지 확인 */
-    const { data: choice } = await supabase
-        .from('vote_choices')
-        .select('id')
-        .eq('id', vote_choice_id)
-        .eq('vote_id', vote_id)
-        .single()
+    /* vote_participate RPC: 검증 + insert + count+1 원자 처리 */
+    const admin = createSupabaseAdminClient()
+    const { error } = await admin.rpc('vote_participate', {
+        p_vote_id:   vote_id,
+        p_choice_id: vote_choice_id,
+        p_user_id:   user.id,
+    })
 
-    if (!choice) {
-        return NextResponse.json({ error: '유효하지 않은 선택지입니다.' }, { status: 400 })
-    }
-
-    /* 이미 투표한 기록 확인 */
-    const { data: existing } = await supabase
-        .from('user_votes')
-        .select('id')
-        .eq('vote_id', vote_id)
-        .eq('user_id', user.id)
-        .single()
-
-    if (existing) {
-        return NextResponse.json({ error: '이미 투표하셨습니다. 재투표는 불가합니다.' }, { status: 409 })
-    }
-
-    /* 투표 기록 저장 */
-    const { error: insertError } = await supabase
-        .from('user_votes')
-        .insert({ vote_id, vote_choice_id, user_id: user.id })
-
-    if (insertError) {
-        return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
-
-    /* 선택지 count +1 */
-    const { error: countError } = await supabase.rpc('increment_vote_count', { choice_id: vote_choice_id })
-
-    if (countError) {
-        return NextResponse.json({ error: countError.message }, { status: 500 })
+    if (error) {
+        const { status, message } = resolveRpcError(error)
+        return NextResponse.json({ error: message }, { status })
     }
 
     return NextResponse.json({ success: true }, { status: 201 })
@@ -79,32 +75,16 @@ export async function DELETE(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { data: existing } = await supabase
-        .from('user_votes')
-        .select('id, vote_choice_id')
-        .eq('vote_id', vote_id)
-        .eq('user_id', user.id)
-        .single()
+    /* vote_cancel RPC: delete + count-1 원자 처리 */
+    const admin = createSupabaseAdminClient()
+    const { error } = await admin.rpc('vote_cancel', {
+        p_vote_id: vote_id,
+        p_user_id: user.id,
+    })
 
-    if (!existing) {
-        return NextResponse.json({ error: '투표 기록이 없습니다.' }, { status: 404 })
-    }
-
-    /* 투표 기록 삭제 */
-    const { error: deleteError } = await supabase
-        .from('user_votes')
-        .delete()
-        .eq('id', existing.id)
-
-    if (deleteError) {
-        return NextResponse.json({ error: deleteError.message }, { status: 500 })
-    }
-
-    /* 선택지 count -1 (0 미만 방지) */
-    const { error: countError } = await supabase.rpc('decrement_vote_count', { choice_id: existing.vote_choice_id })
-
-    if (countError) {
-        return NextResponse.json({ error: countError.message }, { status: 500 })
+    if (error) {
+        const { status, message } = resolveRpcError(error)
+        return NextResponse.json({ error: message }, { status })
     }
 
     return NextResponse.json({ success: true })

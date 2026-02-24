@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { sanitizeText, validateContent } from '@/lib/safety'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
+import { sanitizeText, validateContent, loadBannedWords } from '@/lib/safety'
 
 /* PATCH /api/comments/:id */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,20 +26,34 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json()
-    const { valid, reason } = validateContent(body.content, 'comment')
-    if (!valid) {
+    const adminClient = createSupabaseAdminClient()
+    const dbBannedWords = await loadBannedWords(adminClient)
+    const { valid, pendingReview, reason } = validateContent(body.content, 'comment', dbBannedWords)
+    if (!valid && !pendingReview) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
 
     const { data, error } = await supabase
         .from('comments')
-        .update({ body: sanitizeText(body.content), updated_at: new Date().toISOString() })
+        .update({
+            body: sanitizeText(body.content),
+            updated_at: new Date().toISOString(),
+            ...(pendingReview ? { visibility: 'pending_review' } : {}),
+        })
         .eq('id', id)
         .select()
         .single()
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (pendingReview) {
+        return NextResponse.json({
+            data,
+            message: '수정되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',
+            pending: true,
+        })
     }
 
     return NextResponse.json({ data })

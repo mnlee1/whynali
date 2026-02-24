@@ -6,6 +6,7 @@
  * - 담당 B: 감정·투표·댓글 블록
  */
 
+import Link from 'next/link'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import TimelineSection from '@/components/issue/TimelineSection'
 import SourcesSection from '@/components/issue/SourcesSection'
@@ -16,11 +17,16 @@ import CommentsSection from '@/components/issue/CommentsSection'
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
-    const admin = createSupabaseAdminClient()
-    const { data: issue, error: issueError } = await admin
+    /* 이슈 데이터 조회: RLS 우회를 위해 admin 클라이언트 사용
+       (조건에서 이미 approval_status·visibility_status 필터 적용) */
+    const adminClient = createSupabaseAdminClient()
+
+    const { data: issue, error: issueError } = await adminClient
         .from('issues')
         .select('*')
         .eq('id', id)
+        .eq('approval_status', '승인')
+        .eq('visibility_status', 'visible')
         .single()
 
     if (issueError || !issue) {
@@ -33,8 +39,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         )
     }
 
-    const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    /* 사용자 세션 확인: anon 클라이언트로 쿠키 기반 세션 조회 */
+    const sessionClient = await createSupabaseServerClient()
+    const { data: { user } } = await sessionClient.auth.getUser()
     const userId = user?.id ?? null
 
     const getHeatLevel = (heat: number): string => {
@@ -44,14 +51,21 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     }
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
             {/* 이슈 헤더 */}
             <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded border border-neutral-200 font-medium">
                         {issue.category}
                     </span>
-                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                    <span className={[
+                        'text-xs px-2 py-0.5 rounded border font-medium',
+                        issue.status === '점화'
+                            ? 'bg-red-50 text-red-600 border-red-200'
+                            : issue.status === '논란중'
+                                ? 'bg-orange-50 text-orange-600 border-orange-200'
+                                : 'bg-gray-50 text-gray-600 border-gray-200',
+                    ].join(' ')}>
                         {issue.status}
                     </span>
                 </div>
@@ -66,14 +80,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 화력 지수 */}
-            <div className="mb-8 p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-lg">
+            <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-700">화력 지수</span>
                     <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-orange-600">
                             {(issue.heat_index ?? 0).toFixed(1)}
                         </span>
-                        <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">
+                        <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded border border-orange-200 font-medium">
                             {getHeatLevel(issue.heat_index)}
                         </span>
                     </div>
@@ -81,33 +95,67 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 감정 표현 */}
-            <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">감정 표현</h2>
-                <ReactionsSection issueId={id} userId={userId} />
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">감정 표현</p>
+                </div>
+                <div className="p-4">
+                    <ReactionsSection issueId={id} userId={userId} />
+                </div>
             </div>
 
-            {/* 타임라인 섹션 */}
-            <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">타임라인</h2>
-                <TimelineSection issueId={id} />
+            {/* 타임라인 */}
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">타임라인</p>
+                </div>
+                <div className="p-4">
+                    <TimelineSection issueId={id} />
+                </div>
             </div>
 
-            {/* 출처 섹션 */}
-            <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">출처</h2>
-                <SourcesSection issueId={id} />
+            {/* 출처 */}
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">출처</p>
+                </div>
+                <div className="p-4">
+                    <SourcesSection issueId={id} />
+                </div>
             </div>
 
             {/* 투표 */}
-            <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">투표</h2>
-                <VoteSection issueId={id} userId={userId} />
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">투표</p>
+                </div>
+                <div className="p-4">
+                    <VoteSection issueId={id} userId={userId} />
+                </div>
+            </div>
+
+            {/* 이 이슈의 커뮤니티 */}
+            <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center justify-between">
+                <div>
+                    <p className="text-sm font-semibold text-purple-800 mb-0.5">이 이슈의 커뮤니티</p>
+                    <p className="text-xs text-purple-600">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+                </div>
+                <Link
+                    href={`/community?issue_id=${id}`}
+                    className="shrink-0 text-sm px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                    토론 보기
+                </Link>
             </div>
 
             {/* 댓글 */}
-            <div className="mt-12 pt-8 border-t border-gray-200">
-                <h2 className="text-xl font-bold mb-4">댓글</h2>
-                <CommentsSection issueId={id} userId={userId} />
+            <div className="border border-neutral-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">댓글</p>
+                </div>
+                <div className="p-4">
+                    <CommentsSection issueId={id} userId={userId} />
+                </div>
             </div>
         </div>
     )

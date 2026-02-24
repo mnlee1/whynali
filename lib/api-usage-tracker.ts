@@ -1,9 +1,12 @@
 /**
  * lib/api-usage-tracker.ts
- * 
- * [API 사용량 추적 유틸리티]
- * 
- * 네이버 API 등 외부 API의 사용량을 추적하고 한도를 관리합니다.
+ *
+ * API 사용량 추적 유틸리티
+ *
+ * 네이버 API 등 외부 API의 사용량을 추적하고 한도를 관리한다.
+ * call_count: 실제 호출 횟수 기준 (저장 건수 아님)
+ * success_count / fail_count: 성공/실패 호출 수 분리 기록
+ * (migration: add_api_usage_success_fail_count.sql)
  */
 
 import { supabaseAdmin } from './supabase/server'
@@ -12,19 +15,40 @@ interface ApiUsage {
     api_name: string
     date: string
     call_count: number
+    success_count: number
+    fail_count: number
     daily_limit: number
 }
 
+interface IncrementOptions {
+    calls?: number       // 호출 횟수 (기본 1)
+    successes?: number   // 성공 횟수
+    failures?: number    // 실패 횟수
+}
+
 const NAVER_NEWS_DAILY_LIMIT = 25000
-const WARNING_THRESHOLD = 0.8 // 80%
+const WARNING_THRESHOLD = 0.8
 
 /**
- * API 호출 횟수 증가
+ * incrementApiUsage - API 호출 횟수 증가
+ *
+ * 호출 1회당 call_count +1이 기준이다.
+ * 성공/실패 횟수를 분리해서 기록하면 한도 경보 정확도가 올라간다.
+ *
+ * 예시:
+ *   await incrementApiUsage('naver_news', { calls: 5, successes: 4, failures: 1 })
  */
-export async function incrementApiUsage(apiName: string, count: number = 1): Promise<ApiUsage> {
+export async function incrementApiUsage(
+    apiName: string,
+    options: IncrementOptions | number = 1
+): Promise<ApiUsage> {
     const today = new Date().toISOString().split('T')[0]
 
-    // 오늘 날짜 레코드 조회
+    const { calls = 1, successes = 0, failures = 0 } =
+        typeof options === 'number'
+            ? { calls: options, successes: options, failures: 0 }
+            : options
+
     const { data: existing, error: fetchError } = await supabaseAdmin
         .from('api_usage')
         .select('*')
@@ -33,18 +57,17 @@ export async function incrementApiUsage(apiName: string, count: number = 1): Pro
         .single()
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-        // PGRST116 = not found (정상)
         throw fetchError
     }
 
     if (existing) {
-        // 기존 레코드 업데이트
-        const newCount = existing.call_count + count
         const { data, error } = await supabaseAdmin
             .from('api_usage')
             .update({
-                call_count: newCount,
-                updated_at: new Date().toISOString(),
+                call_count:    existing.call_count    + calls,
+                success_count: existing.success_count + successes,
+                fail_count:    existing.fail_count    + failures,
+                updated_at:    new Date().toISOString(),
             })
             .eq('id', existing.id)
             .select()
@@ -53,14 +76,15 @@ export async function incrementApiUsage(apiName: string, count: number = 1): Pro
         if (error) throw error
         return data
     } else {
-        // 새 레코드 생성
         const { data, error } = await supabaseAdmin
             .from('api_usage')
             .insert({
-                api_name: apiName,
-                date: today,
-                call_count: count,
-                daily_limit: apiName === 'naver_news' ? NAVER_NEWS_DAILY_LIMIT : 10000,
+                api_name:      apiName,
+                date:          today,
+                call_count:    calls,
+                success_count: successes,
+                fail_count:    failures,
+                daily_limit:   apiName === 'naver_news' ? NAVER_NEWS_DAILY_LIMIT : 10000,
             })
             .select()
             .single()

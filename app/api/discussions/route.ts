@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
-import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
+import { sanitizeText, validateContent, checkRateLimit, loadBannedWords } from '@/lib/safety'
 
 /* GET /api/discussions?issue_id=&q=&limit=&offset= */
 /* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색 */
@@ -58,24 +58,34 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
     }
 
-    const { valid, reason } = validateContent(content, 'discussion')
-    if (!valid) {
+    const dbBannedWords = await loadBannedWords(admin)
+    const { valid, pendingReview, reason } = validateContent(content, 'discussion', dbBannedWords)
+    if (!valid && !pendingReview) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
 
     const { data, error } = await admin
         .from('discussion_topics')
-        .insert({
+        .        insert({
             issue_id,
             body: sanitizeText(content),
             is_ai_generated: false,
             approval_status: '대기',
+            ...(pendingReview ? { visibility: 'pending_review' } : {}),
         })
         .select()
         .single()
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (pendingReview) {
+        return NextResponse.json({
+            data,
+            message: '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',
+            pending: true,
+        }, { status: 201 })
     }
 
     return NextResponse.json({ data }, { status: 201 })

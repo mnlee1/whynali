@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
 /* GET /api/admin/safety/rules — 금칙어 목록 */
 export async function GET() {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const { data, error } = await supabaseAdmin
             .from('safety_rules')
@@ -23,6 +27,9 @@ export async function GET() {
 
 /* POST /api/admin/safety/rules — 금칙어 추가 */
 export async function POST(request: NextRequest) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const body = await request.json()
         const word = body.word?.trim()
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error
 
-        await writeAdminLog('금칙어 추가', 'safety_rule', data.id)
+        await writeAdminLog('금칙어 추가', 'safety_rule', data.id, auth.adminEmail)
         return NextResponse.json({ data }, { status: 201 })
     } catch {
         return NextResponse.json({ error: '금칙어 추가 실패' }, { status: 500 })
@@ -63,6 +70,9 @@ export async function POST(request: NextRequest) {
 
 /* DELETE /api/admin/safety/rules?id= — 금칙어 삭제 */
 export async function DELETE(request: NextRequest) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const id = request.nextUrl.searchParams.get('id')
         if (!id) {
@@ -76,7 +86,7 @@ export async function DELETE(request: NextRequest) {
 
         if (error) throw error
 
-        await writeAdminLog('금칙어 삭제', 'safety_rule', id)
+        await writeAdminLog('금칙어 삭제', 'safety_rule', id, auth.adminEmail)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '금칙어 삭제 실패' }, { status: 500 })

@@ -12,6 +12,10 @@ import { recalculateHeatForIssue } from '@/lib/analysis/heat'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+    }
+
     try {
         const { issueId } = await request.json()
 

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
 /* GET /api/admin/discussions?approval_status=&limit=&offset= */
 export async function GET(request: NextRequest) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     const { searchParams } = request.nextUrl
     const approvalStatus = searchParams.get('approval_status')
     const limit = Number(searchParams.get('limit') ?? 50)
@@ -32,6 +36,9 @@ export async function GET(request: NextRequest) {
 
 /* POST /api/admin/discussions — 관리자가 직접 토론 주제 생성 */
 export async function POST(request: NextRequest) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     try {
         const body = await request.json()
         const { issue_id, content, approval_status = '승인' } = body

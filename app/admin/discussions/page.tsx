@@ -3,6 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
+interface Issue {
+    id: string
+    title: string
+}
+
 interface DiscussionTopic {
     id: string
     body: string
@@ -56,6 +61,16 @@ export default function AdminDiscussionsPage() {
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
 
+    /* AI 생성 폼 */
+    const [showAiForm, setShowAiForm] = useState(false)
+    const [aiIssueQuery, setAiIssueQuery] = useState('')
+    const [aiIssueResults, setAiIssueResults] = useState<Issue[]>([])
+    const [aiIssueSearching, setAiIssueSearching] = useState(false)
+    const [aiSelectedIssue, setAiSelectedIssue] = useState<Issue | null>(null)
+    const [aiCount, setAiCount] = useState(3)
+    const [aiGenerating, setAiGenerating] = useState(false)
+    const [aiError, setAiError] = useState<string | null>(null)
+
     /* 수정 폼 */
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editDraft, setEditDraft] = useState('')
@@ -63,6 +78,53 @@ export default function AdminDiscussionsPage() {
     const [editError, setEditError] = useState<string | null>(null)
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2, '종료': 3 }
+
+    /* 승인된 이슈 검색 (AI 생성 대상) */
+    const searchApprovedIssues = useCallback(async (query: string) => {
+        if (!query.trim()) {
+            setAiIssueResults([])
+            return
+        }
+        setAiIssueSearching(true)
+        try {
+            const res = await fetch(
+                `/api/admin/issues?approval_status=승인&search=${encodeURIComponent(query)}&limit=10`
+            )
+            const json = await res.json()
+            setAiIssueResults(json.data ?? [])
+        } catch {
+            setAiIssueResults([])
+        } finally {
+            setAiIssueSearching(false)
+        }
+    }, [])
+
+    /* AI 토론 주제 후보 생성 */
+    const handleAiGenerate = async () => {
+        if (!aiSelectedIssue || aiGenerating) return
+        setAiGenerating(true)
+        setAiError(null)
+        try {
+            const res = await fetch('/api/admin/discussions/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ issue_id: aiSelectedIssue.id, count: aiCount }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            setShowAiForm(false)
+            setAiSelectedIssue(null)
+            setAiIssueQuery('')
+            setAiIssueResults([])
+            // 대기 탭으로 이동해 생성된 주제 확인
+            setFilter('대기')
+            loadTopics('대기')
+        } catch (e) {
+            setAiError(e instanceof Error ? e.message : 'AI 생성 실패')
+        } finally {
+            setAiGenerating(false)
+        }
+    }
 
     const loadTopics = useCallback(async (status: FilterStatus) => {
         setLoading(true)
@@ -193,14 +255,11 @@ export default function AdminDiscussionsPage() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div>
             {/* 헤더 */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-700">
-                        ← 관리자 홈
-                    </Link>
-                    <h1 className="text-2xl font-bold mt-1">토론 주제 관리</h1>
+                    <h1 className="text-2xl font-bold">토론 주제 관리</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
@@ -215,13 +274,112 @@ export default function AdminDiscussionsPage() {
                         새로고침
                     </button>
                     <button
-                        onClick={() => setShowCreateForm(!showCreateForm)}
+                        onClick={() => { setShowAiForm(!showAiForm); setShowCreateForm(false) }}
+                        className="px-3 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                    >
+                        AI 생성
+                    </button>
+                    <button
+                        onClick={() => { setShowCreateForm(!showCreateForm); setShowAiForm(false) }}
                         className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
                         + 직접 생성
                     </button>
                 </div>
             </div>
+
+            {/* AI 생성 폼 */}
+            {showAiForm && (
+                <div className="mb-6 p-4 border border-purple-200 bg-purple-50 rounded-lg space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                        <div>
+                            <h2 className="text-sm font-semibold text-purple-800">AI 토론 주제 생성</h2>
+                            <p className="text-xs text-purple-600 mt-0.5">
+                                이슈 메타데이터(제목·카테고리·화력)만 사용. 본문 미사용. 생성 후 관리자 승인 필요.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => { setShowAiForm(false); setAiError(null); setAiSelectedIssue(null); setAiIssueQuery(''); setAiIssueResults([]) }}
+                            className="text-purple-400 hover:text-purple-600 text-lg leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                    {aiError && (
+                        <p className="text-sm text-red-500">{aiError}</p>
+                    )}
+
+                    {/* 이슈 검색 */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-600">대상 이슈 (승인된 이슈만)</label>
+                        <input
+                            type="text"
+                            value={aiIssueQuery}
+                            onChange={(e) => {
+                                setAiIssueQuery(e.target.value)
+                                setAiSelectedIssue(null)
+                                searchApprovedIssues(e.target.value)
+                            }}
+                            placeholder="이슈 제목으로 검색..."
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-purple-400"
+                        />
+                        {aiIssueSearching && (
+                            <p className="text-xs text-gray-400">검색 중...</p>
+                        )}
+                        {aiIssueResults.length > 0 && !aiSelectedIssue && (
+                            <ul className="border border-gray-200 rounded bg-white divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                                {aiIssueResults.map((issue) => (
+                                    <li key={issue.id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setAiSelectedIssue(issue)
+                                                setAiIssueQuery(issue.title)
+                                                setAiIssueResults([])
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-700"
+                                        >
+                                            {issue.title}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {aiSelectedIssue && (
+                            <p className="text-xs text-purple-700 font-medium">
+                                선택됨: {aiSelectedIssue.title}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* 생성 개수 */}
+                    <div className="flex items-center gap-3">
+                        <label className="text-xs font-medium text-gray-600 whitespace-nowrap">생성 개수</label>
+                        <select
+                            value={aiCount}
+                            onChange={(e) => setAiCount(Number(e.target.value))}
+                            className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-purple-400"
+                        >
+                            {[1, 2, 3, 4, 5].map((n) => (
+                                <option key={n} value={n}>{n}개</option>
+                            ))}
+                        </select>
+                        <span className="text-xs text-gray-400">생성 후 대기 목록에서 승인/반려 처리</span>
+                    </div>
+
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={handleAiGenerate}
+                            disabled={!aiSelectedIssue || aiGenerating}
+                            className="px-4 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                        >
+                            {aiGenerating ? 'AI 생성 중...' : 'AI 토론 주제 생성'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* 신규 생성 폼 */}
             {showCreateForm && (
@@ -297,7 +455,7 @@ export default function AdminDiscussionsPage() {
             )}
 
             {/* 토론 주제 목록 */}
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
