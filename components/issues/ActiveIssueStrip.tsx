@@ -88,14 +88,8 @@ export default function ActiveIssueStrip() {
 
     return (
         <section>
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3">
                 <h2 className="text-sm font-bold text-neutral-700">최근 이슈</h2>
-                <Link
-                    href="/"
-                    className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
-                >
-                    전체 보기
-                </Link>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

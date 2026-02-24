@@ -85,22 +85,14 @@ export default function PopularRanking() {
     return (
         <section>
             {/* 헤더 */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-neutral-900">{weekLabel} 인기</h2>
-                    {/* 막대 아이콘 (화력 게이지 상징) */}
-                    <div className="flex items-end gap-0.5 h-4">
-                        <div className="w-1 h-2 bg-violet-400 rounded-sm" />
-                        <div className="w-1 h-3 bg-violet-500 rounded-sm" />
-                        <div className="w-1 h-4 bg-violet-600 rounded-sm" />
-                    </div>
+            <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-base font-bold text-neutral-900">{weekLabel} 인기</h2>
+                {/* 막대 아이콘 (화력 게이지 상징) */}
+                <div className="flex items-end gap-0.5 h-4">
+                    <div className="w-1 h-2 bg-violet-400 rounded-sm" />
+                    <div className="w-1 h-3 bg-violet-500 rounded-sm" />
+                    <div className="w-1 h-4 bg-violet-600 rounded-sm" />
                 </div>
-                <Link
-                    href="/"
-                    className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
-                >
-                    전체
-                </Link>
             </div>
 
             {/* 랭킹 목록 */}
