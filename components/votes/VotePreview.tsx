@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import type { Vote, VoteChoice } from '@/types/index'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 // votes API 응답 형태 (vote_choices가 조인됨)
 interface VoteWithChoices extends Vote {
@@ -96,7 +97,7 @@ export default function VotePreview() {
                 <div className="p-4 bg-white border border-violet-200 rounded-xl hover:border-violet-300 hover:shadow-sm transition-all">
                     {/* 연결된 이슈 제목 */}
                     <p className="text-xs text-violet-600 font-medium mb-1 line-clamp-1">
-                        {issue.title}
+                        {decodeHtml(issue.title)}
                     </p>
 
                     {/* 투표 제목 */}

@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react'
 import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface CandidateAlert {
     title: string
@@ -342,7 +343,7 @@ export default function AdminIssuesPage() {
                                         target="_blank"
                                         className="text-blue-600 hover:underline"
                                     >
-                                        {issue.title}
+                                        {decodeHtml(issue.title)}
                                     </a>
                                 </td>
                                 <td className="px-4 py-3 text-sm">{issue.category}</td>

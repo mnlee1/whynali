@@ -17,6 +17,7 @@ import { getSources } from '@/lib/api/issues'
 import type { NewsData, CommunityData } from '@/types/issue'
 
 const INITIAL_SHOW_COUNT = 5 // 처음에 보여줄 항목 수
+const SHOW_STEP = 5          // 더보기 클릭 시 추가로 보여줄 항목 수
 
 // 커뮤니티 사이트별 배지 색상 매핑
 const SITE_BADGE_CLASS: Record<string, string> = {
@@ -33,8 +34,8 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
     const [community, setCommunity] = useState<CommunityData[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [showAllNews, setShowAllNews] = useState(false)
-    const [showAllCommunity, setShowAllCommunity] = useState(false)
+    const [showNewsCount, setShowNewsCount] = useState(INITIAL_SHOW_COUNT)
+    const [showCommunityCount, setShowCommunityCount] = useState(INITIAL_SHOW_COUNT)
 
     useEffect(() => {
         const fetchSources = async () => {
@@ -101,8 +102,8 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
         )
     }
 
-    const visibleNews = showAllNews ? news : news.slice(0, INITIAL_SHOW_COUNT)
-    const visibleCommunity = showAllCommunity ? community : community.slice(0, INITIAL_SHOW_COUNT)
+    const visibleNews = news.slice(0, showNewsCount)
+    const visibleCommunity = community.slice(0, showCommunityCount)
 
     return (
         <div className="space-y-6">
@@ -132,14 +133,12 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             </div>
                         ))}
                     </div>
-                    {news.length > INITIAL_SHOW_COUNT && (
+                    {showNewsCount < news.length && (
                         <button
-                            onClick={() => setShowAllNews((prev) => !prev)}
+                            onClick={() => setShowNewsCount((prev) => Math.min(prev + SHOW_STEP, news.length))}
                             className="mt-3 w-full py-2 text-sm text-neutral-600 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-colors"
                         >
-                            {showAllNews
-                                ? '접기'
-                                : `${news.length - INITIAL_SHOW_COUNT}건 더 보기`}
+                            {`${Math.min(SHOW_STEP, news.length - showNewsCount)}건 더 보기 (${news.length - showNewsCount}건 남음)`}
                         </button>
                     )}
                 </div>
@@ -180,14 +179,12 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             </div>
                         ))}
                     </div>
-                    {community.length > INITIAL_SHOW_COUNT && (
+                    {showCommunityCount < community.length && (
                         <button
-                            onClick={() => setShowAllCommunity((prev) => !prev)}
+                            onClick={() => setShowCommunityCount((prev) => Math.min(prev + SHOW_STEP, community.length))}
                             className="mt-3 w-full py-2 text-sm text-neutral-600 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-colors"
                         >
-                            {showAllCommunity
-                                ? '접기'
-                                : `${community.length - INITIAL_SHOW_COUNT}건 더 보기`}
+                            {`${Math.min(SHOW_STEP, community.length - showCommunityCount)}건 더 보기 (${community.length - showCommunityCount}건 남음)`}
                         </button>
                     )}
                 </div>

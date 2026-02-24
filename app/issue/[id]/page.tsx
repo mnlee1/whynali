@@ -8,6 +8,7 @@
 
 import Link from 'next/link'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
+import { decodeHtml } from '@/lib/utils/decode-html'
 import TimelineSection from '@/components/issue/TimelineSection'
 import SourcesSection from '@/components/issue/SourcesSection'
 import ReactionsSection from '@/components/issue/ReactionsSection'
@@ -70,11 +71,11 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     </span>
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold mb-2">
-                    {issue.title}
+                    {decodeHtml(issue.title)}
                 </h1>
                 {issue.description && (
                     <p className="text-gray-600 leading-relaxed">
-                        {issue.description}
+                        {decodeHtml(issue.description)}
                     </p>
                 )}
             </div>

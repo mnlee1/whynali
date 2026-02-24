@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 const STATUS_LABEL: Record<string, string> = {
     '점화': '점화',
@@ -75,7 +76,7 @@ export default async function SearchPage({
                                 >
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium text-gray-800 truncate">
-                                            {issue.title}
+                                            {decodeHtml(issue.title)}
                                         </p>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-xs text-gray-400">{issue.category}</span>
@@ -111,12 +112,12 @@ export default async function SearchPage({
                                         className="block p-3 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors"
                                     >
                                         <p className="text-sm text-gray-800 line-clamp-2">
-                                            {topic.body}
+                                            {decodeHtml(topic.body)}
                                         </p>
                                         <div className="flex items-center gap-2 mt-1">
                                             {issueData && (
                                                 <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
-                                                    {issueData.title}
+                                                    {decodeHtml(issueData.title)}
                                                 </span>
                                             )}
                                             <span className="text-xs text-gray-400">

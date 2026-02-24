@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const approvalStatus = searchParams.get('approval_status')
+    const search = searchParams.get('search')
 
     try {
         /*
@@ -45,10 +46,15 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('issues')
             .select('*', { count: 'exact' })
+            .order('heat_index', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false })
 
         if (approvalStatus) {
             query = query.eq('approval_status', approvalStatus)
+        }
+
+        if (search && search.trim()) {
+            query = query.ilike('title', `%${search.trim()}%`)
         }
 
         const { data, error, count } = await query

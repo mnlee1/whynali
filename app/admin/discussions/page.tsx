@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface Issue {
     id: string
@@ -56,7 +57,10 @@ export default function AdminDiscussionsPage() {
 
     /* 신규 생성 폼 */
     const [showCreateForm, setShowCreateForm] = useState(false)
-    const [newIssueId, setNewIssueId] = useState('')
+    const [newIssueQuery, setNewIssueQuery] = useState('')
+    const [newIssueResults, setNewIssueResults] = useState<Issue[]>([])
+    const [newIssueSearching, setNewIssueSearching] = useState(false)
+    const [newSelectedIssue, setNewSelectedIssue] = useState<Issue | null>(null)
     const [newContent, setNewContent] = useState('')
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
@@ -79,25 +83,30 @@ export default function AdminDiscussionsPage() {
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2, '종료': 3 }
 
-    /* 승인된 이슈 검색 (AI 생성 대상) */
-    const searchApprovedIssues = useCallback(async (query: string) => {
+    /* 승인된 이슈 검색 — AI 생성/직접 생성 공통 */
+    const searchIssues = useCallback(async (query: string, setter: (r: Issue[]) => void, loadingSetter: (v: boolean) => void) => {
         if (!query.trim()) {
-            setAiIssueResults([])
+            setter([])
             return
         }
-        setAiIssueSearching(true)
+        loadingSetter(true)
         try {
             const res = await fetch(
                 `/api/admin/issues?approval_status=승인&search=${encodeURIComponent(query)}&limit=10`
             )
             const json = await res.json()
-            setAiIssueResults(json.data ?? [])
+            setter(json.data ?? [])
         } catch {
-            setAiIssueResults([])
+            setter([])
         } finally {
-            setAiIssueSearching(false)
+            loadingSetter(false)
         }
     }, [])
+
+    /* 승인된 이슈 검색 (AI 생성 대상) */
+    const searchApprovedIssues = useCallback(async (query: string) => {
+        await searchIssues(query, setAiIssueResults, setAiIssueSearching)
+    }, [searchIssues])
 
     /* AI 토론 주제 후보 생성 */
     const handleAiGenerate = async () => {
@@ -232,18 +241,20 @@ export default function AdminDiscussionsPage() {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!newIssueId.trim() || !newContent.trim()) return
+        if (!newSelectedIssue || !newContent.trim()) return
         setCreating(true)
         setCreateError(null)
         try {
             const res = await fetch('/api/admin/discussions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: newIssueId.trim(), content: newContent.trim() }),
+                body: JSON.stringify({ issue_id: newSelectedIssue.id, content: newContent.trim() }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setNewIssueId('')
+            setNewIssueQuery('')
+            setNewIssueResults([])
+            setNewSelectedIssue(null)
             setNewContent('')
             setShowCreateForm(false)
             loadTopics(filter)
@@ -387,37 +398,109 @@ export default function AdminDiscussionsPage() {
                     onSubmit={handleCreate}
                     className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg space-y-3"
                 >
-                    <h2 className="text-sm font-semibold text-blue-800">토론 주제 직접 생성</h2>
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-blue-800">토론 주제 직접 생성</h2>
+                        <button
+                            type="button"
+                            onClick={() => { setShowCreateForm(false); setNewIssueQuery(''); setNewIssueResults([]); setNewSelectedIssue(null); setCreateError(null) }}
+                            className="text-blue-400 hover:text-blue-600 text-lg leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+
                     {createError && (
                         <p className="text-sm text-red-500">{createError}</p>
                     )}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <input
-                            type="text"
-                            value={newIssueId}
-                            onChange={(e) => setNewIssueId(e.target.value)}
-                            placeholder="이슈 ID (UUID)"
-                            className="px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
-                        />
-                        <input
-                            type="text"
-                            value={newContent}
-                            onChange={(e) => setNewContent(e.target.value)}
-                            placeholder="토론 주제 내용"
-                            className="md:col-span-2 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
-                        />
+
+                    {/* Step 1: 이슈 검색 */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-600">
+                            1. 이슈 선택
+                            {newSelectedIssue && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setNewSelectedIssue(null); setNewIssueQuery('') }}
+                                    className="ml-2 text-blue-500 hover:text-blue-700 font-normal"
+                                >
+                                    다시 선택
+                                </button>
+                            )}
+                        </label>
+                        {newSelectedIssue ? (
+                            <div className="px-3 py-2 bg-white border border-blue-300 rounded text-sm text-blue-800 font-medium">
+                                {newSelectedIssue.title}
+                            </div>
+                        ) : (
+                            <>
+                                <input
+                                    type="text"
+                                    value={newIssueQuery}
+                                    onChange={(e) => {
+                                        setNewIssueQuery(e.target.value)
+                                        searchIssues(e.target.value, setNewIssueResults, setNewIssueSearching)
+                                    }}
+                                    placeholder="이슈 제목으로 검색..."
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                    autoFocus
+                                />
+                                {newIssueSearching && (
+                                    <p className="text-xs text-gray-400">검색 중...</p>
+                                )}
+                                {newIssueResults.length > 0 && (
+                                    <ul className="border border-gray-200 rounded bg-white divide-y divide-gray-100 max-h-44 overflow-y-auto">
+                                        {newIssueResults.map((issue) => (
+                                            <li key={issue.id}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewSelectedIssue(issue)
+                                                        setNewIssueQuery(issue.title)
+                                                        setNewIssueResults([])
+                                                    }}
+                                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 text-gray-700"
+                                                >
+                                                    {issue.title}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {newIssueQuery && !newIssueSearching && newIssueResults.length === 0 && (
+                                    <p className="text-xs text-gray-400">검색 결과가 없습니다.</p>
+                                )}
+                            </>
+                        )}
                     </div>
+
+                    {/* Step 2: 토론 내용 (이슈 선택 후 표시) */}
+                    {newSelectedIssue && (
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-600">2. 토론 주제 내용</label>
+                            <textarea
+                                value={newContent}
+                                onChange={(e) => setNewContent(e.target.value)}
+                                placeholder="토론 주제 내용을 입력하세요"
+                                rows={3}
+                                maxLength={500}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400 resize-none"
+                                autoFocus
+                            />
+                            <p className="text-xs text-gray-400 text-right">{newContent.length}/500</p>
+                        </div>
+                    )}
+
                     <div className="flex gap-2 justify-end">
                         <button
                             type="button"
-                            onClick={() => setShowCreateForm(false)}
+                            onClick={() => { setShowCreateForm(false); setNewIssueQuery(''); setNewIssueResults([]); setNewSelectedIssue(null); setCreateError(null) }}
                             className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
                         >
                             취소
                         </button>
                         <button
                             type="submit"
-                            disabled={!newIssueId.trim() || !newContent.trim() || creating}
+                            disabled={!newSelectedIssue || !newContent.trim() || creating}
                             className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                         >
                             {creating ? '생성 중...' : '생성'}
@@ -532,7 +615,7 @@ export default function AdminDiscussionsPage() {
                                                     )}
                                                 </div>
                                             ) : (
-                                                <p className="line-clamp-2">{topic.body}</p>
+                                                <p className="line-clamp-2">{decodeHtml(topic.body)}</p>
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
@@ -542,7 +625,7 @@ export default function AdminDiscussionsPage() {
                                                     target="_blank"
                                                     className="text-blue-600 hover:underline"
                                                 >
-                                                    {topic.issues.title}
+                                                    {decodeHtml(topic.issues.title)}
                                                 </Link>
                                             ) : (
                                                 <span className="text-gray-400">연결 없음</span>
