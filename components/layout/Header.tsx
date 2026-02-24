@@ -17,7 +17,6 @@ import SearchBar from './SearchBar'
 export default function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     const [user, setUser] = useState<User | null>(null)
-    const [isAdmin, setIsAdmin] = useState(false)
     const router = useRouter()
     const sbRef = useRef(
         createBrowserClient(
@@ -26,40 +25,17 @@ export default function Header() {
         )
     )
 
-    const checkAdmin = async () => {
-        try {
-            const res = await fetch('/api/auth/is-admin')
-            if (res.ok) {
-                const data = await res.json()
-                setIsAdmin(data.isAdmin === true)
-            } else {
-                setIsAdmin(false)
-            }
-        } catch {
-            setIsAdmin(false)
-        }
-    }
-
     useEffect(() => {
         const sb = sbRef.current
         sb.auth.getUser().then((result) => {
-            const currentUser = result.data.user ?? null
-            setUser(currentUser)
-            if (currentUser) checkAdmin()
+            setUser(result.data.user ?? null)
         })
 
         const { data: { subscription } } = sb.auth.onAuthStateChange((_, session) => {
-            const currentUser = session?.user ?? null
-            setUser(currentUser)
-            if (currentUser) {
-                checkAdmin()
-            } else {
-                setIsAdmin(false)
-            }
+            setUser(session?.user ?? null)
         })
 
         return () => subscription.unsubscribe()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const handleLogout = async () => {
@@ -178,14 +154,12 @@ export default function Header() {
                     <div className="hidden md:flex items-center gap-3">
                         <SearchBar />
                         <AuthButton />
-                        {isAdmin && (
-                            <Link
-                                href="/admin"
-                                className="px-3 py-1.5 text-sm font-medium bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors"
-                            >
-                                관리자
-                            </Link>
-                        )}
+                        <Link
+                            href="/admin"
+                            className="px-3 py-1.5 text-sm font-medium bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors"
+                        >
+                            관리자
+                        </Link>
                     </div>
 
                     <button
@@ -209,7 +183,6 @@ export default function Header() {
                         <Nav mobile onNavigate={() => setMobileMenuOpen(false)} />
                         <div className="mt-4 pt-4 border-t border-neutral-100 flex flex-col gap-3">
                             <SearchBar />
-                            {isAdmin && (
                             <Link
                                 href="/admin"
                                 onClick={() => setMobileMenuOpen(false)}
@@ -217,7 +190,6 @@ export default function Header() {
                             >
                                 관리자
                             </Link>
-                        )}
                             <AuthButton />
                         </div>
                     </div>
