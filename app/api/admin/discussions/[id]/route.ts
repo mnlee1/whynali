@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 return NextResponse.json({ error: '토론 주제를 찾을 수 없습니다.' }, { status: 404 })
             }
 
-            await writeAdminLog('수정', 'discussion_topic', id, auth.adminEmail)
+            await writeAdminLog('수정', 'discussion_topic', id, auth.adminEmail, sanitized.slice(0, 200))
             return NextResponse.json({ data })
         }
 
@@ -82,7 +82,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: '토론 주제를 찾을 수 없습니다.' }, { status: 404 })
         }
 
-        await writeAdminLog(action, 'discussion_topic', id, auth.adminEmail)
+        const details = data.body ? data.body.slice(0, 200) : null
+        await writeAdminLog(action, 'discussion_topic', id, auth.adminEmail, details)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: '처리 실패' }, { status: 500 })

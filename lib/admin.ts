@@ -26,9 +26,13 @@ function getAdminEmailSet(): Set<string> {
     )
 }
 
-/** 주어진 이메일이 관리자 목록에 포함되어 있는지 확인 */
+/**
+ * 주어진 이메일이 관리자 목록에 포함되어 있는지 확인.
+ * SKIP_ADMIN_CHECK=true 환경변수가 설정된 경우 로그인한 모든 사용자를 허용 (테스트용).
+ */
 export function isAdminEmail(email: string | null | undefined): boolean {
     if (!email) return false
+    if (process.env.SKIP_ADMIN_CHECK === 'true') return true
     return getAdminEmailSet().has(email.toLowerCase())
 }
 

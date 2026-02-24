@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
         let query = supabaseAdmin
             .from('admin_logs')
-            .select('id, action, target_type, target_id, admin_id, created_at', { count: 'exact' })
+            .select('id, action, target_type, target_id, admin_id, details, created_at', { count: 'exact' })
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 

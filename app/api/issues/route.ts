@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         if (sort === 'heat') {
             query = query.order('heat_index', { ascending: false, nullsFirst: false })
         } else {
-            query = query.order('updated_at', { ascending: false })
+            query = query.order('created_at', { ascending: false })
         }
 
         query = query.range(offset, offset + limit - 1)

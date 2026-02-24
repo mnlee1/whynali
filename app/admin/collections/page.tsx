@@ -404,7 +404,7 @@ export default function AdminCollectionsPage() {
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                         <div className="bg-white border rounded-lg p-4">
-                            <StatCard label="뉴스 총 수집" value={stats.news.total} sub={`24h +${total24h(stats.news.last24h)}`} />
+                            <StatCard label="뉴스 총 수집" value={stats.news.total} sub={`최근 24h +${total24h(stats.news.last24h)}건`} />
                         </div>
                         <div className="bg-white border rounded-lg p-4">
                             <StatCard
@@ -414,7 +414,7 @@ export default function AdminCollectionsPage() {
                             />
                         </div>
                         <div className="bg-white border rounded-lg p-4">
-                            <StatCard label="커뮤니티 총 수집" value={stats.community.total} sub={`24h +${total24h(stats.community.last24h)}`} />
+                            <StatCard label="커뮤니티 총 수집" value={stats.community.total} sub={`최근 24h +${total24h(stats.community.last24h)}건`} />
                         </div>
                         <div className="bg-white border rounded-lg p-4">
                             <StatCard

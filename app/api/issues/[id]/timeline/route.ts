@@ -16,7 +16,7 @@ export async function GET(
     try {
         const { data, error } = await supabaseAdmin
             .from('timeline_points')
-            .select('id, occurred_at, source_url, stage, title, created_at')
+            .select('*')
             .eq('issue_id', id)
             .order('occurred_at', { ascending: true })
 

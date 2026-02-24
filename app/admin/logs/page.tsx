@@ -8,6 +8,7 @@ interface AdminLog {
     target_type: string
     target_id: string | null
     admin_id: string | null
+    details: string | null
     created_at: string
 }
 
@@ -155,6 +156,7 @@ export default function AdminLogsPage() {
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">시간</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">액션</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">대상 유형</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">내용</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">대상 ID</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">관리자</th>
                         </tr>
@@ -163,14 +165,14 @@ export default function AdminLogsPage() {
                         {loading ? (
                             [1, 2, 3, 4, 5].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={5} className="px-4 py-3">
+                                    <td colSpan={6} className="px-4 py-3">
                                         <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : logs.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
+                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
                                     기록된 로그가 없습니다.
                                 </td>
                             </tr>
@@ -188,13 +190,20 @@ export default function AdminLogsPage() {
                                             {log.action}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                                         {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">
+                                    <td className="px-4 py-3 text-sm text-gray-700 max-w-xs">
+                                        {log.details ? (
+                                            <span className="line-clamp-2">{log.details}</span>
+                                        ) : (
+                                            <span className="text-gray-300">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">
                                         {log.target_id ? `…${log.target_id.slice(-8)}` : '—'}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-gray-400">
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                                         {log.admin_id ? `…${log.admin_id.slice(-4)}` : '시스템'}
                                     </td>
                                 </tr>

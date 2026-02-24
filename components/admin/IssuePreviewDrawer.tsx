@@ -17,6 +17,7 @@ import { useEffect } from 'react'
 import type { Issue } from '@/types/issue'
 import TimelineEditor from '@/components/admin/TimelineEditor'
 import SourcesSection from '@/components/issue/SourcesSection'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface IssuePreviewDrawerProps {
     issue: Issue | null
@@ -86,7 +87,7 @@ export default function IssuePreviewDrawer({
                     <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-blue-600 mb-1">미리보기</p>
                         <h2 className="text-lg font-bold leading-tight line-clamp-2">
-                            {issue.title}
+                            {decodeHtml(issue.title)}
                         </h2>
                     </div>
                     <button

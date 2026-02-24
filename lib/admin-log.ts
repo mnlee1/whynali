@@ -14,7 +14,8 @@ export async function writeAdminLog(
     action: string,
     targetType: string,
     targetId: string | null = null,
-    adminEmail: string | null = null
+    adminEmail: string | null = null,
+    details: string | null = null
 ): Promise<void> {
     try {
         await supabaseAdmin.from('admin_logs').insert({
@@ -22,6 +23,7 @@ export async function writeAdminLog(
             target_type: targetType,
             target_id: targetId,
             admin_id: adminEmail,
+            details,
         })
     } catch {
         /* intentionally silent */
