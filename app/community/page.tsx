@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { DiscussionTopic } from '@/types'
@@ -11,7 +11,7 @@ type TopicWithIssue = DiscussionTopic & {
 
 const PAGE_SIZE = 20
 
-export default function CommunityPage() {
+function CommunityContent() {
     const searchParams = useSearchParams()
     /* 이슈 상세에서 "이 이슈의 커뮤니티" 진입 시 issue_id 파라미터로 필터링 */
     const issueIdFilter = searchParams.get('issue_id') ?? ''
@@ -183,5 +183,25 @@ export default function CommunityPage() {
                 </>
             )}
         </div>
+    )
+}
+
+export default function CommunityPage() {
+    return (
+        <Suspense fallback={
+            <div className="container mx-auto px-4 py-6 md:py-8">
+                <h1 className="text-2xl md:text-3xl font-bold mb-6">커뮤니티</h1>
+                <div className="space-y-4">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="p-4 border border-gray-200 rounded-lg space-y-2">
+                            <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+                            <div className="h-3 w-1/3 bg-gray-100 rounded animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        }>
+            <CommunityContent />
+        </Suspense>
     )
 }
