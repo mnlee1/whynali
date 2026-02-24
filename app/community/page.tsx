@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { DiscussionTopic } from '@/types'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 type TopicWithIssue = DiscussionTopic & {
     issues: { id: string; title: string } | null
@@ -43,7 +44,7 @@ function CommunityContent() {
             setTotal(json.total ?? 0)
             /* issue_id 필터 시 첫 항목의 이슈 제목 저장 */
             if (issueIdFilter && data.length > 0 && data[0].issues?.title) {
-                setIssueTitle(data[0].issues.title)
+                setIssueTitle(decodeHtml(data[0].issues.title))
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : '목록 조회 실패')
@@ -151,12 +152,12 @@ function CommunityContent() {
                                         )}
                                     </div>
                                     <p className="text-sm text-gray-800 line-clamp-2 mb-2">
-                                        {topic.body}
+                                        {decodeHtml(topic.body)}
                                     </p>
                                     <div className="flex items-center gap-3 text-xs text-gray-400">
                                         {topic.issues && (
                                             <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-100">
-                                                {topic.issues.title}
+                                                {decodeHtml(topic.issues.title)}
                                             </span>
                                         )}
                                         <span>

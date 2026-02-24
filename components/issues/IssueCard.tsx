@@ -12,6 +12,7 @@
 
 import Link from 'next/link'
 import type { Issue } from '@/types/issue'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface IssueCardProps {
     issue: Issue
@@ -82,13 +83,13 @@ export default function IssueCard({ issue }: IssueCardProps) {
 
                 {/* 제목 */}
                 <h3 className="text-base font-semibold text-neutral-900 mb-2 line-clamp-2">
-                    {issue.title}
+                    {decodeHtml(issue.title)}
                 </h3>
 
                 {/* 설명 */}
                 {issue.description && (
                     <p className="text-sm text-neutral-500 mb-3 line-clamp-1">
-                        {issue.description}
+                        {decodeHtml(issue.description)}
                     </p>
                 )}
 

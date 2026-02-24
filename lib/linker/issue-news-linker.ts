@@ -110,15 +110,16 @@ async function linkNewsToIssue(
     const threshold = Math.max(2, Math.ceil(keywordsLower.length * 0.6))
 
     /*
-     * 아직 이슈에 연결되지 않은 뉴스 중 날짜 범위 + 동일 카테고리 내 500건 조회.
-     * 카테고리 필터: 같은 인물이 다른 주제(정치·사회 등)의 뉴스에 등장할 때
-     * 연예 이슈에 오연결되는 문제를 차단한다.
+     * 아직 이슈에 연결되지 않은 뉴스 중 날짜 범위 내 500건 조회.
+     * category가 설정된 경우: 동일 카테고리 뉴스만 대상 (오연결 방지)
+     * category가 null인 경우: 마이그레이션 이전 수집 건 — 제외하지 않고 포함하여
+     *   키워드 매칭 단계에서 관련성으로 판단.
      */
     const { data: news } = await supabaseAdmin
         .from('news_data')
         .select('id, title')
         .is('issue_id', null)
-        .eq('category', issueCategory)
+        .or(`category.eq.${issueCategory},category.is.null`)
         .gte('created_at', from)
         .lte('created_at', to)
         .order('created_at', { ascending: false })

@@ -10,6 +10,7 @@
 import Link from 'next/link'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import DiscussionComments from '@/components/issue/DiscussionComments'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 export default async function DiscussionTopicPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -70,7 +71,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
 
                 {/* 토론 주제 본문 */}
                 <p className="text-base md:text-lg font-semibold text-gray-800 leading-relaxed whitespace-pre-wrap mb-3">
-                    {topic.body}
+                    {decodeHtml(topic.body)}
                 </p>
 
                 <p className="text-xs text-gray-400">

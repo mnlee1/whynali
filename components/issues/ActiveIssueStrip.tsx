@@ -1,19 +1,20 @@
 /**
  * components/issues/ActiveIssueStrip.tsx
  *
- * [진행 중 이슈 가로 스트립]
+ * [최근 진행 중 이슈 카드 그리드]
  *
- * 메인화면에서 현재 진행 중인 이슈(점화/논란중)를 가로 스크롤 형태로 보여줍니다.
- * 종결된 이슈는 제외하고, 최신 활성 이슈를 최대 8개까지 가로로 나열합니다.
- * 사용자가 빠르게 훑어보고 관심 이슈를 클릭할 수 있도록 설계됩니다.
+ * 메인화면 히어로 캐러셀 아래 배치되는 섹션입니다.
+ * 진행 중인 이슈 중 히어로에서 사용된 것을 제외한 최신 2개를 2열 카드로 보여줍니다.
+ * 제목, 카테고리, 화력 지수, 업데이트 시간을 표시합니다.
  */
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 // 상태별 칩 스타일
 function getStatusChipClass(status: string): string {
@@ -27,58 +28,43 @@ function getStatusChipClass(status: string): string {
     }
 }
 
-function getStatusIcon(status: string): string {
-    switch (status) {
-        case '점화': return '▲'
-        case '논란중': return '●'
-        default: return '○'
-    }
+// 날짜 포맷
+function formatDate(dateString: string): string {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffHours = Math.floor((now.getTime() - date.getTime()) / 3600000)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffHours < 1) return '방금 전'
+    if (diffHours < 24) return `${diffHours}시간 전`
+    if (diffDays < 7) return `${diffDays}일 전`
+    return date.toLocaleDateString('ko-KR')
 }
 
 export default function ActiveIssueStrip() {
     const [issues, setIssues] = useState<Issue[]>([])
     const [loading, setLoading] = useState(true)
 
-    const scrollRef = useRef<HTMLDivElement>(null)
-    const isDragging = useRef(false)
-    const startX = useRef(0)
-    const scrollLeft = useRef(0)
-    const hasDragged = useRef(false)
-
-    const onMouseDown = (e: React.MouseEvent) => {
-        if (!scrollRef.current) return
-        isDragging.current = true
-        hasDragged.current = false
-        startX.current = e.pageX - scrollRef.current.offsetLeft
-        scrollLeft.current = scrollRef.current.scrollLeft
-    }
-
-    const onMouseMove = (e: React.MouseEvent) => {
-        if (!isDragging.current || !scrollRef.current) return
-        e.preventDefault()
-        const x = e.pageX - scrollRef.current.offsetLeft
-        const walk = (x - startX.current) * 1.5
-        if (Math.abs(x - startX.current) > 5) hasDragged.current = true
-        scrollRef.current.scrollLeft = scrollLeft.current - walk
-    }
-
-    const onMouseUp = () => { isDragging.current = false }
-
-    // 드래그 후 링크 클릭 방지
-    const onClickCapture = (e: React.MouseEvent) => {
-        if (hasDragged.current) {
-            e.stopPropagation()
-            e.preventDefault()
-        }
-    }
-
     useEffect(() => {
         async function load() {
             try {
-                // 최신 15개 가져와서 진행 중인 것만 최대 8개 추출
-                const res = await getIssues({ sort: 'latest', limit: 15 })
-                const active = res.data.filter((i) => i.status !== '종결').slice(0, 8)
-                setIssues(active)
+                // 화력순 상위 10개 조회 후 TOP 5(히어로 사용 분)를 건너뛰고 진행 중인 것 2개 추출
+                // → 히어로와 동일 이슈가 노출되지 않도록 6위 이후부터 선택
+                const res = await getIssues({ sort: 'heat', limit: 10 })
+                const active = res.data
+                    .filter((i) => i.status !== '종결')
+                    .slice(5, 10)
+                    .slice(0, 2)
+                // 6위 이후 진행 중 이슈가 부족하면 최신순으로 보완
+                if (active.length < 2) {
+                    const fallback = await getIssues({ sort: 'latest', limit: 10 })
+                    const fallbackActive = fallback.data
+                        .filter((i) => i.status !== '종결')
+                        .slice(0, 2)
+                    setIssues(fallbackActive)
+                } else {
+                    setIssues(active)
+                }
             } catch {
                 // 실패 시 섹션 미표시
             } finally {
@@ -90,9 +76,9 @@ export default function ActiveIssueStrip() {
 
     if (loading) {
         return (
-            <div className="flex gap-3 overflow-hidden">
-                {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="h-24 w-48 shrink-0 bg-neutral-100 rounded-xl animate-pulse" />
+            <div className="grid grid-cols-2 gap-3">
+                {[0, 1].map((i) => (
+                    <div key={i} className="h-32 bg-neutral-100 rounded-xl animate-pulse" />
                 ))}
             </div>
         )
@@ -103,49 +89,40 @@ export default function ActiveIssueStrip() {
     return (
         <section>
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-neutral-900">지금 진행 중</h2>
+                <h2 className="text-sm font-bold text-neutral-700">최근 이슈</h2>
                 <Link
                     href="/"
                     className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
                 >
-                    전체 이슈
+                    전체 보기
                 </Link>
             </div>
 
-            {/* 가로 스크롤 스트립 — 터치/마우스 드래그 모두 지원 */}
-            <div
-                ref={scrollRef}
-                className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide touch-pan-x overscroll-x-contain cursor-grab active:cursor-grabbing select-none"
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseUp={onMouseUp}
-                onMouseLeave={onMouseUp}
-                onClickCapture={onClickCapture}
-            >
-                {issues.map((issue) => {
-                    const chipClass = getStatusChipClass(issue.status)
-                    const icon = getStatusIcon(issue.status)
-
-                    return (
-                        <Link key={issue.id} href={`/issue/${issue.id}`} className="shrink-0 w-52">
-                            <article className="h-full p-3.5 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
-                                {/* 상태 칩 */}
-                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium mb-2 ${chipClass}`}>
-                                    <span className="text-[10px]">{icon}</span>
+            <div className="grid grid-cols-2 gap-3">
+                {issues.map((issue) => (
+                    <Link key={issue.id} href={`/issue/${issue.id}`}>
+                        <article className="h-full p-4 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
+                            {/* 카테고리 + 상태 */}
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xs text-neutral-400">{issue.category}</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${getStatusChipClass(issue.status)}`}>
                                     {issue.status}
                                 </span>
+                            </div>
 
-                                {/* 제목 */}
-                                <p className="text-sm font-semibold text-neutral-900 line-clamp-2 leading-snug">
-                                    {issue.title}
-                                </p>
+                            {/* 제목 */}
+                            <p className="text-sm font-semibold text-neutral-900 line-clamp-2 leading-snug mb-3">
+                                {decodeHtml(issue.title)}
+                            </p>
 
-                                {/* 카테고리 */}
-                                <p className="text-xs text-neutral-400 mt-2">{issue.category}</p>
-                            </article>
-                        </Link>
-                    )
-                })}
+                            {/* 화력 + 시간 */}
+                            <div className="flex items-center justify-between text-xs text-neutral-400">
+                                <span>화력 {issue.heat_index ?? 0}</span>
+                                <span>{formatDate(issue.created_at)}</span>
+                            </div>
+                        </article>
+                    </Link>
+                ))}
             </div>
         </section>
     )

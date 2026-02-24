@@ -16,6 +16,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import type { DiscussionTopic } from '@/types/index'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 // 토론 주제에 연결된 이슈 정보가 포함된 타입 (discussions API 응답 형태)
 interface TopicWithIssue extends DiscussionTopic {
@@ -89,12 +90,12 @@ export default function CommunityPreview() {
                                     {/* 연결된 이슈명 */}
                                     {topic.issues?.title && (
                                         <p className="text-xs text-neutral-400 mb-1 line-clamp-1">
-                                            {topic.issues.title}
+                                            {decodeHtml(topic.issues.title)}
                                         </p>
                                     )}
                                     {/* 토론 주제 본문 */}
                                     <p className="text-sm font-medium text-neutral-800 line-clamp-2 leading-snug">
-                                        {topic.body}
+                                        {decodeHtml(topic.body)}
                                     </p>
                                 </div>
                                 <span className="text-xs text-neutral-400 shrink-0 mt-0.5">
@@ -106,15 +107,6 @@ export default function CommunityPreview() {
                 ))}
             </div>
 
-            {/* 커뮤니티 전체 진입 버튼 */}
-            <div className="mt-3 text-center">
-                <Link
-                    href="/community"
-                    className="inline-block px-5 py-2 text-sm font-medium text-neutral-600 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
-                >
-                    커뮤니티 전체 보기
-                </Link>
-            </div>
         </section>
     )
 }
