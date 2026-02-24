@@ -57,8 +57,13 @@ async function getSessionUser(request: NextRequest) {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
+    /* ── SKIP_ADMIN_CHECK=true 이면 /admin/* 및 /api/admin/* 인증 생략 ── */
+    const skipAdminCheck = process.env.SKIP_ADMIN_CHECK === 'true'
+
     /* ── /admin/* 페이지 경로 보호 ── */
     if (pathname.startsWith('/admin')) {
+        if (skipAdminCheck) return NextResponse.next()
+
         const { user, supabaseResponse } = await getSessionUser(request)
 
         if (!user) {
@@ -76,6 +81,8 @@ export async function middleware(request: NextRequest) {
 
     /* ── /api/admin/* API 경로 보호 ── */
     if (pathname.startsWith('/api/admin')) {
+        if (skipAdminCheck) return NextResponse.next()
+
         const { user } = await getSessionUser(request)
 
         if (!user) {
