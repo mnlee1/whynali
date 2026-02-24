@@ -3,14 +3,13 @@
  *
  * 경로별 인증/인가 미들웨어
  *
- * - /admin/*         : 관리자 페이지. 비인증 → /login 리다이렉트, 비관리자 → / 리다이렉트
- * - /api/admin/*     : 관리자 API. 비인증 → 401, 비관리자 → 403
+ * - /admin/*         : 관리자 페이지. 인증 없이 누구나 접근 가능 (공개 운영)
+ * - /api/admin/*     : 관리자 API. 인증 없이 누구나 접근 가능 (공개 운영)
  * - PROTECTED_PATHS  : 로그인 필요 API (쓰기 전용). 비인증 → 401
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { isAdminEmail } from '@/lib/admin'
 
 /* 로그인이 필요한 API 경로 목록 (GET 제외, 쓰기 전용) */
 const PROTECTED_PATHS = [
@@ -57,48 +56,8 @@ async function getSessionUser(request: NextRequest) {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
-    /* ── SKIP_ADMIN_CHECK=true 이면 /admin/* 및 /api/admin/* 인증 생략 ── */
-    const skipAdminCheck = process.env.SKIP_ADMIN_CHECK === 'true'
-
-    /* ── /admin/* 페이지 경로 보호 ── */
-    if (pathname.startsWith('/admin')) {
-        if (skipAdminCheck) return NextResponse.next()
-
-        const { user, supabaseResponse } = await getSessionUser(request)
-
-        if (!user) {
-            const loginUrl = new URL('/login', request.url)
-            loginUrl.searchParams.set('next', pathname)
-            return NextResponse.redirect(loginUrl)
-        }
-
-        if (!isAdminEmail(user.email)) {
-            return NextResponse.redirect(new URL('/', request.url))
-        }
-
-        return supabaseResponse
-    }
-
-    /* ── /api/admin/* API 경로 보호 ── */
-    if (pathname.startsWith('/api/admin')) {
-        if (skipAdminCheck) return NextResponse.next()
-
-        const { user } = await getSessionUser(request)
-
-        if (!user) {
-            return NextResponse.json(
-                { error: 'UNAUTHORIZED', message: '로그인이 필요합니다.' },
-                { status: 401 }
-            )
-        }
-
-        if (!isAdminEmail(user.email)) {
-            return NextResponse.json(
-                { error: 'FORBIDDEN', message: '관리자 권한이 없습니다.' },
-                { status: 403 }
-            )
-        }
-
+    /* ── /admin/* 및 /api/admin/* 는 인증 없이 누구나 접근 가능 ── */
+    if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
         return NextResponse.next()
     }
 
