@@ -237,12 +237,14 @@ function parseAIResults(raw: string, inputs: FilterInput[]): AIResult[] {
 /* ------------------------------------------------------------------ */
 /**
  * saveCandidate - AI 결과를 issue_candidates 테이블에 저장
+ *
+ * Supabase .insert()는 실패해도 throw하지 않으므로 error를 명시적으로 체크한다.
  */
 async function saveCandidate(
     input: FilterInput,
     aiResult: AIResult
 ): Promise<void> {
-    await supabaseAdmin.from('issue_candidates').insert({
+    const { error } = await supabaseAdmin.from('issue_candidates').insert({
         title: input.title,
         source_type: input.sourceType,
         news_ids: input.sourceType === 'news' ? [input.id] : [],
@@ -252,6 +254,8 @@ async function saveCandidate(
         ai_reason: aiResult.reason,
         status: 'pending',
     })
+
+    if (error) throw new Error(`issue_candidates INSERT 실패: ${error.message}`)
 }
 
 /* ------------------------------------------------------------------ */
