@@ -42,13 +42,23 @@ const STOPWORDS = new Set([
 ])
 
 /**
+ * stripMediaPrefix - 언론 접두어 제거
+ *
+ * 이슈 제목 앞의 [단독], [해외연예] 같은 접두어를 제거해 토큰 오염을 방지.
+ * 기존 DB에 이미 접두어가 포함된 이슈 title이 있어도 linker 단에서 처리한다.
+ */
+function stripMediaPrefix(title: string): string {
+    return title.replace(/^(\[[^\]]{1,30}\]\s*)+/, '').trim()
+}
+
+/**
  * extractKeywords - 제목에서 핵심 키워드 추출
  *
- * 특수문자 제거 → 공백 분리 → 2글자 미만 제거 → 불용어 제거
+ * 언론 접두어 제거 → 특수문자 제거 → 공백 분리 → 2글자 미만 제거 → 불용어 제거
  */
 function extractKeywords(text: string): string[] {
     return Array.from(new Set(
-        text
+        stripMediaPrefix(text)
             .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
             .split(/\s+/)
             .filter((w) => w.length >= 2 && !STOPWORDS.has(w))
@@ -104,10 +114,12 @@ async function linkNewsToIssue(
     const { from, to } = buildDateRange(issueCreatedAt)
 
     /*
-     * threshold: 키워드 60%(ceil) 이상 + 최소 2개 일치해야 연결.
-     * 기존 50%+floor에서 강화 — 4개 키워드 기준 3개(75%)로 상향.
+     * threshold: 키워드 수의 40%(ceil), 최소 2개·최대 3개.
+     * 이슈 제목이 길수록 키워드가 많아져 threshold가 과도하게 높아지는 문제 방지.
+     * 예: 7개 키워드 → 기존 5개 → 개선 후 3개
+     * 카테고리 필터가 오연결을 1차 방어하므로 threshold는 느슨하게 유지.
      */
-    const threshold = Math.max(2, Math.ceil(keywordsLower.length * 0.6))
+    const threshold = Math.min(3, Math.max(2, Math.ceil(keywordsLower.length * 0.4)))
 
     /*
      * 아직 이슈에 연결되지 않은 뉴스 중 날짜 범위 내 500건 조회.
@@ -171,7 +183,7 @@ async function unlinkInvalidNews(
     if (!linked || linked.length === 0) return 0
 
     const keywordsLower = keywords.map((k) => k.toLowerCase())
-    const threshold = Math.max(2, Math.ceil(keywordsLower.length * 0.6))
+    const threshold = Math.min(3, Math.max(2, Math.ceil(keywordsLower.length * 0.4)))
 
     const invalidIds = linked
         .filter((item) => {
