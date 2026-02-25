@@ -112,8 +112,9 @@ const GROUPING_STOPWORDS = new Set([
     // 뉴스 수식어
     '발표', '관련', '사건', '사고', '논란', '문제',
     '뉴스', '기자', '취재', '단독', '속보', '긴급', '오늘',
-    // 지역·국가 (단독으로는 이슈 식별 불가)
+    // 지역·국가·행정 (단독으로는 이슈 식별 불가)
     '한국', '서울', '미국', '중국', '일본', '세계', '글로벌',
+    '통합', '행정', '지방', '지역', '개최', '교육', '공개',
 ])
 
 function tokenize(text: string): string[] {
@@ -210,16 +211,18 @@ async function linkCollections(
  */
 const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
     연예: [
-        '배우', '가수', '아이돌', '드라마', '영화', '방송', '예능', '팬', '연기',
+        '배우', '가수', '아이돌', '드라마', '영화', '방송', '팬', '연기',
         '뮤직비디오', '콘서트', '공연', '데뷔', '컴백', '연예인', '스타', '오디션',
         '활동', 'SM', 'JYP', 'HYBE', '걸그룹', '보이그룹', '솔로', '앨범', '뮤지컬',
         '소속사', '매니저', '스캔들', '열애', '결혼', '이혼', '임신', '은퇴',
+        '넷플릭스', '유튜브', '엔터', '아티스트',
     ],
     스포츠: [
         '야구', '축구', '농구', '배구', '선수', '감독', '경기', '우승', '리그',
         '득점', '올림픽', '월드컵', '체육', '코치', '트레이드', '시즌', '챔피언',
         '골', '타자', '투수', '수비', '공격', '패', '승', '골키퍼', '에이전트',
-        '구단', '팀', '스포츠', '육상', '수영', '탁구', '테니스', '골프',
+        '구단', '팀', '육상', '수영', '탁구', '테니스', '골프', '마라톤',
+        // '예능', '전국', '스포츠' 제거 (애매함)
     ],
     정치: [
         '대통령', '국회', '정당', '여당', '야당', '선거', '의원', '장관',
@@ -252,15 +255,19 @@ const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
 /**
  * inferCategory - 그룹 내 제목 키워드 스코어링으로 카테고리 결정
  *
- * 1차: 전체 제목을 합산해 카테고리별 키워드 매칭 수를 점수화 → 가장 높은 카테고리 선택.
- * 2차(폴백): 키워드 매칭 점수가 모두 0이면 수집 카테고리 다수결 사용.
- * 3차(폴백): 수집 카테고리도 없으면 '사회' 기본값 사용.
+ * 1차: 전체 제목을 합산해 카테고리별 키워드 매칭 수를 점수화
+ * 2차: 수집 카테고리 다수결 점수 계산
+ * 3차: 키워드 점수와 다수결 점수를 비교해 더 명확한 쪽 선택
+ *      - 키워드 점수가 다수결의 2배 이상이면 키워드 우선
+ *      - 그 외에는 다수결 우선 (네이버 카테고리가 더 정확한 경우 많음)
+ * 4차(폴백): 둘 다 없으면 '사회' 기본값
  */
 function inferCategory(items: RawItem[]): IssueCategory {
     const validCategories: IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
     const allTitles = items.map((i) => i.title).join(' ')
 
-    const scores = validCategories.reduce<Record<IssueCategory, number>>(
+    // 키워드 점수
+    const keywordScores = validCategories.reduce<Record<IssueCategory, number>>(
         (acc, cat) => {
             acc[cat] = CATEGORY_KEYWORDS[cat].filter((kw) => allTitles.includes(kw)).length
             return acc
@@ -268,24 +275,39 @@ function inferCategory(items: RawItem[]): IssueCategory {
         { 연예: 0, 스포츠: 0, 정치: 0, 사회: 0, 기술: 0 }
     )
 
-    const topByKeyword = (Object.entries(scores) as [IssueCategory, number][])
-        .sort((a, b) => b[1] - a[1])[0]
-
-    if (topByKeyword[1] > 0) return topByKeyword[0]
-
-    // 키워드 매칭 없음 → 수집 카테고리 다수결 폴백
+    // 수집 카테고리 다수결 점수
     const categoryCounts = items
         .filter((i) => i.category !== null)
         .reduce<Record<string, number>>((acc, i) => {
             const cat = i.category as string
-            acc[cat] = (acc[cat] ?? 0) + 1
+            if (validCategories.includes(cat as IssueCategory)) {
+                acc[cat] = (acc[cat] ?? 0) + 1
+            }
             return acc
         }, {})
 
-    const top = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '사회'
-    const candidate = top as IssueCategory
+    const topKeyword = (Object.entries(keywordScores) as [IssueCategory, number][])
+        .sort((a, b) => b[1] - a[1])[0]
+    
+    const topMajority = (Object.entries(categoryCounts) as [string, number][])
+        .sort((a, b) => b[1] - a[1])[0]
 
-    return validCategories.includes(candidate) ? candidate : '사회'
+    // 키워드 점수가 다수결의 2배 이상이면 키워드 우선
+    if (topKeyword[1] > 0 && topMajority && topKeyword[1] >= topMajority[1] * 2) {
+        return topKeyword[0]
+    }
+
+    // 다수결 우선
+    if (topMajority && topMajority[1] > 0) {
+        return topMajority[0] as IssueCategory
+    }
+
+    // 다수결 없으면 키워드
+    if (topKeyword[1] > 0) {
+        return topKeyword[0]
+    }
+
+    return '사회'
 }
 
 /**
