@@ -63,9 +63,11 @@ export async function collectNaverNews(category: string): Promise<number> {
     const newsData = items.map((item) => ({
         title: stripHtmlTags(item.title),
         link: item.link,
-        source: extractSource(item.link),
+        // originallink = 실제 언론사 URL, link = 네이버 뷰어 URL
+        // source는 고유 출처 구분에 사용되므로 반드시 originallink 우선
+        source: extractSource(item.originallink ?? item.link),
         published_at: new Date(item.pubDate).toISOString(),
-        category,  // 이 줄 추가
+        category,
     }))
 
     if (newsData.length > 0) {
