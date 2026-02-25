@@ -67,6 +67,35 @@ export interface CandidateResult {
 }
 
 /**
+ * stripMediaPrefix - 언론 접두어 제거
+ *
+ * 뉴스 기사 제목 앞의 [단독], [속보], [해외연예] 같은 언론사 형식 접두어를 제거한다.
+ * 이 접두어가 이슈 제목에 남아 있으면 토큰을 오염시켜 threshold를 불필요하게 높인다.
+ *
+ * 예시:
+ *   "[해외연예] 조로사, 팔로워 1억 돌파" → "조로사, 팔로워 1억 돌파"
+ *   "[단독][속보] 이재명 대선 출마" → "이재명 대선 출마"
+ */
+function stripMediaPrefix(title: string): string {
+    return title
+        .replace(/^(\[[^\]]{1,30}\]\s*)+/, '')
+        .trim()
+}
+
+/**
+ * selectRepresentativeTitle - 그룹 내 대표 제목 선택
+ *
+ * 접두어 제거 후 가장 짧은 제목을 대표로 선택한다.
+ * 길고 수식어 많은 제목 대신 핵심만 있는 제목을 이슈 title로 쓰기 위함.
+ * 길이가 같으면 첫 번째 아이템 우선.
+ */
+function selectRepresentativeTitle(items: RawItem[]): string {
+    return items
+        .map((i) => stripMediaPrefix(i.title))
+        .reduce((shortest, cur) => cur.length < shortest.length ? cur : shortest)
+}
+
+/**
  * tokenize - 제목을 키워드 배열로 분리
  *
  * 특수문자 제거 후 공백 기준 분리, 2글자 미만 제거.
@@ -94,6 +123,11 @@ function commonKeywordCount(a: string[], b: string[]): number {
  * ≥2 기준은 "장동혁 대표 비판" vs "장동혁 절윤 거부"처럼 같은 인물 이슈가
  * 다른 그룹으로 쪼개지는 현상이 발생하여 ≥1로 완화.
  * 노이즈 방지는 ALERT_THRESHOLD(기본 5건)와 고유 출처 조건으로 대응.
+ *
+ * 주의: 그룹 tokens를 합집합으로 갱신하지 않는다.
+ * 합집합 방식은 뉴스A→B→C 순서로 각 1개씩 공통이면 A와 C가 무관해도 같은 그룹이 되는
+ * 연쇄 그루핑(chaining) 문제를 일으킨다.
+ * 그룹의 기준 토큰은 첫 번째 아이템으로 고정해 이를 방지한다.
  */
 function groupItems(items: RawItem[]): CandidateGroup[] {
     const groups: CandidateGroup[] = []
@@ -105,9 +139,7 @@ function groupItems(items: RawItem[]): CandidateGroup[] {
         for (const group of groups) {
             if (commonKeywordCount(tokens, group.tokens) >= 1) {
                 group.items.push(item)
-                // 대표 토큰을 합집합으로 갱신
-                const combined = new Set([...group.tokens, ...tokens])
-                group.tokens = Array.from(combined)
+                // 토큰을 합집합으로 갱신하지 않음 — 연쇄 그루핑 방지
                 matched = true
                 break
             }
@@ -310,7 +342,8 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         const hasNews = group.items.some((i) => i.type === 'news')
         if (hasNews && uniqueSources < MIN_UNIQUE_SOURCES) continue
 
-        const representativeTitle = group.items[0].title
+        // 접두어 제거 후 그룹 내 가장 짧은 제목을 대표 제목으로 선택
+        const representativeTitle = selectRepresentativeTitle(group.items)
 
         /*
          * 커뮤니티 반응 체크 (키워드 매칭 방식, 가산점 역할):

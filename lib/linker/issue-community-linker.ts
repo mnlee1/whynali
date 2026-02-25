@@ -40,13 +40,20 @@ const STOPWORDS = new Set([
 ])
 
 /**
+ * stripMediaPrefix - 언론 접두어 제거
+ */
+function stripMediaPrefix(title: string): string {
+    return title.replace(/^(\[[^\]]{1,30}\]\s*)+/, '').trim()
+}
+
+/**
  * extractKeywords - 제목에서 핵심 키워드 추출
  *
- * 특수문자 제거 → 공백 분리 → 2글자 미만 제거 → 불용어 제거
+ * 언론 접두어 제거 → 특수문자 제거 → 공백 분리 → 2글자 미만 제거 → 불용어 제거
  */
 function extractKeywords(text: string): string[] {
     return Array.from(new Set(
-        text
+        stripMediaPrefix(text)
             .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
             .split(/\s+/)
             .filter((w) => w.length >= 2 && !STOPWORDS.has(w))
@@ -101,10 +108,10 @@ async function linkCommunityToIssue(
     const { from, to } = buildDateRange(issueCreatedAt)
 
     /*
-     * threshold: 키워드 60%(ceil) 이상 + 최소 2개 일치해야 연결.
-     * 기존 50%+floor에서 강화 — 4개 키워드 기준 3개(75%)로 상향.
+     * threshold: 키워드 수의 40%(ceil), 최소 2개·최대 3개.
+     * 이슈 제목이 길수록 threshold가 과도하게 높아지는 문제 방지.
      */
-    const threshold = Math.max(2, Math.ceil(keywordsLower.length * 0.6))
+    const threshold = Math.min(3, Math.max(2, Math.ceil(keywordsLower.length * 0.4)))
 
     /* 아직 이슈에 연결되지 않은 커뮤니티 글 중 날짜 범위 내 500건 조회 */
     const { data: community } = await supabaseAdmin
@@ -161,7 +168,7 @@ async function unlinkInvalidCommunity(
     if (!linked || linked.length === 0) return 0
 
     const keywordsLower = keywords.map((k) => k.toLowerCase())
-    const threshold = Math.max(2, Math.ceil(keywordsLower.length * 0.6))
+    const threshold = Math.min(3, Math.max(2, Math.ceil(keywordsLower.length * 0.4)))
 
     const invalidIds = linked
         .filter((item) => {

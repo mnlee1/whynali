@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface NaverNewsItem {
     title: string
@@ -21,7 +22,8 @@ function getCategoryQuery(category: string): string {
 }
 
 function stripHtmlTags(html: string): string {
-    return html.replace(/<[^>]*>/g, '').trim()
+    // HTML 태그 제거 후 엔티티(&quot; &amp; 등)도 디코딩
+    return decodeHtml(html.replace(/<[^>]*>/g, '').trim())
 }
 
 function extractSource(url: string): string {
