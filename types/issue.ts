@@ -20,8 +20,9 @@ export interface TimelinePoint {
     id: string
     issue_id: string
     occurred_at: string
-    source_url: string
+    source_url: string | null // null 허용 (컴포넌트에서 null 체크 필요)
     stage: TimelineStage
+    title?: string | null  // 이벤트 한 줄 요약
     created_at: string
 }
 

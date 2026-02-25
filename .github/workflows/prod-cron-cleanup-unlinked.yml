@@ -1,0 +1,18 @@
+name: 미연결 데이터 정리 Cron (Production)
+
+on:
+  # schedule:
+  #   - cron: '0 3 * * 0'  # main 배포 후 활성화 (매주 일요일 03:00 UTC)
+  workflow_dispatch:
+
+jobs:
+  cleanup-unlinked:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 미연결 수집 데이터 정리 API 호출 (Production)
+        run: |
+          curl -X GET https://whynali.vercel.app/api/cron/cleanup-unlinked \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60 \
+            --retry 2

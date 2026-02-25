@@ -1,0 +1,270 @@
+'use client'
+
+/**
+ * components/issue/VoteSection.tsx
+ *
+ * 이슈 투표 섹션.
+ * - 진행중 투표: 상단에 강조 표시
+ * - 종료/마감 투표: 하단 "이전 투표 보기" 접이식 영역으로 분리
+ * - 로그인 시 선택/취소 가능, 비율 실시간 그래프 표시
+ */
+
+import { useState, useEffect, useCallback, CSSProperties } from 'react'
+import type { Vote, VoteChoice } from '@/types'
+
+interface VoteSectionProps {
+    issueId: string
+    userId: string | null
+}
+
+type VoteWithChoices = Vote & { vote_choices: VoteChoice[] }
+
+export default function VoteSection({ issueId, userId: serverUserId }: VoteSectionProps) {
+    const [userId, setUserId] = useState<string | null>(serverUserId)
+    const [votes, setVotes] = useState<VoteWithChoices[]>([])
+    const [userVotes, setUserVotes] = useState<Record<string, string>>({})
+    const [loading, setLoading] = useState(true)
+    const [submitting, setSubmitting] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
+    const [showPast, setShowPast] = useState(false)
+
+    useEffect(() => {
+        if (serverUserId) { setUserId(serverUserId); return }
+        fetch('/api/auth/me')
+            .then((r) => r.ok ? r.json() : null)
+            .then((d) => { if (d?.id) setUserId(d.id) })
+            .catch(() => {})
+    }, [serverUserId])
+
+    const loadVotes = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/votes?issue_id=${issueId}`)
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            setVotes(json.data ?? [])
+            setUserVotes(json.userVotes ?? {})
+        } catch (e) {
+            setError(e instanceof Error ? e.message : '투표 조회 실패')
+        } finally {
+            setLoading(false)
+        }
+    }, [issueId])
+
+    useEffect(() => { loadVotes() }, [loadVotes])
+
+    const handleVote = async (voteId: string, choiceId: string) => {
+        if (!userId || submitting) return
+        setError(null)
+
+        const alreadyVoted = userVotes[voteId]
+
+        if (alreadyVoted && alreadyVoted !== choiceId) {
+            setError('이미 투표하셨습니다. 선택을 취소하려면 현재 선택 항목을 다시 클릭하세요.')
+            return
+        }
+
+        setSubmitting(voteId)
+        try {
+            if (alreadyVoted === choiceId) {
+                const res = await fetch(`/api/votes/${voteId}/vote`, { method: 'DELETE' })
+                const json = await res.json()
+                if (!res.ok) throw new Error(json.error)
+            } else {
+                const res = await fetch(`/api/votes/${voteId}/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vote_choice_id: choiceId }),
+                })
+                const json = await res.json()
+                if (!res.ok) throw new Error(json.error)
+            }
+            await loadVotes()
+        } catch (e) {
+            setError(e instanceof Error ? e.message : '투표 처리 실패')
+        } finally {
+            setSubmitting(null)
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="space-y-4">
+                {[1, 2].map((i) => (
+                    <div key={i} className="p-4 border border-gray-200 rounded-xl space-y-3">
+                        <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
+                        <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
+                    </div>
+                ))}
+            </div>
+        )
+    }
+
+    if (error) {
+        return (
+            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                {error}
+            </div>
+        )
+    }
+
+    if (votes.length === 0) {
+        return <p className="text-sm text-gray-500 py-2">등록된 투표가 없습니다.</p>
+    }
+
+    const activeVotes = votes.filter((v) => v.phase !== '마감')
+    const pastVotes   = votes.filter((v) => v.phase === '마감')
+
+    return (
+        <div className="space-y-6">
+            {!userId && (
+                <p className="text-sm text-gray-500">
+                    <a href="/login" className="text-blue-600 underline">로그인</a>하면 투표할 수 있습니다.
+                </p>
+            )}
+
+            {/* 진행중 투표 */}
+            {activeVotes.length > 0 && (
+                <div className="space-y-4">
+                    {activeVotes.map((vote) => (
+                        <VoteCard
+                            key={vote.id}
+                            vote={vote}
+                            myChoiceId={userVotes[vote.id] ?? null}
+                            isProcessing={submitting === vote.id}
+                            userId={userId}
+                            onVote={handleVote}
+                            highlight
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* 이전 투표 (접이식) */}
+            {pastVotes.length > 0 && (
+                <div>
+                    <button
+                        onClick={() => setShowPast((p) => !p)}
+                        className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1.5 transition-colors"
+                    >
+                        <span>{showPast ? '▲' : '▼'}</span>
+                        <span>이전 투표 {pastVotes.length}개 {showPast ? '접기' : '보기'}</span>
+                    </button>
+
+                    {showPast && (
+                        <div className="mt-3 space-y-4 opacity-80">
+                            {pastVotes.map((vote) => (
+                                <VoteCard
+                                    key={vote.id}
+                                    vote={vote}
+                                    myChoiceId={userVotes[vote.id] ?? null}
+                                    isProcessing={false}
+                                    userId={userId}
+                                    onVote={handleVote}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ─── 투표 카드 컴포넌트 ─── */
+
+interface VoteCardProps {
+    vote: Vote & { vote_choices: VoteChoice[] }
+    myChoiceId: string | null
+    isProcessing: boolean
+    userId: string | null
+    onVote: (voteId: string, choiceId: string) => void
+    highlight?: boolean
+}
+
+function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }: VoteCardProps) {
+    const choices = vote.vote_choices ?? []
+    const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
+    const isClosed = vote.phase === '마감'
+
+    return (
+        <div className={[
+            'p-4 border rounded-xl',
+            highlight && !isClosed
+                ? 'border-violet-300 bg-violet-50/30 shadow-sm'
+                : 'border-gray-200 bg-white',
+        ].join(' ')}>
+            {/* 제목 + 상태 배지 */}
+            <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="flex-1">
+                    {vote.title && (
+                        <p className="font-semibold text-sm mb-0.5">{vote.title}</p>
+                    )}
+                    {vote.phase && (
+                        <span className={[
+                            'inline-block text-xs px-2 py-0.5 rounded border font-medium',
+                            isClosed
+                                ? 'bg-gray-50 text-gray-500 border-gray-200'
+                                : 'bg-purple-100 text-purple-700 border-purple-300',
+                        ].join(' ')}>
+                            {isClosed ? '종료됨' : '진행중'}
+                        </span>
+                    )}
+                </div>
+                {totalCount > 0 && (
+                    <span className="text-xs text-gray-400 shrink-0">
+                        {totalCount.toLocaleString()}표
+                    </span>
+                )}
+            </div>
+
+            {isClosed && (
+                <p className="text-xs text-gray-400 mb-3">이 투표는 종료되었습니다.</p>
+            )}
+
+            {/* 선택지 */}
+            <div className="space-y-2">
+                {choices.map((choice) => {
+                    const pct = totalCount > 0
+                        ? Math.round((choice.count / totalCount) * 100)
+                        : 0
+                    const isSelected = myChoiceId === choice.id
+                    const disabled = !userId || isProcessing || isClosed
+
+                    return (
+                        <button
+                            key={choice.id}
+                            onClick={() => onVote(vote.id, choice.id)}
+                            disabled={disabled}
+                            className={[
+                                'w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors overflow-hidden relative',
+                                isSelected
+                                    ? 'border-violet-400 bg-violet-50 text-violet-800 font-medium'
+                                    : 'border-gray-200 bg-white text-gray-700',
+                                disabled
+                                    ? 'cursor-not-allowed opacity-60'
+                                    : 'hover:border-gray-300 cursor-pointer',
+                            ].join(' ')}
+                        >
+                            <span
+                                className={[
+                                    'vote-bar absolute inset-y-0 left-0 rounded transition-all',
+                                    isSelected ? 'bg-violet-100' : 'bg-gray-100',
+                                ].join(' ')}
+                                style={{ '--vote-pct': `${pct}%` } as CSSProperties}
+                            />
+                            <span className="relative flex justify-between">
+                                <span>{choice.label}</span>
+                                {totalCount > 0 && (
+                                    <span className="text-xs text-gray-500 ml-2">
+                                        {pct}%
+                                    </span>
+                                )}
+                            </span>
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}

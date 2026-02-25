@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface NaverNewsItem {
     title: string
@@ -9,18 +10,20 @@ interface NaverNewsItem {
 }
 
 function getCategoryQuery(category: string): string {
+    // 단순 카테고리명 대신 복합 쿼리 사용 → 수집 단계 노이즈 감소
     const queries: Record<string, string> = {
-        '연예': '연예',
-        '스포츠': '스포츠',
-        '정치': '정치',
-        '사회': '사회',
-        '기술': 'IT 기술',
+        '연예': '연예인 드라마 아이돌 논란',
+        '스포츠': '야구 축구 농구 선수 경기',
+        '정치': '국회 대통령 여당 야당 의원',
+        '사회': '사건 사고 범죄 경찰 수사',
+        '기술': 'AI 반도체 스마트폰 인공지능',
     }
     return queries[category] ?? '이슈'
 }
 
 function stripHtmlTags(html: string): string {
-    return html.replace(/<[^>]*>/g, '').trim()
+    // HTML 태그 제거 후 엔티티(&quot; &amp; 등)도 디코딩
+    return decodeHtml(html.replace(/<[^>]*>/g, '').trim())
 }
 
 function extractSource(url: string): string {
@@ -60,18 +63,28 @@ export async function collectNaverNews(category: string): Promise<number> {
     const newsData = items.map((item) => ({
         title: stripHtmlTags(item.title),
         link: item.link,
-        source: extractSource(item.link),
+        // originallink = 실제 언론사 URL, link = 네이버 뷰어 URL
+        // source는 고유 출처 구분에 사용되므로 반드시 originallink 우선
+        source: extractSource(item.originallink ?? item.link),
         published_at: new Date(item.pubDate).toISOString(),
+        category,
     }))
 
     if (newsData.length > 0) {
-        const { error } = await supabaseAdmin.from('news_data').insert(newsData)
+        /* link UNIQUE 제약 + onConflict ignoreDuplicates로 원자적 중복 방지
+           (migration: add_unique_constraints_for_collectors.sql) */
+        const { error, data: upserted } = await supabaseAdmin
+            .from('news_data')
+            .upsert(newsData, { onConflict: 'link', ignoreDuplicates: true })
+            .select('id')
 
         if (error) {
             console.error('뉴스 저장 에러:', error)
             throw error
         }
+
+        return upserted?.length ?? 0
     }
 
-    return newsData.length
+    return 0
 }

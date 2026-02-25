@@ -1,26 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
+import { sanitizeText, validateContent, checkRateLimit, loadBannedWords } from '@/lib/safety'
 
-/* GET /api/discussions?issue_id=&limit=&offset= */
+/* GET /api/discussions?issue_id=&q=&limit=&offset= */
+/* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색 */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
+    const q = searchParams.get('q')?.trim()
     const limit = Number(searchParams.get('limit') ?? 20)
     const offset = Number(searchParams.get('offset') ?? 0)
 
-    if (!issue_id) {
-        return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
-    }
+    const admin = createSupabaseAdminClient()
 
-    const supabase = await createSupabaseServerClient()
-    const { data, error, count } = await supabase
+    let query = admin
         .from('discussion_topics')
-        .select('*', { count: 'exact' })
-        .eq('issue_id', issue_id)
-        .eq('approval_status', '승인')
+        .select('*, issues(id, title)', { count: 'exact' })
+        .in('approval_status', ['승인', '종료'])
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+
+    if (issue_id) {
+        query = query.eq('issue_id', issue_id)
+    }
+    if (q) {
+        query = query.ilike('body', `%${q}%`)
+    }
+
+    const { data, error, count } = await query
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
@@ -32,6 +39,7 @@ export async function GET(request: NextRequest) {
 /* POST /api/discussions */
 export async function POST(request: NextRequest) {
     const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -50,24 +58,34 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
     }
 
-    const { valid, reason } = validateContent(content, 'discussion')
-    if (!valid) {
+    const dbBannedWords = await loadBannedWords(admin)
+    const { valid, pendingReview, reason } = validateContent(content, 'discussion', dbBannedWords)
+    if (!valid && !pendingReview) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
         .from('discussion_topics')
-        .insert({
+        .        insert({
             issue_id,
             body: sanitizeText(content),
             is_ai_generated: false,
             approval_status: '대기',
+            ...(pendingReview ? { visibility: 'pending_review' } : {}),
         })
         .select()
         .single()
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (pendingReview) {
+        return NextResponse.json({
+            data,
+            message: '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',
+            pending: true,
+        }, { status: 201 })
     }
 
     return NextResponse.json({ data }, { status: 201 })

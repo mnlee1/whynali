@@ -1,3 +1,117 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 투표 선택지 비율 바: --vote-pct CSS 변수로 너비 제어 */
+.vote-bar {
+    width: var(--vote-pct, 0%);
+}
+
+/* 가로 스크롤 영역 스크롤바 숨김 (ActiveIssueStrip 등) */
+.scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* ── 관리자 레이아웃 ──────────────────────────────── */
+
+.admin-layout {
+    @apply min-h-screen bg-gray-50;
+}
+
+/* 모바일: 탭 네비 아래 패딩, 데스크톱: 상하 여백 */
+.admin-container {
+    @apply container mx-auto px-4 py-4 md:flex md:items-start md:py-6;
+}
+
+/* ── 모바일 탭 네비 ─────────────────────────────── */
+
+.admin-mobile-nav {
+    @apply sticky top-0 z-40 bg-white border-b border-gray-200;
+}
+
+.admin-mobile-nav-inner {
+    @apply container mx-auto px-4;
+}
+
+.admin-mobile-nav-scroll {
+    @apply flex gap-1 overflow-x-auto py-2;
+    /* 스크롤바 숨김 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.admin-mobile-nav-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-mobile-nav-item {
+    @apply flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 rounded-full border border-gray-200 whitespace-nowrap hover:border-gray-400 hover:text-gray-900 transition-colors shrink-0;
+}
+
+.admin-mobile-nav-item--active {
+    @apply bg-gray-900 text-white border-gray-900;
+}
+
+.admin-sidebar {
+    /* flex / hidden 제어는 HTML 클래스(hidden md:flex)에서만 담당 */
+    @apply w-52 shrink-0 bg-white border border-gray-200 rounded-xl flex-col self-start;
+    position: sticky;
+    top: 24px;
+    max-height: calc(100vh - 48px);
+}
+
+.admin-sidebar-header {
+    @apply px-4 py-4 border-b border-gray-100;
+}
+
+.admin-sidebar-logo {
+    @apply flex items-center gap-2.5 text-gray-900 hover:text-gray-700 transition-colors;
+}
+
+.admin-sidebar-logo-badge {
+    @apply w-7 h-7 bg-gray-900 text-white text-xs font-bold rounded flex items-center justify-center shrink-0;
+}
+
+.admin-sidebar-logo-text {
+    @apply text-sm font-semibold;
+}
+
+.admin-sidebar-nav {
+    @apply flex-1 px-3 py-4 space-y-0.5 overflow-y-auto;
+}
+
+.admin-sidebar-item {
+    @apply flex items-center gap-2.5 px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900 transition-colors;
+}
+
+.admin-sidebar-item--active {
+    @apply bg-gray-100 text-gray-900 font-medium;
+}
+
+.admin-sidebar-footer {
+    @apply px-3 py-4 border-t border-gray-100;
+}
+
+.admin-sidebar-back {
+    @apply flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-600 transition-colors;
+}
+
+.admin-main {
+    @apply flex-1 min-w-0;
+}
+
+.admin-content {
+    @apply px-2 py-2 md:px-6;
+}
+
+/* 수집 현황 막대 그래프: CSS 변수로 너비 제어 */
+.collection-bar {
+    width: var(--bar-pct, 0%);
+}
