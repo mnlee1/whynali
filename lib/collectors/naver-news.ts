@@ -9,12 +9,13 @@ interface NaverNewsItem {
 }
 
 function getCategoryQuery(category: string): string {
+    // 단순 카테고리명 대신 복합 쿼리 사용 → 수집 단계 노이즈 감소
     const queries: Record<string, string> = {
-        '연예': '연예',
-        '스포츠': '스포츠',
-        '정치': '정치',
-        '사회': '사회',
-        '기술': 'IT 기술',
+        '연예': '연예인 드라마 아이돌 논란',
+        '스포츠': '야구 축구 농구 선수 경기',
+        '정치': '국회 대통령 여당 야당 의원',
+        '사회': '사건 사고 범죄 경찰 수사',
+        '기술': 'AI 반도체 스마트폰 인공지능',
     }
     return queries[category] ?? '이슈'
 }
