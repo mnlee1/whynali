@@ -8,7 +8,7 @@
  *
  * 1단계 (사전 필터 — 비용 절감):
  *   - 뉴스: 최근 COLLECTION_WINDOW_MIN(기본 10분) 내 수집, issue_id 미연결 건
- *   - 커뮤니티: view_count >= VIEW_THRESHOLD 또는 comment_count >= COMMENT_THRESHOLD
+ *   - 커뮤니티: 최근 1시간 내 수집 건 중 view_count 상위 20%만 추출
  *   - 최근 24시간 내 issue_candidates에 같은 제목이 이미 있으면 제외
  *
  * 2단계 (Perplexity API — 품질 판단):
@@ -29,10 +29,8 @@ import type { IssueCategory } from '@/types/issue'
 /* ------------------------------------------------------------------ */
 /** 뉴스 수집 건 집계 창 (분 단위). 기본 10분 */
 const COLLECTION_WINDOW_MIN = parseInt(process.env.FILTER_COLLECTION_WINDOW_MIN ?? '10')
-/** 커뮤니티 조회수 하한선 */
-const VIEW_THRESHOLD = parseInt(process.env.FILTER_VIEW_THRESHOLD ?? '500')
-/** 커뮤니티 댓글수 하한선 */
-const COMMENT_THRESHOLD = parseInt(process.env.FILTER_COMMENT_THRESHOLD ?? '20')
+/** 커뮤니티 조회수 상위 N% 추출 비율 (0~1). 기본 상위 20% */
+const COMMUNITY_TOP_RATIO = parseFloat(process.env.FILTER_COMMUNITY_TOP_RATIO ?? '0.2')
 /** Perplexity 1회 배치 최대 항목 수 */
 const BATCH_SIZE = parseInt(process.env.FILTER_BATCH_SIZE ?? '20')
 /** issue_candidates 저장 최소 점수 */
@@ -95,15 +93,18 @@ async function fetchStage1Candidates(): Promise<FilterInput[]> {
         .gte('created_at', windowStart)
         .limit(BATCH_SIZE * 2)
 
-    // 커뮤니티: 조회수 또는 댓글수 기준 통과 건 (최근 1시간)
+    // 커뮤니티: 최근 1시간 내 전체 조회 후 view_count 상위 20% 추출
     const communityWindowStart = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
-    const { data: communityItems } = await supabaseAdmin
+    const { data: allCommunityItems } = await supabaseAdmin
         .from('community_data')
         .select('id, title, view_count, comment_count')
         .is('issue_id', null)
         .gte('created_at', communityWindowStart)
-        .or(`view_count.gte.${VIEW_THRESHOLD},comment_count.gte.${COMMENT_THRESHOLD}`)
-        .limit(BATCH_SIZE)
+        .order('view_count', { ascending: false })
+
+    // 상위 20% 슬라이스 (최소 1건 보장, 절반 반올림)
+    const top20Count = Math.max(1, Math.ceil((allCommunityItems?.length ?? 0) * COMMUNITY_TOP_RATIO))
+    const communityItems = (allCommunityItems ?? []).slice(0, top20Count)
 
     const candidates: FilterInput[] = []
 
