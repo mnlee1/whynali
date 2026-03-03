@@ -210,6 +210,8 @@ const GROUPING_STOPWORDS = new Set([
     '한국', '서울', '미국', '중국', '일본', '북한', '러시아', '영국', '프랑스',
     '유럽', '아시아', '동남아', '중동', '아프리카', '세계', '글로벌',
     '통합', '행정', '지방', '지역', '개최', '교육', '공개',
+    // 방향·위치 관련 범용어 (너무 일반적)
+    '어디', '어디로', '어디서', '어디에', '여기', '저기', '거기',
     // 범용 정치·소통 용어
     '발언', '언급', '입장', '반박', '대응', '논평', '성명', '담화', '연설', '회견', '인터뷰',
     // 범용 동사·형용사·조사 (커뮤니티 오매칭 방지)
@@ -329,6 +331,9 @@ function commonKeywordCount(a: string[], b: string[]): number {
  * 공통 키워드 2개 이상이면 같은 후보로 판단.
  * 단, 핵심 인물(3글자 이상 고유명사)이 공통이면 키워드 1개여도 같은 그룹.
  * 
+ * 개선: 카테고리가 다르면 3개 이상 키워드 필요 (2개→3개로 상향)
+ * 범용 단어 하나로 무관한 뉴스가 묶이는 문제 방지
+ * 
  * 노이즈 방지는 ALERT_THRESHOLD(기본 3건)와 고유 출처 조건으로 2차 방어.
  *
  * 주의: 그룹 tokens를 합집합으로 갱신하지 않는다.
@@ -377,8 +382,13 @@ function groupItems(items: RawItem[]): CandidateGroup[] {
             const sameCategory = !item.category || !group.items[0].category || 
                                  item.category === group.items[0].category
             
-            // 조건: (키워드 3개 이상) OR (키워드 2개 이상 && 같은 카테고리) OR (키워드 1개 이상 && 핵심 인물 공통)
-            // 카테고리가 달라도 3개 이상 키워드가 겹치면 무조건 같은 이슈로 묶음 (블랙홀 방지 타협안)
+            // 조건 개선:
+            // - (키워드 3개 이상) → 카테고리 무관하게 같은 이슈 (확실한 매칭)
+            // - (키워드 2개 이상 && 같은 카테고리) → 같은 카테고리 내에서 2개 키워드로 묶기
+            // - (키워드 1개 이상 && 핵심 인물 공통) → 핵심 인물 중심 이슈는 1개 키워드로도 묶기
+            // 
+            // 기존에 "카테고리 달라도 3개 이상 키워드면 무조건 묶기"는 유지
+            // 하지만 2개 키워드는 같은 카테고리일 때만 → 범용 단어로 인한 오매칭 방지
             if (commonCount >= 3 || (commonCount >= 2 && sameCategory) || (commonCount >= 1 && hasCommonPerson)) {
                 group.items.push(item)
                 // 토큰을 합집합으로 갱신하지 않음 — 연쇄 그루핑 방지
@@ -540,15 +550,17 @@ const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
     ],
     정치: [
         '대통령', '국회', '정당', '여당', '야당', '선거', '의원', '장관',
-        '탄핵', '법안', '총리', '내각', '청와대', '국무', '정치', '당대표',
+        '탄핵', '법안', '총리', '내각', '청와대', '국무', '당대표',
         '정책', '입법', '개헌', '헌법', '투표', '공천', '후보', '정부',
         '여론', '국정', '국방', '외교', '안보',
         // 보강: 수사·사법 기관 관련 정치 이슈
         '특검', '공수처', '검사', '기소', '수사', '편파수사',
-        '여당', '야당', '국힘', '민주당', '대선', '총선', '내란',
+        '국힘', '민주당', '대선', '총선', '내란',
         '사면', '탄핵소추', '헌재', '법사위',
         // 보강: 행정부처
         '행안부', '국토부', '환경부', '복지부',
+        // 주의: "정치" 단어는 너무 범용적이어서 제외
+        // (예: "스포츠 정치", "연예계 정치" 등 비정치 이슈 오분류 방지)
     ],
     사회: [
         '사건', '사망', '부상', '화재', '범죄', '재판',
@@ -570,6 +582,11 @@ const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
         // 자동차/타이어 산업 키워드 추가
         '타이어', 'OE', '신차용', 'BMW', '벤츠', '아우디', '테슬라', 
         '현대차', '기아', '넥센타이어', '한국타이어',
+        // 과학/기술 연구 기관 및 키워드 추가
+        '기술', '과학', '연구', '실험', 'DGIST', 'KAIST', 'POSTECH', 'GIST',
+        '연구소', '연구원', '논문', '발표', '개발', '특허', '혁신',
+        '뇌과학', '신경과학', '생명과학', '의료기기', '바이오', '제약',
+        '미인도', '복원', '분석', '알고리즘', '머신러닝', '딥러닝',
     ],
 }
 
@@ -598,6 +615,14 @@ const CONTEXT_RULES: Array<{
     { keywords: ['반도체', '생산'], category: '기술', boost: 15 },
     { keywords: ['AI', '모델'], category: '기술', boost: 12 },
     { keywords: ['전기차', '배터리'], category: '기술', boost: 12 },
+    
+    // 기술 - 과학/연구
+    { keywords: ['DGIST', 'AI'], category: '기술', boost: 20 },
+    { keywords: ['KAIST', '연구'], category: '기술', boost: 15 },
+    { keywords: ['뇌', '과학'], category: '기술', boost: 18 },
+    { keywords: ['미인도', 'AI'], category: '기술', boost: 20 },
+    { keywords: ['연구', '개발'], category: '기술', boost: 12 },
+    { keywords: ['기술', '개발'], category: '기술', boost: 12 },
     
     // 스포츠 - 경기/선수
     { keywords: ['선수', '경기'], category: '스포츠', boost: 15 },
@@ -951,50 +976,57 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             ['사회', '기술', '스포츠']
 
         // 최근 24시간 내 유사 이슈 존재 여부 확인 (AI 기반 중복 방지)
-        const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
-        
-        // 1단계: 정확한 제목 일치 체크 (빠른 체크)
-        const { data: exactMatch } = await supabaseAdmin
-            .from('issues')
-            .select('id, title, approval_status, heat_index')
-            .eq('title', representativeTitle)
-            .gte('created_at', since24h)
-            .limit(1)
-
-        let existingIssue = exactMatch?.[0] ?? null
-
-        // 2단계: AI 기반 유사 이슈 체크 (정확한 일치 없을 때만)
-        if (!existingIssue && enableAIDuplicateCheck) {
-            const { data: recentIssues } = await supabaseAdmin
+        // Race Condition 방지: 중복 체크를 함수로 분리하여 재사용
+        const checkForDuplicateIssue = async (): Promise<{ id: string; title: string; approval_status: string; heat_index: number | null } | null> => {
+            const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
+            
+            // 1단계: 정확한 제목 일치 체크 (빠른 체크)
+            const { data: exactMatch } = await supabaseAdmin
                 .from('issues')
                 .select('id, title, approval_status, heat_index')
+                .eq('title', representativeTitle)
                 .gte('created_at', since24h)
-                .order('created_at', { ascending: false })
-                .limit(20) // 최근 20개만 체크
-            
-            if (recentIssues && recentIssues.length > 0) {
-                const { checkDuplicateWithAI } = await import('@/lib/ai/duplicate-checker')
+                .limit(1)
+
+            let existingIssue = exactMatch?.[0] ?? null
+
+            // 2단계: AI 기반 유사 이슈 체크 (정확한 일치 없을 때만)
+            if (!existingIssue && enableAIDuplicateCheck) {
+                const { data: recentIssues } = await supabaseAdmin
+                    .from('issues')
+                    .select('id, title, approval_status, heat_index')
+                    .gte('created_at', since24h)
+                    .order('created_at', { ascending: false })
+                    .limit(20) // 최근 20개만 체크
                 
-                for (const issue of recentIssues) {
-                    try {
-                        const result = await checkDuplicateWithAI(issue.title, representativeTitle)
-                        
-                        if (result.isDuplicate) {
-                            console.log(`[AI 중복 감지] "${representativeTitle}" → "${issue.title}" (${result.confidence}% - ${result.reason})`)
-                            existingIssue = issue
-                            break
+                if (recentIssues && recentIssues.length > 0) {
+                    const { checkDuplicateWithAI } = await import('@/lib/ai/duplicate-checker')
+                    
+                    for (const issue of recentIssues) {
+                        try {
+                            const result = await checkDuplicateWithAI(issue.title, representativeTitle)
+                            
+                            if (result.isDuplicate) {
+                                console.log(`[AI 중복 감지] "${representativeTitle}" → "${issue.title}" (${result.confidence}% - ${result.reason})`)
+                                existingIssue = issue
+                                break
+                            }
+                            
+                            // Rate Limit 방지: 3초 대기
+                            await new Promise(resolve => setTimeout(resolve, 3000))
+                            
+                        } catch (error) {
+                            console.error('[AI 중복 체크 에러]', error)
+                            break // 에러 시 중단하고 신규 등록
                         }
-                        
-                        // Rate Limit 방지: 3초 대기
-                        await new Promise(resolve => setTimeout(resolve, 3000))
-                        
-                    } catch (error) {
-                        console.error('[AI 중복 체크 에러]', error)
-                        break // 에러 시 중단하고 신규 등록
                     }
                 }
             }
+            
+            return existingIssue
         }
+        
+        let existingIssue = await checkForDuplicateIssue()
 
         if (existingIssue) {
             // 기존 이슈 화력 재계산 후 필터링
@@ -1067,7 +1099,64 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             .single()
 
         if (tempError || !tempIssue) {
+            // Race Condition 가능성: 동시에 같은 이슈가 등록되었을 수 있음
+            if (tempError?.code === '23505') { // Unique constraint violation
+                console.log(`[Race Condition 감지] "${representativeTitle}" 이미 등록됨, 재체크`)
+                // 다시 중복 체크
+                const recheckIssue = await checkForDuplicateIssue()
+                if (recheckIssue) {
+                    // 기존 이슈에 수집 건 연결만 수행
+                    await linkCollections(recheckIssue.id, newsIds, communityIds)
+                    console.log(`[기존 이슈 연결] "${representativeTitle}"에 ${newsIds.length}건 뉴스 + ${communityIds.length}건 커뮤니티 연결`)
+                    continue
+                }
+            }
             console.error('임시 이슈 생성 에러:', tempError)
+            continue
+        }
+        
+        // 1.5단계: 임시 이슈 생성 직후 최종 중복 체크 (Race Condition 최종 방어)
+        const finalCheck = await checkForDuplicateIssue()
+        if (finalCheck && finalCheck.id !== tempIssue.id) {
+            console.log(`[Race Condition 방어] 임시 이슈 생성 중 중복 발견, 임시 이슈 삭제: "${representativeTitle}"`)
+            // 방금 생성한 임시 이슈 삭제
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', tempIssue.id)
+            
+            // 기존 이슈에 수집 건 연결
+            await linkCollections(finalCheck.id, newsIds, communityIds)
+            const actualHeat = await calculateHeatIndex(finalCheck.id).catch(() => 0)
+            
+            // 실제 화력이 기준 미달이면 삭제
+            if (actualHeat < MIN_HEAT_TO_REGISTER) {
+                console.log(`[필터] 기존 이슈 실제 화력 부족으로 삭제: "${representativeTitle}" (실제 화력: ${actualHeat}, 최소: ${MIN_HEAT_TO_REGISTER})`)
+                await supabaseAdmin
+                    .from('issues')
+                    .delete()
+                    .eq('id', finalCheck.id)
+                continue
+            }
+            
+            // 기존 이슈가 대기 상태이고 자동 승인 조건이면 승인 처리
+            if (finalCheck.approval_status === '대기') {
+                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+                
+                if (shouldAutoApprove) {
+                    await supabaseAdmin
+                        .from('issues')
+                        .update({ 
+                            approval_status: '승인', 
+                            approval_type: 'auto',
+                            approved_at: now.toISOString() 
+                        })
+                        .eq('id', finalCheck.id)
+                    console.log(`[자동승인 완료] 기존 이슈 "${representativeTitle}" (카테고리: ${issueCategory}, 화력: ${actualHeat}점)`)
+                    result.created++
+                }
+            }
             continue
         }
 
