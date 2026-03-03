@@ -108,7 +108,7 @@ JSON만 반환하세요.`
 
         const result = parseMatchResult(content)
         
-        await incrementApiUsage('groq', 'community-matching', 1)
+        await incrementApiUsage('groq', 1)
         
         console.log(`[AI 매칭] "${issueTitle.substring(0, 30)}..." vs "${communityTitle.substring(0, 30)}..." → ${result.isMatch ? 'O' : 'X'} (${result.confidence}%)`)
         
