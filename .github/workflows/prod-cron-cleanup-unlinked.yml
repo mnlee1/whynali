@@ -1,8 +1,8 @@
 name: 미연결 데이터 정리 Cron (Production)
 
 on:
-  # schedule:
-  #   - cron: '0 3 * * 0'  # main 배포 후 활성화 (매주 일요일 03:00 UTC)
+  schedule:
+    - cron: '0 3 * * 0'  # 매주 일요일 03:00 UTC (한국시간 정오)
   workflow_dispatch:
 
 jobs:

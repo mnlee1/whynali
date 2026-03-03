@@ -6,7 +6,7 @@
  * 쿼리 파라미터:
  *   page    - 페이지 번호 (기본 1)
  *   limit   - 페이지당 건수 (기본 20, 최대 100)
- *   sort    - 정렬 컬럼: written_at | created_at | view_count | comment_count | source_site (기본 comment_count)
+ *   sort    - 정렬 컬럼: written_at | created_at | updated_at | view_count | comment_count | source_site (기본 comment_count)
  *   order   - 정렬 방향: desc | asc (기본 desc)
  *   site    - 사이트 필터: 더쿠 | 네이트판 | 없으면 전체
  *   linked  - 연결 필터: true(연결된 것만) | false(미연결만) | 없으면 전체
@@ -18,7 +18,7 @@ import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_SORT = ['written_at', 'created_at', 'view_count', 'comment_count', 'source_site'] as const
+const ALLOWED_SORT = ['written_at', 'created_at', 'updated_at', 'view_count', 'comment_count', 'source_site'] as const
 type SortColumn = (typeof ALLOWED_SORT)[number]
 
 export async function GET(request: NextRequest) {
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('community_data')
             .select(
-                'id, title, source_site, view_count, comment_count, written_at, created_at, url, issue_id, issues(id, title)',
+                'id, title, source_site, view_count, comment_count, written_at, created_at, updated_at, url, issue_id, issues(id, title)',
                 { count: 'exact' }
             )
             .order(sort, { ascending, nullsFirst: false })

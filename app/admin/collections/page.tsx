@@ -48,6 +48,7 @@ interface CommunityItem {
     comment_count: number
     written_at: string
     created_at: string
+    updated_at: string
     url: string | null
     issue_id: string | null
     issues: { id: string; title: string } | null
@@ -61,7 +62,7 @@ interface ListResult<T> {
 }
 
 type NewsSort = 'created_at' | 'published_at' | 'source'
-type CommunitySort = 'written_at' | 'created_at' | 'view_count' | 'comment_count' | 'source_site'
+type CommunitySort = 'written_at' | 'created_at' | 'updated_at' | 'view_count' | 'comment_count' | 'source_site'
 type SortOrder = 'desc' | 'asc'
 type LinkFilter = 'all' | 'linked' | 'unlinked'
 type SiteFilter = '전체' | '더쿠' | '네이트판'
@@ -596,16 +597,17 @@ export default function AdminCollectionsPage() {
                                 <Th label="댓글" col="comment_count" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} className="text-right" />
                                 <Th label="작성일" col="written_at" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
                                 <Th label="수집일" col="created_at" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
+                                <Th label="갱신일" col="updated_at" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {communityLoading ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
+                                    <td colSpan={8} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
                                 </tr>
                             ) : !communityResult || communityResult.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 게시글이 없습니다</td>
+                                    <td colSpan={8} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 게시글이 없습니다</td>
                                 </tr>
                             ) : (
                                 communityResult.data.map((item) => (
@@ -650,6 +652,9 @@ export default function AdminCollectionsPage() {
                                         </td>
                                         <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
                                             {fmt(item.created_at)}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                            {fmt(item.updated_at)}
                                         </td>
                                     </tr>
                                 ))

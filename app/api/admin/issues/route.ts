@@ -23,34 +23,41 @@ export async function GET(request: NextRequest) {
     const approvalStatus = searchParams.get('approval_status')
     const search = searchParams.get('search')
 
+    // approval_status 파라미터 파싱: "승인:auto", "반려:manual" 등 처리
+    let filterStatus: string | null = null
+    let filterType: string | null = null
+    
+    if (approvalStatus && approvalStatus.includes(':')) {
+        const [status, type] = approvalStatus.split(':')
+        filterStatus = status
+        filterType = type
+    } else if (approvalStatus) {
+        filterStatus = approvalStatus
+    }
+
     try {
         /*
-         * 대기 이슈 조회 시, heat_index < MIN_HEAT_TO_REGISTER인 항목을 자동 반려 처리.
-         * issue-candidate.ts 도입 이전에 등록된 낮은 화력 이슈도 여기서 정리된다.
+         * [자동 반려 로직 제거됨]
+         * 화력이 낮아도 관리자가 직접 확인하고 판단할 수 있도록
+         * 모든 이슈를 목록에 표시합니다.
          */
-        if (!approvalStatus || approvalStatus === '대기') {
-            const { data: lowHeatIds } = await supabaseAdmin
-                .from('issues')
-                .select('id')
-                .eq('approval_status', '대기')
-                .lt('heat_index', MIN_HEAT_TO_REGISTER)
-
-            if (lowHeatIds && lowHeatIds.length > 0) {
-                await supabaseAdmin
-                    .from('issues')
-                    .update({ approval_status: '반려' })
-                    .in('id', lowHeatIds.map((r) => r.id))
-            }
-        }
 
         let query = supabaseAdmin
             .from('issues')
             .select('*', { count: 'exact' })
+            .not('approval_status', 'is', null) // 임시 이슈(null) 제외
+            // 화력 낮은 이슈도 목록에 표시 (관리자가 직접 판단)
             .order('heat_index', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false })
 
-        if (approvalStatus) {
-            query = query.eq('approval_status', approvalStatus)
+        // approval_status 필터 적용
+        if (filterStatus) {
+            query = query.eq('approval_status', filterStatus)
+        }
+
+        // approval_type 필터 적용
+        if (filterType) {
+            query = query.eq('approval_type', filterType)
         }
 
         if (search && search.trim()) {

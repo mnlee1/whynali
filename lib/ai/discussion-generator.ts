@@ -12,6 +12,8 @@
  * - 생성된 주제는 반드시 approval_status='대기'로 저장, 관리자 승인 후에만 노출 (02_AI기획_판단포인트.md §6.4)
  */
 
+import { incrementApiUsage } from '@/lib/api-usage-tracker'
+
 export interface IssueMetadata {
     id: string
     title: string       // 이슈 제목 (그레이존이나 출력이 사실 나열형이므로 허용)
@@ -72,11 +74,26 @@ export async function generateDiscussionTopics(
 
     if (!response.ok) {
         const errText = await response.text()
+        
+        // API 사용량 추적 (실패)
+        await incrementApiUsage('perplexity', {
+            calls: 1,
+            successes: 0,
+            failures: 1,
+        }).catch(err => console.error('API 사용량 추적 실패:', err))
+        
         throw new Error(`Perplexity API 오류 (${response.status}): ${errText}`)
     }
 
     const data = await response.json()
     const raw: string = data.choices?.[0]?.message?.content ?? ''
+
+    // API 사용량 추적 (성공)
+    await incrementApiUsage('perplexity', {
+        calls: 1,
+        successes: 1,
+        failures: 0,
+    }).catch(err => console.error('API 사용량 추적 실패:', err))
 
     return parseTopics(raw)
 }

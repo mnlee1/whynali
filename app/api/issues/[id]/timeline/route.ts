@@ -1,3 +1,14 @@
+/**
+ * app/api/issues/[id]/timeline/route.ts
+ * 
+ * [타임라인 포인트 조회 API]
+ * 
+ * GET: 이슈의 타임라인 포인트 목록을 시간순으로 조회합니다.
+ * 
+ * 참고: 타임라인 포인트 추가는 자동 생성 Cron을 통해서만 가능합니다.
+ *       (중립성 유지, 조작 의혹 방지)
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 

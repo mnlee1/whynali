@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react'
 import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import StatusBadge from '@/components/common/StatusBadge'
 
 interface CandidateAlert {
     title: string
@@ -20,9 +21,12 @@ interface CandidateAlert {
     communityCount: number
 }
 
+type SortField = 'title' | 'status' | 'approval_status' | 'heat_index' | 'created_at'
+type SortOrder = 'asc' | 'desc'
+
 export default function AdminIssuesPage() {
     const [issues, setIssues] = useState<Issue[]>([])
-    const [filter, setFilter] = useState<string>('대기')
+    const [filter, setFilter] = useState<string>('')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
@@ -30,10 +34,19 @@ export default function AdminIssuesPage() {
     const [alertsDismissed, setAlertsDismissed] = useState(false)
     const [showHeatGuide, setShowHeatGuide] = useState(false)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
+    const [sortField, setSortField] = useState<SortField>('heat_index')
+    const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
     useEffect(() => {
         fetchIssues()
     }, [filter])
+
+    useEffect(() => {
+        if (issues.length > 0) {
+            setIssues(sortIssues(issues))
+        }
+    }, [sortField, sortOrder])
 
     useEffect(() => {
         fetchAlerts()
@@ -52,6 +65,41 @@ export default function AdminIssuesPage() {
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
 
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+        } else {
+            setSortField(field)
+            setSortOrder('desc')
+        }
+    }
+
+    const sortIssues = (list: Issue[]) => {
+        return [...list].sort((a, b) => {
+            let compareResult = 0
+
+            switch (sortField) {
+                case 'title':
+                    compareResult = a.title.localeCompare(b.title)
+                    break
+                case 'status':
+                    compareResult = a.status.localeCompare(b.status)
+                    break
+                case 'approval_status':
+                    compareResult = (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
+                    break
+                case 'heat_index':
+                    compareResult = (a.heat_index ?? 0) - (b.heat_index ?? 0)
+                    break
+                case 'created_at':
+                    compareResult = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    break
+            }
+
+            return sortOrder === 'asc' ? compareResult : -compareResult
+        })
+    }
+
     const fetchIssues = async () => {
         try {
             setLoading(true)
@@ -62,12 +110,7 @@ export default function AdminIssuesPage() {
             if (!response.ok) throw new Error('이슈 조회 실패')
             const data = await response.json()
             const list: Issue[] = data.data ?? []
-            if (!filter) {
-                list.sort((a, b) =>
-                    (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
-                )
-            }
-            setIssues(list)
+            setIssues(sortIssues(list))
             setLastRefreshedAt(new Date())
         } catch (err) {
             setError(err instanceof Error ? err.message : '오류 발생')
@@ -134,6 +177,91 @@ export default function AdminIssuesPage() {
         }
     }
 
+    // 다중 선택 관련 함수
+    const toggleSelectAll = () => {
+        if (selectedIds.size === issues.length) {
+            setSelectedIds(new Set())
+        } else {
+            setSelectedIds(new Set(issues.map(i => i.id)))
+        }
+    }
+
+    const toggleSelect = (id: string) => {
+        const newSelected = new Set(selectedIds)
+        if (newSelected.has(id)) {
+            newSelected.delete(id)
+        } else {
+            newSelected.add(id)
+        }
+        setSelectedIds(newSelected)
+    }
+
+    const handleBulkApprove = async () => {
+        const count = selectedIds.size
+        if (count === 0) {
+            alert('선택된 이슈가 없습니다')
+            return
+        }
+
+        if (!confirm(`선택된 ${count}개 이슈를 승인하시겠습니까?`)) return
+
+        try {
+            const promises = Array.from(selectedIds).map(id =>
+                fetch(`/api/admin/issues/${id}/approve`, { method: 'POST' })
+            )
+            await Promise.all(promises)
+            alert(`${count}개 이슈가 승인되었습니다`)
+            setSelectedIds(new Set())
+            fetchIssues()
+        } catch (err) {
+            alert('일괄 승인 실패')
+        }
+    }
+
+    const handleBulkReject = async () => {
+        const count = selectedIds.size
+        if (count === 0) {
+            alert('선택된 이슈가 없습니다')
+            return
+        }
+
+        if (!confirm(`선택된 ${count}개 이슈를 반려하시겠습니까?`)) return
+
+        try {
+            const promises = Array.from(selectedIds).map(id =>
+                fetch(`/api/admin/issues/${id}/reject`, { method: 'POST' })
+            )
+            await Promise.all(promises)
+            alert(`${count}개 이슈가 반려되었습니다`)
+            setSelectedIds(new Set())
+            fetchIssues()
+        } catch (err) {
+            alert('일괄 반려 실패')
+        }
+    }
+
+    const handleBulkRestore = async () => {
+        const count = selectedIds.size
+        if (count === 0) {
+            alert('선택된 이슈가 없습니다')
+            return
+        }
+
+        if (!confirm(`선택된 ${count}개 이슈를 복구하시겠습니까?`)) return
+
+        try {
+            const promises = Array.from(selectedIds).map(id =>
+                fetch(`/api/admin/issues/${id}/restore`, { method: 'POST' })
+            )
+            await Promise.all(promises)
+            alert(`${count}개 이슈가 복구되었습니다`)
+            setSelectedIds(new Set())
+            fetchIssues()
+        } catch (err) {
+            alert('일괄 복구 실패')
+        }
+    }
+
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleString('ko-KR', {
             month: 'short',
@@ -143,10 +271,58 @@ export default function AdminIssuesPage() {
         })
     }
 
-    const APPROVAL_DISPLAY: Record<string, string> = {
-        '대기': '대기',
-        '승인': '승인',
-        '반려': '반려',
+    const getApprovalDisplay = (issue: Issue): { label: string; className: string } => {
+        if (issue.approval_status === '대기') {
+            return {
+                label: '대기',
+                className: 'bg-yellow-100 text-yellow-700 border-yellow-200'
+            }
+        }
+        
+        if (issue.approval_status === '승인') {
+            if (issue.approval_type === 'auto') {
+                return {
+                    label: '자동 승인',
+                    className: 'bg-blue-100 text-blue-700 border-blue-200'
+                }
+            } else if (issue.approval_type === 'manual') {
+                return {
+                    label: '관리자 승인',
+                    className: 'bg-green-100 text-green-700 border-green-200'
+                }
+            } else {
+                // approval_type이 null인 경우 (기존 데이터)
+                return {
+                    label: '승인',
+                    className: 'bg-green-50 text-green-600 border-green-200'
+                }
+            }
+        }
+        
+        if (issue.approval_status === '반려') {
+            if (issue.approval_type === 'auto') {
+                return {
+                    label: '자동 반려',
+                    className: 'bg-gray-100 text-gray-600 border-gray-200'
+                }
+            } else if (issue.approval_type === 'manual') {
+                return {
+                    label: '관리자 반려',
+                    className: 'bg-red-100 text-red-700 border-red-200'
+                }
+            } else {
+                // approval_type이 null인 경우 (기존 데이터)
+                return {
+                    label: '반려',
+                    className: 'bg-red-50 text-red-600 border-red-200'
+                }
+            }
+        }
+        
+        return {
+            label: issue.approval_status,
+            className: 'bg-gray-100 text-gray-700 border-gray-200'
+        }
     }
 
     const getHeatMeta = (heat: number | null | undefined): { label: string; className: string } => {
@@ -206,6 +382,88 @@ export default function AdminIssuesPage() {
                 </div>
             </div>
 
+            {/* 기준 안내 패널 */}
+            <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-lg">
+                <h2 className="text-lg font-bold text-blue-900 mb-4">이슈 관리 기준</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* 화력 점수 산정 */}
+                    <div className="bg-white p-4 rounded border border-blue-100">
+                        <h3 className="font-semibold text-blue-900 mb-3 text-sm">화력 점수 산정</h3>
+                        <ul className="space-y-1 text-xs text-gray-700">
+                            <li className="font-medium text-blue-700">뉴스 신뢰도 (0-100)</li>
+                            <li>• 출처 다양성: 20곳 이상 만점</li>
+                            <li>• 뉴스 건수: 50건 이상 만점</li>
+                            
+                            <li className="font-medium text-purple-700 mt-3 pt-3 border-t border-gray-100">커뮤니티 반응 (0-100)</li>
+                            <li>• 조회수: 5000건 만점</li>
+                            <li>• 댓글수: 500건 만점</li>
+                            
+                            <li className="pt-3 mt-3 border-t border-gray-100 text-red-600 font-medium">중요: 커뮤니티 수집 0건이면</li>
+                            <li className="text-red-600">화력 최대 30점 (자동 승인 불가)</li>
+                            <li className="text-gray-500">커뮤니티 반응 있어야 30점 초과</li>
+                            
+                            <li className="font-medium text-indigo-700 mt-3 pt-3 border-t border-gray-100">계산 예시</li>
+                            <li className="text-gray-500 text-[11px]">뉴스 5건, 출처 5곳 → 신뢰도 19점</li>
+                            <li className="text-gray-500 text-[11px]">커뮤니티 없음 → 화력 6점 ❌</li>
+                            <li className="text-gray-500 text-[11px] mt-1">뉴스 10건, 출처 10곳</li>
+                            <li className="text-gray-500 text-[11px]">커뮤니티 없음 → 화력 11점 ✅</li>
+                            <li className="text-gray-500 text-[11px] mt-1">뉴스 5건 + 조회 1000/댓글 100</li>
+                            <li className="text-gray-500 text-[11px]">→ 화력 11점 ✅</li>
+                            
+                            <li className="font-medium text-gray-700 mt-3 pt-3 border-t border-gray-200">화력 범위</li>
+                            <li>• 70+ 높음 (즉시 승인 권장)</li>
+                            <li>• 30-69 보통 (자동 승인 기준)</li>
+                            <li>• 10-29 낮음 (반려 권장)</li>
+                            <li>• 10 미만 (등록 불가)</li>
+                        </ul>
+                    </div>
+
+                    {/* 승인 상태 기준 */}
+                    <div className="bg-white p-4 rounded border border-blue-100">
+                        <h3 className="font-semibold text-blue-900 mb-3 text-sm">승인 상태 기준</h3>
+                        <ul className="space-y-1 text-xs text-gray-700">
+                            <li className="font-medium text-blue-700">이슈 등록 → 대기</li>
+                            <li>• 뉴스 5건 이상 + 화력 10점 이상</li>
+                            <li className="text-gray-500 text-[11px] mt-1">화력 10점 달성 조건:</li>
+                            <li className="text-gray-500 text-[11px]">- 뉴스 10건 이상 OR</li>
+                            <li className="text-gray-500 text-[11px]">- 뉴스 5건 + 커뮤니티 반응</li>
+                            <li className="text-gray-500 text-[11px]">  (조회 1000+, 댓글 100+)</li>
+                            
+                            <li className="font-medium text-green-700 mt-3 pt-3 border-t border-gray-100">대기 → 자동 승인</li>
+                            <li>• 화력 30점 이상</li>
+                            <li>• 사회/기술/스포츠 카테고리만</li>
+                            <li className="text-amber-600">• 연예/정치는 관리자 승인 필수</li>
+                            
+                            <li className="font-medium text-red-700 mt-3 pt-3 border-t border-gray-100">대기 → 자동 반려</li>
+                            <li>• 화력 10점 미만</li>
+                        </ul>
+                    </div>
+
+                    {/* 이슈 상태 전환 */}
+                    <div className="bg-white p-4 rounded border border-blue-100">
+                        <h3 className="font-semibold text-blue-900 mb-3 text-sm">이슈 상태 전환</h3>
+                        <ul className="space-y-1 text-xs text-gray-700">
+                            <li className="font-medium text-orange-600">점화 → 논란중</li>
+                            <li>• 6시간 경과 + 화력 30점 이상</li>
+                            <li>• 커뮤니티 반응 1건 이상</li>
+                            
+                            <li className="font-medium text-orange-600 mt-3 pt-3 border-t border-gray-100">점화 → 종결</li>
+                            <li>• 6시간 경과 + 화력 10점 미만 (바이패스)</li>
+                            <li>• 24시간 경과 + 화력 30점 미만 (타임아웃)</li>
+                            
+                            <li className="font-medium text-orange-600 mt-3 pt-3 border-t border-gray-100">논란중 → 종결</li>
+                            <li>• 화력 10점 미만 또는</li>
+                            <li>• 48시간 신규 수집 없음</li>
+                            
+                            <li className="font-medium text-orange-600 mt-3 pt-3 border-t border-gray-100">종결 → 논란중 (재점화)</li>
+                            <li>• 급증: 10분간 분당 5건 이상</li>
+                            <li>• 점진: 48시간 내 수집 + 화력 30점 이상</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             {/* 이슈 후보 알람 배너 (5건 이상 후보 존재 시 표시) */}
             {alerts.length > 0 && !alertsDismissed && (
                 <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-lg">
@@ -235,67 +493,65 @@ export default function AdminIssuesPage() {
                 </div>
             )}
 
-            {/* 필터 + 화력 기준 안내 토글 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div className="flex gap-2">
+            {/* 필터 */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+                <div className="flex flex-wrap gap-2">
                     {[
                         { value: '', label: '전체' },
                         { value: '대기', label: '대기' },
-                        { value: '승인', label: '승인' },
-                        { value: '반려', label: '반려' },
+                        { value: '승인', label: '승인 전체' },
+                        { value: '승인:auto', label: '자동 승인' },
+                        { value: '승인:manual', label: '관리자 승인' },
+                        { value: '반려', label: '반려 전체' },
+                        { value: '반려:auto', label: '자동 반려' },
+                        { value: '반려:manual', label: '관리자 반려' },
                     ].map(({ value, label }) => (
                         <button
                             key={label}
                             onClick={() => setFilter(value)}
-                            className={`px-4 py-2 rounded ${
+                            className={`px-3 py-1.5 rounded text-sm ${
                                 filter === value
                                     ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-200 text-gray-700'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                             }`}
                         >
                             {label}
                         </button>
                     ))}
                 </div>
-                <button
-                    onClick={() => setShowHeatGuide((v) => !v)}
-                    className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-500 hover:bg-gray-50"
-                >
-                    화력 기준 {showHeatGuide ? '닫기' : '보기'}
-                </button>
             </div>
 
-            {/* 화력 기준 안내 패널 */}
-            {showHeatGuide && (
-                <div className="mb-5 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                    <p className="font-semibold text-gray-700 mb-2">화력 지수 (0–100) 판단 기준</p>
-                    <div className="flex flex-wrap gap-4 mb-3">
-                        <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-red-600">70 이상</span>
-                            <span className="text-gray-500">— 높음. 즉시 승인 권장.</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-amber-600">30–69</span>
-                            <span className="text-gray-500">— 보통. 제목·카테고리 검토 후 판단.</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-gray-400">30 미만</span>
-                            <span className="text-gray-500">— 낮음. 반려 권장.</span>
-                        </div>
-                    </div>
-                    <div className="text-xs text-gray-400 space-y-0.5">
-                        <p>
-                            화력 = 뉴스 신뢰도 × (0.3 + 0.7 × 커뮤니티 증폭계수)
-                        </p>
-                        <p>
-                            커뮤니티 반응 없으면 최대 30점. 반응이 쌓일수록 점진적으로 상승해 최대 100점.
-                        </p>
-                        <p>
-                            뉴스 신뢰도: 출처 20곳 이상 + 50건 이상이면 만점(100). 커뮤니티 증폭계수: 반응 미약(조회수·댓글 거의 없음)은 0 처리.
-                        </p>
-                        <p className="text-gray-300">
-                            공식 근거: 07_이슈등록_화력_정렬_규격.md §2.3, §6.4
-                        </p>
+            {/* 일괄 작업 버튼 */}
+            {selectedIds.size > 0 && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                    <span className="text-sm text-blue-700 font-medium">
+                        {selectedIds.size}개 이슈 선택됨
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleBulkApprove}
+                            className="px-4 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600"
+                        >
+                            일괄 승인
+                        </button>
+                        <button
+                            onClick={handleBulkReject}
+                            className="px-4 py-2 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                        >
+                            일괄 반려
+                        </button>
+                        <button
+                            onClick={handleBulkRestore}
+                            className="px-4 py-2 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
+                        >
+                            일괄 복구
+                        </button>
+                        <button
+                            onClick={() => setSelectedIds(new Set())}
+                            className="px-4 py-2 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                        >
+                            선택 해제
+                        </button>
                     </div>
                 </div>
             )}
@@ -305,29 +561,71 @@ export default function AdminIssuesPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
+                            <th className="px-4 py-3 text-left">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.size === issues.length && issues.length > 0}
+                                    onChange={toggleSelectAll}
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                />
+                            </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                제목
+                                <button
+                                    onClick={() => handleSort('title')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    제목
+                                    {sortField === 'title' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 카테고리
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                상태
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                승인
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 <button
-                                    onClick={() => setShowHeatGuide((v) => !v)}
+                                    onClick={() => handleSort('status')}
                                     className="flex items-center gap-1 hover:text-gray-700"
                                 >
-                                    화력
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-gray-400 text-[10px] leading-none">?</span>
+                                    상태
+                                    {sortField === 'status' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
                                 </button>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                생성일
+                                <button
+                                    onClick={() => handleSort('approval_status')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    승인
+                                    {sortField === 'approval_status' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                <button
+                                    onClick={() => handleSort('heat_index')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    화력
+                                    {sortField === 'heat_index' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                <button
+                                    onClick={() => handleSort('created_at')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    생성일
+                                    {sortField === 'created_at' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 액션
@@ -337,6 +635,14 @@ export default function AdminIssuesPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                         {issues.map((issue) => (
                             <tr key={issue.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.has(issue.id)}
+                                        onChange={() => toggleSelect(issue.id)}
+                                        className="w-4 h-4 text-blue-600 rounded"
+                                    />
+                                </td>
                                 <td className="px-4 py-3 text-sm font-medium">
                                     <a
                                         href={`/issue/${issue.id}`}
@@ -347,11 +653,18 @@ export default function AdminIssuesPage() {
                                     </a>
                                 </td>
                                 <td className="px-4 py-3 text-sm">{issue.category}</td>
-                                <td className="px-4 py-3 text-sm">{issue.status}</td>
                                 <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 text-xs rounded ${getStatusColor(issue.approval_status)}`}>
-                                        {APPROVAL_DISPLAY[issue.approval_status] ?? issue.approval_status}
-                                    </span>
+                                    <StatusBadge status={issue.status} />
+                                </td>
+                                <td className="px-4 py-3">
+                                    {(() => {
+                                        const approvalMeta = getApprovalDisplay(issue)
+                                        return (
+                                            <span className={`px-2 py-1 text-xs rounded border font-medium ${approvalMeta.className}`}>
+                                                {approvalMeta.label}
+                                            </span>
+                                        )
+                                    })()}
                                 </td>
                                 <td className="px-4 py-3 text-sm">
                                     <span className={getHeatMeta(issue.heat_index).className}>

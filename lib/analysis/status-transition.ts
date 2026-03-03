@@ -7,19 +7,25 @@
  * 자동으로 전환합니다. recalculate-heat Cron에서 화력 재계산 직후 호출됩니다.
  *
  * 전환 규칙:
- *   점화 → 논란중: 승인 후 N시간 경과 + heat_index >= M
- *   점화 → 종결:   승인 후 N시간 경과 + heat_index < K (바이패스)
- *   논란중 → 종결: 화력 K 미만 OR 최근 N시간 신규 수집 건 없음
- *   역방향: 자동 전환 없음 (관리자 수동만)
+ *   점화 → 논란중: 승인 후 6시간 경과 + 화력 30점 이상 + 커뮤니티 1건 이상
+ *   점화 → 종결: 승인 후 6시간 경과 + 화력 10점 미만 (바이패스)
+ *   점화 타임아웃: 24시간 경과 + 화력 30점 미만 → 종결
+ *   논란중 → 종결: 화력 10점 미만 OR 최근 48시간 신규 수집 건 없음
+ *   종결 → 논란중: 재점화 감지 (급증 또는 점진적 화력 상승)
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
 
 // 08_이슈상태전환_규격.md §6 환경변수
 const IGNITE_TO_DEBATE_HOURS = parseInt(process.env.STATUS_IGNITE_TO_DEBATE_HOURS ?? '6')
-const IGNITE_MIN_HEAT = parseInt(process.env.STATUS_IGNITE_MIN_HEAT ?? '40')
+const IGNITE_MIN_HEAT = parseInt(process.env.STATUS_IGNITE_MIN_HEAT ?? '30')
+const IGNITE_TIMEOUT_HOURS = parseInt(process.env.STATUS_IGNITE_TIMEOUT_HOURS ?? '24')
+const DEBATE_MIN_COMMUNITY = parseInt(process.env.STATUS_DEBATE_MIN_COMMUNITY ?? '1')
 const CLOSED_IDLE_HOURS = parseInt(process.env.STATUS_CLOSED_IDLE_HOURS ?? '48')
 const CLOSED_MAX_HEAT = parseInt(process.env.STATUS_CLOSED_MAX_HEAT ?? '10')
+// 재점화 감지: 분당 N건 이상 유입
+const REIGNITE_RATE_PER_MINUTE = parseInt(process.env.STATUS_REIGNITE_RATE_PER_MINUTE ?? '5')
+const REIGNITE_DURATION_MINUTES = parseInt(process.env.STATUS_REIGNITE_DURATION_MINUTES ?? '10')
 
 interface IssueForTransition {
     id: string
@@ -61,9 +67,26 @@ export async function evaluateStatusTransition(
             return { newStatus: '종결', reason: `화력 ${heat}점 (종결 임계값 ${CLOSED_MAX_HEAT} 미만) — 바이패스` }
         }
 
+        // 타임아웃: 24시간 경과했는데 여전히 화력이 30점 미만이면 종결
+        if (elapsedHours >= IGNITE_TIMEOUT_HOURS && heat < IGNITE_MIN_HEAT) {
+            return { newStatus: '종결', reason: `점화 타임아웃 (${elapsedHours.toFixed(1)}h 경과, 화력 ${heat}점)` }
+        }
+
         // 화력이 충분하면 논란중으로 전환
         if (heat >= IGNITE_MIN_HEAT) {
-            return { newStatus: '논란중', reason: `화력 ${heat}점, 경과 ${elapsedHours.toFixed(1)}h` }
+            // 커뮤니티 반응 체크
+            const { data: communityData } = await supabaseAdmin
+                .from('community_data')
+                .select('id', { count: 'exact', head: true })
+                .eq('issue_id', issue.id)
+            
+            const communityCount = communityData ? (communityData as any).count ?? 0 : 0
+            
+            if (communityCount >= DEBATE_MIN_COMMUNITY) {
+                return { newStatus: '논란중', reason: `화력 ${heat}점, 커뮤니티 ${communityCount}건, 경과 ${elapsedHours.toFixed(1)}h` }
+            } else {
+                return { newStatus: null, reason: `화력 ${heat}점이지만 커뮤니티 반응 부족 (${communityCount}건 < ${DEBATE_MIN_COMMUNITY}건)` }
+            }
         }
 
         return { newStatus: null, reason: `화력 ${heat}점 — 전환 기준 미달 (최소 ${IGNITE_MIN_HEAT}점)` }
@@ -98,6 +121,57 @@ export async function evaluateStatusTransition(
         return { newStatus: null, reason: `신규 수집 ${recentCount}건, 화력 ${heat}점 — 논란 진행 중` }
     }
 
-    // 종결 상태는 자동 전환 없음 (역방향은 관리자 수동만)
-    return { newStatus: null, reason: '종결 — 자동 전환 없음' }
+    // 종결 상태: 재점화 감지
+    if (issue.status === '종결') {
+        // 1. 급증 감지: 최근 N분간 분당 M건 이상 유입 시 즉시 재점화
+        const rapidInfluxSince = new Date(Date.now() - REIGNITE_DURATION_MINUTES * 60 * 1000).toISOString()
+        const [rapidNewsRes, rapidCommunityRes] = await Promise.all([
+            supabaseAdmin
+                .from('news_data')
+                .select('id', { count: 'exact', head: true })
+                .eq('issue_id', issue.id)
+                .gte('created_at', rapidInfluxSince),
+            supabaseAdmin
+                .from('community_data')
+                .select('id', { count: 'exact', head: true })
+                .eq('issue_id', issue.id)
+                .gte('created_at', rapidInfluxSince),
+        ])
+
+        const rapidCount = (rapidNewsRes.count ?? 0) + (rapidCommunityRes.count ?? 0)
+        const ratePerMinute = rapidCount / REIGNITE_DURATION_MINUTES
+
+        if (ratePerMinute >= REIGNITE_RATE_PER_MINUTE) {
+            return { 
+                newStatus: '논란중', 
+                reason: `🔥 재점화: ${rapidCount}건/${REIGNITE_DURATION_MINUTES}분 (분당 ${ratePerMinute.toFixed(1)}건)` 
+            }
+        }
+
+        // 2. 점진적 재점화: 최근 48시간 내 신규 수집 + 화력 상승
+        const since = new Date(Date.now() - CLOSED_IDLE_HOURS * 60 * 60 * 1000).toISOString()
+        const [newsRes, communityRes] = await Promise.all([
+            supabaseAdmin
+                .from('news_data')
+                .select('id', { count: 'exact', head: true })
+                .eq('issue_id', issue.id)
+                .gte('created_at', since),
+            supabaseAdmin
+                .from('community_data')
+                .select('id', { count: 'exact', head: true })
+                .eq('issue_id', issue.id)
+                .gte('created_at', since),
+        ])
+
+        const recentCount = (newsRes.count ?? 0) + (communityRes.count ?? 0)
+        
+        // 신규 수집이 있고 화력이 다시 올라가면 논란중 복귀
+        if (recentCount > 0 && heat >= IGNITE_MIN_HEAT) {
+            return { newStatus: '논란중', reason: `재점화: 신규 수집 ${recentCount}건, 화력 ${heat}점` }
+        }
+
+        return { newStatus: null, reason: '종결 유지' }
+    }
+
+    return { newStatus: null, reason: '알 수 없는 상태' }
 }

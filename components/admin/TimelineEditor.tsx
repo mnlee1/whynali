@@ -2,7 +2,8 @@
  * components/admin/TimelineEditor.tsx
  *
  * 관리자용 타임라인 포인트 편집 컴포넌트.
- * 이슈별 타임라인 포인트를 조회하고, 추가·삭제할 수 있습니다.
+ * 이슈별 타임라인 포인트를 조회하고, 삭제할 수 있습니다.
+ * 추가는 자동 생성만 가능합니다 (중립성 유지, 조작 의혹 방지).
  * IssuePreviewDrawer 내부에서 사용합니다.
  */
 
@@ -24,26 +25,6 @@ const STAGE_STYLES: Record<TimelineStage, { badge: string; dot: string; line: st
     '진정': { badge: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400',   line: 'bg-gray-200' },
 }
 
-interface AddForm {
-    stage: TimelineStage
-    occurred_at: string
-    title: string
-    source_url: string
-}
-
-const DEFAULT_FORM: AddForm = {
-    stage: '발단',
-    occurred_at: '',
-    title: '',
-    source_url: '',
-}
-
-function toLocalDatetimeValue(date: Date): string {
-    // datetime-local input은 "YYYY-MM-DDTHH:mm" 형식 필요
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
 function formatDateTime(iso: string): string {
     return new Date(iso).toLocaleString('ko-KR', {
         month: 'short',
@@ -56,11 +37,8 @@ function formatDateTime(iso: string): string {
 export default function TimelineEditor({ issueId }: TimelineEditorProps) {
     const [points, setPoints] = useState<TimelinePoint[]>([])
     const [loading, setLoading] = useState(true)
-    const [submitting, setSubmitting] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
-    const [showForm, setShowForm] = useState(false)
-    const [form, setForm] = useState<AddForm>({ ...DEFAULT_FORM, occurred_at: toLocalDatetimeValue(new Date()) })
 
     const fetchPoints = useCallback(async () => {
         try {
@@ -80,38 +58,6 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
     useEffect(() => {
         fetchPoints()
     }, [fetchPoints])
-
-    const handleAdd = async () => {
-        if (!form.occurred_at) {
-            setError('날짜/시간을 입력해주세요.')
-            return
-        }
-        try {
-            setSubmitting(true)
-            setError(null)
-            const res = await fetch(`/api/issues/${issueId}/timeline`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    stage: form.stage,
-                    occurred_at: new Date(form.occurred_at).toISOString(),
-                    title: form.title.trim() || null,
-                    source_url: form.source_url.trim() || null,
-                }),
-            })
-            if (!res.ok) {
-                const json = await res.json()
-                throw new Error(json.message ?? '추가 실패')
-            }
-            setForm({ ...DEFAULT_FORM, occurred_at: toLocalDatetimeValue(new Date()) })
-            setShowForm(false)
-            await fetchPoints()
-        } catch (err) {
-            setError(err instanceof Error ? err.message : '추가 실패')
-        } finally {
-            setSubmitting(false)
-        }
-    }
 
     const handleDelete = async (pointId: string) => {
         if (!confirm('이 타임라인 포인트를 삭제하시겠습니까?')) return
@@ -147,9 +93,10 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
                     ))}
                 </div>
             ) : points.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">
-                    등록된 타임라인 포인트가 없습니다.
-                </p>
+                <div className="text-sm text-gray-400 text-center py-6 space-y-1">
+                    <p>등록된 타임라인 포인트가 없습니다.</p>
+                    <p className="text-xs">타임라인은 자동 생성 Cron을 통해서만 추가됩니다.</p>
+                </div>
             ) : (
                 <div className="space-y-0">
                     {points.map((point, index) => {
@@ -209,92 +156,10 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
                 </div>
             )}
 
-            {/* 추가 폼 토글 */}
-            {!showForm ? (
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="w-full py-2 text-sm border border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                >
-                    + 포인트 추가
-                </button>
-            ) : (
-                <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/40 space-y-3">
-                    <p className="text-sm font-semibold text-gray-700">새 타임라인 포인트</p>
-
-                    {/* 단계 선택 */}
-                    <div>
-                        <label className="block text-xs text-gray-500 mb-1">단계</label>
-                        <div className="flex gap-2 flex-wrap">
-                            {STAGES.map((stage) => (
-                                <button
-                                    key={stage}
-                                    onClick={() => setForm((f) => ({ ...f, stage }))}
-                                    className={[
-                                        'text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors',
-                                        form.stage === stage
-                                            ? STAGE_STYLES[stage].badge + ' border-current'
-                                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400',
-                                    ].join(' ')}
-                                >
-                                    {stage}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* 날짜/시간 */}
-                    <div>
-                        <label className="block text-xs text-gray-500 mb-1">발생 날짜/시간 <span className="text-red-500">*</span></label>
-                        <input
-                            type="datetime-local"
-                            value={form.occurred_at}
-                            onChange={(e) => setForm((f) => ({ ...f, occurred_at: e.target.value }))}
-                            className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
-                        />
-                    </div>
-
-                    {/* 제목 */}
-                    <div>
-                        <label className="block text-xs text-gray-500 mb-1">이벤트 요약 (선택)</label>
-                        <input
-                            type="text"
-                            value={form.title}
-                            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                            placeholder="한 줄 요약"
-                            className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
-                        />
-                    </div>
-
-                    {/* 출처 URL */}
-                    <div>
-                        <label className="block text-xs text-gray-500 mb-1">출처 URL (선택)</label>
-                        <input
-                            type="url"
-                            value={form.source_url}
-                            onChange={(e) => setForm((f) => ({ ...f, source_url: e.target.value }))}
-                            placeholder="https://"
-                            className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
-                        />
-                    </div>
-
-                    {/* 버튼 */}
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleAdd}
-                            disabled={submitting}
-                            className="flex-1 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {submitting ? '추가 중...' : '추가'}
-                        </button>
-                        <button
-                            onClick={() => { setShowForm(false); setError(null) }}
-                            className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
-                        >
-                            취소
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* 안내 메시지 */}
+            <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100">
+                타임라인 포인트는 자동 생성 Cron을 통해서만 추가됩니다. (중립성 유지)
+            </div>
         </div>
     )
 }

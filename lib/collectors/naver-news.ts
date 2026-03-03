@@ -9,18 +9,6 @@ interface NaverNewsItem {
     pubDate: string
 }
 
-function getCategoryQuery(category: string): string {
-    // 단순 카테고리명 대신 복합 쿼리 사용 → 수집 단계 노이즈 감소
-    const queries: Record<string, string> = {
-        '연예': '연예인 드라마 아이돌 논란',
-        '스포츠': '야구 축구 농구 선수 경기',
-        '정치': '국회 대통령 여당 야당 의원',
-        '사회': '사건 사고 범죄 경찰 수사',
-        '기술': 'AI 반도체 스마트폰 인공지능',
-    }
-    return queries[category] ?? '이슈'
-}
-
 function stripHtmlTags(html: string): string {
     // HTML 태그 제거 후 엔티티(&quot; &amp; 등)도 디코딩
     return decodeHtml(html.replace(/<[^>]*>/g, '').trim())
@@ -43,8 +31,24 @@ export async function collectNaverNews(category: string): Promise<number> {
         throw new Error('네이버 API 키가 설정되지 않았습니다')
     }
 
-    const query = getCategoryQuery(category)
-    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=100&sort=date`
+    // 카테고리 자체를 검색어로 사용하여 해당 분야의 핵심 이슈를 타겟팅
+    const query = category
+
+    const allNewsData: Array<{
+        title: string
+        link: string
+        source: string
+        published_at: string
+        category: string
+    }> = []
+
+    /* 
+     * 핵심 전략: sort=sim (관련도순/정확도순)
+     * 네이버 알고리즘상 해당 카테고리에서 가장 중요하게 다뤄지거나(랭킹/헤드라인급)
+     * 연관성이 높은 뉴스 100건을 우선적으로 반환합니다.
+     * (sort=date 는 단순 최신순이라 가십성/단신 뉴스가 너무 많이 섞임)
+     */
+    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=100&sort=sim`
 
     const response = await fetch(url, {
         headers: {
@@ -54,7 +58,8 @@ export async function collectNaverNews(category: string): Promise<number> {
     })
 
     if (!response.ok) {
-        throw new Error(`네이버 API 에러: ${response.status}`)
+        console.error(`네이버 API 에러 (카테고리: ${category}):`, response.status)
+        return 0
     }
 
     const data = await response.json()
@@ -67,15 +72,16 @@ export async function collectNaverNews(category: string): Promise<number> {
         // source는 고유 출처 구분에 사용되므로 반드시 originallink 우선
         source: extractSource(item.originallink ?? item.link),
         published_at: new Date(item.pubDate).toISOString(),
-        category,
+        category, // 요청받은 카테고리로 명확하게 분류
     }))
 
-    if (newsData.length > 0) {
-        /* link UNIQUE 제약 + onConflict ignoreDuplicates로 원자적 중복 방지
-           (migration: add_unique_constraints_for_collectors.sql) */
+    allNewsData.push(...newsData)
+
+    if (allNewsData.length > 0) {
+        /* link UNIQUE 제약 + onConflict ignoreDuplicates로 원자적 중복 방지 */
         const { error, data: upserted } = await supabaseAdmin
             .from('news_data')
-            .upsert(newsData, { onConflict: 'link', ignoreDuplicates: true })
+            .upsert(allNewsData, { onConflict: 'link', ignoreDuplicates: true })
             .select('id')
 
         if (error) {

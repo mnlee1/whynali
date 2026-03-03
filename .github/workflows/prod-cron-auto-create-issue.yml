@@ -1,8 +1,8 @@
 name: 이슈 후보 자동 생성 Cron (Production)
 
 on:
-  # schedule:
-  #   - cron: '*/30 * * * *'  # main 배포 후 활성화
+  schedule:
+    - cron: '*/30 * * * *'  # 30분마다 실행
   workflow_dispatch:
 
 jobs:

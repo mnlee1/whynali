@@ -10,10 +10,11 @@
  *   - heat_index >= AUTO_APPROVE_THRESHOLD → 승인
  *   - heat_index <  MIN_HEAT_TO_REGISTER  → 반려
  *
- * 2) status 전환 (승인 이슈만, 08_이슈상태전환_규격.md §3):
- *   - 점화 → 논란중: 승인 후 N시간 + heat_index >= M
+ * 2) status 전환 (모든 이슈, 08_이슈상태전환_규격.md §3):
+ *   - 점화 → 논란중: 승인 후 N시간 + heat_index >= M + 커뮤니티 1건
  *   - 점화 → 종결:   승인 후 N시간 + heat_index < K (바이패스)
  *   - 논란중 → 종결: 화력 소진 OR 신규 수집 없음
+ *   - approval_status와 독립적으로 동작 (대기/승인/반려 모두 처리)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
         const { data: issues } = await supabaseAdmin
             .from('issues')
             .select('id, title, approval_status, status, approved_at, created_at')
-            .in('approval_status', ['승인', '대기'])
+            .in('approval_status', ['승인', '대기', '반려'])
             .order('updated_at', { ascending: false })
             .limit(100)
 
@@ -89,7 +90,10 @@ export async function GET(request: NextRequest) {
                     } else if (heatIndex < MIN_HEAT_TO_REGISTER) {
                         await supabaseAdmin
                             .from('issues')
-                            .update({ approval_status: '반려' })
+                            .update({ 
+                                approval_status: '반려',
+                                approval_type: 'auto'
+                            })
                             .eq('id', issue.id)
                         result.statusChanged = '대기 → 반려'
                         autoRejected++
@@ -97,10 +101,11 @@ export async function GET(request: NextRequest) {
                 }
 
                 /*
-                 * 승인 이슈: status(점화/논란중/종결) 자동 전환.
+                 * status(점화/논란중/종결) 자동 전환.
                  * 08_이슈상태전환_규격.md §3 기준으로 평가.
+                 * approval_status와 무관하게 모든 이슈의 status를 전환한다.
                  */
-                if (issue.approval_status === '승인' && issue.status) {
+                if (issue.status) {
                     const transition = await evaluateStatusTransition({
                         id: issue.id,
                         status: issue.status,

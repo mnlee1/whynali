@@ -29,6 +29,7 @@ export async function POST(
             .from('issues')
             .update({
                 approval_status: '승인',
+                approval_type: 'manual',
                 approved_at: new Date().toISOString(),
             })
             .eq('id', id)

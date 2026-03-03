@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
 const VALID_CATEGORIES: readonly IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
 const VALID_STATUSES: readonly IssueStatus[] = ['점화', '논란중', '종결']
 const VALID_SORTS = ['latest', 'heat'] as const
+const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
             .select('*', { count: 'exact' })
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
+            .gte('heat_index', MIN_HEAT_TO_REGISTER) // 화력 낮은 이슈 제외
 
         if (category) {
             query = query.eq('category', category)
