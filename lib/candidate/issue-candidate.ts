@@ -8,15 +8,15 @@
  * 이슈를 대기 등록하거나 자동 승인합니다.
  *
  * 흐름:
- *   1. 커뮤니티 반응 ≥ 1건 + 최근 3시간 건수 ≥ 5건 + 고유 출처 ≥ 2곳: approval_status='대기'로 등록 + 알람 반환
- *   2. 위 조건 충족 + 최근 3시간 건수 ≥ 10건 + 최초 수집 건이 N시간 이전: 자동 승인
+ *   1. 뉴스 5건 이상 + 고유 출처 2곳 이상 + 화력 10점 이상: approval_status='대기'로 등록
+ *   2. 화력 30점 이상 + 허용 카테고리(사회/기술/스포츠): 자동 승인
  *   3. 같은 제목이 최근 24시간 내 이미 등록된 경우 중복 등록 방지
  *
  * 임계값은 환경변수로 조정 가능:
- *   CANDIDATE_ALERT_THRESHOLD (기본 3)
- *   CANDIDATE_AUTO_APPROVE_THRESHOLD (기본 5)
- *   CANDIDATE_NO_RESPONSE_HOURS (기본 6)
- *   CANDIDATE_WINDOW_HOURS (기본 3) — 건수 집계 시간 창
+ *   CANDIDATE_ALERT_THRESHOLD (기본 5) - 최소 뉴스 건수
+ *   CANDIDATE_AUTO_APPROVE_THRESHOLD (기본 30) - 자동 승인 화력 기준
+ *   CANDIDATE_MIN_HEAT_TO_REGISTER (기본 10) - 최소 등록 화력
+ *   CANDIDATE_WINDOW_HOURS (기본 24) — 건수 집계 시간 창
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
@@ -26,7 +26,7 @@ import { validateGroups } from '@/lib/ai/perplexity-group-validator'
 import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
 
 const ALERT_THRESHOLD = parseInt(process.env.CANDIDATE_ALERT_THRESHOLD ?? '5')
-const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '10')
+const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30')
 const NO_RESPONSE_HOURS = parseInt(process.env.CANDIDATE_NO_RESPONSE_HOURS ?? '6')
 /* 건수 집계 시간 창 (시간 단위). 기본 3시간 → 임시로 24시간 */
 const WINDOW_HOURS = parseInt(process.env.CANDIDATE_WINDOW_HOURS ?? '24')
@@ -547,6 +547,8 @@ const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
         '특검', '공수처', '검사', '기소', '수사', '편파수사',
         '여당', '야당', '국힘', '민주당', '대선', '총선', '내란',
         '사면', '탄핵소추', '헌재', '법사위',
+        // 보강: 행정부처
+        '행안부', '국토부', '환경부', '복지부',
     ],
     사회: [
         '사건', '사망', '부상', '화재', '범죄', '재판',
@@ -557,30 +559,86 @@ const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
         '청약', '아파트', '부동산', '임대차', '전세사기',
         '학교폭력', '직장내괴롭힘', '갑질', '인종차별',
         '교통사고', '산업재해', '식품안전',
+        // 보강: 불법/점용/환경 문제
+        '불법', '점용', '재조사', '하천', '계곡', '시설',
     ],
     기술: [
         'AI', '인공지능', '반도체', '스마트폰', '앱', '플랫폼', '스타트업',
         '구글', '애플', '메타', '삼성전자', 'LG전자', 'SK하이닉스', '소프트웨어',
         '클라우드', '데이터', '사이버', '해킹', '개발자', '코딩', '로봇',
         '드론', '자율주행', '전기차', '배터리', '디지털', '서비스', '유튜브',
+        // 자동차/타이어 산업 키워드 추가
+        '타이어', 'OE', '신차용', 'BMW', '벤츠', '아우디', '테슬라', 
+        '현대차', '기아', '넥센타이어', '한국타이어',
     ],
 }
+
+/**
+ * CONTEXT_RULES - 맥락 기반 카테고리 판단 규칙
+ *
+ * 특정 키워드 조합이 함께 등장하면 해당 카테고리 점수를 크게 증가시킨다.
+ * 네이버 API 오분류를 방지하고 제품명/브랜드명 내 카테고리 단어의 오판을 막는다.
+ *
+ * boost: 조합 매칭 시 추가할 점수 (기본 키워드보다 우선순위 높음)
+ */
+const CONTEXT_RULES: Array<{
+    keywords: string[]
+    category: IssueCategory
+    boost: number
+}> = [
+    // 기술 - 자동차/타이어 산업
+    { keywords: ['타이어', 'OE'], category: '기술', boost: 15 },
+    { keywords: ['타이어', '신차용'], category: '기술', boost: 15 },
+    { keywords: ['타이어', '공급'], category: '기술', boost: 12 },
+    { keywords: ['BMW', '공급'], category: '기술', boost: 10 },
+    { keywords: ['넥센타이어'], category: '기술', boost: 10 },
+    { keywords: ['한국타이어'], category: '기술', boost: 10 },
+    
+    // 기술 - 반도체/IT
+    { keywords: ['반도체', '생산'], category: '기술', boost: 15 },
+    { keywords: ['AI', '모델'], category: '기술', boost: 12 },
+    { keywords: ['전기차', '배터리'], category: '기술', boost: 12 },
+    
+    // 스포츠 - 경기/선수
+    { keywords: ['선수', '경기'], category: '스포츠', boost: 15 },
+    { keywords: ['감독', '선수'], category: '스포츠', boost: 15 },
+    { keywords: ['우승', '경기'], category: '스포츠', boost: 12 },
+    { keywords: ['리그', '시즌'], category: '스포츠', boost: 12 },
+    
+    // 정치 - 정부/대통령 (입법/정책 결정 중심)
+    { keywords: ['국회', '법안'], category: '정치', boost: 15 },
+    { keywords: ['여당', '야당'], category: '정치', boost: 15 },
+    { keywords: ['탄핵', '국회'], category: '정치', boost: 15 },
+    { keywords: ['대선', '후보'], category: '정치', boost: 15 },
+    
+    // 사회 - 불법/범죄/재난
+    { keywords: ['불법', '점용'], category: '사회', boost: 15 },
+    { keywords: ['하천', '불법'], category: '사회', boost: 15 },
+    { keywords: ['재조사', '불법'], category: '사회', boost: 12 },
+    { keywords: ['화재', '사망'], category: '사회', boost: 15 },
+    { keywords: ['사고', '피해'], category: '사회', boost: 12 },
+    // 정부 발표라도 사회 문제 해결 중심이면 사회
+    { keywords: ['정부', '재조사'], category: '사회', boost: 10 },
+    { keywords: ['행안부', '재조사'], category: '사회', boost: 10 },
+]
 
 /**
  * inferCategory - 그룹 내 제목 키워드 스코어링으로 카테고리 결정
  *
  * 1차: 전체 제목을 합산해 카테고리별 키워드 매칭 수를 점수화
- * 2차: 수집 카테고리 다수결 점수 계산
- * 3차: 키워드 점수와 다수결 점수를 비교해 더 명확한 쪽 선택
- *      - 키워드 점수가 다수결의 2배 이상이면 키워드 우선
+ * 2차: 맥락 기반 규칙 적용 (특정 키워드 조합 시 점수 대폭 증가)
+ * 3차: 수집 카테고리 다수결 점수 계산
+ * 4차: 키워드 점수와 다수결 점수를 비교해 더 명확한 쪽 선택
+ *      - 맥락 규칙 매칭되면 키워드 우선
+ *      - 다수결 카테고리의 키워드 점수가 0이면 키워드 우선 (네이버 오류 판단)
  *      - 그 외에는 다수결 우선 (네이버 카테고리가 더 정확한 경우 많음)
- * 4차(폴백): 둘 다 없으면 '사회' 기본값
+ * 5차(폴백): 둘 다 없으면 '사회' 기본값
  */
 function inferCategory(items: RawItem[]): IssueCategory {
     const validCategories: IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
     const allTitles = items.map((i) => i.title).join(' ')
 
-    // 키워드 점수
+    // 1차: 키워드 점수
     const keywordScores = validCategories.reduce<Record<IssueCategory, number>>(
         (acc, cat) => {
             acc[cat] = CATEGORY_KEYWORDS[cat].filter((kw) => allTitles.includes(kw)).length
@@ -589,7 +647,17 @@ function inferCategory(items: RawItem[]): IssueCategory {
         { 연예: 0, 스포츠: 0, 정치: 0, 사회: 0, 기술: 0 }
     )
 
-    // 수집 카테고리 다수결 점수
+    // 2차: 맥락 기반 규칙 적용
+    let contextMatched = false
+    for (const rule of CONTEXT_RULES) {
+        const allKeywordsPresent = rule.keywords.every((kw) => allTitles.includes(kw))
+        if (allKeywordsPresent) {
+            keywordScores[rule.category] += rule.boost
+            contextMatched = true
+        }
+    }
+
+    // 3차: 수집 카테고리 다수결 점수
     const categoryCounts = items
         .filter((i) => i.category !== null)
         .reduce<Record<string, number>>((acc, i) => {
@@ -606,14 +674,24 @@ function inferCategory(items: RawItem[]): IssueCategory {
     const topMajority = (Object.entries(categoryCounts) as [string, number][])
         .sort((a, b) => b[1] - a[1])[0]
 
-    // 키워드 점수가 다수결의 2배 이상이면 키워드 우선
-    if (topKeyword[1] > 0 && topMajority && topKeyword[1] >= topMajority[1] * 2) {
+    // 4차: 우선순위 판단
+    
+    // 맥락 규칙이 매칭되었으면 키워드 우선
+    if (contextMatched && topKeyword[1] > 0) {
         return topKeyword[0]
     }
 
-    // 다수결 우선
+    // 다수결이 있지만 해당 카테고리의 키워드 점수가 0이면 네이버 오류로 판단
     if (topMajority && topMajority[1] > 0) {
-        return topMajority[0] as IssueCategory
+        const majorityCategory = topMajority[0] as IssueCategory
+        const majorityKeywordScore = keywordScores[majorityCategory]
+        
+        // 다수결 카테고리의 키워드 점수가 0이고, 다른 카테고리에 키워드가 있으면 키워드 우선
+        if (majorityKeywordScore === 0 && topKeyword[1] > 0) {
+            return topKeyword[0]
+        }
+        
+        return majorityCategory
     }
 
     // 다수결 없으면 키워드
@@ -621,6 +699,7 @@ function inferCategory(items: RawItem[]): IssueCategory {
         return topKeyword[0]
     }
 
+    // 5차: 폴백
     return '사회'
 }
 
@@ -866,19 +945,10 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         const issueCategory = inferCategory(group.items)
 
         // 자동 승인 조건 판단
-        // 1) 건수 충족: 뉴스 10건 이상
-        // 2) 시간 경과: 최초 수집이 N시간 이전 (관리자 응답 대기 기간 경과)
-        // 3) 카테고리 허용: 사회/기술/스포츠만 자동 승인 (연예/정치는 관리자 필수)
+        // 화력 기반 자동 승인 (뉴스 건수 무관)
+        // 카테고리 허용: 사회/기술/스포츠만 자동 승인 (연예/정치는 관리자 필수)
         const AUTO_APPROVE_CATEGORIES = process.env.AUTO_APPROVE_CATEGORIES?.split(',') ?? 
             ['사회', '기술', '스포츠']
-        
-        const meetsAutoApproveConditions =
-            recentCount >= AUTO_APPROVE_THRESHOLD &&
-            firstSeenAt <= noResponseCutoff
-        
-        const shouldAutoApprove = 
-            meetsAutoApproveConditions &&
-            AUTO_APPROVE_CATEGORIES.includes(issueCategory)
 
         // 최근 24시간 내 유사 이슈 존재 여부 확인 (AI 기반 중복 방지)
         const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
@@ -942,6 +1012,10 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             }
             
             if (existingIssue.approval_status === '대기') {
+                // 화력 기반 자동 승인 판정
+                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+                
                 if (shouldAutoApprove) {
                     // 기존 대기 이슈를 자동 승인으로 업데이트
                     const { error: updateError } = await supabaseAdmin
@@ -958,10 +1032,10 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                         result.created++
                     }
                 } else {
-                    const reason = !meetsAutoApproveConditions 
-                        ? '건수/시간 미달' 
+                    const reason = actualHeat < AUTO_APPROVE_THRESHOLD
+                        ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
                         : `${issueCategory} 카테고리는 관리자 승인 필요`
-                    console.log(`[대기유지] 기존 이슈 "${representativeTitle}" (${reason}, 화력: ${actualHeat}점)`)
+                    console.log(`[대기유지] 기존 이슈 "${representativeTitle}" (${reason})`)
                     // 여전히 대기 중 → 배너 알람 목록에 추가
                     result.alerts.push({
                         title: representativeTitle,
@@ -1012,6 +1086,10 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         }
         
         // 4단계: 화력 충분 → 정식 등록 (approval_status 업데이트)
+        // 화력 기반 자동 승인 판정
+        const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+            AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+        
         const approvalStatus = shouldAutoApprove ? '승인' : '대기'
         
         const { error: updateError } = await supabaseAdmin
@@ -1034,8 +1112,8 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             console.log(`[자동승인 완료] "${representativeTitle}" (카테고리: ${issueCategory}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
             result.created++
         } else {
-            const reason = !meetsAutoApproveConditions 
-                ? '건수/시간 미달' 
+            const reason = actualHeat < AUTO_APPROVE_THRESHOLD
+                ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
                 : `${issueCategory} 카테고리는 관리자 승인 필요`
             console.log(`[대기등록 완료] "${representativeTitle}" (${reason}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
             // 대기 등록 → 배너 알람 목록에 추가
