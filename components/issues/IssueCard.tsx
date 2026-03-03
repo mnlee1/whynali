@@ -13,6 +13,7 @@
 import Link from 'next/link'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import StatusBadge from '@/components/common/StatusBadge'
 
 interface IssueCardProps {
     issue: Issue
@@ -66,7 +67,6 @@ function formatDate(dateString: string): string {
 export default function IssueCard({ issue }: IssueCardProps) {
     const heat = issue.heat_index ?? 0
     const heatMeta = getHeatMeta(issue.heat_index)
-    const statusMeta = getStatusMeta(issue.status)
     const barWidthClass = getHeatBarClass(heat)
 
     return (
@@ -75,10 +75,7 @@ export default function IssueCard({ issue }: IssueCardProps) {
                 {/* 상단: 카테고리 + 상태 배지 */}
                 <div className="flex items-center gap-2 mb-2.5">
                     <span className="text-xs text-neutral-400">{issue.category}</span>
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium ${statusMeta.badgeClass}`}>
-                        <span className="text-[10px]">{statusMeta.icon}</span>
-                        {issue.status}
-                    </span>
+                    <StatusBadge status={issue.status} />
                 </div>
 
                 {/* 제목 */}

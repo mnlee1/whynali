@@ -23,6 +23,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { IssueCategory } from '@/types/issue'
+import { incrementApiUsage } from '@/lib/api-usage-tracker'
 
 /* ------------------------------------------------------------------ */
 /* 환경변수 기반 임계값 (운영 중 조정 가능)                               */
@@ -194,11 +195,26 @@ ${inputJson}
 
     if (!response.ok) {
         const errText = await response.text()
+        
+        // API 사용량 추적 (실패)
+        await incrementApiUsage('perplexity', {
+            calls: 1,
+            successes: 0,
+            failures: 1,
+        }).catch(err => console.error('API 사용량 추적 실패:', err))
+        
         throw new Error(`Perplexity API 오류 (${response.status}): ${errText}`)
     }
 
     const data = await response.json()
     const raw: string = data.choices?.[0]?.message?.content ?? ''
+
+    // API 사용량 추적 (성공)
+    await incrementApiUsage('perplexity', {
+        calls: 1,
+        successes: 1,
+        failures: 0,
+    }).catch(err => console.error('API 사용량 추적 실패:', err))
 
     return parseAIResults(raw, items)
 }

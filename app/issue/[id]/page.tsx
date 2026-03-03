@@ -14,6 +14,7 @@ import SourcesSection from '@/components/issue/SourcesSection'
 import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
+import StatusBadge from '@/components/common/StatusBadge'
 
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -59,16 +60,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded border border-neutral-200 font-medium">
                         {issue.category}
                     </span>
-                    <span className={[
-                        'text-xs px-2 py-0.5 rounded border font-medium',
-                        issue.status === '점화'
-                            ? 'bg-red-50 text-red-600 border-red-200'
-                            : issue.status === '논란중'
-                                ? 'bg-orange-50 text-orange-600 border-orange-200'
-                                : 'bg-gray-50 text-gray-600 border-gray-200',
-                    ].join(' ')}>
-                        {issue.status}
-                    </span>
+                    <StatusBadge status={issue.status} size="md" />
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold mb-2">
                     {decodeHtml(issue.title)}

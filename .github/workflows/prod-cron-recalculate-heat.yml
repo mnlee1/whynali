@@ -1,8 +1,8 @@
 name: 화력 분석 Cron (Production)
 
 on:
-  # schedule:
-  #   - cron: '*/10 * * * *'  # main 배포 후 활성화
+  schedule:
+    - cron: '*/10 * * * *'  # 10분마다 실행
   workflow_dispatch:
 
 jobs:

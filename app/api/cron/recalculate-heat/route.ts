@@ -89,7 +89,10 @@ export async function GET(request: NextRequest) {
                     } else if (heatIndex < MIN_HEAT_TO_REGISTER) {
                         await supabaseAdmin
                             .from('issues')
-                            .update({ approval_status: '반려' })
+                            .update({ 
+                                approval_status: '반려',
+                                approval_type: 'auto'
+                            })
                             .eq('id', issue.id)
                         result.statusChanged = '대기 → 반려'
                         autoRejected++

@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react'
 import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import StatusBadge from '@/components/common/StatusBadge'
 
 interface CandidateAlert {
     title: string
@@ -20,9 +21,12 @@ interface CandidateAlert {
     communityCount: number
 }
 
+type SortField = 'title' | 'status' | 'approval_status' | 'heat_index' | 'created_at'
+type SortOrder = 'asc' | 'desc'
+
 export default function AdminIssuesPage() {
     const [issues, setIssues] = useState<Issue[]>([])
-    const [filter, setFilter] = useState<string>('대기')
+    const [filter, setFilter] = useState<string>('')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
@@ -30,10 +34,18 @@ export default function AdminIssuesPage() {
     const [alertsDismissed, setAlertsDismissed] = useState(false)
     const [showHeatGuide, setShowHeatGuide] = useState(false)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
+    const [sortField, setSortField] = useState<SortField>('heat_index')
+    const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
 
     useEffect(() => {
         fetchIssues()
     }, [filter])
+
+    useEffect(() => {
+        if (issues.length > 0) {
+            setIssues(sortIssues(issues))
+        }
+    }, [sortField, sortOrder])
 
     useEffect(() => {
         fetchAlerts()
@@ -52,6 +64,41 @@ export default function AdminIssuesPage() {
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
 
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+        } else {
+            setSortField(field)
+            setSortOrder('desc')
+        }
+    }
+
+    const sortIssues = (list: Issue[]) => {
+        return [...list].sort((a, b) => {
+            let compareResult = 0
+
+            switch (sortField) {
+                case 'title':
+                    compareResult = a.title.localeCompare(b.title)
+                    break
+                case 'status':
+                    compareResult = a.status.localeCompare(b.status)
+                    break
+                case 'approval_status':
+                    compareResult = (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
+                    break
+                case 'heat_index':
+                    compareResult = (a.heat_index ?? 0) - (b.heat_index ?? 0)
+                    break
+                case 'created_at':
+                    compareResult = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    break
+            }
+
+            return sortOrder === 'asc' ? compareResult : -compareResult
+        })
+    }
+
     const fetchIssues = async () => {
         try {
             setLoading(true)
@@ -62,12 +109,7 @@ export default function AdminIssuesPage() {
             if (!response.ok) throw new Error('이슈 조회 실패')
             const data = await response.json()
             const list: Issue[] = data.data ?? []
-            if (!filter) {
-                list.sort((a, b) =>
-                    (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
-                )
-            }
-            setIssues(list)
+            setIssues(sortIssues(list))
             setLastRefreshedAt(new Date())
         } catch (err) {
             setError(err instanceof Error ? err.message : '오류 발생')
@@ -143,10 +185,58 @@ export default function AdminIssuesPage() {
         })
     }
 
-    const APPROVAL_DISPLAY: Record<string, string> = {
-        '대기': '대기',
-        '승인': '승인',
-        '반려': '반려',
+    const getApprovalDisplay = (issue: Issue): { label: string; className: string } => {
+        if (issue.approval_status === '대기') {
+            return {
+                label: '대기',
+                className: 'bg-yellow-100 text-yellow-700 border-yellow-200'
+            }
+        }
+        
+        if (issue.approval_status === '승인') {
+            if (issue.approval_type === 'auto') {
+                return {
+                    label: '자동 승인',
+                    className: 'bg-blue-100 text-blue-700 border-blue-200'
+                }
+            } else if (issue.approval_type === 'manual') {
+                return {
+                    label: '관리자 승인',
+                    className: 'bg-green-100 text-green-700 border-green-200'
+                }
+            } else {
+                // approval_type이 null인 경우 (기존 데이터)
+                return {
+                    label: '승인',
+                    className: 'bg-green-50 text-green-600 border-green-200'
+                }
+            }
+        }
+        
+        if (issue.approval_status === '반려') {
+            if (issue.approval_type === 'auto') {
+                return {
+                    label: '자동 반려',
+                    className: 'bg-gray-100 text-gray-600 border-gray-200'
+                }
+            } else if (issue.approval_type === 'manual') {
+                return {
+                    label: '관리자 반려',
+                    className: 'bg-red-100 text-red-700 border-red-200'
+                }
+            } else {
+                // approval_type이 null인 경우 (기존 데이터)
+                return {
+                    label: '반려',
+                    className: 'bg-red-50 text-red-600 border-red-200'
+                }
+            }
+        }
+        
+        return {
+            label: issue.approval_status,
+            className: 'bg-gray-100 text-gray-700 border-gray-200'
+        }
     }
 
     const getHeatMeta = (heat: number | null | undefined): { label: string; className: string } => {
@@ -237,20 +327,24 @@ export default function AdminIssuesPage() {
 
             {/* 필터 + 화력 기준 안내 토글 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     {[
                         { value: '', label: '전체' },
                         { value: '대기', label: '대기' },
-                        { value: '승인', label: '승인' },
-                        { value: '반려', label: '반려' },
+                        { value: '승인', label: '승인 전체' },
+                        { value: '승인:auto', label: '자동 승인' },
+                        { value: '승인:manual', label: '관리자 승인' },
+                        { value: '반려', label: '반려 전체' },
+                        { value: '반려:auto', label: '자동 반려' },
+                        { value: '반려:manual', label: '관리자 반려' },
                     ].map(({ value, label }) => (
                         <button
                             key={label}
                             onClick={() => setFilter(value)}
-                            className={`px-4 py-2 rounded ${
+                            className={`px-3 py-1.5 rounded text-sm ${
                                 filter === value
                                     ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-200 text-gray-700'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                             }`}
                         >
                             {label}
@@ -279,8 +373,8 @@ export default function AdminIssuesPage() {
                             <span className="text-gray-500">— 보통. 제목·카테고리 검토 후 판단.</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <span className="text-gray-400">30 미만</span>
-                            <span className="text-gray-500">— 낮음. 반려 권장.</span>
+                            <span className="text-gray-400">15–29</span>
+                            <span className="text-gray-500">— 낮음. 반려 권장 (15점 미만은 목록에서 자동 제외됨).</span>
                         </div>
                     </div>
                     <div className="text-xs text-gray-400 space-y-0.5">
@@ -306,28 +400,73 @@ export default function AdminIssuesPage() {
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                제목
+                                <button
+                                    onClick={() => handleSort('title')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    제목
+                                    {sortField === 'title' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 카테고리
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                상태
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                승인
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 <button
-                                    onClick={() => setShowHeatGuide((v) => !v)}
+                                    onClick={() => handleSort('status')}
                                     className="flex items-center gap-1 hover:text-gray-700"
                                 >
-                                    화력
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-gray-400 text-[10px] leading-none">?</span>
+                                    상태
+                                    {sortField === 'status' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
                                 </button>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                생성일
+                                <button
+                                    onClick={() => handleSort('approval_status')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    승인
+                                    {sortField === 'approval_status' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                <button
+                                    onClick={() => handleSort('heat_index')}
+                                    className="flex items-center gap-2 hover:text-gray-700"
+                                >
+                                    <span className="flex items-center gap-1">
+                                        화력
+                                        {sortField === 'heat_index' && (
+                                            <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                        )}
+                                    </span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            setShowHeatGuide((v) => !v)
+                                        }}
+                                        className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-gray-400 text-[10px] leading-none hover:border-gray-600 hover:text-gray-600"
+                                    >
+                                        ?
+                                    </button>
+                                </button>
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                <button
+                                    onClick={() => handleSort('created_at')}
+                                    className="flex items-center gap-1 hover:text-gray-700"
+                                >
+                                    생성일
+                                    {sortField === 'created_at' && (
+                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 액션
@@ -347,11 +486,18 @@ export default function AdminIssuesPage() {
                                     </a>
                                 </td>
                                 <td className="px-4 py-3 text-sm">{issue.category}</td>
-                                <td className="px-4 py-3 text-sm">{issue.status}</td>
                                 <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 text-xs rounded ${getStatusColor(issue.approval_status)}`}>
-                                        {APPROVAL_DISPLAY[issue.approval_status] ?? issue.approval_status}
-                                    </span>
+                                    <StatusBadge status={issue.status} />
+                                </td>
+                                <td className="px-4 py-3">
+                                    {(() => {
+                                        const approvalMeta = getApprovalDisplay(issue)
+                                        return (
+                                            <span className={`px-2 py-1 text-xs rounded border font-medium ${approvalMeta.className}`}>
+                                                {approvalMeta.label}
+                                            </span>
+                                        )
+                                    })()}
                                 </td>
                                 <td className="px-4 py-3 text-sm">
                                     <span className={getHeatMeta(issue.heat_index).className}>

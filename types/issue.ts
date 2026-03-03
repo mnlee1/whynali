@@ -1,6 +1,7 @@
 export type IssueStatus = '점화' | '논란중' | '종결'
 export type IssueCategory = '연예' | '스포츠' | '정치' | '사회' | '기술'
 export type ApprovalStatus = '대기' | '승인' | '반려'
+export type ApprovalType = 'auto' | 'manual'
 export type TimelineStage = '발단' | '전개' | '파생' | '진정'
 
 export interface Issue {
@@ -11,6 +12,7 @@ export interface Issue {
     category: IssueCategory
     heat_index: number | null
     approval_status: ApprovalStatus
+    approval_type: ApprovalType | null
     approved_at: string | null
     created_at: string
     updated_at: string

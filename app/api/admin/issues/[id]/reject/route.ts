@@ -24,6 +24,7 @@ export async function POST(
             .from('issues')
             .update({
                 approval_status: '반려',
+                approval_type: 'manual',
             })
             .eq('id', id)
             .select()

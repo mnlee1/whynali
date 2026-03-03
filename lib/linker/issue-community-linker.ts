@@ -46,17 +46,24 @@ function stripMediaPrefix(title: string): string {
     return title.replace(/^(\[[^\]]{1,30}\]\s*)+/, '').trim()
 }
 
+// 1글자이지만 중요한 의미를 가져서 필터링하면 안 되는 예외 키워드
+const ALLOWED_ONE_CHAR_KEYWORDS = new Set([
+    '환', '뷔', '진', '첸', '츄', '뱀', '윤', '문', '안', '정', '이', '박', '김', '최',
+    '권', '조', '강', '류', '홍', '송', '백', '유', '오', '신', '양', '황', '허', '고',
+    '설', '선', '길', '표', '명', '범', '혁', '훈', '빈', '결', '률', '현', '린'
+])
+
 /**
  * extractKeywords - 제목에서 핵심 키워드 추출
  *
- * 언론 접두어 제거 → 특수문자 제거 → 공백 분리 → 2글자 미만 제거 → 불용어 제거
+ * 언론 접두어 제거 → 특수문자 제거 → 공백 분리 → 2글자 미만 제거(예외 허용) → 불용어 제거
  */
 function extractKeywords(text: string): string[] {
     return Array.from(new Set(
         stripMediaPrefix(text)
             .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
             .split(/\s+/)
-            .filter((w) => w.length >= 2 && !STOPWORDS.has(w))
+            .filter((w) => (w.length >= 2 || ALLOWED_ONE_CHAR_KEYWORDS.has(w)) && !STOPWORDS.has(w))
     ))
 }
 
@@ -71,7 +78,7 @@ function extractTitleWords(text: string): Set<string> {
         text
             .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
             .split(/\s+/)
-            .filter((w) => w.length >= 2)
+            .filter((w) => w.length >= 2 || ALLOWED_ONE_CHAR_KEYWORDS.has(w))
             .map((w) => w.toLowerCase())
     )
 }

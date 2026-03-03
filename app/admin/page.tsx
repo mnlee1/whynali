@@ -40,6 +40,22 @@ interface RecentLog {
     created_at: string
 }
 
+interface ApiCostsSummary {
+    naver: {
+        today: number
+        monthly: number
+        cost: number
+        limit: number
+    }
+    perplexity: {
+        today: number
+        monthly: number
+    }
+    total: {
+        monthly: number
+    }
+}
+
 // ─── 서브 컴포넌트 ────────────────────────────────────────
 
 function StatCard({
@@ -114,29 +130,61 @@ export default function AdminDashboardPage() {
     const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
     const [logsLoading, setLogsLoading] = useState(true)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+    const [apiCosts, setApiCosts] = useState<ApiCostsSummary | null>(null)
+    const [costsLoading, setCostsLoading] = useState(true)
 
     const fetchAll = async () => {
+        console.log('[Admin Dashboard] fetchAll 시작')
         setStatsLoading(true)
         setLogsLoading(true)
+        setCostsLoading(true)
+
+        // API 비용 정보는 독립적으로 빠르게 로드
+        fetch('/api/admin/api-usage')
+            .then(res => {
+                console.log('[Admin Dashboard] API 비용 응답:', res.ok, res.status)
+                return res.ok ? res.json() : null
+            })
+            .then(data => {
+                console.log('[Admin Dashboard] API 비용 데이터:', data)
+                setApiCosts(data)
+                setCostsLoading(false)
+            })
+            .catch(err => {
+                console.error('[Admin Dashboard] API 비용 에러:', err)
+                setCostsLoading(false)
+            })
+
+        // candidates API는 느리므로 별도 처리
+        fetch('/api/admin/candidates')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                setAlerts(data?.alerts ?? [])
+            })
+            .catch(err => {
+                console.error('[Admin Dashboard] Candidates 에러:', err)
+            })
 
         try {
-            const [issuesRes, discussionsRes, safetyRes, collectionsRes, candidatesRes, logsRes] =
+            console.log('[Admin Dashboard] API 호출 시작 (빠른 항목들)')
+            const [issuesRes, discussionsRes, safetyRes, collectionsRes, logsRes] =
                 await Promise.all([
                     fetch('/api/admin/issues?approval_status=대기'),
                     fetch('/api/admin/discussions?status=대기'),
                     fetch('/api/admin/safety/pending'),
                     fetch('/api/admin/collections'),
-                    fetch('/api/admin/candidates'),
                     fetch('/api/admin/logs?limit=8'),
                 ])
 
-            const [issuesData, discussionsData, safetyData, collectionsData, candidatesData, logsData] =
+            console.log('[Admin Dashboard] 빠른 API 응답 받음')
+            console.log('[Admin Dashboard] JSON 파싱 시작')
+
+            const [issuesData, discussionsData, safetyData, collectionsData, logsData] =
                 await Promise.all([
                     issuesRes.ok ? issuesRes.json() : null,
                     discussionsRes.ok ? discussionsRes.json() : null,
                     safetyRes.ok ? safetyRes.json() : null,
                     collectionsRes.ok ? collectionsRes.json() : null,
-                    candidatesRes.ok ? candidatesRes.json() : null,
                     logsRes.ok ? logsRes.json() : null,
                 ])
 
@@ -157,9 +205,11 @@ export default function AdminDashboardPage() {
                 community24h: community24h as number,
             })
 
-            setAlerts(candidatesData?.alerts ?? [])
             setRecentLogs(logsData?.data ?? [])
+            
             setLastRefreshedAt(new Date())
+        } catch (error) {
+            console.error('[Admin Dashboard] 데이터 로드 에러:', error)
         } finally {
             setStatsLoading(false)
             setLogsLoading(false)
@@ -167,6 +217,7 @@ export default function AdminDashboardPage() {
     }
 
     useEffect(() => {
+        console.log('[Admin Dashboard] 컴포넌트 마운트, fetchAll 호출')
         fetchAll()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -262,6 +313,90 @@ export default function AdminDashboardPage() {
                     accent="green"
                     loading={statsLoading}
                 />
+            </div>
+
+            {/* API 비용 현황 */}
+            <div className="mb-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-sm font-semibold text-gray-800">API 비용 현황</h2>
+                        <span className="text-xs text-gray-400">이번 달 누적</span>
+                    </div>
+
+                    {costsLoading ? (
+                        <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-16 bg-gray-100 rounded animate-pulse" />
+                            ))}
+                        </div>
+                    ) : !apiCosts ? (
+                        <p className="text-sm text-gray-400 py-4 text-center">데이터를 불러올 수 없습니다</p>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800">네이버 뉴스 API</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        오늘 {apiCosts.naver.today.toLocaleString()}건 / 월 {apiCosts.naver.monthly.toLocaleString()}건
+                                    </p>
+                                    <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                                        <div 
+                                            className={`h-1.5 rounded-full ${
+                                                (apiCosts.naver.today / apiCosts.naver.limit) >= 0.8 
+                                                    ? 'bg-red-500' 
+                                                    : 'bg-blue-500'
+                                            }`}
+                                            style={{ width: `${Math.min((apiCosts.naver.today / apiCosts.naver.limit) * 100, 100)}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        일일 한도: {apiCosts.naver.limit.toLocaleString()}건
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-gray-500">월 비용</p>
+                                    <p className="text-2xl font-bold text-blue-600">$0</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">무료 한도 내</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-100">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800">Perplexity AI API</p>
+                                    <p className="text-xs text-gray-500 mt-1">이슈 후보 AI 검증 및 토론 주제 생성</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-gray-500">월 비용</p>
+                                    <p className="text-2xl font-bold text-purple-600">
+                                        ${apiCosts.perplexity.monthly.toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-purple-500 mt-0.5">
+                                        ≈ ₩{Math.round(apiCosts.perplexity.monthly * 1300).toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        오늘 ${apiCosts.perplexity.today.toFixed(2)} (₩{Math.round(apiCosts.perplexity.today * 1300).toLocaleString()})
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-800">전체 합계</p>
+                                    <p className="text-xs text-gray-500 mt-1">네이버 API + Perplexity AI</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-gray-500">월 총 비용</p>
+                                    <p className="text-3xl font-bold text-gray-900">
+                                        ${apiCosts.total.monthly.toFixed(2)}
+                                    </p>
+                                    <p className="text-lg font-semibold text-gray-600 mt-1">
+                                        ≈ ₩{Math.round(apiCosts.total.monthly * 1300).toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* 수집 현황 요약 + 최근 로그 */}

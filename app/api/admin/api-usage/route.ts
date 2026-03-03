@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getTodayUsage, getUsageStats, getUsagePercentage } from '@/lib/api-usage-tracker'
+import { getAllApiCostsSummary } from '@/lib/api-usage-tracker'
 import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
@@ -17,20 +17,13 @@ export async function GET() {
     if (auth.error) return auth.error
 
     try {
-        const apiName = 'naver_news'
+        console.log('[API Usage] 요청 시작')
+        const summary = await getAllApiCostsSummary()
+        console.log('[API Usage] 응답 데이터:', JSON.stringify(summary, null, 2))
 
-        const todayUsage = await getTodayUsage(apiName)
-        const usagePercentage = await getUsagePercentage(apiName)
-        const recentStats = await getUsageStats(apiName, 7)
-
-        return NextResponse.json({
-            today: todayUsage,
-            percentage: usagePercentage,
-            warning: usagePercentage >= 80,
-            history: recentStats,
-        })
+        return NextResponse.json(summary)
     } catch (error) {
-        console.error('API 사용량 조회 에러:', error)
+        console.error('[API Usage] 조회 에러:', error)
         return NextResponse.json(
             { error: 'FETCH_ERROR', message: 'API 사용량 조회 실패' },
             { status: 500 }
