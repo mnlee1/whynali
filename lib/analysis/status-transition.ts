@@ -75,12 +75,12 @@ export async function evaluateStatusTransition(
         // 화력이 충분하면 논란중으로 전환
         if (heat >= IGNITE_MIN_HEAT) {
             // 커뮤니티 반응 체크
-            const { data: communityData } = await supabaseAdmin
+            const { count } = await supabaseAdmin
                 .from('community_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
             
-            const communityCount = communityData ? (communityData as any).count ?? 0 : 0
+            const communityCount = count ?? 0
             
             if (communityCount >= DEBATE_MIN_COMMUNITY) {
                 return { newStatus: '논란중', reason: `화력 ${heat}점, 커뮤니티 ${communityCount}건, 경과 ${elapsedHours.toFixed(1)}h` }
@@ -103,12 +103,12 @@ export async function evaluateStatusTransition(
         const [newsRes, communityRes] = await Promise.all([
             supabaseAdmin
                 .from('news_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
                 .gte('created_at', since),
             supabaseAdmin
                 .from('community_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
                 .gte('created_at', since),
         ])
@@ -128,12 +128,12 @@ export async function evaluateStatusTransition(
         const [rapidNewsRes, rapidCommunityRes] = await Promise.all([
             supabaseAdmin
                 .from('news_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
                 .gte('created_at', rapidInfluxSince),
             supabaseAdmin
                 .from('community_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
                 .gte('created_at', rapidInfluxSince),
         ])
@@ -153,12 +153,12 @@ export async function evaluateStatusTransition(
         const [newsRes, communityRes] = await Promise.all([
             supabaseAdmin
                 .from('news_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
                 .gte('created_at', since),
             supabaseAdmin
                 .from('community_data')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('issue_id', issue.id)
                 .gte('created_at', since),
         ])
