@@ -13,6 +13,7 @@ import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
+import CategoryBadge from '@/components/common/CategoryBadge'
 
 interface CandidateAlert {
     title: string
@@ -291,10 +292,10 @@ export default function AdminIssuesPage() {
                     className: 'bg-green-100 text-green-700 border-green-200'
                 }
             } else {
-                // approval_type이 null인 경우 (기존 데이터)
+                // approval_type이 null인 경우 (오류 상태)
                 return {
-                    label: '승인',
-                    className: 'bg-green-50 text-green-600 border-green-200'
+                    label: '⚠️ 승인 (오류)',
+                    className: 'bg-orange-100 text-orange-700 border-orange-200'
                 }
             }
         }
@@ -311,10 +312,10 @@ export default function AdminIssuesPage() {
                     className: 'bg-red-100 text-red-700 border-red-200'
                 }
             } else {
-                // approval_type이 null인 경우 (기존 데이터)
+                // approval_type이 null인 경우 (오류 상태)
                 return {
-                    label: '반려',
-                    className: 'bg-red-50 text-red-600 border-red-200'
+                    label: '⚠️ 반려 (오류)',
+                    className: 'bg-orange-100 text-orange-700 border-orange-200'
                 }
             }
         }
@@ -652,7 +653,9 @@ export default function AdminIssuesPage() {
                                         {decodeHtml(issue.title)}
                                     </a>
                                 </td>
-                                <td className="px-4 py-3 text-sm">{issue.category}</td>
+                                <td className="px-4 py-3">
+                                    <CategoryBadge category={issue.category} size="sm" />
+                                </td>
                                 <td className="px-4 py-3">
                                     <StatusBadge status={issue.status} />
                                 </td>

@@ -14,6 +14,7 @@ import Link from 'next/link'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
+import CategoryBadge from '@/components/common/CategoryBadge'
 
 interface IssueCardProps {
     issue: Issue
@@ -74,7 +75,7 @@ export default function IssueCard({ issue }: IssueCardProps) {
             <article className="p-5 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
                 {/* 상단: 카테고리 + 상태 배지 */}
                 <div className="flex items-center gap-2 mb-2.5">
-                    <span className="text-xs text-neutral-400">{issue.category}</span>
+                    <CategoryBadge category={issue.category} size="sm" />
                     <StatusBadge status={issue.status} />
                 </div>
 

@@ -15,6 +15,7 @@ import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
+import CategoryBadge from '@/components/common/CategoryBadge'
 
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -57,9 +58,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             {/* 이슈 헤더 */}
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded border border-neutral-200 font-medium">
-                        {issue.category}
-                    </span>
+                    <CategoryBadge category={issue.category} size="sm" />
                     <StatusBadge status={issue.status} size="md" />
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold mb-2">

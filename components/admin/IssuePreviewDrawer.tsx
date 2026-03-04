@@ -18,6 +18,7 @@ import type { Issue } from '@/types/issue'
 import TimelineEditor from '@/components/admin/TimelineEditor'
 import SourcesSection from '@/components/issue/SourcesSection'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import CategoryBadge from '@/components/common/CategoryBadge'
 
 interface IssuePreviewDrawerProps {
     issue: Issue | null
@@ -106,9 +107,7 @@ export default function IssuePreviewDrawer({
                     {/* 배지 + 설명 */}
                     <div>
                         <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded border border-neutral-200 font-medium">
-                                {issue.category}
-                            </span>
+                            <CategoryBadge category={issue.category} size="sm" />
                             <span className={`text-xs px-2 py-0.5 rounded border font-medium ${statusStyle}`}>
                                 {issue.status}
                             </span>
