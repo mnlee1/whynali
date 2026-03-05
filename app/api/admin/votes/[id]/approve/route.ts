@@ -26,10 +26,11 @@ export async function POST(request: NextRequest, { params }: Params) {
         .from('votes')
         .update({
             phase: '진행중',
+            approval_status: '승인',
             started_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('phase', '대기')
+        .eq('approval_status', '대기')
         .select()
         .single()
 

@@ -158,7 +158,14 @@ export default function CommentsSection({
     }, [])
 
     const handleWrite = async () => {
-        if (!userId || !draft.trim() || submittingWrite || rateLimitCountdown > 0) return
+        if (!userId) {
+            const currentPath = window.location.pathname
+            if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+            }
+            return
+        }
+        if (!draft.trim() || submittingWrite || rateLimitCountdown > 0) return
         setSubmittingWrite(true)
         setWriteError(null)
         setWriteErrorType(null)
@@ -223,8 +230,12 @@ export default function CommentsSection({
             if (!res.ok) throw new Error(json.error)
             setEditingId(null)
             setEditDraft('')
+            const updatedBody = editDraft.trim()
             setComments((prev) =>
-                prev.map((c) => c.id === commentId ? { ...c, body: editDraft.trim() } : c)
+                prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c)
+            )
+            setBestComments((prev) =>
+                prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c)
             )
         } catch (e) {
             setError(e instanceof Error ? e.message : '수정 실패')
@@ -252,7 +263,14 @@ export default function CommentsSection({
 
     /* 댓글 좋아요/싫어요 토글 (낙관적 업데이트) */
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
-        if (!userId || likingId) return
+        if (!userId) {
+            const currentPath = window.location.pathname
+            if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+            }
+            return
+        }
+        if (likingId) return
         setLikingId(commentId)
 
         // 현재 상태 저장 (롤백용)
@@ -461,7 +479,7 @@ export default function CommentsSection({
                     <p className="text-sm text-gray-400 text-center py-3">
                         종료된 토론입니다. 댓글을 작성할 수 없습니다.
                     </p>
-                ) : userId ? (
+                ) : (
                     <div className="space-y-2">
                         {writeErrorType === 'rate_limit' && writeError && (
                             <div className="flex items-center gap-3 px-3 py-2 bg-yellow-50 border border-yellow-300 rounded text-sm">
@@ -490,7 +508,15 @@ export default function CommentsSection({
                                     setWriteErrorType(null)
                                 }
                             }}
-                            placeholder="댓글을 입력하세요..."
+                            onClick={() => {
+                                if (!userId) {
+                                    const currentPath = window.location.pathname
+                                    if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                                        window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+                                    }
+                                }
+                            }}
+                            placeholder={userId ? "댓글을 입력하세요..." : "댓글을 작성하려면 로그인하세요"}
                             rows={3}
                             className={[
                                 'w-full px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none',
@@ -510,11 +536,6 @@ export default function CommentsSection({
                             </button>
                         </div>
                     </div>
-                ) : (
-                    <p className="text-sm text-gray-500 text-center py-3">
-                        <a href="/login" className="text-blue-600 underline">로그인</a>하면 댓글을 작성할 수 있습니다.
-                        로그인했는데도 이 문구가 보이면 페이지를 새로고침해 보세요.
-                    </p>
                 )}
             </div>
         </div>
@@ -621,13 +642,13 @@ function CommentItem({
                 <div className="flex items-center gap-2 mt-2">
                     <button
                         onClick={() => onLike(comment.id, 'like')}
-                        disabled={!userId || isLiking}
+                        disabled={isLiking}
                         className={[
                             'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
                             myType === 'like'
                                 ? 'border-blue-400 bg-blue-50 text-blue-600 font-medium'
                                 : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                            isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                         ].join(' ')}
                     >
                         <span>👍</span>
@@ -635,13 +656,13 @@ function CommentItem({
                     </button>
                     <button
                         onClick={() => onLike(comment.id, 'dislike')}
-                        disabled={!userId || isLiking}
+                        disabled={isLiking}
                         className={[
                             'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
                             myType === 'dislike'
                                 ? 'border-red-400 bg-red-50 text-red-500 font-medium'
                                 : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                            isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                         ].join(' ')}
                     >
                         <span>👎</span>

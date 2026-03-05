@@ -12,9 +12,13 @@
  *   점화 타임아웃: 24시간 경과 + 화력 30점 미만 → 종결
  *   논란중 → 종결: 화력 10점 미만 OR 최근 48시간 신규 수집 건 없음
  *   종결 → 논란중: 재점화 감지 (급증 또는 점진적 화력 상승)
+ *
+ * 연동 기능:
+ *   - 이슈가 '종결' 상태로 전환되면 관련 투표 자동 마감
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
 
 // 08_이슈상태전환_규격.md §6 환경변수
 const IGNITE_TO_DEBATE_HOURS = parseInt(process.env.STATUS_IGNITE_TO_DEBATE_HOURS ?? '6')

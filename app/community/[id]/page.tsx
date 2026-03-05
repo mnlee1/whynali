@@ -21,7 +21,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
         .from('discussion_topics')
         .select('*, issues(id, title)')
         .eq('id', id)
-        .in('approval_status', ['승인', '종료'])
+        .in('approval_status', ['진행중', '마감'])
         .single()
 
     if (error || !topic) {
@@ -42,7 +42,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
     const userId = user?.id ?? null
 
     const issueData = topic.issues as { id: string; title: string } | null
-    const isClosed = topic.approval_status === '종료'
+    const isClosed = topic.approval_status === '마감'
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
@@ -60,7 +60,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
                             ? 'bg-gray-50 text-gray-500 border-gray-200'
                             : 'bg-purple-100 text-purple-700 border-purple-300',
                     ].join(' ')}>
-                        {isClosed ? '종료' : '토론 중'}
+                        {isClosed ? '마감' : '진행중'}
                     </span>
                     {topic.is_ai_generated && (
                         <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-200">

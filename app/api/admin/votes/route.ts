@@ -7,7 +7,7 @@ import { writeAdminLog } from '@/lib/admin-log'
 export const dynamic = 'force-dynamic'
 
 /* GET /api/admin/votes — 투표 목록 조회 (관리자)
-   query: phase?, limit? */
+   query: phase?, approval_status?, limit? */
 export async function GET(request: NextRequest) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
@@ -15,11 +15,12 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = request.nextUrl
         const phase = searchParams.get('phase')
+        const approvalStatus = searchParams.get('approval_status')
         const limit = parseInt(searchParams.get('limit') ?? '50', 10)
 
         let query = supabaseAdmin
             .from('votes')
-            .select('id, issue_id, title, phase, issue_status_snapshot, started_at, ended_at, created_at, issues!inner(id, title), vote_choices(id, label, count)')
+            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, created_at, issues!inner(id, title), vote_choices(id, label, count)')
             .order('created_at', { ascending: false })
             .limit(limit)
 
@@ -27,11 +28,20 @@ export async function GET(request: NextRequest) {
             query = query.eq('phase', phase)
         }
 
+        if (approvalStatus) {
+            const statuses = approvalStatus.split(',')
+            if (statuses.length === 1) {
+                query = query.eq('approval_status', statuses[0])
+            } else {
+                query = query.in('approval_status', statuses)
+            }
+        }
+
         const { data, error } = await query
 
         if (error) throw error
 
-        // count는 필요할 때만 별도 쿼리로 가져오기 (더 빠름)
+        // count는 필요할 때만 별도 쿼리로 가져오기
         let count = data?.length ?? 0
         if (count >= limit) {
             let countQuery = supabaseAdmin
@@ -40,6 +50,15 @@ export async function GET(request: NextRequest) {
             
             if (phase && ['대기', '진행중', '마감'].includes(phase)) {
                 countQuery = countQuery.eq('phase', phase)
+            }
+            
+            if (approvalStatus) {
+                const statuses = approvalStatus.split(',')
+                if (statuses.length === 1) {
+                    countQuery = countQuery.eq('approval_status', statuses[0])
+                } else {
+                    countQuery = countQuery.in('approval_status', statuses)
+                }
             }
             
             const { count: totalCount } = await countQuery
@@ -54,14 +73,14 @@ export async function GET(request: NextRequest) {
 }
 
 /* POST /api/admin/votes — 투표 생성 (선택지 동시 생성)
-   body: { issue_id, title?, choices: string[] } */
+   body: { issue_id, title?, choices: string[], auto_end_date?, auto_end_participants? } */
 export async function POST(request: NextRequest) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
     try {
         const body = await request.json()
-        const { issue_id, title, choices } = body
+        const { issue_id, title, choices, auto_end_date, auto_end_participants } = body
 
         if (!issue_id) {
             return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
@@ -89,14 +108,24 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '이슈를 찾을 수 없습니다.' }, { status: 404 })
         }
 
+        // 자동 종료 옵션 준비
+        const voteData: any = {
+            issue_id,
+            title: title ? sanitizeText(title) : null,
+            phase: '대기',
+            issue_status_snapshot: issue?.status,
+        }
+
+        if (auto_end_date) {
+            voteData.auto_end_date = auto_end_date
+        }
+        if (auto_end_participants && typeof auto_end_participants === 'number') {
+            voteData.auto_end_participants = auto_end_participants
+        }
+
         const { data: vote, error: voteError } = await supabaseAdmin
             .from('votes')
-            .insert({
-                issue_id,
-                title: title ? sanitizeText(title) : null,
-                phase: '대기',
-                issue_status_snapshot: issue?.status,
-            })
+            .insert(voteData)
             .select()
             .single()
 

@@ -1,0 +1,18 @@
+name: 투표 자동 종료 Cron (Production)
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # 매 시간 정각
+  workflow_dispatch:
+
+jobs:
+  auto-end-votes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 투표 자동 종료 API 호출
+        run: |
+          curl -X GET https://whynali.vercel.app/api/cron/auto-end-votes \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60 \
+            --retry 2

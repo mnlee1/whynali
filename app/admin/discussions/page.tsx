@@ -14,27 +14,25 @@ interface DiscussionTopic {
     body: string
     issue_id: string
     is_ai_generated: boolean
-    approval_status: '대기' | '승인' | '반려' | '종료'
+    approval_status: '대기' | '진행중' | '마감'
     approved_at: string | null
     created_at: string
     issues: { id: string; title: string } | null
 }
 
-type FilterStatus = '' | '대기' | '승인' | '반려' | '종료'
+type FilterStatus = '' | '대기' | '진행중' | '마감'
 
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
     { value: '', label: '전체' },
     { value: '대기', label: '대기' },
-    { value: '승인', label: '승인' },
-    { value: '반려', label: '반려' },
-    { value: '종료', label: '종료' },
+    { value: '진행중', label: '진행중' },
+    { value: '마감', label: '마감' },
 ]
 
 const STATUS_STYLE: Record<string, string> = {
     '대기': 'bg-yellow-100 text-yellow-700',
-    '승인': 'bg-green-100 text-green-700',
-    '반려': 'bg-red-100 text-red-700',
-    '종료': 'bg-gray-100 text-gray-600',
+    '진행중': 'bg-green-100 text-green-700',
+    '마감': 'bg-gray-100 text-gray-600',
 }
 
 function formatDate(dateString: string): string {
@@ -87,7 +85,7 @@ export default function AdminDiscussionsPage() {
     const [submittingEdit, setSubmittingEdit] = useState(false)
     const [editError, setEditError] = useState<string | null>(null)
 
-    const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2, '종료': 3 }
+    const STATUS_ORDER: Record<string, number> = { '대기': 0, '진행중': 1, '마감': 2 }
 
     /* 승인된 이슈 목록 로드 */
     const loadApprovedIssues = useCallback(async () => {
@@ -138,7 +136,7 @@ export default function AdminDiscussionsPage() {
             if (!res.ok) throw new Error(json.error)
 
             const topics = json.data.map((t: any) => ({
-                content: t.body || ''
+                content: t.content || ''
             }))
 
             setGeneratedTopics(topics)
@@ -196,6 +194,8 @@ export default function AdminDiscussionsPage() {
                     body: JSON.stringify({
                         issue_id: selectedIssue.id,
                         content: topic.content,
+                        is_ai_generated: true,
+                        approval_status: '대기',
                     }),
                 })
                 const json = await res.json()
@@ -223,7 +223,12 @@ export default function AdminDiscussionsPage() {
             const res = await fetch('/api/admin/discussions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: selectedIssue.id, content: newContent.trim() }),
+                body: JSON.stringify({
+                    issue_id: selectedIssue.id,
+                    content: newContent.trim(),
+                    is_ai_generated: false,
+                    approval_status: '대기',
+                }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -248,7 +253,7 @@ export default function AdminDiscussionsPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             const data: DiscussionTopic[] = json.data ?? []
-            /* 전체 탭일 때 대기 → 승인 → 반려 순 정렬 */
+            /* 전체 탭일 때 대기 → 진행중 → 마감 순 정렬 */
             if (!status) {
                 data.sort((a, b) =>
                     (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
@@ -291,14 +296,14 @@ export default function AdminDiscussionsPage() {
     }
 
     /* 일괄 처리 */
-    const handleBulkAction = async (action: '승인' | '반려' | '삭제') => {
+    const handleBulkAction = async (action: '진행중' | '마감' | '삭제') => {
         if (selectedTopicIds.size === 0) return
 
         const confirmMsg =
-            action === '승인'
+            action === '진행중'
                 ? `선택한 ${selectedTopicIds.size}개 토론 주제를 승인하시겠습니까?`
-                : action === '반려'
-                ? `선택한 ${selectedTopicIds.size}개 토론 주제를 반려하시겠습니까?`
+                : action === '마감'
+                ? `선택한 ${selectedTopicIds.size}개 토론 주제를 종료하시겠습니까?`
                 : `선택한 ${selectedTopicIds.size}개 토론 주제를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
 
         if (!window.confirm(confirmMsg)) return
@@ -314,8 +319,11 @@ export default function AdminDiscussionsPage() {
                     if (action === '삭제') {
                         res = await fetch(`/api/admin/discussions/${id}`, { method: 'DELETE' })
                     } else {
-                        const endpoint = action === '승인' ? `/api/admin/discussions/${id}/approve` : `/api/admin/discussions/${id}/reject`
-                        res = await fetch(endpoint, { method: 'POST' })
+                        res = await fetch(`/api/admin/discussions/${id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action }),
+                        })
                     }
                     const json = await res.json()
                     if (!res.ok) throw new Error(json.error)
@@ -373,11 +381,10 @@ export default function AdminDiscussionsPage() {
         }
     }
 
-    const handleAction = async (id: string, action: '승인' | '반려' | '복구' | '종료') => {
+    const handleAction = async (id: string, action: '진행중' | '마감' | '복구') => {
         const confirmMsg =
-            action === '승인' ? '이 토론 주제를 승인하시겠습니까?' :
-            action === '반려' ? '이 토론 주제를 반려 처리하시겠습니까?' :
-            action === '종료' ? '이 토론 주제를 종료하시겠습니까? 댓글 작성이 차단됩니다.' :
+            action === '진행중' ? '이 토론 주제를 승인하시겠습니까?' :
+            action === '마감' ? '이 토론 주제를 종료하시겠습니까? 댓글 작성이 차단됩니다.' :
             '이 토론 주제를 대기 상태로 복구하시겠습니까?'
         if (!window.confirm(confirmMsg)) return
         setProcessingId(id)
@@ -390,20 +397,27 @@ export default function AdminDiscussionsPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             const nextStatus =
-                action === '승인' ? '승인' :
-                action === '반려' ? '반려' :
-                action === '종료' ? '종료' : '대기'
-            setTopics((prev) =>
-                prev.map((t) =>
-                    t.id === id
-                        ? {
-                              ...t,
-                              approval_status: nextStatus as DiscussionTopic['approval_status'],
-                              approved_at: action === '승인' ? new Date().toISOString() : null,
-                          }
-                        : t
+                action === '진행중' ? '진행중' :
+                action === '마감' ? '마감' : '대기'
+            
+            /* 필터와 맞지 않으면 목록에서 제거, 맞으면 상태만 업데이트 */
+            if (filter && filter !== nextStatus) {
+                setTopics((prev) => prev.filter((t) => t.id !== id))
+                setTotal((prev) => Math.max(0, prev - 1))
+            } else {
+                setTopics((prev) =>
+                    prev.map((t) =>
+                        t.id === id
+                            ? {
+                                  ...t,
+                                  approval_status: nextStatus as DiscussionTopic['approval_status'],
+                                  approved_at: action === '진행중' ? new Date().toISOString() : null,
+                              }
+                            : t
+                    )
                 )
-            )
+            }
+            
             setSelectedTopicIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
@@ -411,6 +425,31 @@ export default function AdminDiscussionsPage() {
             })
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
+        } finally {
+            setProcessingId(null)
+        }
+    }
+
+    const handleDelete = async (id: string) => {
+        if (!window.confirm('이 토론 주제를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
+        setProcessingId(id)
+        try {
+            const res = await fetch(`/api/admin/discussions/${id}`, {
+                method: 'DELETE',
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            
+            /* 목록에서 제거하고 total count 감소 */
+            setTopics((prev) => prev.filter((t) => t.id !== id))
+            setTotal((prev) => Math.max(0, prev - 1))
+            setSelectedTopicIds(prev => {
+                const next = new Set(prev)
+                next.delete(id)
+                return next
+            })
+        } catch (e) {
+            alert(e instanceof Error ? e.message : '삭제 실패')
         } finally {
             setProcessingId(null)
         }
@@ -677,22 +716,22 @@ export default function AdminDiscussionsPage() {
                             {selectedTopicIds.size}개 선택
                         </span>
                         {filter === '대기' && (
-                            <>
-                                <button
-                                    onClick={() => handleBulkAction('승인')}
-                                    disabled={bulkProcessing}
-                                    className="px-3 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                >
-                                    일괄 승인
-                                </button>
-                                <button
-                                    onClick={() => handleBulkAction('반려')}
-                                    disabled={bulkProcessing}
-                                    className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                >
-                                    일괄 반려
-                                </button>
-                            </>
+                            <button
+                                onClick={() => handleBulkAction('진행중')}
+                                disabled={bulkProcessing}
+                                className="px-3 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                            >
+                                일괄 승인
+                            </button>
+                        )}
+                        {filter === '진행중' && (
+                            <button
+                                onClick={() => handleBulkAction('마감')}
+                                disabled={bulkProcessing}
+                                className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                            >
+                                일괄 종료
+                            </button>
                         )}
                         <button
                             onClick={() => handleBulkAction('삭제')}
@@ -860,42 +899,24 @@ export default function AdminDiscussionsPage() {
                                                         수정
                                                     </button>
                                                     {topic.approval_status === '대기' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleAction(topic.id, '승인')}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                                            >
-                                                                승인
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleAction(topic.id, '반려')}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                                            >
-                                                                반려
-                                                            </button>
-                                                        </>
+                                                        <button
+                                                            onClick={() => handleAction(topic.id, '진행중')}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                        >
+                                                            승인
+                                                        </button>
                                                     )}
-                                                    {topic.approval_status === '승인' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleAction(topic.id, '종료')}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
-                                                            >
-                                                                종료
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleAction(topic.id, '반려')}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                                            >
-                                                                반려
-                                                            </button>
-                                                        </>
+                                                    {topic.approval_status === '진행중' && (
+                                                        <button
+                                                            onClick={() => handleAction(topic.id, '마감')}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                                        >
+                                                            종료
+                                                        </button>
                                                     )}
-                                                    {(topic.approval_status === '반려' || topic.approval_status === '종료') && (
+                                                    {topic.approval_status === '마감' && (
                                                         <button
                                                             onClick={() => handleAction(topic.id, '복구')}
                                                             disabled={isProcessing}
@@ -904,6 +925,14 @@ export default function AdminDiscussionsPage() {
                                                             복구
                                                         </button>
                                                     )}
+                                                    {/* 삭제 버튼: 모든 상태에서 노출 */}
+                                                    <button
+                                                        onClick={() => handleDelete(topic.id)}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                                                    >
+                                                        삭제
+                                                    </button>
                                                 </div>
                                             )}
                                         </td>

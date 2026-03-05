@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 
+const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
+
 /* GET /api/search?q=&limit=&offset= */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
@@ -14,20 +16,39 @@ export async function GET(request: NextRequest) {
 
     const admin = createSupabaseAdminClient()
 
+    const keywords = q.split(/\s+/).filter((k) => k.length >= 2)
+
+    if (keywords.length === 0) {
+        return NextResponse.json({ error: '검색어는 2자 이상 입력해 주세요.' }, { status: 400 })
+    }
+
+    let issueQuery = admin
+        .from('issues')
+        .select('id, title, status, category, created_at')
+        .eq('approval_status', '승인')
+        .eq('visibility_status', 'visible')
+        .gte('heat_index', MIN_HEAT_TO_REGISTER)
+
+    let discussionQuery = admin
+        .from('discussion_topics')
+        .select('id, issue_id, body, created_at')
+        .eq('approval_status', '승인')
+
+    if (keywords.length === 1) {
+        issueQuery = issueQuery.ilike('title', `%${keywords[0]}%`)
+        discussionQuery = discussionQuery.ilike('body', `%${keywords[0]}%`)
+    } else {
+        const issueOrConditions = keywords.map((k) => `title.ilike.%${k}%`).join(',')
+        const discussionOrConditions = keywords.map((k) => `body.ilike.%${k}%`).join(',')
+        issueQuery = issueQuery.or(issueOrConditions)
+        discussionQuery = discussionQuery.or(discussionOrConditions)
+    }
+
     const [issueResult, discussionResult] = await Promise.all([
-        admin
-            .from('issues')
-            .select('id, title, status, category, created_at')
-            .ilike('title', `%${q}%`)
-            .eq('approval_status', '승인')
+        issueQuery
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1),
-
-        admin
-            .from('discussion_topics')
-            .select('id, issue_id, body, created_at')
-            .ilike('body', `%${q}%`)
-            .eq('approval_status', '승인')
+        discussionQuery
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1),
     ])

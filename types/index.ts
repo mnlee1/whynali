@@ -46,9 +46,12 @@ export interface Vote {
     issue_id: string
     title?: string
     phase?: '대기' | '진행중' | '마감'
+    approval_status?: '대기' | '승인' | '반려'
     issue_status_snapshot?: '점화' | '논란중' | '종결' | null
     started_at?: string | null
     ended_at?: string | null
+    auto_end_date?: string | null
+    auto_end_participants?: number | null
     created_at: string
 }
 
@@ -66,7 +69,7 @@ export interface DiscussionTopic {
     issue_id: string
     body: string
     is_ai_generated: boolean
-    approval_status: '대기' | '승인' | '반려' | '종료'
+    approval_status: '대기' | '진행중' | '마감'
     approved_at?: string
     created_at: string
 }

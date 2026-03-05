@@ -140,7 +140,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             )}
 
             {/* 상태 탭 */}
-            <div className="flex items-center border-b border-neutral-200">
+            <div className="flex items-center justify-between border-b border-neutral-200">
                 {/* 상태 탭: 전체 / 점화 / 논란중 / 종결 */}
                 <div className="flex">
                     {STATUS_TABS.map((tab) => (
@@ -159,6 +159,9 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                         </button>
                     ))}
                 </div>
+                <span className="text-xs text-neutral-400 pr-2">
+                    최신순으로 정렬 됩니다.
+                </span>
             </div>
 
             {/* 에러 */}

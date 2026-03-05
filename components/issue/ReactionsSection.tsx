@@ -59,7 +59,14 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
     useEffect(() => { loadReactions() }, [loadReactions])
 
     const handleClick = async (type: ReactionType) => {
-        if (!userId || submitting) return
+        if (!userId) {
+            const currentPath = window.location.pathname
+            if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+            }
+            return
+        }
+        if (submitting) return
         setSubmitting(true)
         setError(null)
         try {
@@ -99,14 +106,14 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                         <button
                             key={type}
                             onClick={() => handleClick(type)}
-                            disabled={!userId || submitting}
+                            disabled={submitting}
                             title={label}
                             className={[
                                 'flex flex-col items-center px-2 py-2 rounded-xl border transition-colors',
                                 selected
                                     ? 'border-violet-400 bg-violet-50 scale-105'
                                     : 'border-gray-200 bg-white',
-                                !userId || submitting
+                                submitting
                                     ? 'opacity-60 cursor-not-allowed'
                                     : 'hover:border-gray-300 hover:scale-105 cursor-pointer',
                             ].join(' ')}
@@ -118,24 +125,16 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                             ].join(' ')}>
                                 {label}
                             </span>
-                            {count > 0 && (
-                                <span className={[
-                                    'text-xs tabular-nums',
-                                    selected ? 'text-violet-600 font-medium' : 'text-gray-400',
-                                ].join(' ')}>
-                                    {count.toLocaleString()}
-                                </span>
-                            )}
+                            <span className={[
+                                'text-xs tabular-nums',
+                                selected ? 'text-violet-600 font-medium' : 'text-gray-400',
+                            ].join(' ')}>
+                                {count.toLocaleString()}
+                            </span>
                         </button>
                     )
                 })}
             </div>
-            {!userId && (
-                <p className="text-sm text-gray-500 mt-3">
-                    <a href="/login" className="text-blue-600 underline">로그인</a>하면 감정을 표현할 수 있습니다.
-                    로그인했는데도 이 문구가 보이면 페이지를 새로고침해 보세요.
-                </p>
-            )}
         </div>
     )
 }

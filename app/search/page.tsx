@@ -15,21 +15,37 @@ async function SearchResults({ query }: { query: string }) {
 
     const admin = createSupabaseAdminClient()
 
+    const keywords = query.split(/\s+/).filter((k) => k.length >= 2)
+
+    if (keywords.length === 0) {
+        return (
+            <p className="text-sm text-gray-500">검색어를 2자 이상 입력해 주세요.</p>
+        )
+    }
+
+    let issueQuery = admin
+        .from('issues')
+        .select('id, title, status, category, created_at')
+        .eq('approval_status', '승인')
+
+    let discussionQuery = admin
+        .from('discussion_topics')
+        .select('id, body, issue_id, created_at, issues(id, title)')
+        .eq('approval_status', '승인')
+
+    if (keywords.length === 1) {
+        issueQuery = issueQuery.ilike('title', `%${keywords[0]}%`)
+        discussionQuery = discussionQuery.ilike('body', `%${keywords[0]}%`)
+    } else {
+        const issueOrConditions = keywords.map((k) => `title.ilike.%${k}%`).join(',')
+        const discussionOrConditions = keywords.map((k) => `body.ilike.%${k}%`).join(',')
+        issueQuery = issueQuery.or(issueOrConditions)
+        discussionQuery = discussionQuery.or(discussionOrConditions)
+    }
+
     const [issueResult, discussionResult] = await Promise.all([
-        admin
-            .from('issues')
-            .select('id, title, status, category, created_at')
-            .ilike('title', `%${query}%`)
-            .eq('approval_status', '승인')
-            .order('created_at', { ascending: false })
-            .limit(10),
-        admin
-            .from('discussion_topics')
-            .select('id, body, issue_id, created_at, issues(id, title)')
-            .ilike('body', `%${query}%`)
-            .eq('approval_status', '승인')
-            .order('created_at', { ascending: false })
-            .limit(10),
+        issueQuery.order('created_at', { ascending: false }).limit(10),
+        discussionQuery.order('created_at', { ascending: false }).limit(10),
     ])
 
     const issues = issueResult.data ?? []

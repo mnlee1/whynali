@@ -8,14 +8,14 @@
  * 이슈를 대기 등록하거나 자동 승인합니다.
  *
  * 흐름:
- *   1. 뉴스 5건 이상 + 고유 출처 2곳 이상 + 화력 10점 이상: approval_status='대기'로 등록
+ *   1. 뉴스 5건 이상 + 고유 출처 2곳 이상 + 화력 15점 이상: approval_status='대기'로 등록
  *   2. 화력 30점 이상 + 허용 카테고리(사회/기술/스포츠): 자동 승인
  *   3. 같은 제목이 최근 24시간 내 이미 등록된 경우 중복 등록 방지
  *
  * 임계값은 환경변수로 조정 가능:
  *   CANDIDATE_ALERT_THRESHOLD (기본 5) - 최소 뉴스 건수
  *   CANDIDATE_AUTO_APPROVE_THRESHOLD (기본 30) - 자동 승인 화력 기준
- *   CANDIDATE_MIN_HEAT_TO_REGISTER (기본 10) - 최소 등록 화력
+ *   CANDIDATE_MIN_HEAT_TO_REGISTER (기본 15) - 최소 등록 화력
  *   CANDIDATE_WINDOW_HOURS (기본 24) — 건수 집계 시간 창
  */
 
@@ -38,7 +38,7 @@ const WINDOW_HOURS = parseInt(process.env.CANDIDATE_WINDOW_HOURS ?? '24')
 /* 대기 등록을 위한 최소 고유 출처 수. 같은 언론사의 반복 배포를 걸러낸다 */
 const MIN_UNIQUE_SOURCES = parseInt(process.env.CANDIDATE_MIN_UNIQUE_SOURCES ?? '2')
 /* 이슈 등록 후 화력이 이 값 미만이면 자동 반려 처리 (관리자 목록에 노출 안 됨) */
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
+const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
 /*
  * 커뮤니티 글을 이슈에 매칭할 때 요구하는 최소 공통 키워드 수.
  * 뉴스 그루핑(>= 1)과 별도로 더 엄격하게 적용해 관련 없는 글 유입 방지.
@@ -944,6 +944,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                         .update({ 
                             approval_status: '승인', 
                             approval_type: 'auto',
+                            approval_heat_index: actualHeat,
                             approved_at: now.toISOString() 
                         })
                         .eq('id', existingIssue.id)
@@ -1039,6 +1040,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                         .update({ 
                             approval_status: '승인', 
                             approval_type: 'auto',
+                            approval_heat_index: actualHeat,
                             approved_at: now.toISOString() 
                         })
                         .eq('id', finalCheck.id)
@@ -1075,6 +1077,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             .update({
                 approval_status: approvalStatus,
                 approval_type: shouldAutoApprove ? 'auto' : null,
+                approval_heat_index: shouldAutoApprove ? actualHeat : null,
                 approved_at: shouldAutoApprove ? now.toISOString() : null,
             })
             .eq('id', tempIssue.id)

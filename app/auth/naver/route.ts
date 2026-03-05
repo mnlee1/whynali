@@ -23,8 +23,20 @@ export async function GET(request: NextRequest) {
     const redirectUri = `${origin}/auth/callback/naver`
     const state = crypto.randomUUID()
 
+    // next 파라미터를 쿠키에 저장하여 콜백에서 사용
+    const searchParams = request.nextUrl.searchParams
+    const next = searchParams.get('next') ?? '/'
+    
     const cookieStore = await cookies()
     cookieStore.set('naver_oauth_state', state, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 10,
+        path: '/',
+    })
+
+    cookieStore.set('naver_oauth_next', next, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

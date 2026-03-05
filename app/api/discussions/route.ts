@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sanitizeText, validateContent, checkRateLimit, loadBannedWords } from '@/lib/safety'
 
-/* GET /api/discussions?issue_id=&q=&limit=&offset= */
-/* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색 */
+/* GET /api/discussions?issue_id=&q=&status=&limit=&offset= */
+/* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색, status 지정 시 특정 상태만 조회 */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
     const q = searchParams.get('q')?.trim()
+    const status = searchParams.get('status')?.trim()
     const limit = Number(searchParams.get('limit') ?? 20)
     const offset = Number(searchParams.get('offset') ?? 0)
 
@@ -16,7 +17,15 @@ export async function GET(request: NextRequest) {
     let query = admin
         .from('discussion_topics')
         .select('*, issues(id, title)', { count: 'exact' })
-        .in('approval_status', ['승인', '종료'])
+
+    // status 파라미터가 있으면 해당 상태만, 없으면 진행중/마감 둘 다
+    if (status) {
+        query = query.eq('approval_status', status)
+    } else {
+        query = query.in('approval_status', ['진행중', '마감'])
+    }
+
+    query = query
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
@@ -33,7 +42,23 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data, total: count ?? 0 })
+    // 각 토론 주제별 의견(댓글) 수 조회
+    const topicsWithOpinions = await Promise.all(
+        (data || []).map(async (topic) => {
+            const { count: opinionCount } = await admin
+                .from('comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('discussion_topic_id', topic.id)
+                .eq('visibility', 'public')
+
+            return {
+                ...topic,
+                opinionCount: opinionCount || 0
+            }
+        })
+    )
+
+    return NextResponse.json({ data: topicsWithOpinions, total: count ?? 0 })
 }
 
 /* POST /api/discussions */

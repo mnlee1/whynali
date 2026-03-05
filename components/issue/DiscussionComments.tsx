@@ -223,7 +223,9 @@ export default function DiscussionComments({
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             setEditingId(null); setEditDraft('')
-            setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: editDraft.trim() } : c))
+            const updatedBody = editDraft.trim()
+            setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c))
+            setBestComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c))
         } catch (e) {
             setError(e instanceof Error ? e.message : '수정 실패')
         } finally {
@@ -498,7 +500,13 @@ export default function DiscussionComments({
                     </div>
                 ) : (
                     <p className="text-sm text-gray-500 text-center py-3">
-                        <a href="/login" className="text-purple-600 underline">로그인</a>하면 의견을 남길 수 있습니다.
+                        <a
+                            href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
+                            className="text-purple-600 underline"
+                        >
+                            로그인
+                        </a>
+                        하면 의견을 남길 수 있습니다.
                     </p>
                 )}
             </div>

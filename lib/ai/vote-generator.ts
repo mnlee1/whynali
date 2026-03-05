@@ -11,7 +11,9 @@
  * - 생성된 투표는 phase='대기'로 저장, 관리자 승인 후에만 활성화
  * - 이슈 제목은 입력으로 허용하나, 출력에서 실명·특정인 직접 지목 금지
  *
- * AI: Groq (Llama 3.1, 무료)
+ * AI: OpenAI (GPT-4o-mini) 또는 Groq (Llama 3.1, 무료)
+ * - OpenAI 우선 사용 (더 안정적)
+ * - OpenAI 키 없으면 Groq 사용
  */
 
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
@@ -42,11 +44,92 @@ export async function generateVoteOptions(
     issue: IssueMetadata,
     count: number = 2
 ): Promise<GeneratedVote[]> {
-    const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) {
-        throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다.')
+    const openaiKey = process.env.OPENAI_API_KEY
+    const groqKey = process.env.GROQ_API_KEY
+
+    // OpenAI 우선 사용
+    if (openaiKey) {
+        return generateWithOpenAI(issue, count, openaiKey)
     }
 
+    // OpenAI 없으면 Groq 사용
+    if (groqKey) {
+        return generateWithGroq(issue, count, groqKey)
+    }
+
+    throw new Error('AI API 키가 설정되지 않았습니다. (OPENAI_API_KEY 또는 GROQ_API_KEY)')
+}
+
+/**
+ * OpenAI로 투표 생성
+ */
+async function generateWithOpenAI(
+    issue: IssueMetadata,
+    count: number,
+    apiKey: string
+): Promise<GeneratedVote[]> {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content:
+                        '당신은 사회 이슈에 대한 여론 투표 문항을 만드는 전문가입니다. ' +
+                        '주어진 이슈 정보를 바탕으로 명확하고 중립적인 투표 질문과 선택지를 만드세요. ' +
+                        '특정인 실명이나 특정 집단을 직접 지목하는 표현은 절대 사용하지 마세요. ' +
+                        '반드시 JSON 배열로만 응답하세요.',
+                },
+                {
+                    role: 'user',
+                    content: buildPrompt(issue, count),
+                },
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+            response_format: { type: 'json_object' }
+        }),
+    })
+
+    if (!response.ok) {
+        const errText = await response.text()
+
+        await incrementApiUsage('openai', {
+            calls: 1,
+            successes: 0,
+            failures: 1,
+        }).catch(err => console.error('API 사용량 추적 실패:', err))
+
+        throw new Error(`OpenAI API 오류 (${response.status}): ${errText}`)
+    }
+
+    const data = await response.json()
+    const raw: string = data.choices?.[0]?.message?.content ?? ''
+
+    await incrementApiUsage('openai', {
+        calls: 1,
+        successes: 1,
+        failures: 0,
+        inputTokens: data.usage?.prompt_tokens || 0,
+        outputTokens: data.usage?.completion_tokens || 0,
+    }).catch(err => console.error('API 사용량 추적 실패:', err))
+
+    return parseVotes(raw)
+}
+
+/**
+ * Groq로 투표 생성 (백업)
+ */
+async function generateWithGroq(
+    issue: IssueMetadata,
+    count: number,
+    apiKey: string
+): Promise<GeneratedVote[]> {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {

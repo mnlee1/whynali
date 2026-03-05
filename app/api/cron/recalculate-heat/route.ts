@@ -22,13 +22,14 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { recalculateHeatForIssue } from '@/lib/analysis/heat'
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
+import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
 /* issue-candidate.ts와 동일한 환경변수 참조 */
-const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '10')
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
+const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30')
+const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
 
 export async function GET(request: NextRequest) {
     const authError = verifyCronRequest(request)
@@ -96,6 +97,7 @@ export async function GET(request: NextRequest) {
                                     .update({
                                         approval_status: '승인',
                                         approval_type: 'auto',
+                                        approval_heat_index: heatIndex,
                                         approved_at: new Date().toISOString(),
                                     })
                                     .eq('id', issue.id)
@@ -106,7 +108,8 @@ export async function GET(request: NextRequest) {
                                     .from('issues')
                                     .update({ 
                                         approval_status: '반려',
-                                        approval_type: 'auto'
+                                        approval_type: 'auto',
+                                        approval_heat_index: heatIndex
                                     })
                                     .eq('id', issue.id)
                                 result.statusChanged = '대기 → 반려'
@@ -129,6 +132,7 @@ export async function GET(request: NextRequest) {
                             })
 
                             if (transition.newStatus) {
+                                const oldStatus = issue.status
                                 await supabaseAdmin
                                     .from('issues')
                                     .update({
@@ -136,8 +140,17 @@ export async function GET(request: NextRequest) {
                                         updated_at: new Date().toISOString(),
                                     })
                                     .eq('id', issue.id)
+                                
+                                // 이슈가 '종결' 상태로 전환되면 관련 투표 자동 마감
+                                if (transition.newStatus === '종결') {
+                                    const { count } = await closeVotesOnIssueClosed(issue.id)
+                                    if (count > 0) {
+                                        console.log(`[투표 자동 마감] 이슈 ${issue.id} 종결 → ${count}개 투표 마감`)
+                                    }
+                                }
+                                
                                 result.statusChanged = (result.statusChanged ? result.statusChanged + ', ' : '')
-                                    + `${issue.status} → ${transition.newStatus} (${transition.reason})`
+                                    + `${oldStatus} → ${transition.newStatus} (${transition.reason})`
                                 return { ...result, autoApproved: 0, autoRejected: 0, statusTransitioned: 1 }
                             }
                         }

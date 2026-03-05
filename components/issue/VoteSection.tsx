@@ -28,6 +28,14 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     const [error, setError] = useState<string | null>(null)
     const [showPast, setShowPast] = useState(false)
 
+    // 전체 참여자 수 계산
+    const totalCount = votes
+        .filter((v) => v.phase === '진행중')
+        .reduce((sum, vote) => {
+            const voteTotal = (vote.vote_choices ?? []).reduce((s, c) => s + (c.count ?? 0), 0)
+            return sum + voteTotal
+        }, 0)
+
     useEffect(() => {
         if (serverUserId) { setUserId(serverUserId); return }
         fetch('/api/auth/me')
@@ -53,23 +61,40 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     useEffect(() => { loadVotes() }, [loadVotes])
 
     const handleVote = async (voteId: string, choiceId: string) => {
-        if (!userId || submitting) return
+        if (!userId) {
+            const currentPath = window.location.pathname
+            if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+            }
+            return
+        }
+        if (submitting) return
         setError(null)
 
         const alreadyVoted = userVotes[voteId]
 
-        if (alreadyVoted && alreadyVoted !== choiceId) {
-            setError('이미 투표하셨습니다. 선택을 취소하려면 현재 선택 항목을 다시 클릭하세요.')
-            return
-        }
-
         setSubmitting(voteId)
         try {
             if (alreadyVoted === choiceId) {
+                // 같은 선택지 클릭 → 투표 취소
                 const res = await fetch(`/api/votes/${voteId}/vote`, { method: 'DELETE' })
                 const json = await res.json()
                 if (!res.ok) throw new Error(json.error)
+            } else if (alreadyVoted && alreadyVoted !== choiceId) {
+                // 다른 선택지 클릭 → 기존 투표 취소 후 새로운 선택지에 투표
+                const deleteRes = await fetch(`/api/votes/${voteId}/vote`, { method: 'DELETE' })
+                const deleteJson = await deleteRes.json()
+                if (!deleteRes.ok) throw new Error(deleteJson.error)
+
+                const postRes = await fetch(`/api/votes/${voteId}/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vote_choice_id: choiceId }),
+                })
+                const postJson = await postRes.json()
+                if (!postRes.ok) throw new Error(postJson.error)
             } else {
+                // 처음 투표
                 const res = await fetch(`/api/votes/${voteId}/vote`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -78,9 +103,16 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 const json = await res.json()
                 if (!res.ok) throw new Error(json.error)
             }
-            await loadVotes()
+            
+            // 투표 후 데이터 갱신 (정렬 순서 유지)
+            const res = await fetch(`/api/votes?issue_id=${issueId}`)
+            const json = await res.json()
+            if (res.ok) {
+                setVotes(json.data ?? [])
+                setUserVotes(json.userVotes ?? {})
+            }
         } catch (e) {
-            setError(e instanceof Error ? e.message : '투표 처리 실패')
+            alert(e instanceof Error ? e.message : '투표 처리 실패')
         } finally {
             setSubmitting(null)
         }
@@ -96,14 +128,6 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                         <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
                     </div>
                 ))}
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-                {error}
             </div>
         )
     }
@@ -124,10 +148,38 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
     return (
         <div className="p-4 space-y-4">
-            {!userId && (
-                <p className="text-sm text-gray-500">
-                    <a href="/login" className="text-blue-600 underline">로그인</a>하면 투표할 수 있습니다.
-                </p>
+            {/* 참여 유도 메시지 강화 */}
+            {!userId && activeVotes.length > 0 && (
+                <div className="p-4 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-10 h-10 bg-violet-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                            ?
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold text-violet-900 mb-1">
+                                지금 투표에 참여하세요!
+                            </p>
+                            <p className="text-xs text-violet-700 mb-2">
+                                {totalCount.toLocaleString()}명이 이미 의견을 남겼습니다. 당신의 생각은 어떤가요?
+                            </p>
+                            <a
+                                href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
+                                className="inline-block px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+                            >
+                                로그인하고 투표하기 →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 로그인 사용자용 간단 안내 */}
+            {userId && activeVotes.length > 0 && (
+                <div className="p-3 bg-violet-50 border border-violet-200 rounded-lg">
+                    <p className="text-xs text-violet-700">
+                        💡 선택지를 클릭하여 투표하세요. 다시 클릭하면 취소할 수 있습니다.
+                    </p>
+                </div>
             )}
 
             {/* 진행중 투표 */}
@@ -206,27 +258,55 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
     const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
     const isClosed = vote.phase === '마감'
 
+    // 자동 종료 정보 계산
+    const autoEndDate = vote.auto_end_date ? new Date(vote.auto_end_date) : null
+    const autoEndParticipants = vote.auto_end_participants
+    const timeRemaining = autoEndDate ? autoEndDate.getTime() - Date.now() : null
+    const isEndingSoon = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000
+    const participantProgress = autoEndParticipants
+        ? Math.min(Math.round((totalCount / autoEndParticipants) * 100), 100)
+        : null
+
+    // 남은 시간 표시
+    const getTimeRemainingText = () => {
+        if (!timeRemaining || timeRemaining <= 0) return null
+        const hours = Math.floor(timeRemaining / (1000 * 60 * 60))
+        const days = Math.floor(hours / 24)
+        if (days > 0) return `${days}일 후 종료`
+        if (hours > 0) return `${hours}시간 후 종료`
+        const minutes = Math.floor(timeRemaining / (1000 * 60))
+        return `${minutes}분 후 종료`
+    }
+
     return (
         <div className={[
-            'p-4 border rounded-xl',
+            'p-4 border rounded-xl transition-all',
             highlight && !isClosed
                 ? 'border-violet-300 bg-violet-50/30 shadow-sm'
                 : 'border-gray-200 bg-white',
+            isEndingSoon && !isClosed ? 'ring-2 ring-orange-200' : '',
         ].join(' ')}>
             {/* 제목 + 상태 배지 */}
             <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex-1">
-                    {vote.title && (
-                        <p className="font-semibold text-sm mb-0.5">{vote.title}</p>
-                    )}
-                    {vote.phase && (
-                        <span className={[
-                            'inline-block text-xs px-2 py-0.5 rounded border font-medium',
-                            isClosed
-                                ? 'bg-gray-50 text-gray-500 border-gray-200'
-                                : 'bg-purple-100 text-purple-700 border-purple-300',
-                        ].join(' ')}>
-                            {isClosed ? '종료됨' : '진행중'}
+                    <div className="flex items-center gap-2 mb-1">
+                        {vote.phase && (
+                            <span className={[
+                                'inline-block text-xs px-2 py-0.5 rounded border font-medium shrink-0',
+                                isClosed
+                                    ? 'bg-gray-50 text-gray-500 border-gray-200'
+                                    : 'bg-purple-100 text-purple-700 border-purple-300',
+                            ].join(' ')}>
+                                {isClosed ? '종료됨' : '진행중'}
+                            </span>
+                        )}
+                        {vote.title && (
+                            <p className="font-semibold text-sm">{vote.title}</p>
+                        )}
+                    </div>
+                    {isEndingSoon && !isClosed && (
+                        <span className="inline-block text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-medium animate-pulse">
+                            🔥 {getTimeRemainingText()}
                         </span>
                     )}
                 </div>
@@ -236,6 +316,29 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
                     </span>
                 )}
             </div>
+
+            {/* 자동 종료 안내 */}
+            {!isClosed && (autoEndDate || autoEndParticipants) && (
+                <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                    {autoEndDate && !isEndingSoon && (
+                        <p>📅 {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료</p>
+                    )}
+                    {autoEndParticipants && (
+                        <div className="mt-1">
+                            <div className="flex items-center justify-between mb-1">
+                                <span>🎯 목표 {autoEndParticipants.toLocaleString()}명</span>
+                                <span className="font-semibold">{participantProgress}%</span>
+                            </div>
+                            <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${participantProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {isClosed && (
                 <p className="text-xs text-gray-400 mb-3">이 투표는 종료되었습니다.</p>
@@ -248,7 +351,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
                         ? Math.round((choice.count / totalCount) * 100)
                         : 0
                     const isSelected = myChoiceId === choice.id
-                    const disabled = !userId || isProcessing || isClosed
+                    const disabled = isProcessing || isClosed
 
                     return (
                         <button

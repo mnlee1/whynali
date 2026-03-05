@@ -37,7 +37,10 @@ export async function GET(request: NextRequest) {
     const origin = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin
     const code = requestUrl.searchParams.get('code')
     const state = requestUrl.searchParams.get('state')
-    const next = requestUrl.searchParams.get('next') ?? '/'
+
+    // 쿠키에서 next 파라미터 가져오기
+    const cookieStore = await cookies()
+    const next = cookieStore.get('naver_oauth_next')?.value ?? '/'
 
     const redirectError = (message: string) =>
         NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(message)}`, origin))
@@ -46,12 +49,12 @@ export async function GET(request: NextRequest) {
         return redirectError('인증 코드가 없습니다.')
     }
 
-    const cookieStore = await cookies()
     const savedState = cookieStore.get('naver_oauth_state')?.value
     if (savedState && state !== savedState) {
         return redirectError('잘못된 요청입니다.')
     }
     cookieStore.delete('naver_oauth_state')
+    cookieStore.delete('naver_oauth_next')
 
     const clientId = process.env.NAVER_CLIENT_ID
     const clientSecret = process.env.NAVER_CLIENT_SECRET

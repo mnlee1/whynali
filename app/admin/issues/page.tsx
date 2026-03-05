@@ -314,11 +314,33 @@ export default function AdminIssuesPage() {
         }
     }
 
-    const getHeatMeta = (heat: number | null | undefined): { label: string; className: string } => {
+    const getHeatMeta = (heat: number | null | undefined, approvalHeat?: number | null): { label: string; className: string } => {
         if (heat == null) return { label: '-', className: 'text-gray-400' }
-        if (heat >= 70) return { label: `${heat} 높음`, className: 'font-semibold text-red-600' }
-        if (heat >= 30) return { label: `${heat} 보통`, className: 'font-medium text-amber-600' }
-        return { label: `${heat} 낮음`, className: 'text-gray-400' }
+        
+        let label = ''
+        let className = ''
+        
+        if (heat >= 70) {
+            label = `${heat} 높음`
+            className = 'font-semibold text-red-600'
+        } else if (heat >= 30) {
+            label = `${heat} 보통`
+            className = 'font-medium text-amber-600'
+        } else if (heat >= 15) {
+            label = `${heat} 낮음`
+            className = 'text-gray-500'
+        } else {
+            label = `${heat} 매우낮음`
+            className = 'text-gray-400'
+        }
+        
+        // 승인 당시 화력이 있고, 현재 화력과 다르면 표시
+        if (approvalHeat != null && approvalHeat !== heat) {
+            label += ` ↓ (승인시 ${approvalHeat})`
+            className += ' text-xs'
+        }
+        
+        return { label, className }
     }
 
     const getStatusColor = (status: string) => {
@@ -395,16 +417,16 @@ export default function AdminIssuesPage() {
                             <li className="font-medium text-indigo-700 mt-3 pt-3 border-t border-gray-100">계산 예시</li>
                             <li className="text-gray-500 text-[11px]">뉴스 5건, 출처 5곳 → 신뢰도 19점</li>
                             <li className="text-gray-500 text-[11px]">커뮤니티 없음 → 화력 6점 ❌</li>
-                            <li className="text-gray-500 text-[11px] mt-1">뉴스 10건, 출처 10곳</li>
-                            <li className="text-gray-500 text-[11px]">커뮤니티 없음 → 화력 11점 ✅</li>
-                            <li className="text-gray-500 text-[11px] mt-1">뉴스 5건 + 조회 1000/댓글 100</li>
-                            <li className="text-gray-500 text-[11px]">→ 화력 11점 ✅</li>
+                            <li className="text-gray-500 text-[11px] mt-1">뉴스 15건, 출처 10곳</li>
+                            <li className="text-gray-500 text-[11px]">커뮤니티 없음 → 화력 16점 ✅</li>
+                            <li className="text-gray-500 text-[11px] mt-1">뉴스 10건 + 조회 1500/댓글 150</li>
+                            <li className="text-gray-500 text-[11px]">→ 화력 15점 ✅</li>
                             
                             <li className="font-medium text-gray-700 mt-3 pt-3 border-t border-gray-200">화력 범위</li>
                             <li>• 70+ 높음 (즉시 승인 권장)</li>
                             <li>• 30-69 보통 (자동 승인 기준)</li>
-                            <li>• 10-29 낮음 (반려 권장)</li>
-                            <li>• 10 미만 (등록 불가)</li>
+                            <li>• 15-29 낮음 (반려 권장)</li>
+                            <li>• 15 미만 (등록 불가)</li>
                         </ul>
                     </div>
 
@@ -413,11 +435,11 @@ export default function AdminIssuesPage() {
                         <h3 className="font-semibold text-blue-900 mb-3 text-sm">승인 상태 기준</h3>
                         <ul className="space-y-1 text-xs text-gray-700">
                             <li className="font-medium text-blue-700">이슈 등록 → 대기</li>
-                            <li>• 뉴스 5건 이상 + 화력 10점 이상</li>
-                            <li className="text-gray-500 text-[11px] mt-1">화력 10점 달성 조건:</li>
-                            <li className="text-gray-500 text-[11px]">- 뉴스 10건 이상 OR</li>
-                            <li className="text-gray-500 text-[11px]">- 뉴스 5건 + 커뮤니티 반응</li>
-                            <li className="text-gray-500 text-[11px]">  (조회 1000+, 댓글 100+)</li>
+                            <li>• 뉴스 5건 이상 + 화력 15점 이상</li>
+                            <li className="text-gray-500 text-[11px] mt-1">화력 15점 달성 조건:</li>
+                            <li className="text-gray-500 text-[11px]">- 뉴스 15건 이상 OR</li>
+                            <li className="text-gray-500 text-[11px]">- 뉴스 10건 + 커뮤니티 반응</li>
+                            <li className="text-gray-500 text-[11px]">  (조회 1500+, 댓글 150+)</li>
                             
                             <li className="font-medium text-green-700 mt-3 pt-3 border-t border-gray-100">대기 → 자동 승인</li>
                             <li>• 화력 30점 이상</li>
@@ -425,7 +447,7 @@ export default function AdminIssuesPage() {
                             <li className="text-amber-600">• 연예/정치는 관리자 승인 필수</li>
                             
                             <li className="font-medium text-red-700 mt-3 pt-3 border-t border-gray-100">대기 → 자동 반려</li>
-                            <li>• 화력 10점 미만</li>
+                            <li>• 화력 15점 미만</li>
                         </ul>
                     </div>
 
@@ -658,8 +680,8 @@ export default function AdminIssuesPage() {
                                     })()}
                                 </td>
                                 <td className="px-4 py-3 text-sm">
-                                    <span className={getHeatMeta(issue.heat_index).className}>
-                                        {getHeatMeta(issue.heat_index).label}
+                                    <span className={getHeatMeta(issue.heat_index, issue.approval_heat_index).className}>
+                                        {getHeatMeta(issue.heat_index, issue.approval_heat_index).label}
                                     </span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-500">
