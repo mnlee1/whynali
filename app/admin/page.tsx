@@ -47,10 +47,34 @@ interface ApiCostsSummary {
         cost: number
         limit: number
     }
+    groq: {
+        today: number
+        monthly: number
+        successes: number
+        failures: number
+    }
     perplexity: {
         today: number
         monthly: number
-    }
+        calls: {
+            today: number
+            monthly: number
+        }
+        tokens: {
+            today: {
+                input: number
+                output: number
+                total: number
+            }
+            monthly: {
+                input: number
+                output: number
+                total: number
+            }
+        }
+        successes: number
+        failures: number
+    } | null
     total: {
         monthly: number
     }
@@ -139,53 +163,28 @@ export default function AdminDashboardPage() {
         setLogsLoading(true)
         setCostsLoading(true)
 
-        // API 비용 정보는 독립적으로 빠르게 로드
-        fetch('/api/admin/api-usage')
-            .then(res => {
-                console.log('[Admin Dashboard] API 비용 응답:', res.ok, res.status)
-                return res.ok ? res.json() : null
-            })
-            .then(data => {
-                console.log('[Admin Dashboard] API 비용 데이터:', data)
-                setApiCosts(data)
-                setCostsLoading(false)
-            })
-            .catch(err => {
-                console.error('[Admin Dashboard] API 비용 에러:', err)
-                setCostsLoading(false)
-            })
-
-        // candidates API는 느리므로 별도 처리
-        fetch('/api/admin/candidates')
-            .then(res => res.ok ? res.json() : null)
-            .then(data => {
-                setAlerts(data?.alerts ?? [])
-            })
-            .catch(err => {
-                console.error('[Admin Dashboard] Candidates 에러:', err)
-            })
-
         try {
-            console.log('[Admin Dashboard] API 호출 시작 (빠른 항목들)')
-            const [issuesRes, discussionsRes, safetyRes, collectionsRes, logsRes] =
+            console.log('[Admin Dashboard] 핵심 API 호출 시작 (병렬 처리)')
+            const [issuesRes, discussionsRes, safetyRes, collectionsRes, logsRes, apiUsageRes] =
                 await Promise.all([
                     fetch('/api/admin/issues?approval_status=대기'),
                     fetch('/api/admin/discussions?status=대기'),
                     fetch('/api/admin/safety/pending'),
                     fetch('/api/admin/collections'),
                     fetch('/api/admin/logs?limit=8'),
+                    fetch('/api/admin/api-usage'),
                 ])
 
-            console.log('[Admin Dashboard] 빠른 API 응답 받음')
-            console.log('[Admin Dashboard] JSON 파싱 시작')
+            console.log('[Admin Dashboard] 핵심 API 응답 받음')
 
-            const [issuesData, discussionsData, safetyData, collectionsData, logsData] =
+            const [issuesData, discussionsData, safetyData, collectionsData, logsData, apiUsageData] =
                 await Promise.all([
                     issuesRes.ok ? issuesRes.json() : null,
                     discussionsRes.ok ? discussionsRes.json() : null,
                     safetyRes.ok ? safetyRes.json() : null,
                     collectionsRes.ok ? collectionsRes.json() : null,
                     logsRes.ok ? logsRes.json() : null,
+                    apiUsageRes.ok ? apiUsageRes.json() : null,
                 ])
 
             const news24h = collectionsData
@@ -206,14 +205,24 @@ export default function AdminDashboardPage() {
             })
 
             setRecentLogs(logsData?.data ?? [])
-            
+            setApiCosts(apiUsageData)
             setLastRefreshedAt(new Date())
         } catch (error) {
             console.error('[Admin Dashboard] 데이터 로드 에러:', error)
         } finally {
             setStatsLoading(false)
             setLogsLoading(false)
+            setCostsLoading(false)
         }
+
+        fetch('/api/admin/candidates')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                setAlerts(data?.alerts ?? [])
+            })
+            .catch(err => {
+                console.error('[Admin Dashboard] Candidates 에러:', err)
+            })
     }
 
     useEffect(() => {
@@ -222,13 +231,15 @@ export default function AdminDashboardPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    const fmt = (d: string) =>
-        new Date(d).toLocaleString('ko-KR', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        })
+    const fmt = (d: string) => {
+        const date = new Date(d)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hour = String(date.getHours()).padStart(2, '0')
+        const minute = String(date.getMinutes()).padStart(2, '0')
+        return `${year}-${month}-${day} ${hour}:${minute}`
+    }
 
     return (
         <div>
@@ -315,83 +326,192 @@ export default function AdminDashboardPage() {
                 />
             </div>
 
-            {/* API 비용 현황 */}
+            {/* AI 시스템 현황 */}
             <div className="mb-6">
                 <div className="bg-white rounded-lg border border-gray-200 p-5">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-semibold text-gray-800">API 비용 현황</h2>
-                        <span className="text-xs text-gray-400">이번 달 누적</span>
+                        <div>
+                            <h2 className="text-sm font-semibold text-gray-800">AI 시스템 현황</h2>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                기준일: {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
+                        </div>
+                        <span className="text-xs text-gray-400">실시간 모니터링</span>
                     </div>
 
                     {costsLoading ? (
                         <div className="space-y-3">
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="h-16 bg-gray-100 rounded animate-pulse" />
+                            {[1, 2].map((i) => (
+                                <div key={i} className="h-32 bg-gray-100 rounded animate-pulse" />
                             ))}
                         </div>
                     ) : !apiCosts ? (
                         <p className="text-sm text-gray-400 py-4 text-center">데이터를 불러올 수 없습니다</p>
                     ) : (
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-100">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-800">네이버 뉴스 API</p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        오늘 {apiCosts.naver.today.toLocaleString()}건 / 월 {apiCosts.naver.monthly.toLocaleString()}건
-                                    </p>
-                                    <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
-                                        <div 
-                                            className={`h-1.5 rounded-full ${
-                                                (apiCosts.naver.today / apiCosts.naver.limit) >= 0.8 
-                                                    ? 'bg-red-500' 
-                                                    : 'bg-blue-500'
-                                            }`}
-                                            style={{ width: `${Math.min((apiCosts.naver.today / apiCosts.naver.limit) * 100, 100)}%` }}
-                                        />
+                            {/* Groq AI */}
+                            <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                                        <div>
+                                            <p className="text-base font-semibold text-gray-900">Groq AI</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">Llama 3.1 8B Instant</p>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        일일 한도: {apiCosts.naver.limit.toLocaleString()}건
-                                    </p>
+                                    <span className="px-2.5 py-1 text-xs font-semibold bg-green-500 text-white rounded-full">
+                                        사용 중
+                                    </span>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-xs text-gray-500">월 비용</p>
-                                    <p className="text-2xl font-bold text-blue-600">$0</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">무료 한도 내</p>
+
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-white/60 rounded-lg p-3">
+                                        <p className="text-xs text-gray-500 mb-1">
+                                            오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
+                                        </p>
+                                        <p className="text-2xl font-bold text-gray-900">{apiCosts.groq?.today || 0}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                        <p className="text-xs font-semibold text-green-600 mt-1">$0.00</p>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3">
+                                        <p className="text-xs text-gray-500 mb-1">
+                                            이번 달 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
+                                        </p>
+                                        <p className="text-2xl font-bold text-gray-900">{apiCosts.groq?.monthly || 0}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                        <p className="text-xs font-semibold text-green-600 mt-1">$0.00 (무료)</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 mb-3">
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">커뮤니티 매칭</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">중복 이슈 체크</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">토론 주제 생성</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">투표 생성</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                </div>
+
+                                <div className="pt-3 border-t border-green-200">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-600">성공률</span>
+                                        <span className="text-lg font-bold text-green-600">
+                                            {apiCosts.groq?.monthly > 0 
+                                                ? Math.round((apiCosts.groq.successes / apiCosts.groq.monthly) * 100)
+                                                : 100}%
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-100">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-800">Perplexity AI API</p>
-                                    <p className="text-xs text-gray-500 mt-1">이슈 후보 AI 검증 및 토론 주제 생성</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-xs text-gray-500">월 비용</p>
-                                    <p className="text-2xl font-bold text-purple-600">
-                                        ${apiCosts.perplexity.monthly.toFixed(2)}
-                                    </p>
-                                    <p className="text-xs text-purple-500 mt-0.5">
-                                        ≈ ₩{Math.round(apiCosts.perplexity.monthly * 1300).toLocaleString()}
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        오늘 ${apiCosts.perplexity.today.toFixed(2)} (₩{Math.round(apiCosts.perplexity.today * 1300).toLocaleString()})
-                                    </p>
-                                </div>
-                            </div>
+                            {/* Perplexity AI (사용 시에만 표시) */}
+                            {apiCosts.perplexity && (
+                                <div className="p-5 bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg border border-purple-200">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 bg-purple-500 rounded-full animate-pulse" />
+                                            <div>
+                                                <p className="text-base font-semibold text-gray-900">Perplexity AI</p>
+                                                <p className="text-xs text-gray-500 mt-0.5">Sonar Model</p>
+                                            </div>
+                                        </div>
+                                        <span className="px-2.5 py-1 text-xs font-semibold bg-purple-500 text-white rounded-full">
+                                            사용 중
+                                        </span>
+                                    </div>
 
-                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div className="bg-white/60 rounded-lg p-3">
+                                            <p className="text-xs text-gray-500 mb-1">
+                                                오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-900">{apiCosts.perplexity.calls.today}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                            <p className="text-xs font-semibold text-purple-600 mt-1">
+                                                ${apiCosts.perplexity.today.toFixed(2)}
+                                            </p>
+                                        </div>
+                                        <div className="bg-white/60 rounded-lg p-3">
+                                            <p className="text-xs text-gray-500 mb-1">
+                                                이번 달 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-900">{apiCosts.perplexity.calls.monthly}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                            <p className="text-xs font-semibold text-purple-600 mt-1">
+                                                ${apiCosts.perplexity.monthly.toFixed(2)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 mb-3">
+                                        <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                            <span className="text-gray-700 font-medium">뉴스 그루핑</span>
+                                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">활성</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                            <span className="text-gray-700 font-medium">이슈 후보 검증</span>
+                                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">활성</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/60 rounded-lg p-3 mb-3">
+                                        <p className="text-xs font-medium text-purple-700 mb-2">
+                                            토큰 사용량 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
+                                        </p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div>
+                                                <p className="text-xs text-gray-500">입력</p>
+                                                <p className="text-sm font-bold text-gray-900">{(apiCosts.perplexity.tokens.monthly.input / 1000).toFixed(1)}K</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500">출력</p>
+                                                <p className="text-sm font-bold text-gray-900">{(apiCosts.perplexity.tokens.monthly.output / 1000).toFixed(1)}K</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500">전체</p>
+                                                <p className="text-sm font-bold text-purple-600">{(apiCosts.perplexity.tokens.monthly.total / 1000).toFixed(1)}K</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-3 border-t border-purple-200">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-gray-600">성공률</span>
+                                            <span className="text-lg font-bold text-purple-600">
+                                                {apiCosts.perplexity.calls.monthly > 0 
+                                                    ? Math.round((apiCosts.perplexity.successes / apiCosts.perplexity.calls.monthly) * 100)
+                                                    : 100}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 전체 요약 */}
+                            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg border-2 border-gray-300">
                                 <div>
-                                    <p className="text-sm font-semibold text-gray-800">전체 합계</p>
-                                    <p className="text-xs text-gray-500 mt-1">네이버 API + Perplexity AI</p>
+                                    <p className="text-sm font-semibold text-gray-800">AI 시스템 총 비용</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })} 누적
+                                    </p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs text-gray-500">월 총 비용</p>
                                     <p className="text-3xl font-bold text-gray-900">
                                         ${apiCosts.total.monthly.toFixed(2)}
                                     </p>
-                                    <p className="text-lg font-semibold text-gray-600 mt-1">
-                                        ≈ ₩{Math.round(apiCosts.total.monthly * 1300).toLocaleString()}
-                                    </p>
+                                    {apiCosts.total.monthly === 0 ? (
+                                        <p className="text-sm text-green-600 font-semibold mt-1">모두 무료</p>
+                                    ) : (
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            ≈ ₩{Math.round(apiCosts.total.monthly * 1300).toLocaleString()}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>

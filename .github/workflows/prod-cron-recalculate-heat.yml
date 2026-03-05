@@ -14,5 +14,6 @@ jobs:
           curl -X GET https://whynali.vercel.app/api/cron/recalculate-heat \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
-            --max-time 60 \
-            --retry 2
+            --max-time 120 \
+            --retry 2 \
+            --retry-delay 5

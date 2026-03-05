@@ -10,6 +10,8 @@
  * - 본문·요약문 절대 미사용 (04_서비스노출_법적검토.md §4.2)
  * - 이슈 제목은 입력으로 허용하나, 출력에서 실명·특정인 직접 지목 금지 (§7.1)
  * - 생성된 주제는 반드시 approval_status='대기'로 저장, 관리자 승인 후에만 노출 (02_AI기획_판단포인트.md §6.4)
+ *
+ * AI: Groq (Llama 3.1, 무료)
  */
 
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
@@ -29,7 +31,7 @@ export interface GeneratedTopic {
 /**
  * generateDiscussionTopics - AI 토론 주제 후보 생성
  *
- * 이슈 메타데이터만 입력으로 받아 Perplexity API를 통해 철학적 토론 주제를 생성한다.
+ * 이슈 메타데이터만 입력으로 받아 Groq API를 통해 철학적 토론 주제를 생성한다.
  * 본문이나 요약문은 사용하지 않는다.
  *
  * 예시:
@@ -39,19 +41,19 @@ export async function generateDiscussionTopics(
     issue: IssueMetadata,
     count: number = 3
 ): Promise<GeneratedTopic[]> {
-    const apiKey = process.env.PERPLEXITY_API_KEY
+    const apiKey = process.env.GROQ_API_KEY
     if (!apiKey) {
-        throw new Error('PERPLEXITY_API_KEY 환경변수가 설정되지 않았습니다.')
+        throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다.')
     }
 
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
-            Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-            model: 'sonar',
+            model: 'llama-3.3-70b-versatile',
             messages: [
                 {
                     role: 'system',
@@ -69,6 +71,7 @@ export async function generateDiscussionTopics(
             ],
             temperature: 0.7,
             max_tokens: 800,
+            response_format: { type: 'json_object' }
         }),
     })
 
@@ -76,20 +79,20 @@ export async function generateDiscussionTopics(
         const errText = await response.text()
         
         // API 사용량 추적 (실패)
-        await incrementApiUsage('perplexity', {
+        await incrementApiUsage('groq', {
             calls: 1,
             successes: 0,
             failures: 1,
         }).catch(err => console.error('API 사용량 추적 실패:', err))
         
-        throw new Error(`Perplexity API 오류 (${response.status}): ${errText}`)
+        throw new Error(`Groq API 오류 (${response.status}): ${errText}`)
     }
 
     const data = await response.json()
     const raw: string = data.choices?.[0]?.message?.content ?? ''
 
     // API 사용량 추적 (성공)
-    await incrementApiUsage('perplexity', {
+    await incrementApiUsage('groq', {
         calls: 1,
         successes: 1,
         failures: 0,
@@ -126,23 +129,37 @@ ${heatLine}
 3. 원인·책임·가치 기준·공정성 등 보편적으로 논의 가능한 주제
 4. 한 문장, 60자 이내
 
-JSON 배열 형식으로만 응답 (설명 없이):
-["주제1", "주제2", "주제3"]`
+JSON 형식으로만 응답:
+{
+  "topics": ["주제1", "주제2", "주제3"]
+}`
 }
 
 /**
  * parseTopics - API 응답에서 토론 주제 배열 파싱
  */
 function parseTopics(raw: string): GeneratedTopic[] {
-    const match = raw.match(/\[[\s\S]*?\]/)
-    if (!match) return []
-
     try {
+        const parsed = JSON.parse(raw)
+        // topics 배열 또는 직접 배열 처리
+        const topicsArray = parsed.topics || parsed
+
+        if (Array.isArray(topicsArray)) {
+            return topicsArray
+                .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+                .map((content) => ({ content: content.trim().substring(0, 60) }))
+        }
+
+        // JSON 객체에서 배열 찾기 시도
+        const match = raw.match(/\[[\s\S]*?\]/)
+        if (!match) return []
+
         const arr: unknown[] = JSON.parse(match[0])
         return arr
             .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-            .map((content) => ({ content: content.trim() }))
-    } catch {
+            .map((content) => ({ content: content.trim().substring(0, 60) }))
+    } catch (e) {
+        console.error('토론 주제 파싱 실패:', e, 'Raw:', raw)
         return []
     }
 }

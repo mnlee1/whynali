@@ -24,7 +24,7 @@ import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 120
 
 /* issue-candidate.ts와 동일한 환경변수 참조 */
 const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '10')
@@ -36,13 +36,14 @@ export async function GET(request: NextRequest) {
 
     try {
         const startTime = Date.now()
+        const MAX_EXECUTION_TIME = 100000 // 100초 (120초 타임아웃 전에 여유있게 종료)
 
         const { data: issues } = await supabaseAdmin
             .from('issues')
             .select('id, title, approval_status, status, approved_at, created_at')
             .in('approval_status', ['승인', '대기', '반려'])
             .order('updated_at', { ascending: false })
-            .limit(20)
+            .limit(15)
 
         if (!issues || issues.length === 0) {
             return NextResponse.json({
@@ -62,9 +63,17 @@ export async function GET(request: NextRequest) {
         let autoApproved = 0
         let autoRejected = 0
         let statusTransitioned = 0
+        let timeoutReached = false
 
         const BATCH_SIZE = 5
         for (let i = 0; i < issues.length; i += BATCH_SIZE) {
+            // 타임아웃 체크
+            if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+                console.warn(`[화력 분석] 타임아웃 임박 — ${i}/${issues.length}개 처리 후 조기 종료`)
+                timeoutReached = true
+                break
+            }
+
             const batch = issues.slice(i, i + BATCH_SIZE)
             const batchResults = await Promise.all(
                 batch.map(async (issue) => {
@@ -86,6 +95,7 @@ export async function GET(request: NextRequest) {
                                     .from('issues')
                                     .update({
                                         approval_status: '승인',
+                                        approval_type: 'auto',
                                         approved_at: new Date().toISOString(),
                                     })
                                     .eq('id', issue.id)
@@ -158,11 +168,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             processed: results.length,
+            totalIssues: issues.length,
             autoApproved,
             autoRejected,
             statusTransitioned,
             avgHeat: avgHeat.toFixed(2),
             elapsed: `${elapsed}ms`,
+            timeoutReached,
             timestamp: new Date().toISOString(),
             details: results.slice(0, 10),
         })

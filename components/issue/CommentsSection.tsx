@@ -1,5 +1,3 @@
-'use client'
-
 /**
  * components/issue/CommentsSection.tsx
  *
@@ -10,7 +8,10 @@
  * - 작성/수정/삭제, 세이프티봇 연동
  */
 
+'use client'
+
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { formatDate } from '@/lib/utils/format-date'
 import type { Comment } from '@/types'
 
 interface CommentsSectionProps {
@@ -31,18 +32,6 @@ const SORT_LABELS: Record<SortOption, string> = {
     latest: '최신순',
     likes: '좋아요순',
     dislikes: '싫어요순',
-}
-
-function formatRelativeTime(dateString: string): string {
-    const diff = Date.now() - new Date(dateString).getTime()
-    const minutes = Math.floor(diff / 60000)
-    if (minutes < 1) return '방금 전'
-    if (minutes < 60) return `${minutes}분 전`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}시간 전`
-    const days = Math.floor(hours / 24)
-    if (days < 30) return `${days}일 전`
-    return new Date(dateString).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
 }
 
 function authorLabel(comment: Comment): string {
@@ -261,10 +250,65 @@ export default function CommentsSection({
         }
     }
 
-    /* 댓글 좋아요/싫어요 토글 */
+    /* 댓글 좋아요/싫어요 토글 (낙관적 업데이트) */
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
         if (!userId || likingId) return
         setLikingId(commentId)
+
+        // 현재 상태 저장 (롤백용)
+        const currentComments = [...comments]
+        const currentBestComments = [...bestComments]
+
+        // 낙관적 업데이트: 즉시 UI 반영
+        const optimisticUpdater = (prev: CommentWithLike[]) =>
+            prev.map((c) => {
+                if (c.id !== commentId) return c
+                
+                const currentType = c.userLikeType
+                let newLikeCount = c.like_count
+                let newDislikeCount = c.dislike_count
+                let newUserType: 'like' | 'dislike' | null = type
+
+                // 같은 타입 클릭 시 토글 (취소)
+                if (currentType === type) {
+                    newUserType = null
+                    if (type === 'like') {
+                        newLikeCount = Math.max(0, newLikeCount - 1)
+                    } else {
+                        newDislikeCount = Math.max(0, newDislikeCount - 1)
+                    }
+                } else {
+                    // 다른 타입으로 변경
+                    if (currentType === 'like') {
+                        newLikeCount = Math.max(0, newLikeCount - 1)
+                        newDislikeCount = newDislikeCount + 1
+                    } else if (currentType === 'dislike') {
+                        newDislikeCount = Math.max(0, newDislikeCount - 1)
+                        newLikeCount = newLikeCount + 1
+                    } else {
+                        // 처음 클릭
+                        if (type === 'like') {
+                            newLikeCount = newLikeCount + 1
+                        } else {
+                            newDislikeCount = newDislikeCount + 1
+                        }
+                    }
+                }
+
+                return {
+                    ...c,
+                    like_count: newLikeCount,
+                    dislike_count: newDislikeCount,
+                    userLikeType: newUserType
+                }
+            })
+
+        setComments(optimisticUpdater)
+        setBestComments(optimisticUpdater)
+
+        // 낙관적 업데이트 후 즉시 버튼 활성화 (중복 클릭 방지를 위해 짧은 딜레이)
+        setTimeout(() => setLikingId(null), 300)
+
         try {
             const res = await fetch(`/api/comments/${commentId}/like`, {
                 method: 'POST',
@@ -272,18 +316,27 @@ export default function CommentsSection({
                 body: JSON.stringify({ type }),
             })
             const json = await res.json()
-            if (!res.ok) return
+            
+            if (!res.ok) {
+                // 실패 시 롤백
+                setComments(currentComments)
+                setBestComments(currentBestComments)
+                return
+            }
 
-            const updater = (prev: CommentWithLike[]) =>
+            // 서버 응답으로 최종 확정
+            const serverUpdater = (prev: CommentWithLike[]) =>
                 prev.map((c) =>
                     c.id === commentId
                         ? { ...c, like_count: json.like_count, dislike_count: json.dislike_count, userLikeType: json.userType }
                         : c
                 )
-            setComments(updater)
-            setBestComments(updater)
-        } finally {
-            setLikingId(null)
+            setComments(serverUpdater)
+            setBestComments(serverUpdater)
+        } catch {
+            // 네트워크 오류 시 롤백
+            setComments(currentComments)
+            setBestComments(currentBestComments)
         }
     }
 
@@ -510,7 +563,7 @@ function CommentItem({
                 </span>
                 <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">
-                        {formatRelativeTime(comment.created_at)}
+                        {formatDate(comment.created_at)}
                     </span>
                     {isMine && !isEditing && (
                         <div className="flex gap-2">

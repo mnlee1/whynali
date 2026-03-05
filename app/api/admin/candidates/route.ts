@@ -11,11 +11,14 @@
  *   alerts: [{ title: "OO 논란", count: 7, newsCount: 4, communityCount: 3 }],
  *   evaluated: 23
  * }
+ *
+ * 최적화: 3분간 캐싱하여 반복 호출 시 즉시 응답
  */
 
 import { NextResponse } from 'next/server'
 import { evaluateCandidates } from '@/lib/candidate/issue-candidate'
 import { requireAdmin } from '@/lib/admin'
+import { getCachedCandidates, setCachedCandidates } from '@/lib/cache/candidates-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,11 +27,27 @@ export async function GET() {
     if (auth.error) return auth.error
 
     try {
+        const cached = getCachedCandidates()
+        if (cached) {
+            return NextResponse.json({
+                alerts: cached.alerts,
+                evaluated: cached.evaluated,
+                cached: true,
+            })
+        }
+
+        const startTime = Date.now()
         const result = await evaluateCandidates()
+        const elapsed = Date.now() - startTime
+
+        console.log(`[후보 조회] ${elapsed}ms 소요`)
+
+        setCachedCandidates(result)
 
         return NextResponse.json({
             alerts: result.alerts,
             evaluated: result.evaluated,
+            cached: false,
         })
     } catch (error) {
         console.error('이슈 후보 조회 에러:', error)

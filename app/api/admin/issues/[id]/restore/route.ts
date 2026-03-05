@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
+import { clearCandidatesCache } from '@/lib/cache/candidates-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,6 @@ export async function POST(
     try {
         const { id } = await params
 
-        /* 복구 시 approval_status를 대기로 되돌리고, visibility도 visible로 복원 */
         const { data, error } = await supabaseAdmin
             .from('issues')
             .update({
@@ -29,6 +29,8 @@ export async function POST(
             .single()
 
         if (error) throw error
+
+        clearCandidatesCache()
 
         return NextResponse.json({ data })
     } catch (error) {

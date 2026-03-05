@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { DiscussionTopic } from '@/types'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import { formatDate } from '@/lib/utils/format-date'
+import SearchBar from '@/components/common/SearchBar'
 
 type TopicWithIssue = DiscussionTopic & {
     issues: { id: string; title: string } | null
 }
 
 const PAGE_SIZE = 20
+const DEBOUNCE_MS = 350
 
 function CommunityContent() {
     const searchParams = useSearchParams()
@@ -19,14 +22,31 @@ function CommunityContent() {
 
     const [topics, setTopics] = useState<TopicWithIssue[]>([])
     const [total, setTotal] = useState(0)
-    const [offset, setOffset] = useState(0)
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [searchInput, setSearchInput] = useState('')
-    const [activeQ, setActiveQ] = useState('')
+    const [searchQuery, setSearchQuery] = useState('')
     /* 연결 이슈 제목 (issue_id 필터 시 헤더에 표시) */
     const [issueTitle, setIssueTitle] = useState<string | null>(null)
+
+    const offsetRef = useRef(0)
+    const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    /* 검색 입력 → debounce → searchQuery 업데이트 */
+    const handleSearchChange = (value: string) => {
+        setSearchInput(value)
+        if (debounceTimer.current) clearTimeout(debounceTimer.current)
+        debounceTimer.current = setTimeout(() => {
+            setSearchQuery(value)
+        }, DEBOUNCE_MS)
+    }
+
+    /* Enter 키: debounce 취소 후 즉시 검색 트리거 */
+    const handleSearch = () => {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current)
+        setSearchQuery(searchInput)
+    }
 
     const loadTopics = useCallback(async (q: string, currentOffset: number, append: boolean) => {
         try {
@@ -46,6 +66,9 @@ function CommunityContent() {
             if (issueIdFilter && data.length > 0 && data[0].issues?.title) {
                 setIssueTitle(decodeHtml(data[0].issues.title))
             }
+            if (!append) {
+                offsetRef.current = data.length
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : '목록 조회 실패')
         } finally {
@@ -54,24 +77,18 @@ function CommunityContent() {
         }
     }, [issueIdFilter])
 
+    /* 검색어 변경 시 목록 초기화 및 재로드 */
     useEffect(() => {
-        loadTopics('', 0, false)
-    }, [loadTopics])
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault()
-        const q = searchInput.trim()
-        setActiveQ(q)
-        setOffset(0)
         setLoading(true)
-        loadTopics(q, 0, false)
-    }
+        setError(null)
+        loadTopics(searchQuery, 0, false)
+    }, [searchQuery, loadTopics])
 
     const handleLoadMore = () => {
-        const next = offset + PAGE_SIZE
-        setOffset(next)
+        const next = offsetRef.current
         setLoadingMore(true)
-        loadTopics(activeQ, next, true)
+        loadTopics(searchQuery, next, true)
+        offsetRef.current = next + PAGE_SIZE
     }
 
     return (
@@ -89,21 +106,14 @@ function CommunityContent() {
             )}
 
             {/* 검색 */}
-            <form onSubmit={handleSearch} className="flex gap-2 mb-6">
-                <input
-                    type="text"
+            <div className="mb-6">
+                <SearchBar
                     value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
+                    onChange={handleSearchChange}
+                    onSearch={handleSearch}
                     placeholder="토론 주제 검색..."
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-neutral-400"
                 />
-                <button
-                    type="submit"
-                    className="px-4 py-2 text-sm bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 font-medium transition-colors"
-                >
-                    검색
-                </button>
-            </form>
+            </div>
 
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
@@ -115,59 +125,38 @@ function CommunityContent() {
             {loading ? (
                 <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="p-4 border border-gray-200 rounded-lg space-y-2">
-                            <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
-                            <div className="h-3 w-1/3 bg-gray-100 rounded animate-pulse" />
-                        </div>
+                        <div key={i} className="h-20 bg-neutral-100 rounded-xl animate-pulse" />
                     ))}
                 </div>
             ) : topics.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-12">
-                    {activeQ ? `"${activeQ}"에 대한 토론 주제가 없습니다.` : '등록된 토론 주제가 없습니다.'}
+                    {searchQuery ? `"${searchQuery}"에 대한 토론 주제가 없습니다.` : '등록된 토론 주제가 없습니다.'}
                 </p>
             ) : (
                 <>
-                    <p className="text-sm text-gray-500 mb-3">총 {total.toLocaleString()}개</p>
-                    <ul className="space-y-3">
+                    <p className="text-sm text-gray-500 mb-4">총 {total.toLocaleString()}개</p>
+                    <div className="space-y-4">
                         {topics.map((topic) => (
-                            <li key={topic.id}>
-                                <Link
-                                    href={`/community/${topic.id}`}
-                                    className="block p-4 border border-gray-200 rounded-xl hover:border-purple-300 transition-colors"
-                                >
-                                    {/* 상태 배지 행 */}
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className={[
-                                            'text-xs px-2 py-0.5 rounded border font-medium',
-                                            topic.approval_status === '종료'
-                                                ? 'bg-gray-50 text-gray-500 border-gray-200'
-                                                : 'bg-purple-100 text-purple-700 border-purple-300',
-                                        ].join(' ')}>
-                                            {topic.approval_status === '종료' ? '종료' : '토론 중'}
-                                        </span>
-                                        {topic.is_ai_generated && (
-                                            <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-200 font-medium">
-                                                AI 생성
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-sm text-gray-800 line-clamp-2 mb-2">
+                            <Link key={topic.id} href={`/community/${topic.id}`} className="block">
+                                <article className="p-5 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
+                                    {/* 연결된 이슈명 */}
+                                    {topic.issues?.title && (
+                                        <p className="text-xs text-neutral-400 mb-2">
+                                            {decodeHtml(topic.issues.title)}
+                                        </p>
+                                    )}
+                                    {/* 토론 주제 본문 */}
+                                    <p className="text-base font-semibold text-neutral-900 mb-3 line-clamp-2 leading-snug">
                                         {decodeHtml(topic.body)}
                                     </p>
-                                    <div className="flex items-center gap-3 text-xs text-gray-400">
-                                        {topic.issues && (
-                                            <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-100">
-                                                {decodeHtml(topic.issues.title)}
-                                            </span>
-                                        )}
-                                        <span>
-                                            {new Date(topic.created_at).toLocaleDateString('ko-KR')}
-                                        </span>
+                                    {/* 날짜 */}
+                                    <div className="flex items-center gap-2 text-xs text-neutral-400">
+                                        <span>{formatDate(topic.created_at)}</span>
                                     </div>
-                                </Link>
-                            </li>
+                                </article>
+                            </Link>
                         ))}
-                    </ul>
+                    </div>
 
                     {/* 더보기 */}
                     {topics.length < total && (
@@ -175,9 +164,9 @@ function CommunityContent() {
                             <button
                                 onClick={handleLoadMore}
                                 disabled={loadingMore}
-                                className="text-sm px-5 py-2 border border-neutral-300 rounded-lg text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
+                                className="px-5 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {loadingMore ? '불러오는 중...' : `더보기 (${total - topics.length}개 남음)`}
+                                {loadingMore ? '로딩 중...' : '더 보기'}
                             </button>
                         </div>
                     )}
@@ -194,10 +183,7 @@ export default function CommunityPage() {
                 <h1 className="text-2xl md:text-3xl font-bold mb-6">커뮤니티</h1>
                 <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="p-4 border border-gray-200 rounded-lg space-y-2">
-                            <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
-                            <div className="h-3 w-1/3 bg-gray-100 rounded animate-pulse" />
-                        </div>
+                        <div key={i} className="h-20 bg-neutral-100 rounded-xl animate-pulse" />
                     ))}
                 </div>
             </div>

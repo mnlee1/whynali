@@ -38,7 +38,7 @@ function formatDate(dateString: string): string {
     if (diffHours < 1) return '방금 전'
     if (diffHours < 24) return `${diffHours}시간 전`
     if (diffDays < 7) return `${diffDays}일 전`
-    return date.toLocaleDateString('ko-KR')
+    return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 export default function ActiveIssueStrip() {

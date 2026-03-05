@@ -19,7 +19,7 @@ async function main() {
     console.log('최근 10개 이슈:')
     if (issues && issues.length > 0) {
         issues.forEach(i => {
-            const date = new Date(i.created_at).toLocaleString('ko-KR')
+            const date = new Date(i.created_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
             console.log(`- [${i.approval_status}] ${i.status} | 화력 ${i.heat_index ?? 0}점 | ${i.title.substring(0, 40)}... (${date})`)
         })
     } else {

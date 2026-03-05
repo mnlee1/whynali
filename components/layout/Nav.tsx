@@ -6,10 +6,9 @@ import { usePathname } from 'next/navigation'
 
 interface NavProps {
     mobile?: boolean
-    onNavigate?: () => void
 }
 
-export default function Nav({ mobile = false, onNavigate }: NavProps) {
+export default function Nav({ mobile = false }: NavProps) {
     const pathname = usePathname()
 
     const categories = [
@@ -23,21 +22,24 @@ export default function Nav({ mobile = false, onNavigate }: NavProps) {
 
     if (mobile) {
         return (
-            <nav className="flex flex-col gap-1">
+            <>
                 {categories.map((cat) => {
                     const isActive = pathname === cat.href || pathname.startsWith(cat.href + '/')
                     return (
                         <Link
                             key={cat.href}
                             href={cat.href}
-                            onClick={onNavigate}
-                            className={`text-base py-2 hover:text-neutral-900 ${isActive ? 'text-neutral-900 font-bold' : 'text-neutral-700 font-normal'}`}
+                            className={`px-3.5 py-1.5 text-sm rounded-full whitespace-nowrap border transition-colors ${
+                                isActive 
+                                    ? 'bg-violet-700 text-white border-violet-700 font-semibold' 
+                                    : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-300 font-medium'
+                            }`}
                         >
                             {cat.name}
                         </Link>
                     )
                 })}
-            </nav>
+            </>
         )
     }
 
@@ -52,7 +54,11 @@ export default function Nav({ mobile = false, onNavigate }: NavProps) {
                         )}
                         <Link
                             href={cat.href}
-                            className={`text-sm hover:text-neutral-900 whitespace-nowrap ${isActive ? 'text-neutral-900 font-bold' : 'text-neutral-600 font-normal'}`}
+                            className={`text-sm whitespace-nowrap transition-colors ${
+                                isActive 
+                                    ? 'text-neutral-900 font-bold' 
+                                    : 'text-neutral-600 font-normal hover:text-neutral-900'
+                            }`}
                         >
                             {cat.name}
                         </Link>

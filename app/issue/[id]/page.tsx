@@ -2,7 +2,7 @@
  * app/issue/[id]/page.tsx
  *
  * 특정 이슈의 상세 정보를 보여줍니다.
- * - 담당 A: 기본 정보, 화력 지수, 타임라인, 출처(뉴스·커뮤니티)
+ * - 담당 A: 기본 정보, 타임라인, 출처(뉴스·커뮤니티), 관련 토론주제
  * - 담당 B: 감정·투표·댓글 블록
  */
 
@@ -15,7 +15,7 @@ import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
-import CategoryBadge from '@/components/common/CategoryBadge'
+import { formatDate } from '@/lib/utils/format-date'
 
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -42,58 +42,40 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         )
     }
 
+    /* 관련 토론 주제 조회 */
+    const { data: discussionTopics } = await adminClient
+        .from('discussion_topics')
+        .select('id, body, created_at')
+        .eq('issue_id', id)
+        .eq('approval_status', '승인')
+        .order('created_at', { ascending: false })
+        .limit(5)
+
     /* 사용자 세션 확인: anon 클라이언트로 쿠키 기반 세션 조회 */
     const sessionClient = await createSupabaseServerClient()
     const { data: { user } } = await sessionClient.auth.getUser()
     const userId = user?.id ?? null
-
-    const getHeatLevel = (heat: number): string => {
-        if (heat >= 70) return '높음'
-        if (heat >= 30) return '보통'
-        return '낮음'
-    }
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
             {/* 이슈 헤더 */}
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                    <CategoryBadge category={issue.category} size="sm" />
                     <StatusBadge status={issue.status} size="md" />
                 </div>
-                <h1 className="text-2xl md:text-3xl font-bold mb-2">
+                <h1 className="text-2xl md:text-3xl font-bold mb-3">
                     {decodeHtml(issue.title)}
                 </h1>
+                <div className="flex items-center gap-2 text-xs text-neutral-400 mb-2">
+                    <span>{issue.category}</span>
+                    <span>·</span>
+                    <span>{formatDate(issue.created_at)}</span>
+                </div>
                 {issue.description && (
                     <p className="text-gray-600 leading-relaxed">
                         {decodeHtml(issue.description)}
                     </p>
                 )}
-            </div>
-
-            {/* 화력 지수 */}
-            <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl">
-                <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">화력 지수</span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold text-orange-600">
-                            {(issue.heat_index ?? 0).toFixed(1)}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded border border-orange-200 font-medium">
-                            {getHeatLevel(issue.heat_index)}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* 감정 표현 */}
-            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">감정 표현</p>
-                </div>
-                <div className="p-4">
-                    <ReactionsSection issueId={id} userId={userId} />
-                </div>
             </div>
 
             {/* 타임라인 */}
@@ -121,10 +103,53 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
                     <p className="text-sm font-semibold text-neutral-800">투표</p>
                 </div>
-                <div className="p-4">
-                    <VoteSection issueId={id} userId={userId} />
-                </div>
+                <VoteSection issueId={id} userId={userId} />
             </div>
+
+            {/* 관련 토론 주제 */}
+            {discussionTopics && discussionTopics.length > 0 && (
+                <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                    <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">💬</span>
+                            <p className="text-sm font-bold text-purple-800">관련 토론 주제 ({discussionTopics.length})</p>
+                        </div>
+                        <Link
+                            href={`/community?issue_id=${id}`}
+                            className="text-xs text-purple-600 hover:text-purple-800 font-semibold"
+                        >
+                            전체보기 →
+                        </Link>
+                    </div>
+                    <div className="divide-y divide-neutral-100 bg-white">
+                        {discussionTopics.map((topic, index) => (
+                            <Link
+                                key={topic.id}
+                                href={`/community/${topic.id}`}
+                                className="block p-4 hover:bg-purple-50 transition-colors group"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600 text-xs font-bold group-hover:bg-purple-200">
+                                        {index + 1}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 leading-relaxed line-clamp-2 group-hover:text-purple-700">
+                                            {topic.body}
+                                        </p>
+                                        <p className="text-xs text-gray-400 mt-1.5">
+                                            {new Date(topic.created_at).toLocaleDateString('ko-KR', {
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric'
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* 이 이슈의 커뮤니티 */}
             <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center justify-between">
@@ -138,6 +163,16 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 >
                     토론 보기
                 </Link>
+            </div>
+
+            {/* 감정 표현 */}
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">감정 표현</p>
+                </div>
+                <div className="p-4">
+                    <ReactionsSection issueId={id} userId={userId} />
+                </div>
             </div>
 
             {/* 댓글 */}

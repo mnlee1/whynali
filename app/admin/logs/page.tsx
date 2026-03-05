@@ -39,13 +39,14 @@ const ACTION_BADGE: Record<string, string> = {
 const PAGE_SIZE = 50
 
 function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleString('ko-KR', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-    })
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    const second = String(date.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`
 }
 
 export default function AdminLogsPage() {

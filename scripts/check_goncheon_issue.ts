@@ -24,7 +24,7 @@ async function main() {
     console.log('승인타입:', data.approval_type)
     console.log('화력:', data.heat_index, '점')
     console.log('카테고리:', data.category)
-    console.log('생성일:', new Date(data.created_at).toLocaleString('ko-KR'))
+    console.log('생성일:', new Date(data.created_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
     console.log()
     console.log('[ 분석 ]')
     console.log('화력 10점이므로 반려 기준(< 10점)에 해당하지 않음')

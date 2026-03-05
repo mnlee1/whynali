@@ -14,6 +14,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSources } from '@/lib/api/issues'
+import { formatDate } from '@/lib/utils/format-date'
 import type { NewsData, CommunityData } from '@/types/issue'
 
 const INITIAL_SHOW_COUNT = 5 // 처음에 보여줄 항목 수
@@ -53,15 +54,6 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
 
         fetchSources()
     }, [issueId])
-
-    // 날짜 포맷
-    const formatDate = (dateString: string): string => {
-        const date = new Date(dateString)
-        return date.toLocaleDateString('ko-KR', {
-            month: 'short',
-            day: 'numeric',
-        })
-    }
 
     // 신뢰도 배지 (뉴스 전용, 커뮤니티는 해당 없음)
     const getCredibilityBadge = (credibility?: number) => {

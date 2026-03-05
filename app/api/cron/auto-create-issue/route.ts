@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { evaluateCandidates } from '@/lib/candidate/issue-candidate'
 import { verifyCronRequest } from '@/lib/cron-auth'
+import { clearCandidatesCache } from '@/lib/cache/candidates-cache'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest) {
     if (authError) return authError
 
     try {
+        clearCandidatesCache()
+        
         const startTime = Date.now()
         const result = await evaluateCandidates()
         const elapsed = Date.now() - startTime

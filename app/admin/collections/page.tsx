@@ -356,12 +356,15 @@ export default function AdminCollectionsPage() {
         return el.value
     }
 
-    const fmt = (d: string) =>
-        new Date(d).toLocaleString('ko-KR', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-        })
-
-    const total24h = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0)
+    const fmt = (d: string) => {
+        const date = new Date(d)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hour = String(date.getHours()).padStart(2, '0')
+        const minute = String(date.getMinutes()).padStart(2, '0')
+        return `${year}-${month}-${day} ${hour}:${minute}`
+    }
 
     const LINK_TABS: { value: LinkFilter; label: string }[] = [
         { value: 'all', label: '전체' },
@@ -402,87 +405,20 @@ export default function AdminCollectionsPage() {
 
             {/* 요약 통계 카드 */}
             {stats && (
-                <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                        <div className="bg-white border rounded-lg p-4">
-                            <StatCard label="뉴스 총 수집" value={stats.news.total} sub={`최근 24h +${total24h(stats.news.last24h)}건`} />
-                        </div>
-                        <div className="bg-white border rounded-lg p-4">
-                            <StatCard
-                                label="뉴스 이슈 연결"
-                                value={stats.news.linked}
-                                sub={stats.news.total ? `${Math.round((stats.news.linked / stats.news.total) * 100)}%` : '-'}
-                            />
-                        </div>
-                        <div className="bg-white border rounded-lg p-4">
-                            <StatCard label="커뮤니티 총 수집" value={stats.community.total} sub={`최근 24h +${total24h(stats.community.last24h)}건`} />
-                        </div>
-                        <div className="bg-white border rounded-lg p-4">
-                            <StatCard
-                                label="커뮤니티 이슈 연결"
-                                value={stats.community.linked}
-                                sub={stats.community.total ? `${Math.round((stats.community.linked / stats.community.total) * 100)}%` : '-'}
-                            />
-                        </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-white border rounded-lg p-4">
+                        <StatCard label="뉴스 총 수집" value={stats.news.total} />
                     </div>
-
-                    {/* 출처별 수집 현황 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div className="bg-white border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-sm font-semibold text-gray-700">뉴스 출처별 수집</h2>
-                                <CronBadge label="30분 주기" />
-                            </div>
-                            {Object.keys(stats.news.byCategory).length === 0 ? (
-                                <p className="text-sm text-gray-400">수집 데이터 없음</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {Object.entries(stats.news.byCategory)
-                                        .sort(([, a], [, b]) => b - a)
-                                        .slice(0, 8)
-                                        .map(([src, cnt]) => (
-                                            <div key={src} className="flex items-center gap-2">
-                                                <span className="text-sm text-gray-600 w-28 truncate">{src}</span>
-                                                <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                                                    <div
-                                                        className="bg-blue-500 h-1.5 rounded-full"
-                                                        style={{ width: `${Math.min(100, (cnt / stats.news.total) * 100)}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-sm font-medium text-gray-700 w-8 text-right">{cnt}</span>
-                                            </div>
-                                        ))}
-                                </div>
-                            )}
-                        </div>
-                        <div className="bg-white border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-sm font-semibold text-gray-700">커뮤니티 사이트별 수집</h2>
-                                <CronBadge label="3분 주기" />
-                            </div>
-                            {Object.keys(stats.community.bySite).length === 0 ? (
-                                <p className="text-sm text-gray-400">수집 데이터 없음</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {Object.entries(stats.community.bySite)
-                                        .sort(([, a], [, b]) => b - a)
-                                        .map(([site, cnt]) => (
-                                            <div key={site} className="flex items-center gap-2">
-                                                <span className="text-sm text-gray-600 w-20">{site}</span>
-                                                <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                                                    <div
-                                                        className="bg-purple-500 h-1.5 rounded-full"
-                                                        style={{ width: `${Math.min(100, (cnt / stats.community.total) * 100)}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-sm font-medium text-gray-700 w-8 text-right">{cnt}</span>
-                                            </div>
-                                        ))}
-                                </div>
-                            )}
-                        </div>
+                    <div className="bg-white border rounded-lg p-4">
+                        <StatCard label="뉴스 이슈 연결" value={stats.news.linked} />
                     </div>
-                </>
+                    <div className="bg-white border rounded-lg p-4">
+                        <StatCard label="커뮤니티 총 수집" value={stats.community.total} />
+                    </div>
+                    <div className="bg-white border rounded-lg p-4">
+                        <StatCard label="커뮤니티 이슈 연결" value={stats.community.linked} />
+                    </div>
+                </div>
             )}
 
             {/* ── 수집 뉴스 목록 ── */}
@@ -590,9 +526,9 @@ export default function AdminCollectionsPage() {
                     <table className="min-w-full divide-y divide-gray-100">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-full">제목</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">제목</th>
                                 <Th label="사이트" col="source_site" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">연결 이슈</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap w-48">연결 이슈</th>
                                 <Th label="조회" col="view_count" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} className="text-right" />
                                 <Th label="댓글" col="comment_count" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} className="text-right" />
                                 <Th label="작성일" col="written_at" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
@@ -612,7 +548,7 @@ export default function AdminCollectionsPage() {
                             ) : (
                                 communityResult.data.map((item) => (
                                     <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-2.5 text-sm max-w-xs">
+                                        <td className="px-4 py-2.5 text-sm">
                                             {item.url ? (
                                                 <a href={item.url} target="_blank" rel="noopener noreferrer"
                                                     className="text-gray-900 hover:text-blue-600 hover:underline line-clamp-1">
@@ -631,10 +567,10 @@ export default function AdminCollectionsPage() {
                                                 {item.source_site}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap max-w-[12rem]">
                                             {item.issues ? (
                                                 <Link href={`/issue/${item.issues.id}`}
-                                                    className="text-blue-600 hover:underline line-clamp-1">
+                                                    className="text-blue-600 hover:underline line-clamp-1 block">
                                                     {item.issues.title}
                                                 </Link>
                                             ) : (

@@ -30,7 +30,7 @@ async function main() {
         console.log(`총 ${approvedNull.length}개\n`)
         approvedNull.slice(0, 10).forEach((issue, idx) => {
             console.log(`${idx + 1}. ${issue.title}`)
-            console.log(`   화력: ${issue.heat_index}점 | 생성: ${new Date(issue.created_at).toLocaleDateString('ko-KR')}`)
+            console.log(`   화력: ${issue.heat_index}점 | 생성: ${new Date(issue.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`)
         })
         if (approvedNull.length > 10) {
             console.log(`... 외 ${approvedNull.length - 10}개`)
@@ -44,7 +44,7 @@ async function main() {
         console.log(`총 ${rejectedNull.length}개\n`)
         rejectedNull.slice(0, 10).forEach((issue, idx) => {
             console.log(`${idx + 1}. ${issue.title}`)
-            console.log(`   화력: ${issue.heat_index}점 | 생성: ${new Date(issue.created_at).toLocaleDateString('ko-KR')}`)
+            console.log(`   화력: ${issue.heat_index}점 | 생성: ${new Date(issue.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`)
         })
         if (rejectedNull.length > 10) {
             console.log(`... 외 ${rejectedNull.length - 10}개`)

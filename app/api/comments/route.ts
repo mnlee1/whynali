@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
+import { checkAndNotifyWithCooldown } from '@/lib/safety-notification'
 import { toUserMessage } from '@/lib/api-errors'
 import { ensurePublicUser } from '@/lib/ensure-user'
 
@@ -172,6 +173,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (pendingReview) {
+        // 비동기로 알림 체크 (응답 속도에 영향 없음)
+        checkAndNotifyWithCooldown().catch(console.error)
+        
         return NextResponse.json({
             data,
             message: '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',

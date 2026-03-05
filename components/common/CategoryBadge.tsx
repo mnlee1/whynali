@@ -11,33 +11,21 @@
  *   <CategoryBadge category="스포츠" size="sm" />
  */
 
-import type { IssueCategory } from '@/types/issue'
+import type { IssueCategory } from '@/lib/config/categories'
+import { getCategoryById } from '@/lib/config/categories'
 
 interface CategoryBadgeProps {
     category: IssueCategory
     size?: 'sm' | 'md'
 }
 
-function getCategoryStyle(category: IssueCategory): string {
-    switch (category) {
-        case '연예':
-            return 'bg-pink-100 text-pink-700 border-pink-200'
-        case '스포츠':
-            return 'bg-blue-100 text-blue-700 border-blue-200'
-        case '정치':
-            return 'bg-purple-100 text-purple-700 border-purple-200'
-        case '사회':
-            return 'bg-green-100 text-green-700 border-green-200'
-        case '기술':
-            return 'bg-indigo-100 text-indigo-700 border-indigo-200'
-        default:
-            return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-}
-
 export default function CategoryBadge({ category, size = 'md' }: CategoryBadgeProps) {
     const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'
-    const styleClass = getCategoryStyle(category)
+    
+    const config = getCategoryById(category)
+    const styleClass = config
+        ? `${config.badgeColors.bg} ${config.badgeColors.text} ${config.badgeColors.border}`
+        : 'bg-gray-100 text-gray-700 border-gray-200'
 
     return (
         <span className={`inline-flex items-center font-medium border rounded-md ${sizeClass} ${styleClass}`}>

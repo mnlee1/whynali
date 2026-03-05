@@ -4,6 +4,8 @@
  * [관리자 - 수집 현황 API]
  * 
  * 뉴스·커뮤니티 수집 통계와 최근 데이터를 조회합니다.
+ * 
+ * 최적화: 전체 count는 캐싱된 근사값 사용 (정확도보다 속도 우선)
  */
 
 import { NextResponse } from 'next/server'
@@ -11,6 +13,9 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
+
+let cachedCounts: { news: number; community: number; timestamp: number } | null = null
+const CACHE_TTL_MS = 5 * 60 * 1000
 
 export async function GET() {
     const auth = await requireAdmin()
@@ -21,15 +26,34 @@ export async function GET() {
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
         const yesterdayIso = yesterday.toISOString()
 
-        /* total은 별도 count 쿼리로 정확히 계산 (limit 1000 기반 length 사용 금지) */
+        let newsTotal = 0
+        let communityTotal = 0
+
+        if (cachedCounts && (Date.now() - cachedCounts.timestamp) < CACHE_TTL_MS) {
+            newsTotal = cachedCounts.news
+            communityTotal = cachedCounts.community
+            console.log('[수집 현황] 캐시된 count 사용')
+        } else {
+            const [{ count: newsTotalCount }, { count: communityTotalCount }] = await Promise.all([
+                supabaseAdmin.from('news_data').select('*', { count: 'exact', head: true }),
+                supabaseAdmin.from('community_data').select('*', { count: 'exact', head: true }),
+            ])
+            
+            newsTotal = newsTotalCount ?? 0
+            communityTotal = communityTotalCount ?? 0
+            
+            cachedCounts = {
+                news: newsTotal,
+                community: communityTotal,
+                timestamp: Date.now(),
+            }
+            console.log('[수집 현황] count 캐시 갱신')
+        }
+
         const [
-            { count: newsTotal },
-            { count: communityTotal },
             { data: newsRecent },
             { data: communityRecent },
         ] = await Promise.all([
-            supabaseAdmin.from('news_data').select('*', { count: 'exact', head: true }),
-            supabaseAdmin.from('community_data').select('*', { count: 'exact', head: true }),
             supabaseAdmin
                 .from('news_data')
                 .select('id, source, created_at')
@@ -42,7 +66,6 @@ export async function GET() {
                 .order('created_at', { ascending: false }),
         ])
 
-        /* source별 24h 집계 */
         const newsByCategory: Record<string, number> = {}
         const newsLast24h: Record<string, number> = {}
 
@@ -59,14 +82,12 @@ export async function GET() {
             communityLast24h[item.source_site] = (communityLast24h[item.source_site] || 0) + 1
         })
 
-        // 최근 뉴스 10개 (link + 이슈 연결 포함)
         const { data: recentNews } = await supabaseAdmin
             .from('news_data')
             .select('id, title, link, source, published_at, created_at, issue_id, issues(id, title)')
             .order('created_at', { ascending: false })
             .limit(10)
 
-        // 더쿠·네이트판 각각 최근 10건 — 동시 배치 insert 시 한 사이트만 표시되는 문제 방지
         const [{ data: recentTheqoo }, { data: recentNatePann }] = await Promise.all([
             supabaseAdmin
                 .from('community_data')
@@ -82,11 +103,9 @@ export async function GET() {
                 .limit(10),
         ])
 
-        /* 두 목록을 created_at 내림차순으로 병합 */
         const recentCommunity = [...(recentTheqoo || []), ...(recentNatePann || [])]
             .sort((a, b) => new Date(b.written_at).getTime() - new Date(a.written_at).getTime())
 
-        // 연결 통계: news_data / community_data의 issue_id FK 기준
         const { count: linkedNewsCount } = await supabaseAdmin
             .from('news_data')
             .select('*', { count: 'exact', head: true })
@@ -99,14 +118,14 @@ export async function GET() {
 
         return NextResponse.json({
             news: {
-                total: newsTotal ?? 0,
+                total: newsTotal,
                 byCategory: newsByCategory,
                 last24h: newsLast24h,
                 linked: linkedNewsCount || 0,
                 recent: recentNews || [],
             },
             community: {
-                total: communityTotal ?? 0,
+                total: communityTotal,
                 bySite: communityBySite,
                 last24h: communityLast24h,
                 linked: linkedCommunityCount || 0,

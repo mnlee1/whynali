@@ -80,9 +80,9 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
 
     if (loading) {
         return (
-            <div className="flex gap-2 flex-wrap">
+            <div className="grid grid-cols-7 gap-1">
                 {REACTIONS.map((t) => (
-                    <div key={t} className="h-14 w-16 rounded-lg bg-gray-100 animate-pulse" />
+                    <div key={t} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
                 ))}
             </div>
         )
@@ -91,7 +91,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
     return (
         <div>
             {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
-            <div className="flex gap-2 flex-wrap">
+            <div className="grid grid-cols-7 gap-1">
                 {REACTION_META.map(({ type, emoji, label }) => {
                     const count = counts[type] ?? 0
                     const selected = userReaction === type
@@ -102,7 +102,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                             disabled={!userId || submitting}
                             title={label}
                             className={[
-                                'flex flex-col items-center px-3 py-2 rounded-xl border transition-colors min-w-[60px]',
+                                'flex flex-col items-center px-2 py-2 rounded-xl border transition-colors',
                                 selected
                                     ? 'border-violet-400 bg-violet-50 scale-105'
                                     : 'border-gray-200 bg-white',

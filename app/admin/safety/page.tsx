@@ -20,12 +20,13 @@ interface PendingComment {
 }
 
 function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleString('ko-KR', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    })
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
 /** 검토 대기 목록에서 작성자 익명 표시. 뒷4자리로 서로 구분 (99_댓글_작성자_표시_정책 §3.5) */
@@ -272,8 +273,15 @@ export default function AdminSafetyPage() {
 
                     {/* 하드코딩 금칙어 안내 */}
                     <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-500">
-                        코드에 하드코딩된 금칙어(<code>lib/safety.ts</code>)는 별도로 즉시 차단됩니다.
-                        이 목록은 DB 기반으로 관리자가 추가 운영할 수 있는 확장 금칙어입니다.
+                        <p className="mb-2">
+                            <strong>금칙어 정책:</strong>
+                        </p>
+                        <ul className="list-disc pl-4 space-y-1">
+                            <li>코드 하드코딩 금칙어(<code>lib/safety.ts</code>): 즉시 차단</li>
+                            <li>DB 금칙어(이 목록): 관리자 추가 가능</li>
+                            <li>매칭 방식: 단어 경계 기준 (오탐 최소화)</li>
+                            <li>검토 배치: 일 1회 또는 10건 이상 시 알림</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -283,16 +291,35 @@ export default function AdminSafetyPage() {
                         <h2 className="text-lg font-semibold">
                             검토 대기 댓글
                             {pendingTotal > 0 && (
-                                <span className="ml-2 text-sm font-normal px-2 py-0.5 bg-red-100 text-red-700 rounded">
+                                <span className={[
+                                    'ml-2 text-sm font-normal px-2 py-0.5 rounded',
+                                    pendingTotal >= 10
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-yellow-100 text-yellow-700'
+                                ].join(' ')}>
                                     {pendingTotal}건
                                 </span>
                             )}
                         </h2>
                     </div>
 
-                    <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-                        금칙어가 포함된 댓글은 자동으로 검토 대기 상태가 됩니다.
-                        사용자에게는 "등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다." 안내가 표시됩니다.
+                    <div className={[
+                        'mb-3 p-3 border rounded text-xs',
+                        pendingTotal >= 10
+                            ? 'bg-red-50 border-red-200 text-red-700'
+                            : 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                    ].join(' ')}>
+                        {pendingTotal >= 10 ? (
+                            <>
+                                <strong>알림:</strong> 검토 대기 댓글이 10건 이상입니다. 
+                                관리자 이메일로 알림이 발송되었습니다.
+                            </>
+                        ) : (
+                            <>
+                                금칙어가 포함된 댓글은 자동으로 검토 대기 상태가 됩니다.
+                                사용자에게는 "등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다." 안내가 표시됩니다.
+                            </>
+                        )}
                     </div>
 
                     {pendingError && (

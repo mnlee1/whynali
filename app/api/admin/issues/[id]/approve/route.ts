@@ -12,6 +12,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata } from '@/lib/ai/discussion-generator'
+import { clearCandidatesCache } from '@/lib/cache/candidates-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,9 +39,8 @@ export async function POST(
 
         if (error) throw error
 
-        // 이슈 승인 즉시 응답 후, 백그라운드에서 AI 토론 주제 후보 생성
-        // - PERPLEXITY_API_KEY 미설정 시 건너뜀 (graceful degradation)
-        // - 실패해도 이슈 승인 자체는 완료된 상태 유지
+        clearCandidatesCache()
+
         if (process.env.PERPLEXITY_API_KEY && data) {
             generateDiscussionTopicsInBackground(data).catch((e) => {
                 console.error('[approve] AI 토론 주제 자동 생성 실패 (이슈 승인은 정상 완료):', e)

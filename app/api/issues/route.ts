@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { parseLimitOffset, parseEnum } from '@/lib/parse-params'
 import type { IssueCategory, IssueStatus } from '@/types/issue'
+import { getCategoryIds } from '@/lib/config/categories'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_CATEGORIES: readonly IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
+const VALID_CATEGORIES = getCategoryIds() as readonly IssueCategory[]
 const VALID_STATUSES: readonly IssueStatus[] = ['점화', '논란중', '종결']
 const VALID_SORTS = ['latest', 'heat'] as const
 const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
