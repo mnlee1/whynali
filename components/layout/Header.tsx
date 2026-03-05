@@ -10,14 +10,22 @@ import SearchBar from './SearchBar'
 
 /**
  * Header - 공통 상단바
- * 로고(왼쪽), 네비, 검색·로그인(오른쪽).
- * 로그인 상태: 아바타 + 닉네임 + 로그아웃 버튼 표시.
- * 이메일은 개인정보이므로 노출하지 않음.
+ * 
+ * 네이버 뉴스 스타일 2단 구조:
+ * 1. 상단 헤더 (배경색): 로고 + 검색 + 유저 정보
+ * 2. GNB 바: 카테고리 네비게이션
+ * 
+ * 모바일 (1280px 미만):
+ * - 상단 헤더: 로고 + 검색 아이콘 + 유저 아이콘
+ * - GNB: 가로 스크롤 가능한 필 버튼 형태
+ * - 검색: 돋보기 클릭 시 토글
  */
 export default function Header() {
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+    const [mobileUserMenuOpen, setMobileUserMenuOpen] = useState(false)
     const [user, setUser] = useState<User | null>(null)
     const router = useRouter()
+    const userMenuRef = useRef<HTMLDivElement>(null)
     const sbRef = useRef(
         createBrowserClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,6 +44,17 @@ export default function Header() {
         })
 
         return () => subscription.unsubscribe()
+    }, [])
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+                setMobileUserMenuOpen(false)
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
     const handleLogout = async () => {
@@ -84,14 +103,24 @@ export default function Header() {
         }
     }
 
-    const AuthButton = () => {
+    const AuthButton = ({ mobile = false }: { mobile?: boolean }) => {
         if (!user) {
             return (
                 <Link
                     href="/login"
-                    className="px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
+                    className={mobile 
+                        ? "p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+                        : "px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
+                    }
+                    aria-label={mobile ? "로그인" : undefined}
                 >
-                    로그인
+                    {mobile ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    ) : (
+                        "로그인"
+                    )}
                 </Link>
             )
         }
@@ -100,6 +129,65 @@ export default function Header() {
         const avatarUrl = getAvatarUrl(user)
         const initial = displayName.charAt(0).toUpperCase()
         const badge = getProviderBadge(user)
+
+        if (mobile) {
+            return (
+                <div ref={userMenuRef} className="relative">
+                    <button
+                        onClick={() => setMobileUserMenuOpen(!mobileUserMenuOpen)}
+                        className="p-1 hover:opacity-80 transition-opacity"
+                        aria-label="사용자 메뉴"
+                    >
+                        <div className="relative">
+                            {avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={avatarUrl}
+                                    alt={displayName}
+                                    referrerPolicy="no-referrer"
+                                    className="w-8 h-8 rounded-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700">
+                                    {initial}
+                                </div>
+                            )}
+                            {badge && (
+                                <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none ${badge.className}`}>
+                                    {badge.label}
+                                </div>
+                            )}
+                        </div>
+                    </button>
+
+                    {mobileUserMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-neutral-200 rounded-lg shadow-lg z-50">
+                            <div className="p-3 border-b border-neutral-100">
+                                <p className="text-sm font-semibold text-neutral-900 truncate">
+                                    {displayName}
+                                </p>
+                                {user.email && (
+                                    <p className="text-xs text-neutral-500 truncate mt-0.5">
+                                        {user.email}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="p-2">
+                                <button
+                                    onClick={() => {
+                                        handleLogout()
+                                        setMobileUserMenuOpen(false)
+                                    }}
+                                    className="w-full px-3 py-2 text-sm text-left text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
+                                >
+                                    로그아웃
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )
+        }
 
         return (
             <div className="flex items-center gap-2">
@@ -124,7 +212,7 @@ export default function Header() {
                             </div>
                         )}
                     </div>
-                    <span className="hidden md:inline text-sm font-medium text-neutral-700 max-w-[10ch] truncate">
+                    <span className="hidden xl:inline text-sm font-medium text-neutral-700 max-w-[10ch] truncate">
                         {displayName}
                     </span>
                 </div>
@@ -139,62 +227,107 @@ export default function Header() {
     }
 
     return (
+        <>
         <header className="sticky top-0 z-50 bg-white border-b border-neutral-200">
             <div className="container mx-auto px-4">
-                <div className="flex items-center justify-between h-12 md:h-14">
-                    <div className="flex items-center gap-6">
-                        <Link href="/" className="text-lg font-semibold text-violet-700 tracking-tight mr-2">
-                            왜난리
+                {/* 데스크톱 레이아웃 (1280px 이상) - 1단 구조 */}
+                <div className="hidden xl:flex items-center justify-between h-14">
+                    <div className="flex items-center gap-8">
+                        <Link href="/" className="flex items-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src="/whynali-logo.png"
+                                alt="왜난리"
+                                className="h-8 w-auto"
+                            />
                         </Link>
-                        <div className="hidden md:flex">
-                            <Nav />
-                        </div>
+                        <Nav />
                     </div>
 
-                    <div className="hidden md:flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                         <SearchBar />
                         <AuthButton />
                         <Link
                             href="/admin"
-                            className="px-3 py-1.5 text-sm font-medium bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors"
+                            className="px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
                         >
                             관리자
                         </Link>
                     </div>
-
-                    <button
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className="md:hidden p-2 -mr-2 text-neutral-600"
-                        aria-label="메뉴"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            {mobileMenuOpen ? (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            ) : (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                            )}
-                {/* 모바일 메뉴 */}
-                        </svg>
-                    </button>
                 </div>
 
-                {mobileMenuOpen && (
-                    <div className="md:hidden border-t border-neutral-100 py-4">
-                        <Nav mobile onNavigate={() => setMobileMenuOpen(false)} />
-                        <div className="mt-4 pt-4 border-t border-neutral-100 flex flex-col gap-3">
-                            <SearchBar />
-                            <Link
-                                href="/admin"
-                                onClick={() => setMobileMenuOpen(false)}
-                                className="block px-3 py-2 text-sm font-medium bg-gray-900 text-white rounded text-center hover:bg-gray-700"
+                {/* 모바일 레이아웃 (1280px 미만) - 2단 구조 */}
+                <div className="xl:hidden">
+                    {/* 상단 바: 로고 + 검색 + 유저 */}
+                    <div className="flex items-center justify-between h-12">
+                        <Link href="/" className="flex items-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src="/whynali-logo.png"
+                                alt="왜난리"
+                                className="h-6 w-auto"
+                            />
+                        </Link>
+
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+                                className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+                                aria-label="검색"
                             >
-                                관리자
-                            </Link>
-                            <AuthButton />
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </button>
+                            <AuthButton mobile />
                         </div>
                     </div>
-                )}
+
+                    {/* GNB 바 */}
+                    <div className="border-t border-neutral-100">
+                        <div className="overflow-x-auto scrollbar-hide px-4 py-2">
+                            <div className="flex gap-4 min-w-max">
+                                <Nav mobile />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* 모바일 플로팅 검색바 */}
+            {mobileSearchOpen && (
+                <>
+                    {/* 검색바 컨테이너 (GNB 아래에 위치) */}
+                    <div className="xl:hidden absolute left-0 right-0 z-50 bg-white shadow-lg border-b border-neutral-200">
+                        <div className="container mx-auto px-4 py-3">
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar mobile onSearchComplete={() => setMobileSearchOpen(false)} />
+                                </div>
+                                <button
+                                    onClick={() => setMobileSearchOpen(false)}
+                                    className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+                                    aria-label="검색 닫기"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </header>
+        
+        {/* 모바일 검색 오버레이 (헤더 밖에 위치) */}
+        {mobileSearchOpen && (
+            <div 
+                className="xl:hidden fixed inset-0 bg-black/50 z-30"
+                style={{ top: 'var(--header-height, 0)' }}
+                onClick={() => setMobileSearchOpen(false)}
+            />
+        )}
+        </>
     )
 }

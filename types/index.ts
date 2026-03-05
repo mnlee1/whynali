@@ -45,7 +45,10 @@ export interface Vote {
     id: string
     issue_id: string
     title?: string
-    phase?: string
+    phase?: '대기' | '진행중' | '마감'
+    issue_status_snapshot?: '점화' | '논란중' | '종결' | null
+    started_at?: string | null
+    ended_at?: string | null
     created_at: string
 }
 

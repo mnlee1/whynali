@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 
-/* GET /api/votes?issue_id= — 투표 목록 + 선택지 + 현재 사용자 참여 기록 */
+/* GET /api/votes?issue_id=&limit= — 투표 목록 + 선택지 + 현재 사용자 참여 기록 */
 export async function GET(request: NextRequest) {
     const issue_id = request.nextUrl.searchParams.get('issue_id')
-
-    if (!issue_id) {
-        return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
-    }
+    const limit = Number(request.nextUrl.searchParams.get('limit') ?? 0)
 
     const admin = createSupabaseAdminClient()
-    const { data, error } = await admin
+    
+    let query = admin
         .from('votes')
-        .select('*, vote_choices(*)')
-        .eq('issue_id', issue_id)
-        .order('created_at', { ascending: true })
+        .select('*, vote_choices(*), issues(id, title)')
+        .in('phase', ['진행중', '마감'])
+        .order('created_at', { ascending: false })
+
+    if (issue_id) {
+        query = query.eq('issue_id', issue_id)
+    }
+
+    if (limit > 0) {
+        query = query.limit(limit)
+    }
+
+    const { data, error } = await query
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })

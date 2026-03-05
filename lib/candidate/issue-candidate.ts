@@ -21,7 +21,12 @@
 
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { calculateHeatIndex } from '@/lib/analysis/heat'
-import type { IssueCategory } from '@/types/issue'
+import type { IssueCategory } from '@/lib/config/categories'
+import {
+    getAllCategoryKeywords,
+    getAllContextRules,
+    getCategoryIds,
+} from '@/lib/config/categories'
 import { validateGroups } from '@/lib/ai/perplexity-group-validator'
 import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
 
@@ -210,6 +215,10 @@ const GROUPING_STOPWORDS = new Set([
     '한국', '서울', '미국', '중국', '일본', '북한', '러시아', '영국', '프랑스',
     '유럽', '아시아', '동남아', '중동', '아프리카', '세계', '글로벌',
     '통합', '행정', '지방', '지역', '개최', '교육', '공개',
+    // 방향·위치 관련 범용어 (너무 일반적)
+    '어디', '어디로', '어디서', '어디에', '여기', '저기', '거기',
+    // 모집·참여 관련 범용어 (지역명 없이 단독 사용 시 오매칭 원인)
+    '모집', '참여', '신청', '접수', '지원', '선발', '채용',
     // 범용 정치·소통 용어
     '발언', '언급', '입장', '반박', '대응', '논평', '성명', '담화', '연설', '회견', '인터뷰',
     // 범용 동사·형용사·조사 (커뮤니티 오매칭 방지)
@@ -329,6 +338,9 @@ function commonKeywordCount(a: string[], b: string[]): number {
  * 공통 키워드 2개 이상이면 같은 후보로 판단.
  * 단, 핵심 인물(3글자 이상 고유명사)이 공통이면 키워드 1개여도 같은 그룹.
  * 
+ * 개선: 카테고리가 다르면 3개 이상 키워드 필요 (2개→3개로 상향)
+ * 범용 단어 하나로 무관한 뉴스가 묶이는 문제 방지
+ * 
  * 노이즈 방지는 ALERT_THRESHOLD(기본 3건)와 고유 출처 조건으로 2차 방어.
  *
  * 주의: 그룹 tokens를 합집합으로 갱신하지 않는다.
@@ -377,8 +389,13 @@ function groupItems(items: RawItem[]): CandidateGroup[] {
             const sameCategory = !item.category || !group.items[0].category || 
                                  item.category === group.items[0].category
             
-            // 조건: (키워드 3개 이상) OR (키워드 2개 이상 && 같은 카테고리) OR (키워드 1개 이상 && 핵심 인물 공통)
-            // 카테고리가 달라도 3개 이상 키워드가 겹치면 무조건 같은 이슈로 묶음 (블랙홀 방지 타협안)
+            // 조건 개선:
+            // - (키워드 3개 이상) → 카테고리 무관하게 같은 이슈 (확실한 매칭)
+            // - (키워드 2개 이상 && 같은 카테고리) → 같은 카테고리 내에서 2개 키워드로 묶기
+            // - (키워드 1개 이상 && 핵심 인물 공통) → 핵심 인물 중심 이슈는 1개 키워드로도 묶기
+            // 
+            // 기존에 "카테고리 달라도 3개 이상 키워드면 무조건 묶기"는 유지
+            // 하지만 2개 키워드는 같은 카테고리일 때만 → 범용 단어로 인한 오매칭 방지
             if (commonCount >= 3 || (commonCount >= 2 && sameCategory) || (commonCount >= 1 && hasCommonPerson)) {
                 group.items.push(item)
                 // 토큰을 합집합으로 갱신하지 않음 — 연쇄 그루핑 방지
@@ -519,108 +536,15 @@ async function linkCollections(
 
 /**
  * CATEGORY_KEYWORDS - 카테고리별 제목 키워드 사전
- *
- * 제목에서 이 키워드가 몇 개 매칭되는지 스코어링해 카테고리를 결정한다.
- * 키워드 추가/수정으로 분류 정확도를 조정할 수 있다.
+ * 설정 파일에서 자동 로드
  */
-const CATEGORY_KEYWORDS: Record<IssueCategory, string[]> = {
-    연예: [
-        '배우', '가수', '아이돌', '드라마', '영화', '방송', '팬', '연기',
-        '뮤직비디오', '콘서트', '공연', '데뷔', '컴백', '연예인', '스타', '오디션',
-        '활동', 'SM', 'JYP', 'HYBE', '걸그룹', '보이그룹', '솔로', '앨범', '뮤지컬',
-        '소속사', '매니저', '스캔들', '열애', '결혼', '이혼', '임신', '은퇴',
-        '넷플릭스', '유튜브', '엔터', '아티스트',
-    ],
-    스포츠: [
-        '야구', '축구', '농구', '배구', '선수', '감독', '경기', '우승', '리그',
-        '득점', '올림픽', '월드컵', '체육', '코치', '트레이드', '시즌', '챔피언',
-        '골', '타자', '투수', '수비', '공격', '패', '승', '골키퍼', '에이전트',
-        '구단', '팀', '육상', '수영', '탁구', '테니스', '골프', '마라톤',
-        // '예능', '전국', '스포츠' 제거 (애매함)
-    ],
-    정치: [
-        '대통령', '국회', '정당', '여당', '야당', '선거', '의원', '장관',
-        '탄핵', '법안', '총리', '내각', '청와대', '국무', '정치', '당대표',
-        '정책', '입법', '개헌', '헌법', '투표', '공천', '후보', '정부',
-        '여론', '국정', '국방', '외교', '안보',
-        // 보강: 수사·사법 기관 관련 정치 이슈
-        '특검', '공수처', '검사', '기소', '수사', '편파수사',
-        '여당', '야당', '국힘', '민주당', '대선', '총선', '내란',
-        '사면', '탄핵소추', '헌재', '법사위',
-        // 보강: 행정부처
-        '행안부', '국토부', '환경부', '복지부',
-    ],
-    사회: [
-        '사건', '사망', '부상', '화재', '범죄', '재판',
-        '피해', '시위', '갈등', '체포', '실종', '사고', '폭행',
-        '성범죄', '마약', '사기', '횡령', '뇌물', '비리', '항의',
-        '파업', '시위대', '집회', '조사', '구속', '판결',
-        // 보강: 생활·사회 이슈
-        '청약', '아파트', '부동산', '임대차', '전세사기',
-        '학교폭력', '직장내괴롭힘', '갑질', '인종차별',
-        '교통사고', '산업재해', '식품안전',
-        // 보강: 불법/점용/환경 문제
-        '불법', '점용', '재조사', '하천', '계곡', '시설',
-    ],
-    기술: [
-        'AI', '인공지능', '반도체', '스마트폰', '앱', '플랫폼', '스타트업',
-        '구글', '애플', '메타', '삼성전자', 'LG전자', 'SK하이닉스', '소프트웨어',
-        '클라우드', '데이터', '사이버', '해킹', '개발자', '코딩', '로봇',
-        '드론', '자율주행', '전기차', '배터리', '디지털', '서비스', '유튜브',
-        // 자동차/타이어 산업 키워드 추가
-        '타이어', 'OE', '신차용', 'BMW', '벤츠', '아우디', '테슬라', 
-        '현대차', '기아', '넥센타이어', '한국타이어',
-    ],
-}
+const CATEGORY_KEYWORDS = getAllCategoryKeywords()
 
 /**
  * CONTEXT_RULES - 맥락 기반 카테고리 판단 규칙
- *
- * 특정 키워드 조합이 함께 등장하면 해당 카테고리 점수를 크게 증가시킨다.
- * 네이버 API 오분류를 방지하고 제품명/브랜드명 내 카테고리 단어의 오판을 막는다.
- *
- * boost: 조합 매칭 시 추가할 점수 (기본 키워드보다 우선순위 높음)
+ * 설정 파일에서 자동 로드
  */
-const CONTEXT_RULES: Array<{
-    keywords: string[]
-    category: IssueCategory
-    boost: number
-}> = [
-    // 기술 - 자동차/타이어 산업
-    { keywords: ['타이어', 'OE'], category: '기술', boost: 15 },
-    { keywords: ['타이어', '신차용'], category: '기술', boost: 15 },
-    { keywords: ['타이어', '공급'], category: '기술', boost: 12 },
-    { keywords: ['BMW', '공급'], category: '기술', boost: 10 },
-    { keywords: ['넥센타이어'], category: '기술', boost: 10 },
-    { keywords: ['한국타이어'], category: '기술', boost: 10 },
-    
-    // 기술 - 반도체/IT
-    { keywords: ['반도체', '생산'], category: '기술', boost: 15 },
-    { keywords: ['AI', '모델'], category: '기술', boost: 12 },
-    { keywords: ['전기차', '배터리'], category: '기술', boost: 12 },
-    
-    // 스포츠 - 경기/선수
-    { keywords: ['선수', '경기'], category: '스포츠', boost: 15 },
-    { keywords: ['감독', '선수'], category: '스포츠', boost: 15 },
-    { keywords: ['우승', '경기'], category: '스포츠', boost: 12 },
-    { keywords: ['리그', '시즌'], category: '스포츠', boost: 12 },
-    
-    // 정치 - 정부/대통령 (입법/정책 결정 중심)
-    { keywords: ['국회', '법안'], category: '정치', boost: 15 },
-    { keywords: ['여당', '야당'], category: '정치', boost: 15 },
-    { keywords: ['탄핵', '국회'], category: '정치', boost: 15 },
-    { keywords: ['대선', '후보'], category: '정치', boost: 15 },
-    
-    // 사회 - 불법/범죄/재난
-    { keywords: ['불법', '점용'], category: '사회', boost: 15 },
-    { keywords: ['하천', '불법'], category: '사회', boost: 15 },
-    { keywords: ['재조사', '불법'], category: '사회', boost: 12 },
-    { keywords: ['화재', '사망'], category: '사회', boost: 15 },
-    { keywords: ['사고', '피해'], category: '사회', boost: 12 },
-    // 정부 발표라도 사회 문제 해결 중심이면 사회
-    { keywords: ['정부', '재조사'], category: '사회', boost: 10 },
-    { keywords: ['행안부', '재조사'], category: '사회', boost: 10 },
-]
+const CONTEXT_RULES = getAllContextRules()
 
 /**
  * inferCategory - 그룹 내 제목 키워드 스코어링으로 카테고리 결정
@@ -635,29 +559,26 @@ const CONTEXT_RULES: Array<{
  * 5차(폴백): 둘 다 없으면 '사회' 기본값
  */
 function inferCategory(items: RawItem[]): IssueCategory {
-    const validCategories: IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
+    const validCategories = getCategoryIds() as IssueCategory[]
     const allTitles = items.map((i) => i.title).join(' ')
 
-    // 1차: 키워드 점수
-    const keywordScores = validCategories.reduce<Record<IssueCategory, number>>(
+    const keywordScores = validCategories.reduce<Record<string, number>>(
         (acc, cat) => {
             acc[cat] = CATEGORY_KEYWORDS[cat].filter((kw) => allTitles.includes(kw)).length
             return acc
         },
-        { 연예: 0, 스포츠: 0, 정치: 0, 사회: 0, 기술: 0 }
+        {}
     )
 
-    // 2차: 맥락 기반 규칙 적용
     let contextMatched = false
     for (const rule of CONTEXT_RULES) {
         const allKeywordsPresent = rule.keywords.every((kw) => allTitles.includes(kw))
         if (allKeywordsPresent) {
-            keywordScores[rule.category] += rule.boost
+            keywordScores[rule.category] = (keywordScores[rule.category] ?? 0) + rule.boost
             contextMatched = true
         }
     }
 
-    // 3차: 수집 카테고리 다수결 점수
     const categoryCounts = items
         .filter((i) => i.category !== null)
         .reduce<Record<string, number>>((acc, i) => {
@@ -674,32 +595,25 @@ function inferCategory(items: RawItem[]): IssueCategory {
     const topMajority = (Object.entries(categoryCounts) as [string, number][])
         .sort((a, b) => b[1] - a[1])[0]
 
-    // 4차: 우선순위 판단
-    
-    // 맥락 규칙이 매칭되었으면 키워드 우선
-    if (contextMatched && topKeyword[1] > 0) {
+    if (contextMatched && topKeyword && topKeyword[1] > 0) {
         return topKeyword[0]
     }
 
-    // 다수결이 있지만 해당 카테고리의 키워드 점수가 0이면 네이버 오류로 판단
     if (topMajority && topMajority[1] > 0) {
         const majorityCategory = topMajority[0] as IssueCategory
-        const majorityKeywordScore = keywordScores[majorityCategory]
+        const majorityKeywordScore = keywordScores[majorityCategory] ?? 0
         
-        // 다수결 카테고리의 키워드 점수가 0이고, 다른 카테고리에 키워드가 있으면 키워드 우선
-        if (majorityKeywordScore === 0 && topKeyword[1] > 0) {
+        if (majorityKeywordScore === 0 && topKeyword && topKeyword[1] > 0) {
             return topKeyword[0]
         }
         
         return majorityCategory
     }
 
-    // 다수결 없으면 키워드
-    if (topKeyword[1] > 0) {
+    if (topKeyword && topKeyword[1] > 0) {
         return topKeyword[0]
     }
 
-    // 5차: 폴백
     return '사회'
 }
 
@@ -951,50 +865,57 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             ['사회', '기술', '스포츠']
 
         // 최근 24시간 내 유사 이슈 존재 여부 확인 (AI 기반 중복 방지)
-        const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
-        
-        // 1단계: 정확한 제목 일치 체크 (빠른 체크)
-        const { data: exactMatch } = await supabaseAdmin
-            .from('issues')
-            .select('id, title, approval_status, heat_index')
-            .eq('title', representativeTitle)
-            .gte('created_at', since24h)
-            .limit(1)
-
-        let existingIssue = exactMatch?.[0] ?? null
-
-        // 2단계: AI 기반 유사 이슈 체크 (정확한 일치 없을 때만)
-        if (!existingIssue && enableAIDuplicateCheck) {
-            const { data: recentIssues } = await supabaseAdmin
+        // Race Condition 방지: 중복 체크를 함수로 분리하여 재사용
+        const checkForDuplicateIssue = async (): Promise<{ id: string; title: string; approval_status: string; heat_index: number | null } | null> => {
+            const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
+            
+            // 1단계: 정확한 제목 일치 체크 (빠른 체크)
+            const { data: exactMatch } = await supabaseAdmin
                 .from('issues')
                 .select('id, title, approval_status, heat_index')
+                .eq('title', representativeTitle)
                 .gte('created_at', since24h)
-                .order('created_at', { ascending: false })
-                .limit(20) // 최근 20개만 체크
-            
-            if (recentIssues && recentIssues.length > 0) {
-                const { checkDuplicateWithAI } = await import('@/lib/ai/duplicate-checker')
+                .limit(1)
+
+            let existingIssue = exactMatch?.[0] ?? null
+
+            // 2단계: AI 기반 유사 이슈 체크 (정확한 일치 없을 때만)
+            if (!existingIssue && enableAIDuplicateCheck) {
+                const { data: recentIssues } = await supabaseAdmin
+                    .from('issues')
+                    .select('id, title, approval_status, heat_index')
+                    .gte('created_at', since24h)
+                    .order('created_at', { ascending: false })
+                    .limit(20) // 최근 20개만 체크
                 
-                for (const issue of recentIssues) {
-                    try {
-                        const result = await checkDuplicateWithAI(issue.title, representativeTitle)
-                        
-                        if (result.isDuplicate) {
-                            console.log(`[AI 중복 감지] "${representativeTitle}" → "${issue.title}" (${result.confidence}% - ${result.reason})`)
-                            existingIssue = issue
-                            break
+                if (recentIssues && recentIssues.length > 0) {
+                    const { checkDuplicateWithAI } = await import('@/lib/ai/duplicate-checker')
+                    
+                    for (const issue of recentIssues) {
+                        try {
+                            const result = await checkDuplicateWithAI(issue.title, representativeTitle)
+                            
+                            if (result.isDuplicate) {
+                                console.log(`[AI 중복 감지] "${representativeTitle}" → "${issue.title}" (${result.confidence}% - ${result.reason})`)
+                                existingIssue = issue
+                                break
+                            }
+                            
+                            // Rate Limit 방지: 3초 대기
+                            await new Promise(resolve => setTimeout(resolve, 3000))
+                            
+                        } catch (error) {
+                            console.error('[AI 중복 체크 에러]', error)
+                            break // 에러 시 중단하고 신규 등록
                         }
-                        
-                        // Rate Limit 방지: 3초 대기
-                        await new Promise(resolve => setTimeout(resolve, 3000))
-                        
-                    } catch (error) {
-                        console.error('[AI 중복 체크 에러]', error)
-                        break // 에러 시 중단하고 신규 등록
                     }
                 }
             }
+            
+            return existingIssue
         }
+        
+        let existingIssue = await checkForDuplicateIssue()
 
         if (existingIssue) {
             // 기존 이슈 화력 재계산 후 필터링
@@ -1067,7 +988,64 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             .single()
 
         if (tempError || !tempIssue) {
+            // Race Condition 가능성: 동시에 같은 이슈가 등록되었을 수 있음
+            if (tempError?.code === '23505') { // Unique constraint violation
+                console.log(`[Race Condition 감지] "${representativeTitle}" 이미 등록됨, 재체크`)
+                // 다시 중복 체크
+                const recheckIssue = await checkForDuplicateIssue()
+                if (recheckIssue) {
+                    // 기존 이슈에 수집 건 연결만 수행
+                    await linkCollections(recheckIssue.id, newsIds, communityIds)
+                    console.log(`[기존 이슈 연결] "${representativeTitle}"에 ${newsIds.length}건 뉴스 + ${communityIds.length}건 커뮤니티 연결`)
+                    continue
+                }
+            }
             console.error('임시 이슈 생성 에러:', tempError)
+            continue
+        }
+        
+        // 1.5단계: 임시 이슈 생성 직후 최종 중복 체크 (Race Condition 최종 방어)
+        const finalCheck = await checkForDuplicateIssue()
+        if (finalCheck && finalCheck.id !== tempIssue.id) {
+            console.log(`[Race Condition 방어] 임시 이슈 생성 중 중복 발견, 임시 이슈 삭제: "${representativeTitle}"`)
+            // 방금 생성한 임시 이슈 삭제
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', tempIssue.id)
+            
+            // 기존 이슈에 수집 건 연결
+            await linkCollections(finalCheck.id, newsIds, communityIds)
+            const actualHeat = await calculateHeatIndex(finalCheck.id).catch(() => 0)
+            
+            // 실제 화력이 기준 미달이면 삭제
+            if (actualHeat < MIN_HEAT_TO_REGISTER) {
+                console.log(`[필터] 기존 이슈 실제 화력 부족으로 삭제: "${representativeTitle}" (실제 화력: ${actualHeat}, 최소: ${MIN_HEAT_TO_REGISTER})`)
+                await supabaseAdmin
+                    .from('issues')
+                    .delete()
+                    .eq('id', finalCheck.id)
+                continue
+            }
+            
+            // 기존 이슈가 대기 상태이고 자동 승인 조건이면 승인 처리
+            if (finalCheck.approval_status === '대기') {
+                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+                
+                if (shouldAutoApprove) {
+                    await supabaseAdmin
+                        .from('issues')
+                        .update({ 
+                            approval_status: '승인', 
+                            approval_type: 'auto',
+                            approved_at: now.toISOString() 
+                        })
+                        .eq('id', finalCheck.id)
+                    console.log(`[자동승인 완료] 기존 이슈 "${representativeTitle}" (카테고리: ${issueCategory}, 화력: ${actualHeat}점)`)
+                    result.created++
+                }
+            }
             continue
         }
 

@@ -6,6 +6,53 @@ import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
+/* GET /api/admin/votes — 투표 목록 조회 (관리자)
+   query: phase?, limit? */
+export async function GET(request: NextRequest) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
+    try {
+        const { searchParams } = request.nextUrl
+        const phase = searchParams.get('phase')
+        const limit = parseInt(searchParams.get('limit') ?? '50', 10)
+
+        let query = supabaseAdmin
+            .from('votes')
+            .select('id, issue_id, title, phase, issue_status_snapshot, started_at, ended_at, created_at, issues!inner(id, title), vote_choices(id, label, count)')
+            .order('created_at', { ascending: false })
+            .limit(limit)
+
+        if (phase && ['대기', '진행중', '마감'].includes(phase)) {
+            query = query.eq('phase', phase)
+        }
+
+        const { data, error } = await query
+
+        if (error) throw error
+
+        // count는 필요할 때만 별도 쿼리로 가져오기 (더 빠름)
+        let count = data?.length ?? 0
+        if (count >= limit) {
+            let countQuery = supabaseAdmin
+                .from('votes')
+                .select('id', { count: 'exact', head: true })
+            
+            if (phase && ['대기', '진행중', '마감'].includes(phase)) {
+                countQuery = countQuery.eq('phase', phase)
+            }
+            
+            const { count: totalCount } = await countQuery
+            count = totalCount ?? count
+        }
+
+        return NextResponse.json({ data: data ?? [], total: count })
+    } catch (e) {
+        const message = e instanceof Error ? e.message : '투표 조회 실패'
+        return NextResponse.json({ error: message }, { status: 500 })
+    }
+}
+
 /* POST /api/admin/votes — 투표 생성 (선택지 동시 생성)
    body: { issue_id, title?, choices: string[] } */
 export async function POST(request: NextRequest) {
@@ -32,12 +79,23 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '선택지는 1~50자여야 합니다.' }, { status: 400 })
         }
 
+        const { data: issue, error: issueError } = await supabaseAdmin
+            .from('issues')
+            .select('status')
+            .eq('id', issue_id)
+            .single()
+
+        if (issueError) {
+            return NextResponse.json({ error: '이슈를 찾을 수 없습니다.' }, { status: 404 })
+        }
+
         const { data: vote, error: voteError } = await supabaseAdmin
             .from('votes')
             .insert({
                 issue_id,
                 title: title ? sanitizeText(title) : null,
-                phase: '진행중',
+                phase: '대기',
+                issue_status_snapshot: issue?.status,
             })
             .select()
             .single()

@@ -38,12 +38,13 @@ const STATUS_STYLE: Record<string, string> = {
 }
 
 function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleString('ko-KR', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    })
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
 export default function AdminDiscussionsPage() {
@@ -55,25 +56,30 @@ export default function AdminDiscussionsPage() {
     const [processingId, setProcessingId] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
-    /* 신규 생성 폼 */
-    const [showCreateForm, setShowCreateForm] = useState(false)
-    const [newIssueQuery, setNewIssueQuery] = useState('')
-    const [newIssueResults, setNewIssueResults] = useState<Issue[]>([])
-    const [newIssueSearching, setNewIssueSearching] = useState(false)
-    const [newSelectedIssue, setNewSelectedIssue] = useState<Issue | null>(null)
-    const [newContent, setNewContent] = useState('')
-    const [creating, setCreating] = useState(false)
-    const [createError, setCreateError] = useState<string | null>(null)
+    /* 다중 선택 */
+    const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(new Set())
+    const [bulkProcessing, setBulkProcessing] = useState(false)
 
-    /* AI 생성 폼 */
-    const [showAiForm, setShowAiForm] = useState(false)
-    const [aiIssueQuery, setAiIssueQuery] = useState('')
-    const [aiIssueResults, setAiIssueResults] = useState<Issue[]>([])
-    const [aiIssueSearching, setAiIssueSearching] = useState(false)
-    const [aiSelectedIssue, setAiSelectedIssue] = useState<Issue | null>(null)
+    /* 통합 생성 폼 */
+    const [showCreateForm, setShowCreateForm] = useState(false)
+    const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai')
+    const [approvedIssues, setApprovedIssues] = useState<Issue[]>([])
+    const [loadingIssues, setLoadingIssues] = useState(false)
+    const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
+    const [newContent, setNewContent] = useState('')
     const [aiCount, setAiCount] = useState(3)
-    const [aiGenerating, setAiGenerating] = useState(false)
-    const [aiError, setAiError] = useState<string | null>(null)
+    const [submitting, setSubmitting] = useState(false)
+    const [formError, setFormError] = useState<string | null>(null)
+
+    /* AI 미리보기 */
+    const [generatedTopics, setGeneratedTopics] = useState<Array<{
+        content: string
+    }>>([])
+    const [showPreview, setShowPreview] = useState(false)
+    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
+    const [generating, setGenerating] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [regenerateDisabled, setRegenerateDisabled] = useState(false)
 
     /* 수정 폼 */
     const [editingId, setEditingId] = useState<string | null>(null)
@@ -83,61 +89,158 @@ export default function AdminDiscussionsPage() {
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2, '종료': 3 }
 
-    /* 승인된 이슈 검색 — AI 생성/직접 생성 공통 */
-    const searchIssues = useCallback(async (query: string, setter: (r: Issue[]) => void, loadingSetter: (v: boolean) => void) => {
-        if (!query.trim()) {
-            setter([])
-            return
-        }
-        loadingSetter(true)
+    /* 승인된 이슈 목록 로드 */
+    const loadApprovedIssues = useCallback(async () => {
+        setLoadingIssues(true)
         try {
-            const res = await fetch(
-                `/api/admin/issues?approval_status=승인&search=${encodeURIComponent(query)}&limit=10`
-            )
+            const res = await fetch('/api/admin/issues?approval_status=승인&limit=100')
             const json = await res.json()
-            setter(json.data ?? [])
+            setApprovedIssues(json.data ?? [])
         } catch {
-            setter([])
+            setApprovedIssues([])
         } finally {
-            loadingSetter(false)
+            setLoadingIssues(false)
         }
     }, [])
 
-    /* 승인된 이슈 검색 (AI 생성 대상) */
-    const searchApprovedIssues = useCallback(async (query: string) => {
-        await searchIssues(query, setAiIssueResults, setAiIssueSearching)
-    }, [searchIssues])
+    /* 폼 열기 */
+    const handleOpenForm = () => {
+        setShowCreateForm(true)
+        loadApprovedIssues()
+    }
 
-    /* AI 토론 주제 후보 생성 */
-    const handleAiGenerate = async () => {
-        if (!aiSelectedIssue || aiGenerating) return
-        setAiGenerating(true)
-        setAiError(null)
+    /* 폼 닫기 */
+    const handleCloseForm = () => {
+        setShowCreateForm(false)
+        setSelectedIssue(null)
+        setNewContent('')
+        setCreateMode('ai')
+        setFormError(null)
+        setGeneratedTopics([])
+        setShowPreview(false)
+        setSelectedIndices(new Set())
+    }
+
+    /* AI 생성 (미리보기) */
+    const handleGenerate = async () => {
+        if (!selectedIssue || generating) return
+
+        setGenerating(true)
+        setFormError(null)
+
         try {
             const res = await fetch('/api/admin/discussions/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: aiSelectedIssue.id, count: aiCount }),
+                body: JSON.stringify({ issue_id: selectedIssue.id, count: aiCount }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setShowAiForm(false)
-            setAiSelectedIssue(null)
-            setAiIssueQuery('')
-            setAiIssueResults([])
-            // 대기 탭으로 이동해 생성된 주제 확인
+
+            const topics = json.data.map((t: any) => ({
+                content: t.body || ''
+            }))
+
+            setGeneratedTopics(topics)
+            setSelectedIndices(new Set(topics.map((_: any, idx: number) => idx)))
+            setShowPreview(true)
+        } catch (e) {
+            setFormError(e instanceof Error ? e.message : 'AI 생성 실패')
+        } finally {
+            setGenerating(false)
+        }
+    }
+
+    /* 재생성 */
+    const handleRegenerate = async () => {
+        if (regenerateDisabled) return
+        setRegenerateDisabled(true)
+        await handleGenerate()
+        setTimeout(() => setRegenerateDisabled(false), 5000)
+    }
+
+    /* 전체 선택/해제 */
+    const handleTogglePreviewAll = () => {
+        if (selectedIndices.size === generatedTopics.length) {
+            setSelectedIndices(new Set())
+        } else {
+            setSelectedIndices(new Set(generatedTopics.map((_, idx) => idx)))
+        }
+    }
+
+    /* 개별 선택 토글 */
+    const handleTogglePreviewSelect = (idx: number) => {
+        const newSet = new Set(selectedIndices)
+        if (newSet.has(idx)) {
+            newSet.delete(idx)
+        } else {
+            newSet.add(idx)
+        }
+        setSelectedIndices(newSet)
+    }
+
+    /* 선택 항목 등록 */
+    const handleSaveSelected = async () => {
+        if (!selectedIssue || saving || selectedIndices.size === 0) return
+
+        setSaving(true)
+        setFormError(null)
+
+        try {
+            const selectedTopics = generatedTopics.filter((_, idx) => selectedIndices.has(idx))
+
+            for (const topic of selectedTopics) {
+                const res = await fetch('/api/admin/discussions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        issue_id: selectedIssue.id,
+                        content: topic.content,
+                    }),
+                })
+                const json = await res.json()
+                if (!res.ok) throw new Error(json.error)
+            }
+
+            handleCloseForm()
             setFilter('대기')
             loadTopics('대기')
         } catch (e) {
-            setAiError(e instanceof Error ? e.message : 'AI 생성 실패')
+            setFormError(e instanceof Error ? e.message : '등록 실패')
         } finally {
-            setAiGenerating(false)
+            setSaving(false)
+        }
+    }
+
+    /* 직접 입력 제출 */
+    const handleSubmitManual = async () => {
+        if (!selectedIssue || !newContent.trim() || submitting) return
+
+        setSubmitting(true)
+        setFormError(null)
+
+        try {
+            const res = await fetch('/api/admin/discussions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ issue_id: selectedIssue.id, content: newContent.trim() }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+
+            handleCloseForm()
+            loadTopics(filter)
+        } catch (e) {
+            setFormError(e instanceof Error ? e.message : '생성 실패')
+        } finally {
+            setSubmitting(false)
         }
     }
 
     const loadTopics = useCallback(async (status: FilterStatus) => {
         setLoading(true)
         setError(null)
+        setSelectedTopicIds(new Set()) // 로드 시 선택 초기화
         try {
             const params = new URLSearchParams({ limit: '50' })
             if (status) params.set('approval_status', status)
@@ -164,6 +267,75 @@ export default function AdminDiscussionsPage() {
     useEffect(() => {
         loadTopics(filter)
     }, [filter, loadTopics])
+
+    /* 토론 주제 목록 다중 선택 토글 */
+    const handleToggleTopicSelect = (id: string) => {
+        setSelectedTopicIds(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
+    }
+
+    /* 토론 주제 목록 전체 선택/해제 */
+    const handleToggleTopicAll = () => {
+        if (selectedTopicIds.size === topics.length) {
+            setSelectedTopicIds(new Set())
+        } else {
+            setSelectedTopicIds(new Set(topics.map(t => t.id)))
+        }
+    }
+
+    /* 일괄 처리 */
+    const handleBulkAction = async (action: '승인' | '반려' | '삭제') => {
+        if (selectedTopicIds.size === 0) return
+
+        const confirmMsg =
+            action === '승인'
+                ? `선택한 ${selectedTopicIds.size}개 토론 주제를 승인하시겠습니까?`
+                : action === '반려'
+                ? `선택한 ${selectedTopicIds.size}개 토론 주제를 반려하시겠습니까?`
+                : `선택한 ${selectedTopicIds.size}개 토론 주제를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+
+        if (!window.confirm(confirmMsg)) return
+
+        setBulkProcessing(true)
+        try {
+            const selectedIds = Array.from(selectedTopicIds)
+            const errors: string[] = []
+
+            for (const id of selectedIds) {
+                try {
+                    let res
+                    if (action === '삭제') {
+                        res = await fetch(`/api/admin/discussions/${id}`, { method: 'DELETE' })
+                    } else {
+                        const endpoint = action === '승인' ? `/api/admin/discussions/${id}/approve` : `/api/admin/discussions/${id}/reject`
+                        res = await fetch(endpoint, { method: 'POST' })
+                    }
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.error)
+                } catch (e) {
+                    errors.push(`${id}: ${e instanceof Error ? e.message : '처리 실패'}`)
+                }
+            }
+
+            if (errors.length > 0) {
+                alert(`일부 항목 처리 실패:\n${errors.join('\n')}`)
+            }
+
+            loadTopics(filter)
+            setSelectedTopicIds(new Set())
+        } catch (e) {
+            alert(e instanceof Error ? e.message : '일괄 처리 실패')
+        } finally {
+            setBulkProcessing(false)
+        }
+    }
 
     const handleEditStart = (topic: DiscussionTopic) => {
         setEditingId(topic.id)
@@ -232,36 +404,15 @@ export default function AdminDiscussionsPage() {
                         : t
                 )
             )
+            setSelectedTopicIds(prev => {
+                const next = new Set(prev)
+                next.delete(id)
+                return next
+            })
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
             setProcessingId(null)
-        }
-    }
-
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!newSelectedIssue || !newContent.trim()) return
-        setCreating(true)
-        setCreateError(null)
-        try {
-            const res = await fetch('/api/admin/discussions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: newSelectedIssue.id, content: newContent.trim() }),
-            })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-            setNewIssueQuery('')
-            setNewIssueResults([])
-            setNewSelectedIssue(null)
-            setNewContent('')
-            setShowCreateForm(false)
-            loadTopics(filter)
-        } catch (e) {
-            setCreateError(e instanceof Error ? e.message : '생성 실패')
-        } finally {
-            setCreating(false)
         }
     }
 
@@ -285,198 +436,173 @@ export default function AdminDiscussionsPage() {
                         새로고침
                     </button>
                     <button
-                        onClick={() => { setShowAiForm(!showAiForm); setShowCreateForm(false) }}
-                        className="px-3 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
-                    >
-                        AI 생성
-                    </button>
-                    <button
-                        onClick={() => { setShowCreateForm(!showCreateForm); setShowAiForm(false) }}
+                        onClick={handleOpenForm}
                         className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
-                        + 직접 생성
+                        + 토론 주제 생성
                     </button>
                 </div>
             </div>
 
-            {/* AI 생성 폼 */}
-            {showAiForm && (
-                <div className="mb-6 p-4 border border-purple-200 bg-purple-50 rounded-lg space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                        <div>
-                            <h2 className="text-sm font-semibold text-purple-800">AI 토론 주제 생성</h2>
-                            <p className="text-xs text-purple-600 mt-0.5">
-                                이슈 메타데이터(제목·카테고리·화력)만 사용. 본문 미사용. 생성 후 관리자 승인 필요.
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => { setShowAiForm(false); setAiError(null); setAiSelectedIssue(null); setAiIssueQuery(''); setAiIssueResults([]) }}
-                            className="text-purple-400 hover:text-purple-600 text-lg leading-none"
-                        >
-                            ×
-                        </button>
-                    </div>
-
-                    {aiError && (
-                        <p className="text-sm text-red-500">{aiError}</p>
-                    )}
-
-                    {/* 이슈 검색 */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium text-gray-600">대상 이슈 (승인된 이슈만)</label>
-                        <input
-                            type="text"
-                            value={aiIssueQuery}
-                            onChange={(e) => {
-                                setAiIssueQuery(e.target.value)
-                                setAiSelectedIssue(null)
-                                searchApprovedIssues(e.target.value)
-                            }}
-                            placeholder="이슈 제목으로 검색..."
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-purple-400"
-                        />
-                        {aiIssueSearching && (
-                            <p className="text-xs text-gray-400">검색 중...</p>
-                        )}
-                        {aiIssueResults.length > 0 && !aiSelectedIssue && (
-                            <ul className="border border-gray-200 rounded bg-white divide-y divide-gray-100 max-h-40 overflow-y-auto">
-                                {aiIssueResults.map((issue) => (
-                                    <li key={issue.id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setAiSelectedIssue(issue)
-                                                setAiIssueQuery(issue.title)
-                                                setAiIssueResults([])
-                                            }}
-                                            className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-700"
-                                        >
-                                            {issue.title}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        {aiSelectedIssue && (
-                            <p className="text-xs text-purple-700 font-medium">
-                                선택됨: {aiSelectedIssue.title}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* 생성 개수 */}
-                    <div className="flex items-center gap-3">
-                        <label className="text-xs font-medium text-gray-600 whitespace-nowrap">생성 개수</label>
-                        <select
-                            value={aiCount}
-                            onChange={(e) => setAiCount(Number(e.target.value))}
-                            className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-purple-400"
-                        >
-                            {[1, 2, 3, 4, 5].map((n) => (
-                                <option key={n} value={n}>{n}개</option>
-                            ))}
-                        </select>
-                        <span className="text-xs text-gray-400">생성 후 대기 목록에서 승인/반려 처리</span>
-                    </div>
-
-                    <div className="flex justify-end">
-                        <button
-                            type="button"
-                            onClick={handleAiGenerate}
-                            disabled={!aiSelectedIssue || aiGenerating}
-                            className="px-4 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-                        >
-                            {aiGenerating ? 'AI 생성 중...' : 'AI 토론 주제 생성'}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* 신규 생성 폼 */}
+            {/* 통합 생성 폼 */}
             {showCreateForm && (
-                <form
-                    onSubmit={handleCreate}
-                    className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg space-y-3"
-                >
+                <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg space-y-4">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-semibold text-blue-800">토론 주제 직접 생성</h2>
+                        <h2 className="text-sm font-semibold text-blue-800">토론 주제 생성</h2>
                         <button
-                            type="button"
-                            onClick={() => { setShowCreateForm(false); setNewIssueQuery(''); setNewIssueResults([]); setNewSelectedIssue(null); setCreateError(null) }}
+                            onClick={handleCloseForm}
                             className="text-blue-400 hover:text-blue-600 text-lg leading-none"
                         >
                             ×
                         </button>
                     </div>
 
-                    {createError && (
-                        <p className="text-sm text-red-500">{createError}</p>
+                    {formError && (
+                        <p className="text-sm text-red-500">{formError}</p>
                     )}
 
-                    {/* Step 1: 이슈 검색 */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium text-gray-600">
-                            1. 이슈 선택
-                            {newSelectedIssue && (
-                                <button
-                                    type="button"
-                                    onClick={() => { setNewSelectedIssue(null); setNewIssueQuery('') }}
-                                    className="ml-2 text-blue-500 hover:text-blue-700 font-normal"
-                                >
-                                    다시 선택
-                                </button>
-                            )}
-                        </label>
-                        {newSelectedIssue ? (
-                            <div className="px-3 py-2 bg-white border border-blue-300 rounded text-sm text-blue-800 font-medium">
-                                {newSelectedIssue.title}
-                            </div>
-                        ) : (
-                            <>
+                    {/* 생성 방식 선택 */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-600">생성 방식</label>
+                        <div className="flex gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
                                 <input
-                                    type="text"
-                                    value={newIssueQuery}
-                                    onChange={(e) => {
-                                        setNewIssueQuery(e.target.value)
-                                        searchIssues(e.target.value, setNewIssueResults, setNewIssueSearching)
-                                    }}
-                                    placeholder="이슈 제목으로 검색..."
-                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
-                                    autoFocus
+                                    type="radio"
+                                    name="createMode"
+                                    value="ai"
+                                    checked={createMode === 'ai'}
+                                    onChange={(e) => setCreateMode(e.target.value as 'ai')}
+                                    className="w-4 h-4 text-blue-500"
                                 />
-                                {newIssueSearching && (
-                                    <p className="text-xs text-gray-400">검색 중...</p>
-                                )}
-                                {newIssueResults.length > 0 && (
-                                    <ul className="border border-gray-200 rounded bg-white divide-y divide-gray-100 max-h-44 overflow-y-auto">
-                                        {newIssueResults.map((issue) => (
-                                            <li key={issue.id}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setNewSelectedIssue(issue)
-                                                        setNewIssueQuery(issue.title)
-                                                        setNewIssueResults([])
-                                                    }}
-                                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 text-gray-700"
-                                                >
-                                                    {issue.title}
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                                {newIssueQuery && !newIssueSearching && newIssueResults.length === 0 && (
-                                    <p className="text-xs text-gray-400">검색 결과가 없습니다.</p>
-                                )}
-                            </>
+                                <span className="text-sm">AI 자동 생성</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="createMode"
+                                    value="manual"
+                                    checked={createMode === 'manual'}
+                                    onChange={(e) => setCreateMode(e.target.value as 'manual')}
+                                    className="w-4 h-4 text-blue-500"
+                                />
+                                <span className="text-sm">직접 작성</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* 이슈 선택 */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-600">대상 이슈 (승인된 이슈만)</label>
+                        {loadingIssues ? (
+                            <p className="text-xs text-gray-400">이슈 목록 로딩 중...</p>
+                        ) : (
+                            <select
+                                value={selectedIssue?.id ?? ''}
+                                onChange={(e) => {
+                                    const issue = approvedIssues.find((i) => i.id === e.target.value)
+                                    setSelectedIssue(issue ?? null)
+                                }}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                            >
+                                <option value="">이슈를 선택하세요</option>
+                                {approvedIssues.map((issue) => (
+                                    <option key={issue.id} value={issue.id}>
+                                        {issue.title}
+                                    </option>
+                                ))}
+                            </select>
                         )}
                     </div>
 
-                    {/* Step 2: 토론 내용 (이슈 선택 후 표시) */}
-                    {newSelectedIssue && (
+                    {/* AI 모드: 생성 개수 */}
+                    {createMode === 'ai' && !showPreview && (
+                        <div className="space-y-2 p-3 bg-purple-50 border border-purple-200 rounded">
+                            <p className="text-xs text-purple-700">
+                                이슈 메타데이터(제목·카테고리·화력)만 사용. 본문 미사용.
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <label className="text-xs font-medium text-gray-600">생성 개수</label>
+                                <select
+                                    value={aiCount}
+                                    onChange={(e) => setAiCount(Number(e.target.value))}
+                                    className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none"
+                                    disabled={generating}
+                                >
+                                    {[1, 2, 3, 4, 5].map((n) => (
+                                        <option key={n} value={n}>{n}개</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* AI 미리보기 */}
+                    {createMode === 'ai' && showPreview && (
+                        <div className="space-y-3 p-3 bg-white border border-gray-200 rounded">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-gray-800">
+                                    생성 결과 ({generatedTopics.length}개)
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={handleTogglePreviewAll}
+                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                    {selectedIndices.size === generatedTopics.length ? '전체 해제' : '전체 선택'}
+                                </button>
+                            </div>
+
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                                {generatedTopics.map((topic, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={[
+                                            'p-3 border rounded transition-colors',
+                                            selectedIndices.has(idx)
+                                                ? 'border-blue-300 bg-blue-50'
+                                                : 'border-gray-200 bg-white'
+                                        ].join(' ')}
+                                    >
+                                        <label className="flex items-start gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIndices.has(idx)}
+                                                onChange={() => handleTogglePreviewSelect(idx)}
+                                                className="mt-0.5 w-4 h-4"
+                                            />
+                                            <p className="flex-1 text-sm text-gray-900">
+                                                {topic.content}
+                                            </p>
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t">
+                                <button
+                                    type="button"
+                                    onClick={handleRegenerate}
+                                    disabled={regenerateDisabled || generating}
+                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                    {regenerateDisabled ? '재생성 대기 중...' : '🔄 재생성'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveSelected}
+                                    disabled={saving || selectedIndices.size === 0}
+                                    className="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                >
+                                    {saving ? '등록 중...' : `선택 항목 등록 (${selectedIndices.size})`}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 직접 작성 모드: 토론 주제 내용 */}
+                    {createMode === 'manual' && (
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-gray-600">2. 토론 주제 내용</label>
+                            <label className="text-xs font-medium text-gray-600">토론 주제 내용</label>
                             <textarea
                                 value={newContent}
                                 onChange={(e) => setNewContent(e.target.value)}
@@ -484,50 +610,105 @@ export default function AdminDiscussionsPage() {
                                 rows={3}
                                 maxLength={500}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400 resize-none"
-                                autoFocus
                             />
                             <p className="text-xs text-gray-400 text-right">{newContent.length}/500</p>
                         </div>
                     )}
 
-                    <div className="flex gap-2 justify-end">
-                        <button
-                            type="button"
-                            onClick={() => { setShowCreateForm(false); setNewIssueQuery(''); setNewIssueResults([]); setNewSelectedIssue(null); setCreateError(null) }}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                        >
-                            취소
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={!newSelectedIssue || !newContent.trim() || creating}
-                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                        >
-                            {creating ? '생성 중...' : '생성'}
-                        </button>
-                    </div>
-                </form>
+                    {!showPreview && (
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                onClick={handleCloseForm}
+                                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                            >
+                                취소
+                            </button>
+                            {createMode === 'ai' ? (
+                                <button
+                                    type="button"
+                                    onClick={handleGenerate}
+                                    disabled={!selectedIssue || generating}
+                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                >
+                                    {generating ? 'AI 생성 중...' : 'AI 생성'}
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleSubmitManual}
+                                    disabled={!selectedIssue || !newContent.trim() || submitting}
+                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                >
+                                    {submitting ? '생성 중...' : '생성'}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* 필터 탭 */}
-            <div className="flex gap-2 mb-4">
-                {FILTER_LABELS.map(({ value, label }) => (
-                    <button
-                        key={value}
-                        onClick={() => setFilter(value)}
-                        className={[
-                            'px-4 py-1.5 text-sm rounded',
-                            filter === value
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                        ].join(' ')}
-                    >
-                        {label}
-                    </button>
-                ))}
-                <span className="ml-auto text-sm text-gray-500 self-center">
-                    총 {total}개
-                </span>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div className="flex gap-2">
+                    {FILTER_LABELS.map(({ value, label }) => (
+                        <button
+                            key={value}
+                            onClick={() => setFilter(value)}
+                            className={[
+                                'px-4 py-1.5 text-sm rounded',
+                                filter === value
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                            ].join(' ')}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                    <span className="ml-auto text-sm text-gray-500 self-center">
+                        총 {total}개
+                    </span>
+                </div>
+
+                {/* 일괄 처리 버튼 */}
+                {selectedTopicIds.size > 0 && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                            {selectedTopicIds.size}개 선택
+                        </span>
+                        {filter === '대기' && (
+                            <>
+                                <button
+                                    onClick={() => handleBulkAction('승인')}
+                                    disabled={bulkProcessing}
+                                    className="px-3 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                >
+                                    일괄 승인
+                                </button>
+                                <button
+                                    onClick={() => handleBulkAction('반려')}
+                                    disabled={bulkProcessing}
+                                    className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                >
+                                    일괄 반려
+                                </button>
+                            </>
+                        )}
+                        <button
+                            onClick={() => handleBulkAction('삭제')}
+                            disabled={bulkProcessing}
+                            className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                        >
+                            일괄 삭제
+                        </button>
+                        <button
+                            onClick={() => setSelectedTopicIds(new Set())}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                            선택 해제
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* 에러 */}
@@ -542,22 +723,30 @@ export default function AdminDiscussionsPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
+                            <th className="w-12 px-4 py-3 text-left">
+                                <input
+                                    type="checkbox"
+                                    checked={topics.length > 0 && selectedTopicIds.size === topics.length}
+                                    onChange={handleToggleTopicAll}
+                                    className="w-4 h-4"
+                                />
+                            </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 토론 내용
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-64 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 연결 이슈
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 생성 유형
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 승인 상태
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 생성일
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-56 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 액션
                             </th>
                         </tr>
@@ -566,14 +755,14 @@ export default function AdminDiscussionsPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={6} className="px-4 py-3">
+                                    <td colSpan={7} className="px-4 py-3">
                                         <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : topics.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">
+                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
                                     해당 상태의 토론 주제가 없습니다.
                                 </td>
                             </tr>
@@ -581,8 +770,17 @@ export default function AdminDiscussionsPage() {
                             topics.map((topic) => {
                                 const isProcessing = processingId === topic.id
                                 const isEditing = editingId === topic.id
+                                const isSelected = selectedTopicIds.has(topic.id)
                                 return (
-                                    <tr key={topic.id} className="hover:bg-gray-50">
+                                    <tr key={topic.id} className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}>
+                                        <td className="px-4 py-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => handleToggleTopicSelect(topic.id)}
+                                                className="w-4 h-4"
+                                            />
+                                        </td>
                                         <td className="px-4 py-3 text-sm text-gray-800 max-w-xs">
                                             {isEditing ? (
                                                 <div className="space-y-1">
@@ -618,12 +816,12 @@ export default function AdminDiscussionsPage() {
                                                 <p className="line-clamp-2">{decodeHtml(topic.body)}</p>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm">
+                                        <td className="px-4 py-3 text-sm max-w-xs">
                                             {topic.issues ? (
                                                 <Link
                                                     href={`/issue/${topic.issues.id}`}
                                                     target="_blank"
-                                                    className="text-blue-600 hover:underline"
+                                                    className="text-blue-600 hover:underline line-clamp-2 break-words"
                                                 >
                                                     {decodeHtml(topic.issues.title)}
                                                 </Link>

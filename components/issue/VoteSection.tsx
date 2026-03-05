@@ -88,7 +88,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
     if (loading) {
         return (
-            <div className="space-y-4">
+            <div className="p-4 space-y-4">
                 {[1, 2].map((i) => (
                     <div key={i} className="p-4 border border-gray-200 rounded-xl space-y-3">
                         <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
@@ -109,14 +109,21 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     }
 
     if (votes.length === 0) {
-        return <p className="text-sm text-gray-500 py-2">등록된 투표가 없습니다.</p>
+        return <p className="text-sm text-gray-500 p-4">등록된 투표가 없습니다.</p>
     }
 
-    const activeVotes = votes.filter((v) => v.phase !== '마감')
-    const pastVotes   = votes.filter((v) => v.phase === '마감')
+    const activeVotes = votes.filter((v) => v.phase === '진행중')
+    const pastVotes = votes.filter((v) => v.phase === '마감')
+
+    const pastVotesByStatus: Record<string, typeof pastVotes> = {
+        '점화': pastVotes.filter((v) => v.issue_status_snapshot === '점화'),
+        '논란중': pastVotes.filter((v) => v.issue_status_snapshot === '논란중'),
+        '종결': pastVotes.filter((v) => v.issue_status_snapshot === '종결'),
+        '기타': pastVotes.filter((v) => !v.issue_status_snapshot),
+    }
 
     return (
-        <div className="space-y-6">
+        <div className="p-4 space-y-4">
             {!userId && (
                 <p className="text-sm text-gray-500">
                     <a href="/login" className="text-blue-600 underline">로그인</a>하면 투표할 수 있습니다.
@@ -140,7 +147,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 </div>
             )}
 
-            {/* 이전 투표 (접이식) */}
+            {/* 이전 투표 (접이식, 상태별 블록) */}
             {pastVotes.length > 0 && (
                 <div>
                     <button
@@ -152,17 +159,29 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                     </button>
 
                     {showPast && (
-                        <div className="mt-3 space-y-4 opacity-80">
-                            {pastVotes.map((vote) => (
-                                <VoteCard
-                                    key={vote.id}
-                                    vote={vote}
-                                    myChoiceId={userVotes[vote.id] ?? null}
-                                    isProcessing={false}
-                                    userId={userId}
-                                    onVote={handleVote}
-                                />
-                            ))}
+                        <div className="mt-3 space-y-4">
+                            {Object.entries(pastVotesByStatus).map(([status, statusVotes]) => {
+                                if (statusVotes.length === 0) return null
+                                return (
+                                    <div key={status} className="opacity-80">
+                                        <h4 className="text-xs font-semibold text-gray-500 mb-2">
+                                            {status} 시기 투표
+                                        </h4>
+                                        <div className="space-y-3">
+                                            {statusVotes.map((vote) => (
+                                                <VoteCard
+                                                    key={vote.id}
+                                                    vote={vote}
+                                                    myChoiceId={userVotes[vote.id] ?? null}
+                                                    isProcessing={false}
+                                                    userId={userId}
+                                                    onVote={handleVote}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )
+                            })}
                         </div>
                     )}
                 </div>

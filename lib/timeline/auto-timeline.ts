@@ -114,19 +114,26 @@ async function generateTimelineForIssue(
 }
 
 /**
- * generateTimelines - 승인된 이슈 중 타임라인 없는 이슈에 자동 생성
+ * generateTimelines - 타임라인 없는 이슈에 자동 생성
  *
  * Cron에서 주기적으로 호출합니다.
- * 처리 대상: approval_status='승인' + visibility_status='visible'
+ * 
+ * 처리 대상: 
+ * - approval_status: 승인/대기/반려 모두 포함 (상태와 무관하게 타임라인 생성)
+ * - visibility_status='visible': 숨김 처리된 이슈는 제외
+ * 
+ * 이유:
+ * - 대기 이슈: 관리자가 미리보기에서 타임라인 확인 필요
+ * - 반려 이슈: 나중에 복구하거나 참고용으로 타임라인 유지
  */
 export async function generateTimelines(): Promise<AutoTimelineResult[]> {
     const { data: issues } = await supabaseAdmin
         .from('issues')
         .select('id, title, status')
-        .eq('approval_status', '승인')
+        .not('approval_status', 'is', null) // 임시 이슈(null) 제외
         .eq('visibility_status', 'visible')
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(100)
 
     if (!issues || issues.length === 0) return []
 

@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react'
 import { getTimeline } from '@/lib/api/issues'
+import { formatDate } from '@/lib/utils/format-date'
 import type { TimelinePoint } from '@/types/issue'
 
 interface TimelineSectionProps {
@@ -47,15 +48,6 @@ const STAGE_TEXT_COLOR: Record<string, string> = {
     '전개': 'text-green-700',
     '파생': 'text-yellow-700',
     '진정': 'text-gray-600',
-}
-
-function formatDateTime(dateString: string): string {
-    return new Date(dateString).toLocaleString('ko-KR', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    })
 }
 
 export default function TimelineSection({ issueId }: TimelineSectionProps) {
@@ -141,7 +133,7 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
                                         {point.stage}
                                     </span>
                                     <span className={`text-xs ${textColor} opacity-80`}>
-                                        {formatDateTime(point.occurred_at)}
+                                        {formatDate(point.occurred_at)}
                                     </span>
                                 </div>
 

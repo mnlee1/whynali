@@ -30,8 +30,8 @@ async function main() {
 
         console.log(`[ ${issues.title} ]`)
         console.log(`ID: ${issues.id}`)
-        console.log(`생성일: ${new Date(issues.created_at).toLocaleString('ko-KR')}`)
-        console.log(`승인일: ${issues.approved_at ? new Date(issues.approved_at).toLocaleString('ko-KR') : 'null'}`)
+        console.log(`생성일: ${new Date(issues.created_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+        console.log(`승인일: ${issues.approved_at ? new Date(issues.approved_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'null'}`)
         console.log(`승인상태: ${issues.approval_status}`)
         console.log(`승인타입: ${issues.approval_type ?? 'null'}`)
         console.log(`화력: ${issues.heat_index}점`)
@@ -74,7 +74,7 @@ async function main() {
             
             console.log(`${idx + 1}. ${issue.title}`)
             console.log(`   화력: ${issue.heat_index}점 | 승인타입: ${issue.approval_type ?? 'null'}`)
-            console.log(`   생성→승인: ${diffMinutes}분 | 생성: ${new Date(issue.created_at).toLocaleDateString('ko-KR')}\n`)
+            console.log(`   생성→승인: ${diffMinutes}분 | 생성: ${new Date(issue.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}\n`)
         })
     } else {
         console.log('없음')

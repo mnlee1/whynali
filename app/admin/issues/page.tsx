@@ -13,6 +13,7 @@ import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
+import CategoryBadge from '@/components/common/CategoryBadge'
 
 interface CandidateAlert {
     title: string
@@ -40,6 +41,9 @@ export default function AdminIssuesPage() {
 
     useEffect(() => {
         fetchIssues()
+        if (alerts.length === 0 && !alertsDismissed) {
+            fetchAlerts()
+        }
     }, [filter])
 
     useEffect(() => {
@@ -48,18 +52,14 @@ export default function AdminIssuesPage() {
         }
     }, [sortField, sortOrder])
 
-    useEffect(() => {
-        fetchAlerts()
-    }, [])
-
     const fetchAlerts = async () => {
         try {
             const response = await fetch('/api/admin/candidates')
             if (!response.ok) return
             const data = await response.json()
             setAlerts(data.alerts ?? [])
-        } catch {
-            // 알람 조회 실패는 무시 (부가 기능)
+        } catch (error) {
+            console.error('[이슈 관리] Candidates 조회 에러:', error)
         }
     }
 
@@ -247,7 +247,7 @@ export default function AdminIssuesPage() {
             return
         }
 
-        if (!confirm(`선택된 ${count}개 이슈를 복구하시겠습니까?`)) return
+        if (!confirm(`선택된 ${count}개 이슈를 대기 상태로 복구하시겠습니까?`)) return
 
         try {
             const promises = Array.from(selectedIds).map(id =>
@@ -263,12 +263,13 @@ export default function AdminIssuesPage() {
     }
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleString('ko-KR', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        })
+        const date = new Date(dateString)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hour = String(date.getHours()).padStart(2, '0')
+        const minute = String(date.getMinutes()).padStart(2, '0')
+        return `${year}-${month}-${day} ${hour}:${minute}`
     }
 
     const getApprovalDisplay = (issue: Issue): { label: string; className: string } => {
@@ -290,12 +291,6 @@ export default function AdminIssuesPage() {
                     label: '관리자 승인',
                     className: 'bg-green-100 text-green-700 border-green-200'
                 }
-            } else {
-                // approval_type이 null인 경우 (기존 데이터)
-                return {
-                    label: '승인',
-                    className: 'bg-green-50 text-green-600 border-green-200'
-                }
             }
         }
         
@@ -309,12 +304,6 @@ export default function AdminIssuesPage() {
                 return {
                     label: '관리자 반려',
                     className: 'bg-red-100 text-red-700 border-red-200'
-                }
-            } else {
-                // approval_type이 null인 경우 (기존 데이터)
-                return {
-                    label: '반려',
-                    className: 'bg-red-50 text-red-600 border-red-200'
                 }
             }
         }
@@ -652,7 +641,9 @@ export default function AdminIssuesPage() {
                                         {decodeHtml(issue.title)}
                                     </a>
                                 </td>
-                                <td className="px-4 py-3 text-sm">{issue.category}</td>
+                                <td className="px-4 py-3">
+                                    <CategoryBadge category={issue.category} size="sm" />
+                                </td>
                                 <td className="px-4 py-3">
                                     <StatusBadge status={issue.status} />
                                 </td>

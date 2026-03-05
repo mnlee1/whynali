@@ -26,9 +26,9 @@ async function main() {
 
     for (const issue of issues) {
         console.log(`[화력 ${issue.heat_index}점] ${issue.title}`)
-        console.log(`  - 생성일: ${new Date(issue.created_at).toLocaleString('ko-KR')}`)
-        console.log(`  - 승인일: ${issue.approved_at ? new Date(issue.approved_at).toLocaleString('ko-KR') : 'null'}`)
-        console.log(`  - 수정일: ${new Date(issue.updated_at).toLocaleString('ko-KR')}`)
+        console.log(`  - 생성일: ${new Date(issue.created_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+        console.log(`  - 승인일: ${issue.approved_at ? new Date(issue.approved_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'null'}`)
+        console.log(`  - 수정일: ${new Date(issue.updated_at).toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
         
         // 연결된 뉴스/커뮤니티 확인
         const { count: newsCount } = await supabaseAdmin

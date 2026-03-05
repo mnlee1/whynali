@@ -1,0 +1,35 @@
+/**
+ * components/common/CategoryBadge.tsx
+ * 
+ * [카테고리 배지 컴포넌트]
+ * 
+ * 이슈의 카테고리를 색상이 있는 배지로 표시합니다.
+ * 카테고리별로 다른 색상을 사용하여 한눈에 구분할 수 있습니다.
+ * 
+ * 예시:
+ *   <CategoryBadge category="연예" />
+ *   <CategoryBadge category="스포츠" size="sm" />
+ */
+
+import type { IssueCategory } from '@/lib/config/categories'
+import { getCategoryById } from '@/lib/config/categories'
+
+interface CategoryBadgeProps {
+    category: IssueCategory
+    size?: 'sm' | 'md'
+}
+
+export default function CategoryBadge({ category, size = 'md' }: CategoryBadgeProps) {
+    const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'
+    
+    const config = getCategoryById(category)
+    const styleClass = config
+        ? `${config.badgeColors.bg} ${config.badgeColors.text} ${config.badgeColors.border}`
+        : 'bg-gray-100 text-gray-700 border-gray-200'
+
+    return (
+        <span className={`inline-flex items-center font-medium border rounded-md ${sizeClass} ${styleClass}`}>
+            {category}
+        </span>
+    )
+}

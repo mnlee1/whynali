@@ -27,7 +27,8 @@ const STAGE_STYLES: Record<TimelineStage, { badge: string; dot: string; line: st
 
 function formatDateTime(iso: string): string {
     return new Date(iso).toLocaleString('ko-KR', {
-        month: 'short',
+        year: 'numeric',
+        month: 'long',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',

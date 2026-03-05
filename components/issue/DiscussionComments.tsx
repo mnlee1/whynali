@@ -49,7 +49,7 @@ function formatRelativeTime(dateString: string): string {
     if (hours < 24) return `${hours}시간 전`
     const days = Math.floor(hours / 24)
     if (days < 30) return `${days}일 전`
-    return new Date(dateString).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+    return new Date(dateString).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 function authorLabel(comment: Comment): string {
@@ -251,6 +251,61 @@ export default function DiscussionComments({
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
         if (!userId || likingId) return
         setLikingId(commentId)
+
+        // 현재 상태 저장 (롤백용)
+        const currentComments = [...comments]
+        const currentBestComments = [...bestComments]
+
+        // 낙관적 업데이트: 즉시 UI 반영
+        const optimisticUpdater = (prev: CommentWithLike[]) =>
+            prev.map((c) => {
+                if (c.id !== commentId) return c
+                
+                const currentType = c.userLikeType
+                let newLikeCount = c.like_count
+                let newDislikeCount = c.dislike_count
+                let newUserType: 'like' | 'dislike' | null = type
+
+                // 같은 타입 클릭 시 토글 (취소)
+                if (currentType === type) {
+                    newUserType = null
+                    if (type === 'like') {
+                        newLikeCount = Math.max(0, newLikeCount - 1)
+                    } else {
+                        newDislikeCount = Math.max(0, newDislikeCount - 1)
+                    }
+                } else {
+                    // 다른 타입으로 변경
+                    if (currentType === 'like') {
+                        newLikeCount = Math.max(0, newLikeCount - 1)
+                        newDislikeCount = newDislikeCount + 1
+                    } else if (currentType === 'dislike') {
+                        newDislikeCount = Math.max(0, newDislikeCount - 1)
+                        newLikeCount = newLikeCount + 1
+                    } else {
+                        // 처음 클릭
+                        if (type === 'like') {
+                            newLikeCount = newLikeCount + 1
+                        } else {
+                            newDislikeCount = newDislikeCount + 1
+                        }
+                    }
+                }
+
+                return {
+                    ...c,
+                    like_count: newLikeCount,
+                    dislike_count: newDislikeCount,
+                    userLikeType: newUserType
+                }
+            })
+
+        setComments(optimisticUpdater)
+        setBestComments(optimisticUpdater)
+
+        // 낙관적 업데이트 후 즉시 버튼 활성화 (중복 클릭 방지를 위해 짧은 딜레이)
+        setTimeout(() => setLikingId(null), 300)
+
         try {
             const res = await fetch(`/api/comments/${commentId}/like`, {
                 method: 'POST',
@@ -258,17 +313,27 @@ export default function DiscussionComments({
                 body: JSON.stringify({ type }),
             })
             const json = await res.json()
-            if (!res.ok) return
-            const updater = (prev: CommentWithLike[]) =>
+            
+            if (!res.ok) {
+                // 실패 시 롤백
+                setComments(currentComments)
+                setBestComments(currentBestComments)
+                return
+            }
+
+            // 서버 응답으로 최종 확정
+            const serverUpdater = (prev: CommentWithLike[]) =>
                 prev.map((c) =>
                     c.id === commentId
                         ? { ...c, like_count: json.like_count, dislike_count: json.dislike_count, userLikeType: json.userType }
                         : c
                 )
-            setComments(updater)
-            setBestComments(updater)
-        } finally {
-            setLikingId(null)
+            setComments(serverUpdater)
+            setBestComments(serverUpdater)
+        } catch {
+            // 네트워크 오류 시 롤백
+            setComments(currentComments)
+            setBestComments(currentBestComments)
         }
     }
 

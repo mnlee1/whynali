@@ -22,7 +22,8 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
-import type { IssueCategory } from '@/types/issue'
+import type { IssueCategory } from '@/lib/config/categories'
+import { getCategoryIds } from '@/lib/config/categories'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
 
 /* ------------------------------------------------------------------ */
@@ -209,11 +210,20 @@ ${inputJson}
     const data = await response.json()
     const raw: string = data.choices?.[0]?.message?.content ?? ''
 
-    // API 사용량 추적 (성공)
+    // Perplexity API 응답에서 토큰 사용량 추출
+    const usage = data.usage || {}
+    const inputTokens = usage.prompt_tokens || 0
+    const outputTokens = usage.completion_tokens || 0
+
+    console.log('[Perplexity Filter] 토큰 사용량:', { inputTokens, outputTokens, total: inputTokens + outputTokens })
+
+    // API 사용량 추적 (성공 + 토큰 정보)
     await incrementApiUsage('perplexity', {
         calls: 1,
         successes: 1,
         failures: 0,
+        inputTokens,
+        outputTokens,
     }).catch(err => console.error('API 사용량 추적 실패:', err))
 
     return parseAIResults(raw, items)
@@ -225,7 +235,7 @@ ${inputJson}
  * 파싱 실패 시 빈 배열 반환 (에러를 상위로 전파하지 않음).
  */
 function parseAIResults(raw: string, inputs: FilterInput[]): AIResult[] {
-    const validCategories: IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술']
+    const validCategories = getCategoryIds() as IssueCategory[]
     const inputIds = new Set(inputs.map((i) => i.id))
 
     const match = raw.match(/\[[\s\S]*\]/)

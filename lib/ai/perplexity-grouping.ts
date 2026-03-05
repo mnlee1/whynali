@@ -96,11 +96,20 @@ ${titles}
         const data = await response.json()
         const content = data.choices?.[0]?.message?.content?.trim() ?? ''
 
-        // API 사용량 추적 (성공)
+        // Perplexity API 응답에서 토큰 사용량 추출
+        const usage = data.usage || {}
+        const inputTokens = usage.prompt_tokens || 0
+        const outputTokens = usage.completion_tokens || 0
+
+        console.log('[Perplexity Grouping] 토큰 사용량:', { inputTokens, outputTokens, total: inputTokens + outputTokens })
+
+        // API 사용량 추적 (성공 + 토큰 정보)
         await incrementApiUsage('perplexity', {
             calls: 1,
             successes: 1,
             failures: 0,
+            inputTokens,
+            outputTokens,
         }).catch(err => console.error('API 사용량 추적 실패:', err))
 
         // JSON 파싱

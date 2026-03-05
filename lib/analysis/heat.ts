@@ -30,15 +30,11 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
 
     const communityData = communityResult.data ?? []
     const newsData = newsResult.data ?? []
-    
-    // 디버그 로그
-    console.log(`[화력 계산] 이슈 ${issueId}: 뉴스 ${newsData.length}건, 커뮤니티 ${communityData.length}건`)
 
     let communityHeat = 0
     if (communityData.length > 0) {
         const totalViews = communityData.reduce((sum, d) => sum + (d.view_count ?? 0), 0)
         const totalComments = communityData.reduce((sum, d) => sum + (d.comment_count ?? 0), 0)
-        // 만점 기준: 조회수 합산 5,000건 / 댓글 합산 500건 (핫게 중간 이상)
         const viewScore = Math.min(100, (totalViews / 5000) * 100)
         const commentScore = Math.min(100, (totalComments / 500) * 100)
         const raw = viewScore * 0.35 + commentScore * 0.45
@@ -48,7 +44,6 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
     let newsCredibility = 0
     if (newsData.length > 0) {
         const uniqueSources = new Set(newsData.map((d) => d.source)).size
-        // 만점 기준: 출처 20곳 이상 / 뉴스 50건 이상 (대형 이슈 기준)
         const sourceScore = (Math.min(20, uniqueSources) / 20) * 100
         const countScore = Math.min(100, newsData.length * 2)
         newsCredibility = Math.min(100, Math.max(0, Math.round(sourceScore * 0.6 + countScore * 0.4)))

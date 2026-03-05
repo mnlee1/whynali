@@ -2,7 +2,8 @@
 
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// RESEND_API_KEY가 없으면 null로 설정 (에러 방지)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 /** ADMIN_NOTIFY_EMAILS 환경변수를 파싱해 수신자 목록 반환 */
 function getNotifyRecipients(): string[] {
@@ -24,12 +25,12 @@ export interface AdminEmailPayload {
  * - 개별 발송 실패 시 전체를 중단하지 않고 계속 진행
  */
 export async function sendAdminNotification(payload: AdminEmailPayload): Promise<void> {
-    const recipients = getNotifyRecipients()
-
-    if (!process.env.RESEND_API_KEY) {
+    if (!resend || !process.env.RESEND_API_KEY) {
         console.warn('[email] RESEND_API_KEY 미설정 — 이메일 발송 건너뜀')
         return
     }
+
+    const recipients = getNotifyRecipients()
 
     if (recipients.length === 0) {
         console.warn('[email] ADMIN_NOTIFY_EMAILS 미설정 — 이메일 발송 건너뜀')

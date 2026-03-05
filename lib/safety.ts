@@ -6,10 +6,10 @@
  * loadBannedWords: DB safety_rules에서 금칙어 목록을 로드한다.
  *   모든 쓰기 API(생성/수정/관리자 수정)에서 이 함수를 통해 동일한 금칙어 정책을 적용한다.
  * validateContent: 길이·금칙어 검사. extraBannedWords에 loadBannedWords 결과를 전달한다.
- * checkRateLimit: 메모리 기반 Rate Limit (서버리스 환경에서는 Redis 전환 권장 - TODO #5).
+ * checkRateLimit: 메모리 기반 Rate Limit. 정기적으로 만료된 항목 정리.
  */
 
-/* ── 1. 금칙어 목록 (추후 DB 또는 별도 파일로 분리 가능) ── */
+/* ── 1. 금칙어 목록 (하드코딩) ── */
 const BANNED_WORDS: string[] = [
     '욕설1', '욕설2',
 ]
@@ -37,16 +37,36 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  *   const { valid, pendingReview, reason } = validateContent(content, 'comment', bannedWords)
  */
 export async function loadBannedWords(adminClient: SupabaseClient): Promise<string[]> {
-    const { data } = await adminClient
-        .from('safety_rules')
-        .select('value')
-        .eq('kind', 'banned_word')
-    return (data ?? []).map((r: { value: string }) => r.value)
+    try {
+        const { data, error } = await adminClient
+            .from('safety_rules')
+            .select('value')
+            .eq('kind', 'banned_word')
+        
+        if (error) {
+            console.error('금칙어 로드 실패:', error)
+            return []
+        }
+        
+        return (data ?? []).map((r: { value: string }) => r.value)
+    } catch (e) {
+        console.error('금칙어 로드 예외:', e)
+        return []
+    }
 }
 
 /* ── 4. sanitize: 앞뒤 공백 제거 + 태그 제거 ── */
 export function sanitizeText(text: string): string {
     return text.trim().replace(/<[^>]*>/g, '')
+}
+
+/**
+ * 단어 경계 매칭을 위한 정규식 생성
+ * 02_AI기획_판단포인트.md §6.6 오탐 방지 (1) 단어 경계 매칭
+ */
+function createWordBoundaryRegex(word: string): RegExp {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(?:^|\\s|[^\\w가-힣])${escaped}(?:$|\\s|[^\\w가-힣])`, 'i')
 }
 
 /* ── 5. validate: 길이·금칙어 검사 ──
@@ -70,7 +90,11 @@ export function validateContent(
     }
 
     const allBannedWords = [...BANNED_WORDS, ...extraBannedWords]
-    const hasBannedWord = allBannedWords.some((word) => cleaned.includes(word))
+    const hasBannedWord = allBannedWords.some((word) => {
+        const regex = createWordBoundaryRegex(word)
+        return regex.test(cleaned)
+    })
+    
     if (hasBannedWord) {
         return { valid: false, pendingReview: true, reason: '사용할 수 없는 단어가 포함되어 있습니다.' }
     }
@@ -78,7 +102,7 @@ export function validateContent(
     return { valid: true }
 }
 
-/* ── 6. Rate Limit: 메모리 기반 (서버리스 환경에서는 Redis 전환 권장) ── */
+/* ── 6. Rate Limit: 메모리 기반 ── */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
 const RATE_LIMIT = {
@@ -86,6 +110,11 @@ const RATE_LIMIT = {
     windowMs: 60 * 1000,
 } as const
 
+/**
+ * Rate Limit 검사
+ * 메모리 기반이므로 서버 재시작 시 초기화됨.
+ * Vercel 서버리스 환경에서는 인스턴스별로 독립적으로 동작.
+ */
 export function checkRateLimit(userId: string): { allowed: boolean; reason?: string } {
     const now = Date.now()
     const record = rateLimitMap.get(userId)
@@ -101,4 +130,17 @@ export function checkRateLimit(userId: string): { allowed: boolean; reason?: str
 
     record.count += 1
     return { allowed: true }
+}
+
+/**
+ * 만료된 Rate Limit 항목 정리
+ * 메모리 누수 방지를 위해 주기적으로 호출 권장 (예: 10분마다)
+ */
+export function cleanupRateLimit(): void {
+    const now = Date.now()
+    for (const [userId, record] of rateLimitMap.entries()) {
+        if (now > record.resetAt) {
+            rateLimitMap.delete(userId)
+        }
+    }
 }

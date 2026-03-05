@@ -136,7 +136,8 @@ CREATE TABLE admin_logs (
     action TEXT,
     target_type TEXT,
     target_id UUID,
-    admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    admin_id TEXT,
+    details TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -155,3 +156,6 @@ CREATE INDEX idx_news_data_category ON news_data(category);
 CREATE INDEX idx_news_data_created_at ON news_data(created_at);
 CREATE INDEX idx_community_data_issue_id ON community_data(issue_id);
 CREATE INDEX idx_community_data_created_at ON community_data(created_at);
+CREATE INDEX idx_admin_logs_created_at ON admin_logs(created_at);
+CREATE INDEX idx_admin_logs_admin_id ON admin_logs(admin_id);
+CREATE INDEX idx_admin_logs_target_type ON admin_logs(target_type);

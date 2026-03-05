@@ -80,22 +80,8 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // 생성된 주제를 '대기' 상태로 저장 — 관리자 승인 전까지 서비스 미노출
-        const rows = topics.map((t) => ({
-            issue_id: issue.id,
-            body: t.content,
-            is_ai_generated: true,
-            approval_status: '대기',
-        }))
-
-        const { data: inserted, error: insertError } = await supabaseAdmin
-            .from('discussion_topics')
-            .insert(rows)
-            .select()
-
-        if (insertError) throw insertError
-
-        return NextResponse.json({ data: inserted, generated: inserted?.length ?? 0 }, { status: 201 })
+        // 생성된 주제를 JSON으로 반환 (DB 저장은 프론트엔드에서 선택 후 처리)
+        return NextResponse.json({ data: topics, generated: topics.length }, { status: 201 })
     } catch (e) {
         const message = e instanceof Error ? e.message : 'AI 토론 주제 생성 실패'
         console.error('[discussions/generate]', message)

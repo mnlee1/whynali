@@ -37,6 +37,10 @@ const STOPWORDS = new Set([
     '지금', '올해', '최근', '현재', '직접', '처음', '마지막', '드디어',
     '알고', '보니', '위해', '대해', '통해', '따라', '의해', '부터', '까지',
     '이번', '해당', '모든', '일부', '전체', '이미', '아직', '더욱', '매우',
+    // 방향/위치 관련 범용어 추가
+    '어디', '어디로', '어디서', '어디에', '여기', '저기', '거기',
+    // 모집/참여 관련 범용어
+    '모집', '참여', '신청', '접수', '지원', '선발',
 ])
 
 /**
@@ -115,10 +119,12 @@ async function linkCommunityToIssue(
     const { from, to } = buildDateRange(issueCreatedAt)
 
     /*
-     * threshold: 키워드 수의 40%(ceil), 최소 2개·최대 3개.
-     * 이슈 제목이 길수록 threshold가 과도하게 높아지는 문제 방지.
+     * threshold: 키워드 수의 60%(ceil), 최소 2개·최대 5개.
+     * 
+     * 기존 40%는 너무 느슨해서 무관한 커뮤니티 글이 많이 연결됨.
+     * 60%로 상향 + 최대값을 3→5로 증가하여 긴 제목도 정확하게 매칭.
      */
-    const threshold = Math.min(3, Math.max(2, Math.ceil(keywordsLower.length * 0.4)))
+    const threshold = Math.min(5, Math.max(2, Math.ceil(keywordsLower.length * 0.6)))
 
     /* 아직 이슈에 연결되지 않은 커뮤니티 글 중 날짜 범위 내 500건 조회 */
     const { data: community } = await supabaseAdmin
@@ -175,7 +181,7 @@ async function unlinkInvalidCommunity(
     if (!linked || linked.length === 0) return 0
 
     const keywordsLower = keywords.map((k) => k.toLowerCase())
-    const threshold = Math.min(3, Math.max(2, Math.ceil(keywordsLower.length * 0.4)))
+    const threshold = Math.min(5, Math.max(2, Math.ceil(keywordsLower.length * 0.6)))
 
     const invalidIds = linked
         .filter((item) => {
@@ -204,23 +210,29 @@ async function unlinkInvalidCommunity(
 
 export async function linkAllCommunityToIssues(): Promise<LinkResult[]> {
     /*
+     * 승인·대기 이슈: 새 커뮤니티 글 연결 + 기존 연결 재검증
+     * 반려 이슈: 새 커뮤니티 글 연결 안 함, 기존 잘못된 연결만 정리 (데이터 정합성 유지)
+     * 
      * 대기 이슈도 포함: 승인 전에도 커뮤니티가 연결되어야 화력 재계산에 반영됨.
      * 대기 상태에서 커뮤니티 반응이 누락되면 화력이 낮게 유지되어 자동 반려되는 악순환 방지.
      */
     const { data: issues } = await supabaseAdmin
         .from('issues')
-        .select('id, title, created_at')
-        .in('approval_status', ['승인', '대기'])
+        .select('id, title, created_at, approval_status')
+        .in('approval_status', ['승인', '대기', '반려'])
         .order('updated_at', { ascending: false })
-        .limit(50)
+        .limit(100)
 
     if (!issues || issues.length === 0) return []
 
     const results: LinkResult[] = []
 
     for (const issue of issues) {
+        // 반려된 이슈는 새 커뮤니티 글 연결하지 않고, 기존 잘못된 연결만 정리
+        const isRejected = issue.approval_status === '반려'
+        
         const [linkedCount, unlinkedCount] = await Promise.all([
-            linkCommunityToIssue(issue.id, issue.title, issue.created_at),
+            isRejected ? Promise.resolve(0) : linkCommunityToIssue(issue.id, issue.title, issue.created_at),
             unlinkInvalidCommunity(issue.id, issue.title, issue.created_at),
         ])
 

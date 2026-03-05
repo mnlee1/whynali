@@ -4,6 +4,27 @@
  * 모든 approval_type null 이슈 최종 수정
  */
 
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
+// .env.local 파일 로드
+try {
+    const envPath = join(process.cwd(), '.env.local')
+    const envContent = readFileSync(envPath, 'utf-8')
+    envContent.split('\n').forEach(line => {
+        const match = line.match(/^([^=]+)=(.*)$/)
+        if (match) {
+            const key = match[1].trim()
+            const value = match[2].trim()
+            if (!process.env[key]) {
+                process.env[key] = value
+            }
+        }
+    })
+} catch (e) {
+    console.log('.env.local 파일을 찾을 수 없습니다.')
+}
+
 import { supabaseAdmin } from '../lib/supabase/server'
 
 const AUTO_APPROVE_THRESHOLD = 30
