@@ -15,6 +15,7 @@ export interface Issue {
     heat_index: number | null
     approval_status: ApprovalStatus
     approval_type: ApprovalType | null
+    approval_heat_index: number | null
     approved_at: string | null
     created_at: string
     updated_at: string

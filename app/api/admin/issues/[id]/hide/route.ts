@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
+import { closeVotesOnIssueDeleted } from '@/lib/vote-auto-closer'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,12 @@ export async function POST(
             .single()
 
         if (error) throw error
+
+        // 이슈 숨김 시 관련 투표 자동 마감
+        const { count } = await closeVotesOnIssueDeleted(id)
+        if (count > 0) {
+            console.log(`[투표 자동 마감] 이슈 ${id} 숨김 → ${count}개 투표 마감`)
+        }
 
         return NextResponse.json({ data })
     } catch (error) {

@@ -33,27 +33,37 @@ interface Vote {
     issue_id: string
     title: string | null
     phase: '대기' | '진행중' | '마감'
+    approval_status: '대기' | '승인' | '반려'
     issue_status_snapshot: string | null
     started_at: string | null
     ended_at: string | null
+    auto_end_date: string | null
+    auto_end_participants: number | null
     created_at: string
     issues: { id: string; title: string } | null
     vote_choices: VoteChoice[]
 }
 
-type FilterPhase = '' | '대기' | '진행중' | '마감'
+type FilterPhase = '' | '대기' | '진행중' | '마감' | '반려'
 
 const FILTER_LABELS: { value: FilterPhase; label: string }[] = [
     { value: '', label: '전체' },
     { value: '대기', label: '대기' },
     { value: '진행중', label: '진행중' },
     { value: '마감', label: '마감' },
+    { value: '반려', label: '반려' },
 ]
 
 const PHASE_STYLE: Record<string, string> = {
     '대기': 'bg-yellow-100 text-yellow-700',
     '진행중': 'bg-green-100 text-green-700',
     '마감': 'bg-gray-100 text-gray-600',
+}
+
+const APPROVAL_STATUS_STYLE: Record<string, string> = {
+    '대기': 'bg-yellow-100 text-yellow-700',
+    '승인': 'bg-green-100 text-green-700',
+    '반려': 'bg-red-100 text-red-700',
 }
 
 function formatDate(dateString: string): string {
@@ -90,6 +100,12 @@ export default function AdminVotesPage() {
     const [aiCount, setAiCount] = useState(2)
     const [submitting, setSubmitting] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
+
+    /* 자동 종료 옵션 */
+    const [autoEndEnabled, setAutoEndEnabled] = useState(false)
+    const [autoEndType, setAutoEndType] = useState<'date' | 'participants'>('date')
+    const [autoEndDate, setAutoEndDate] = useState('')
+    const [autoEndParticipants, setAutoEndParticipants] = useState('')
 
     /* AI 미리보기 */
     const [generatedVotes, setGeneratedVotes] = useState<Array<{
@@ -135,6 +151,10 @@ export default function AdminVotesPage() {
         setGeneratedVotes([])
         setShowPreview(false)
         setSelectedIndices(new Set())
+        setAutoEndEnabled(false)
+        setAutoEndType('date')
+        setAutoEndDate('')
+        setAutoEndParticipants('')
     }
 
     /* AI 생성 (미리보기) */
@@ -206,6 +226,17 @@ export default function AdminVotesPage() {
         try {
             const selectedVotes = generatedVotes.filter((_, idx) => selectedIndices.has(idx))
 
+            // 자동 종료 옵션 준비
+            const autoEndOptions: any = {}
+            if (autoEndEnabled) {
+                if (autoEndType === 'date' && autoEndDate) {
+                    autoEndOptions.auto_end_date = new Date(autoEndDate).toISOString()
+                }
+                if (autoEndType === 'participants' && autoEndParticipants) {
+                    autoEndOptions.auto_end_participants = parseInt(autoEndParticipants, 10)
+                }
+            }
+
             for (const vote of selectedVotes) {
                 const res = await fetch('/api/admin/votes', {
                     method: 'POST',
@@ -214,6 +245,7 @@ export default function AdminVotesPage() {
                         issue_id: selectedIssue.id,
                         title: vote.title,
                         choices: vote.choices,
+                        ...autoEndOptions,
                     }),
                 })
                 const json = await res.json()
@@ -224,7 +256,7 @@ export default function AdminVotesPage() {
             setFilter('대기')
             loadVotes('대기')
         } catch (e) {
-            setFormError(e instanceof Error ? e.message : '등록 실패')
+            setFormError(e instanceof Error ? e.message : '저장 실패')
         } finally {
             setSaving(false)
         }
@@ -247,6 +279,17 @@ export default function AdminVotesPage() {
         setFormError(null)
 
         try {
+            // 자동 종료 옵션 준비
+            const autoEndOptions: any = {}
+            if (autoEndEnabled) {
+                if (autoEndType === 'date' && autoEndDate) {
+                    autoEndOptions.auto_end_date = new Date(autoEndDate).toISOString()
+                }
+                if (autoEndType === 'participants' && autoEndParticipants) {
+                    autoEndOptions.auto_end_participants = parseInt(autoEndParticipants, 10)
+                }
+            }
+
             const res = await fetch('/api/admin/votes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -254,6 +297,7 @@ export default function AdminVotesPage() {
                     issue_id: selectedIssue.id,
                     title: voteTitle.trim(),
                     choices: validChoices,
+                    ...autoEndOptions,
                 }),
             })
             const json = await res.json()
@@ -272,10 +316,18 @@ export default function AdminVotesPage() {
     const loadVotes = useCallback(async (phase: FilterPhase) => {
         setLoading(true)
         setError(null)
-        setSelectedVoteIds(new Set()) // 로드 시 선택 초기화
+        setSelectedVoteIds(new Set())
         try {
             const params = new URLSearchParams({ limit: '50' })
-            if (phase) params.set('phase', phase)
+            
+            // 반려 필터는 approval_status로 조회
+            if (phase === '반려') {
+                params.set('approval_status', '반려')
+            } else if (phase) {
+                params.set('phase', phase)
+                params.set('approval_status', '대기,승인')
+            }
+            
             const res = await fetch(`/api/admin/votes?${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -299,33 +351,62 @@ export default function AdminVotesPage() {
         loadVotes(filter)
     }, [filter, loadVotes])
 
-    const handleAction = async (id: string, action: '승인' | '반려') => {
-        const confirmMsg =
-            action === '승인'
-                ? '이 투표를 승인하여 진행중 상태로 전환하시겠습니까?'
-                : '이 투표를 반려 처리하시겠습니까? 투표와 선택지가 모두 삭제됩니다.'
+    const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료') => {
+        let confirmMsg = ''
+        
+        if (action === '승인') {
+            confirmMsg = '이 투표를 승인하여 진행중 상태로 전환하시겠습니까?'
+        } else if (action === '반려') {
+            confirmMsg = '이 투표를 반려 처리하시겠습니까? (대기 상태로 유지되며 삭제되지 않습니다)'
+        } else if (action === '삭제') {
+            confirmMsg = '이 투표를 영구 삭제하시겠습니까? 투표와 선택지가 모두 삭제됩니다.'
+        } else if (action === '종료') {
+            confirmMsg = '이 투표를 즉시 종료하시겠습니까?'
+        }
+        
         if (!window.confirm(confirmMsg)) return
         setProcessingId(id)
         try {
-            const endpoint =
-                action === '승인'
-                    ? `/api/admin/votes/${id}/approve`
-                    : `/api/admin/votes/${id}/reject`
-            const res = await fetch(endpoint, { method: 'POST' })
+            let endpoint = ''
+            let method = 'POST'
+            
+            if (action === '승인') {
+                endpoint = `/api/admin/votes/${id}/approve`
+            } else if (action === '반려') {
+                endpoint = `/api/admin/votes/${id}/reject`
+            } else if (action === '삭제') {
+                endpoint = `/api/admin/votes/${id}`
+                method = 'DELETE'
+            } else if (action === '종료') {
+                endpoint = `/api/admin/votes/${id}/close`
+            }
+            
+            const res = await fetch(endpoint, { method })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
 
             if (action === '승인') {
                 setVotes((prev) =>
                     prev.map((v) =>
-                        v.id === id
-                            ? { ...v, phase: '진행중' as const, started_at: new Date().toISOString() }
-                            : v
+                        v.id === id ? { ...v, phase: '진행중', approval_status: '승인' as const } : v
                     )
                 )
-            } else {
+            } else if (action === '반려') {
+                setVotes((prev) =>
+                    prev.map((v) =>
+                        v.id === id ? { ...v, approval_status: '반려' as const } : v
+                    )
+                )
+            } else if (action === '삭제') {
                 setVotes((prev) => prev.filter((v) => v.id !== id))
+            } else if (action === '종료') {
+                setVotes((prev) =>
+                    prev.map((v) =>
+                        v.id === id ? { ...v, phase: '마감' as const } : v
+                    )
+                )
             }
+            
             setSelectedVoteIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
@@ -651,6 +732,69 @@ export default function AdminVotesPage() {
                                 )}
                             </div>
 
+                            {/* 자동 종료 옵션 */}
+                            <div className="space-y-2 pt-2 border-t border-gray-200">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="autoEndEnabled"
+                                        checked={autoEndEnabled}
+                                        onChange={(e) => setAutoEndEnabled(e.target.checked)}
+                                        className="rounded"
+                                    />
+                                    <label htmlFor="autoEndEnabled" className="text-xs font-medium text-gray-600">
+                                        자동 종료 설정
+                                    </label>
+                                </div>
+
+                                {autoEndEnabled && (
+                                    <div className="pl-6 space-y-2">
+                                        <div className="flex gap-2">
+                                            <label className="flex items-center gap-1.5">
+                                                <input
+                                                    type="radio"
+                                                    name="autoEndType"
+                                                    value="date"
+                                                    checked={autoEndType === 'date'}
+                                                    onChange={(e) => setAutoEndType(e.target.value as 'date')}
+                                                />
+                                                <span className="text-xs text-gray-600">날짜</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5">
+                                                <input
+                                                    type="radio"
+                                                    name="autoEndType"
+                                                    value="participants"
+                                                    checked={autoEndType === 'participants'}
+                                                    onChange={(e) => setAutoEndType(e.target.value as 'participants')}
+                                                />
+                                                <span className="text-xs text-gray-600">참여자 수</span>
+                                            </label>
+                                        </div>
+
+                                        {autoEndType === 'date' && (
+                                            <input
+                                                type="datetime-local"
+                                                value={autoEndDate}
+                                                onChange={(e) => setAutoEndDate(e.target.value)}
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                            />
+                                        )}
+
+                                        {autoEndType === 'participants' && (
+                                            <input
+                                                type="number"
+                                                value={autoEndParticipants}
+                                                onChange={(e) => setAutoEndParticipants(e.target.value)}
+                                                placeholder="목표 참여자 수 입력"
+                                                min="1"
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* 직접 입력 제출 버튼 */}
                             <div className="flex gap-2 pt-2 border-t">
                                 <button
@@ -832,8 +976,18 @@ export default function AdminVotesPage() {
                                                 {vote.title || '(제목 없음)'}
                                             </p>
                                             {vote.issue_status_snapshot && (
-                                                <span className="text-xs text-gray-400">
+                                                <span className="text-xs text-gray-400 block">
                                                     시점: {vote.issue_status_snapshot}
+                                                </span>
+                                            )}
+                                            {vote.auto_end_date && (
+                                                <span className="text-xs text-blue-600 block">
+                                                    📅 {new Date(vote.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료
+                                                </span>
+                                            )}
+                                            {vote.auto_end_participants && (
+                                                <span className="text-xs text-blue-600 block">
+                                                    🎯 {vote.auto_end_participants}명 도달 시 종료
                                                 </span>
                                             )}
                                         </td>
@@ -865,9 +1019,14 @@ export default function AdminVotesPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`px-2 py-1 text-xs rounded ${PHASE_STYLE[vote.phase]}`}>
-                                                {vote.phase}
-                                            </span>
+                                            <div className="space-y-1">
+                                                <span className={`inline-block px-2 py-1 text-xs rounded ${PHASE_STYLE[vote.phase]}`}>
+                                                    {vote.phase}
+                                                </span>
+                                                <span className={`inline-block px-2 py-1 text-xs rounded ml-1 ${APPROVAL_STATUS_STYLE[vote.approval_status]}`}>
+                                                    {vote.approval_status}
+                                                </span>
+                                            </div>
                                             {vote.phase !== '대기' && (
                                                 <div className="text-xs text-gray-400 mt-1">
                                                     {totalVotes.toLocaleString()}표
@@ -878,7 +1037,7 @@ export default function AdminVotesPage() {
                                             {formatDate(vote.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            {vote.phase === '대기' && (
+                                            {vote.approval_status === '대기' && (
                                                 <div className="flex gap-1.5">
                                                     <button
                                                         onClick={() => handleAction(vote.id, '승인')}
@@ -890,11 +1049,29 @@ export default function AdminVotesPage() {
                                                     <button
                                                         onClick={() => handleAction(vote.id, '반려')}
                                                         disabled={isProcessing}
-                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                        className="text-xs px-2.5 py-1.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
                                                     >
                                                         반려
                                                     </button>
                                                 </div>
+                                            )}
+                                            {vote.phase === '진행중' && (
+                                                <button
+                                                    onClick={() => handleAction(vote.id, '종료')}
+                                                    disabled={isProcessing}
+                                                    className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                                >
+                                                    수동 종료
+                                                </button>
+                                            )}
+                                            {(vote.approval_status === '반려' || (vote.approval_status === '대기' && vote.phase === '대기')) && (
+                                                <button
+                                                    onClick={() => handleAction(vote.id, '삭제')}
+                                                    disabled={isProcessing}
+                                                    className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                >
+                                                    삭제
+                                                </button>
                                             )}
                                         </td>
                                     </tr>

@@ -4,7 +4,8 @@
  * [관리자 - 투표 반려 API]
  *
  * 대기 상태의 투표를 반려 처리.
- * 투표와 연결된 선택지를 모두 삭제.
+ * approval_status를 '반려'로 변경 (삭제하지 않음).
+ * 삭제는 별도 DELETE API 사용.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: vote, error: voteError } = await supabaseAdmin
         .from('votes')
-        .select('phase')
+        .select('phase, approval_status')
         .eq('id', id)
         .single()
 
@@ -35,25 +36,20 @@ export async function POST(request: NextRequest, { params }: Params) {
         )
     }
 
-    if (vote.phase !== '대기') {
+    if (vote.approval_status !== '대기') {
         return NextResponse.json(
             { error: '대기 상태의 투표만 반려할 수 있습니다.' },
             { status: 422 }
         )
     }
 
-    await supabaseAdmin
-        .from('vote_choices')
-        .delete()
-        .eq('vote_id', id)
-
-    const { error: deleteError } = await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
         .from('votes')
-        .delete()
+        .update({ approval_status: '반려' })
         .eq('id', id)
 
-    if (deleteError) {
-        return NextResponse.json({ error: deleteError.message }, { status: 500 })
+    if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
     await writeAdminLog('투표 반려', 'vote', id, auth.adminEmail)

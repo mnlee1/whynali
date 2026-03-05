@@ -5,7 +5,8 @@
  *
  * 메인화면에서 현재 진행 중인 투표를 미리 보여줘 참여를 유도합니다.
  * 참여가 가장 활발한 투표 5개를 스와이프 형태로 보여줍니다.
- * 선택지와 현재 득표 비율을 바 형태로 보여주고, 클릭하면 해당 이슈 상세로 이동합니다.
+ * 1위 vs 2위 대결 구도를 크게 강조하여 시각적 흥미를 높입니다.
+ * 그라디언트 배경과 큰 "투표하기" 버튼으로 참여를 유도합니다.
  *
  * 투표가 하나도 없으면 섹션 전체를 숨깁니다.
  * 
@@ -17,9 +18,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Swiper, SwiperSlide } from 'swiper/react'
-import { FreeMode, Mousewheel } from 'swiper/modules'
+import { Autoplay, Pagination } from 'swiper/modules'
 import 'swiper/css'
-import 'swiper/css/free-mode'
+import 'swiper/css/pagination'
 import type { Issue } from '@/types/issue'
 import type { Vote, VoteChoice } from '@/types/index'
 import { decodeHtml } from '@/lib/utils/decode-html'
@@ -28,18 +29,6 @@ import { decodeHtml } from '@/lib/utils/decode-html'
 interface VoteWithChoices extends Vote {
     vote_choices: VoteChoice[]
     issues?: { id: string; title: string } | null
-}
-
-// 득표 비율을 Tailwind 단계 클래스로 변환 (인라인 스타일 없이 표현)
-function getRatioBarClass(ratio: number): string {
-    if (ratio >= 90) return 'w-11/12'
-    if (ratio >= 75) return 'w-3/4'
-    if (ratio >= 60) return 'w-3/5'
-    if (ratio >= 50) return 'w-1/2'
-    if (ratio >= 40) return 'w-2/5'
-    if (ratio >= 25) return 'w-1/4'
-    if (ratio >= 10) return 'w-1/12'
-    return 'w-1'
 }
 
 export default function VotePreview() {
@@ -88,82 +77,109 @@ export default function VotePreview() {
             <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base font-bold text-neutral-900">지금 투표 중</h2>
                 <span className="text-xs text-neutral-400">
-                    {votes.length}개 투표 진행 중
+                    투표 참여도 높은 순으로 정렬 됩니다.
                 </span>
             </div>
 
-            {/* Swiper를 사용한 스와이프 영역 */}
+            {/* Swiper를 사용한 슬라이드 영역 */}
             <Swiper
-                modules={[FreeMode, Mousewheel]}
+                modules={[Autoplay, Pagination]}
                 spaceBetween={16}
                 slidesPerView="auto"
-                freeMode={{
-                    enabled: true,
-                    sticky: false,
+                autoplay={{
+                    delay: 5000,
+                    disableOnInteraction: false,
                 }}
-                mousewheel={{
-                    forceToAxis: true,
+                pagination={{
+                    clickable: true,
+                    bulletClass: 'swiper-pagination-bullet !bg-neutral-300',
+                    bulletActiveClass: 'swiper-pagination-bullet-active !bg-violet-500',
                 }}
-                className="!overflow-visible"
+                loop={votes.length > 1}
+                className="!pb-10"
             >
-                {votes.map((vote) => {
+                {votes.map((vote, index) => {
                     const choices = vote.vote_choices ?? []
                     const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
-                    const issueTitle = vote.issues?.title ?? '알 수 없는 이슈'
                     const issueId = vote.issues?.id ?? ''
 
+                    // 득표순 정렬
+                    const sortedChoices = [...choices].sort((a, b) => b.count - a.count)
+                    const first = sortedChoices[0]
+                    const second = sortedChoices[1]
+                    const remaining = choices.length - 2
+
+                    const firstRatio = totalCount > 0 ? Math.round((first.count / totalCount) * 100) : 0
+                    const secondRatio = totalCount > 0 && second ? Math.round((second.count / totalCount) * 100) : 0
+
+                    // 슬라이드마다 다른 그라디언트
+                    const gradients = [
+                        'from-violet-500 to-purple-600',
+                        'from-blue-500 to-cyan-600',
+                        'from-pink-500 to-rose-600',
+                        'from-amber-500 to-orange-600',
+                        'from-emerald-500 to-teal-600',
+                    ]
+                    const gradient = gradients[index % gradients.length]
+
                     return (
-                        <SwiperSlide key={vote.id} className="!w-80">
+                        <SwiperSlide key={vote.id} className="!w-80 md:!w-96">
                             <Link href={`/issue/${issueId}`}>
-                                <div className="p-4 bg-white border border-violet-200 rounded-xl hover:border-violet-300 hover:shadow-md transition-all h-full">
-                                    {/* 연결된 이슈 제목 */}
-                                    <p className="text-xs text-violet-600 font-medium mb-1 line-clamp-1">
-                                        {decodeHtml(issueTitle)}
-                                    </p>
+                                <div className={`relative p-5 bg-gradient-to-br ${gradient} rounded-2xl hover:shadow-xl transition-all overflow-hidden group`}>
+                                    {/* 배경 패턴 */}
+                                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors" />
+                                    
+                                    <div className="relative space-y-4">
+                                        {/* 투표 제목 */}
+                                        <h3 className="text-base font-bold text-white line-clamp-2 min-h-[3rem]">
+                                            {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
+                                        </h3>
 
-                                    {/* 투표 제목 */}
-                                    <p className="text-sm font-bold text-neutral-900 mb-4 line-clamp-2 min-h-[2.5rem]">
-                                        {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
-                                    </p>
-
-                                    {/* 선택지 + 득표 바 */}
-                                    <div className="space-y-2.5">
-                                        {choices.slice(0, 4).map((choice) => {
-                                            const ratio = totalCount > 0
-                                                ? Math.round((choice.count / totalCount) * 100)
-                                                : 0
-                                            const barClass = getRatioBarClass(ratio)
-
-                                            // 득표 1위 여부
-                                            const maxCount = Math.max(...choices.map((c) => c.count))
-                                            const isLeading = choice.count === maxCount && totalCount > 0
-
-                                            return (
-                                                <div key={choice.id}>
-                                                    <div className="flex items-center justify-between text-xs mb-1">
-                                                        <span className={`font-medium truncate ${isLeading ? 'text-violet-700' : 'text-neutral-600'}`}>
-                                                            {choice.label}
-                                                        </span>
-                                                        <span className={`ml-2 ${isLeading ? 'text-violet-600 font-semibold' : 'text-neutral-400'}`}>
-                                                            {ratio}%
-                                                        </span>
-                                                    </div>
-                                                    <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
-                                                        <div className={`h-full rounded-full ${barClass} ${isLeading ? 'bg-violet-500' : 'bg-neutral-300'}`} />
-                                                    </div>
+                                        {/* 1위 vs 2위 대결 */}
+                                        <div className="space-y-3">
+                                            {/* 1위 */}
+                                            <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <span className="text-xs font-bold text-white/90">1위</span>
+                                                    <span className="text-2xl font-black text-white">{firstRatio}%</span>
                                                 </div>
-                                            )
-                                        })}
-                                    </div>
+                                                <p className="text-sm font-semibold text-white line-clamp-1">
+                                                    {first.label}
+                                                </p>
+                                            </div>
 
-                                    {/* 총 투표 수 + 참여 유도 */}
-                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-100">
-                                        <span className="text-xs text-neutral-400">
-                                            총 {totalCount.toLocaleString()}명 참여
-                                        </span>
-                                        <span className="text-xs text-violet-600 font-medium">
-                                            투표 참여 →
-                                        </span>
+                                            {/* 2위 (있을 경우) */}
+                                            {second && (
+                                                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <span className="text-xs font-bold text-white/80">2위</span>
+                                                        <span className="text-xl font-bold text-white/90">{secondRatio}%</span>
+                                                    </div>
+                                                    <p className="text-sm font-medium text-white/90 line-clamp-1">
+                                                        {second.label}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* 나머지 선택지 */}
+                                            {remaining > 0 && (
+                                                <p className="text-xs text-white/70 text-center">
+                                                    외 {remaining}개 선택지
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* 하단 정보 */}
+                                        <div className="flex items-center justify-between pt-3 border-t border-white/20">
+                                            <span className="text-xs text-white/80 font-medium">
+                                                {totalCount.toLocaleString()}명 참여
+                                            </span>
+                                            <div className="px-4 py-1.5 bg-white rounded-full">
+                                                <span className="text-xs font-bold text-violet-600">
+                                                    투표하기
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </Link>
@@ -171,13 +187,6 @@ export default function VotePreview() {
                     )
                 })}
             </Swiper>
-
-            {/* 스크롤 힌트 */}
-            {votes.length > 1 && (
-                <p className="text-xs text-center text-neutral-400 mt-4">
-                    ← 좌우로 스와이프하여 더 많은 투표 보기 →
-                </p>
-            )}
         </section>
     )
 }

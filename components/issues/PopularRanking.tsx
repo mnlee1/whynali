@@ -42,10 +42,15 @@ export default function PopularRanking() {
     }, [])
 
     return (
-        <section className="flex flex-col">
+        <section className="flex flex-col h-full">
             {/* 헤더 */}
             <div className="mb-4">
-                <h2 className="text-base font-bold text-neutral-900">지금 뜨는 이슈</h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-neutral-900">지금 뜨는 이슈</h2>
+                    <span className="text-xs text-neutral-400">
+                        최근 7일 화력순
+                    </span>
+                </div>
             </div>
 
             {/* 랭킹 목록 */}

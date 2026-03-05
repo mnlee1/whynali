@@ -10,7 +10,16 @@ import SearchBar from '@/components/common/SearchBar'
 
 type TopicWithIssue = DiscussionTopic & {
     issues: { id: string; title: string } | null
+    opinionCount?: number
 }
+
+type FilterStatus = '' | '진행중' | '마감'
+
+const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
+    { value: '', label: '전체' },
+    { value: '진행중', label: '진행중' },
+    { value: '마감', label: '마감' },
+]
 
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
@@ -27,6 +36,7 @@ function CommunityContent() {
     const [error, setError] = useState<string | null>(null)
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
+    const [statusFilter, setStatusFilter] = useState<FilterStatus>('')
     /* 연결 이슈 제목 (issue_id 필터 시 헤더에 표시) */
     const [issueTitle, setIssueTitle] = useState<string | null>(null)
 
@@ -48,13 +58,14 @@ function CommunityContent() {
         setSearchQuery(searchInput)
     }
 
-    const loadTopics = useCallback(async (q: string, currentOffset: number, append: boolean) => {
+    const loadTopics = useCallback(async (q: string, status: FilterStatus, currentOffset: number, append: boolean) => {
         try {
             const params = new URLSearchParams({
                 limit: String(PAGE_SIZE),
                 offset: String(currentOffset),
             })
             if (q) params.set('q', q)
+            if (status) params.set('status', status)
             if (issueIdFilter) params.set('issue_id', issueIdFilter)
             const res = await fetch(`/api/discussions?${params}`)
             const json = await res.json()
@@ -77,17 +88,17 @@ function CommunityContent() {
         }
     }, [issueIdFilter])
 
-    /* 검색어 변경 시 목록 초기화 및 재로드 */
+    /* 검색어 또는 상태 필터 변경 시 목록 초기화 및 재로드 */
     useEffect(() => {
         setLoading(true)
         setError(null)
-        loadTopics(searchQuery, 0, false)
-    }, [searchQuery, loadTopics])
+        loadTopics(searchQuery, statusFilter, 0, false)
+    }, [searchQuery, statusFilter, loadTopics])
 
     const handleLoadMore = () => {
         const next = offsetRef.current
         setLoadingMore(true)
-        loadTopics(searchQuery, next, true)
+        loadTopics(searchQuery, statusFilter, next, true)
         offsetRef.current = next + PAGE_SIZE
     }
 
@@ -115,6 +126,24 @@ function CommunityContent() {
                 />
             </div>
 
+            {/* 상태 필터 탭 */}
+            <div className="flex gap-2 mb-6">
+                {FILTER_LABELS.map(({ value, label }) => (
+                    <button
+                        key={value}
+                        onClick={() => setStatusFilter(value)}
+                        className={[
+                            'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                            statusFilter === value
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50',
+                        ].join(' ')}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
                     {error}
@@ -135,23 +164,45 @@ function CommunityContent() {
             ) : (
                 <>
                     <p className="text-sm text-gray-500 mb-4">총 {total.toLocaleString()}개</p>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {topics.map((topic) => (
                             <Link key={topic.id} href={`/community/${topic.id}`} className="block">
-                                <article className="p-5 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
-                                    {/* 연결된 이슈명 */}
-                                    {topic.issues?.title && (
-                                        <p className="text-xs text-neutral-400 mb-2">
-                                            {decodeHtml(topic.issues.title)}
-                                        </p>
-                                    )}
-                                    {/* 토론 주제 본문 */}
-                                    <p className="text-base font-semibold text-neutral-900 mb-3 line-clamp-2 leading-snug">
-                                        {decodeHtml(topic.body)}
-                                    </p>
-                                    {/* 날짜 */}
-                                    <div className="flex items-center gap-2 text-xs text-neutral-400">
-                                        <span>{formatDate(topic.created_at)}</span>
+                                <article className="p-4 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            {/* 상태 뱃지 */}
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className={[
+                                                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                                                    topic.approval_status === '진행중'
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-gray-100 text-gray-600'
+                                                ].join(' ')}>
+                                                    {topic.approval_status}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* 연결된 이슈명 */}
+                                            {topic.issues?.title && (
+                                                <p className="text-xs text-neutral-400 mb-1 line-clamp-1">
+                                                    {decodeHtml(topic.issues.title)}
+                                                </p>
+                                            )}
+                                            {/* 토론 주제 본문 */}
+                                            <p className="text-sm font-medium text-neutral-800 line-clamp-2 leading-snug mb-2">
+                                                {decodeHtml(topic.body)}
+                                            </p>
+                                            {/* 의견 수 */}
+                                            {topic.opinionCount !== undefined && (
+                                                <div className="flex items-center gap-1 text-xs text-neutral-500">
+                                                    <span>💬</span>
+                                                    <span>의견 {topic.opinionCount.toLocaleString()}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="text-xs text-neutral-400 shrink-0 mt-0.5">
+                                            {formatDate(topic.created_at)}
+                                        </span>
                                     </div>
                                 </article>
                             </Link>

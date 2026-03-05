@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ id: string }> }
 
 /* PATCH /api/admin/discussions/:id
-   상태 변경: { action: '승인' | '반려' | '복구' | '종료' }
+   상태 변경: { action: '진행중' | '마감' | '복구' }
    내용 수정: { content: string } */
 export async function PATCH(request: NextRequest, { params }: Params) {
     const auth = await requireAdmin()
@@ -53,21 +53,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             )
         }
 
-        const VALID_ACTIONS = ['승인', '반려', '복구', '종료'] as const
+        const VALID_ACTIONS = ['진행중', '마감', '복구'] as const
         if (!VALID_ACTIONS.includes(action)) {
             return NextResponse.json(
-                { error: 'action은 승인 | 반려 | 복구 | 종료 중 하나여야 합니다.' },
+                { error: 'action은 진행중 | 마감 | 복구 중 하나여야 합니다.' },
                 { status: 400 }
             )
         }
 
         const updatePayload =
-            action === '승인'
-                ? { approval_status: '승인', approved_at: new Date().toISOString() }
-                : action === '반려'
-                ? { approval_status: '반려', approved_at: null }
-                : action === '종료'
-                ? { approval_status: '종료' }
+            action === '진행중'
+                ? { approval_status: '진행중', approved_at: new Date().toISOString() }
+                : action === '마감'
+                ? { approval_status: '마감' }
                 : { approval_status: '대기', approved_at: null }   // 복구 → 대기
 
         const { data, error } = await supabaseAdmin

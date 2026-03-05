@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json()
-        const { issue_id, content, approval_status = '승인' } = body
+        const { issue_id, content, is_ai_generated = false, approval_status = '대기' } = body
 
         if (!issue_id || !content?.trim()) {
             return NextResponse.json(
@@ -50,10 +50,10 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const validStatuses = ['대기', '승인', '반려']
+        const validStatuses = ['대기', '승인', '반려', '진행중', '마감']
         if (!validStatuses.includes(approval_status)) {
             return NextResponse.json(
-                { error: 'approval_status는 대기|승인|반려 중 하나여야 합니다.' },
+                { error: 'approval_status는 대기|진행중|마감 중 하나여야 합니다.' },
                 { status: 400 }
             )
         }
@@ -63,9 +63,9 @@ export async function POST(request: NextRequest) {
             .insert({
                 issue_id,
                 body: content.trim(),
-                is_ai_generated: false,
+                is_ai_generated,
                 approval_status,
-                approved_at: approval_status === '승인' ? new Date().toISOString() : null,
+                approved_at: approval_status === '진행중' ? new Date().toISOString() : null,
             })
             .select()
             .single()

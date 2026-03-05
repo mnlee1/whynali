@@ -13,33 +13,37 @@
 
 import { useState, useEffect } from 'react'
 import { getTimeline } from '@/lib/api/issues'
-import { formatDate } from '@/lib/utils/format-date'
+import { formatDateWithTime } from '@/lib/utils/format-date'
 import type { TimelinePoint } from '@/types/issue'
 
 interface TimelineSectionProps {
     issueId: string
 }
 
-const STAGE_STYLES: Record<string, { card: string; dot: string; line: string }> = {
+const STAGE_STYLES: Record<string, { card: string; dot: string; line: string; badge: string }> = {
     '발단': {
         card: 'bg-blue-50 border-blue-200',
         dot:  'bg-blue-500',
         line: 'bg-blue-200',
+        badge: 'bg-blue-500 text-white border-blue-600',
     },
     '전개': {
         card: 'bg-green-50 border-green-200',
         dot:  'bg-green-500',
         line: 'bg-green-200',
+        badge: 'bg-green-500 text-white border-green-600',
     },
     '파생': {
         card: 'bg-yellow-50 border-yellow-200',
         dot:  'bg-yellow-500',
         line: 'bg-yellow-200',
+        badge: 'bg-yellow-500 text-white border-yellow-600',
     },
     '진정': {
         card: 'bg-gray-50 border-gray-200',
         dot:  'bg-gray-400',
         line: 'bg-gray-200',
+        badge: 'bg-gray-500 text-white border-gray-600',
     },
 }
 
@@ -101,9 +105,15 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
 
     if (timeline.length === 0) {
         return (
-            <p className="text-sm text-gray-400 text-center py-6">
-                타임라인 정보가 없습니다.
-            </p>
+            <div className="text-center py-8 space-y-3">
+                <div className="text-4xl">⏳</div>
+                <p className="text-sm font-medium text-gray-600">
+                    타임라인을 생성 중입니다
+                </p>
+                <p className="text-xs text-gray-400">
+                    뉴스가 수집되면 자동으로 타임라인이 생성됩니다
+                </p>
+            </div>
         )
     }
 
@@ -127,13 +137,13 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
                         {/* 카드 */}
                         <div className="flex-1 pb-4">
                             <div className={`p-4 border rounded-xl ${style.card}`}>
-                                {/* 단계 + 날짜 */}
+                                {/* 단계 + 날짜 및 시간 */}
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${style.card} ${textColor}`}>
+                                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border shadow-sm ${style.badge}`}>
                                         {point.stage}
                                     </span>
                                     <span className={`text-xs ${textColor} opacity-80`}>
-                                        {formatDate(point.occurred_at)}
+                                        {formatDateWithTime(point.occurred_at)}
                                     </span>
                                 </div>
 
@@ -150,9 +160,13 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
                                         href={point.source_url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`text-xs underline underline-offset-2 hover:opacity-70 transition-opacity ${textColor}`}
+                                        className={`inline-flex items-center gap-1 text-xs underline underline-offset-2 hover:opacity-70 transition-opacity ${textColor}`}
                                     >
-                                        출처 확인 →
+                                        <span>출처</span>
+                                        <span className="opacity-60">
+                                            ({new URL(point.source_url).hostname.replace('www.', '')})
+                                        </span>
+                                        <span>→</span>
                                     </a>
                                 ) : (
                                     <span className="text-xs text-gray-400">출처 없음</span>

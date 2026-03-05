@@ -12,10 +12,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { data: existing } = await supabase
+    const admin = createSupabaseAdminClient()
+    const { data: existing } = await admin
         .from('comments')
-        .select('user_id')
+        .select('user_id, visibility')
         .eq('id', id)
+        .neq('visibility', 'deleted')
         .single()
 
     if (!existing) {
@@ -26,14 +28,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json()
-    const adminClient = createSupabaseAdminClient()
-    const dbBannedWords = await loadBannedWords(adminClient)
+    const dbBannedWords = await loadBannedWords(admin)
     const { valid, pendingReview, reason } = validateContent(body.content, 'comment', dbBannedWords)
     if (!valid && !pendingReview) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
         .from('comments')
         .update({
             body: sanitizeText(body.content),
@@ -69,10 +70,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { data: existing } = await supabase
+    const admin = createSupabaseAdminClient()
+    const { data: existing } = await admin
         .from('comments')
-        .select('user_id')
+        .select('user_id, visibility')
         .eq('id', id)
+        .neq('visibility', 'deleted')
         .single()
 
     if (!existing) {
@@ -82,7 +85,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         return NextResponse.json({ error: '본인 댓글만 삭제할 수 있습니다.' }, { status: 403 })
     }
 
-    const { error } = await supabase
+    const { error } = await admin
         .from('comments')
         .update({ visibility: 'deleted', updated_at: new Date().toISOString() })
         .eq('id', id)
