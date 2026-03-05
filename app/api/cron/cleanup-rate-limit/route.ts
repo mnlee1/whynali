@@ -7,13 +7,7 @@ import { cleanupRateLimit } from '@/lib/safety'
  * Rate Limit 맵에서 만료된 항목 정리
  * Vercel Cron으로 10분마다 호출 권장
  * 
- * vercel.json 설정:
- * {
- *   "crons": [{
- *     "path": "/api/cron/cleanup-rate-limit",
- *     "schedule": "*/10 * * * *"
- *   }]
- * }
+ * vercel.json 설정 예시 (매 10분마다 실행)
  */
 export async function GET() {
     try {

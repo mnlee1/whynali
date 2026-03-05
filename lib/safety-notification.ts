@@ -6,7 +6,7 @@
  */
 
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
-import { sendAdminEmail } from '@/lib/email'
+import { sendAdminNotification } from '@/lib/email'
 
 const PENDING_THRESHOLD = 10 // 검토 대기 10건 이상 시 알림
 
@@ -28,15 +28,15 @@ export async function checkAndNotifyPendingReview(): Promise<void> {
         }
         
         // 10건 이상일 때만 알림 발송
-        await sendAdminEmail(
-            '세이프티 검토 대기 알림',
-            `
+        await sendAdminNotification({
+            subject: '세이프티 검토 대기 알림',
+            html: `
                 <h2>세이프티 검토 대기 알림</h2>
                 <p>검토 대기 중인 댓글이 <strong>${count}건</strong>입니다.</p>
                 <p>관리자 페이지에서 확인해 주세요.</p>
                 <p><a href="${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/admin/safety">세이프티 관리 페이지로 이동</a></p>
             `
-        )
+        })
     } catch (error) {
         // 알림 실패는 로그만 남기고 에러를 던지지 않음 (댓글 작성 자체는 성공)
         console.error('세이프티 알림 발송 실패:', error)
