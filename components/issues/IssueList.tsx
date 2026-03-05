@@ -142,13 +142,13 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             {/* 상태 탭 */}
             <div className="flex items-center justify-between border-b border-neutral-200">
                 {/* 상태 탭: 전체 / 점화 / 논란중 / 종결 */}
-                <div className="flex">
+                <div className="flex overflow-x-auto scrollbar-hide flex-1">
                     {STATUS_TABS.map((tab) => (
                         <button
                             key={tab.value}
                             onClick={() => setStatusFilter(tab.value)}
                             className={[
-                                'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                                'flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
                                 statusFilter === tab.value
                                     ? 'border-neutral-900 text-neutral-900'
                                     : 'border-transparent text-neutral-500 hover:text-neutral-700',
@@ -159,7 +159,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                         </button>
                     ))}
                 </div>
-                <span className="text-xs text-neutral-400 pr-2">
+                <span className="hidden sm:block text-xs text-neutral-400 pr-2 shrink-0">
                     최신순으로 정렬 됩니다.
                 </span>
             </div>
