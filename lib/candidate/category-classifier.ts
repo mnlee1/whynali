@@ -11,9 +11,19 @@ import Groq from 'groq-sdk'
 import type { IssueCategory } from '@/lib/config/categories'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-})
+let groqInstance: Groq | null = null
+
+function getGroqClient(): Groq {
+    if (!groqInstance) {
+        if (!process.env.GROQ_API_KEY) {
+            throw new Error('GROQ_API_KEY가 설정되지 않았습니다')
+        }
+        groqInstance = new Groq({
+            apiKey: process.env.GROQ_API_KEY,
+        })
+    }
+    return groqInstance
+}
 
 const ENABLE_AI_CATEGORY = process.env.ENABLE_AI_CATEGORY === 'true'
 
@@ -70,6 +80,8 @@ ${sampleTitles}
 JSON만 출력하세요.`
 
     try {
+        const groq = getGroqClient()
+        
         const completion = await groq.chat.completions.create({
             model: 'llama-3.3-70b-versatile',
             messages: [
