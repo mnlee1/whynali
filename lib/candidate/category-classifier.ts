@@ -83,7 +83,7 @@ JSON만 출력하세요.`
         const groq = getGroqClient()
         
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',  // 가벼운 모델로 변경 (토큰 소비 적음)
             messages: [
                 {
                     role: 'system',
