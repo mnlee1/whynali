@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
         let query = supabaseAdmin
             .from('votes')
-            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, created_at, issues!inner(id, title), vote_choices(id, label, count)')
+            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, created_at, issues(id, title), vote_choices(id, label, count)')
             .order('created_at', { ascending: false })
             .limit(limit)
 
@@ -39,7 +39,10 @@ export async function GET(request: NextRequest) {
 
         const { data, error } = await query
 
-        if (error) throw error
+        if (error) {
+            console.error('[투표 조회 에러]', error)
+            throw error
+        }
 
         // count는 필요할 때만 별도 쿼리로 가져오기
         let count = data?.length ?? 0
@@ -67,6 +70,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({ data: data ?? [], total: count })
     } catch (e) {
+        console.error('[투표 조회 API 에러]', e)
         const message = e instanceof Error ? e.message : '투표 조회 실패'
         return NextResponse.json({ error: message }, { status: 500 })
     }

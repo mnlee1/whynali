@@ -1,20 +1,36 @@
-# Supabase 테이블 생성 순서
+# Supabase 테이블 가이드
 
-리셋 후 97_1단계_기초픽스 §3.1 스키마대로 테이블을 만드는 방법.
+Supabase 데이터베이스 테이블 생성 및 확인 방법.
 
----
+## 테이블 목록
 
-## 1. Supabase SQL Editor 열기
+| 테이블명 | 담당 | 역할 |
+|----------|------|------|
+| issues | A | 이슈 기본 정보 |
+| timeline_points | A | 타임라인 포인트 |
+| news_data | A | 뉴스 수집 |
+| community_data | A | 커뮤니티 수집 |
+| users | B | 사용자 정보 |
+| reactions | B | 감정 표현 |
+| comments | B | 댓글 |
+| votes | B | 투표 |
+| vote_choices | B | 투표 선택지 |
+| user_votes | B | 사용자 투표 |
+| discussion_topics | B | 토론 주제 |
+| safety_rules | B | 금칙어·설정 |
+| admin_logs | A·B | 관리자 로그 |
+
+## 테이블 생성 방법
+
+### 1. Supabase SQL Editor 열기
 
 1. [Supabase Dashboard](https://supabase.com/dashboard) → 프로젝트 선택
 2. 왼쪽 **SQL Editor** 클릭
 3. **New query** 선택
 
----
+### 2. SQL 전체 복사 후 실행
 
-## 2. 아래 SQL 전체 복사 후 한 번에 실행
-
-아래 블록 전체를 복사해 SQL Editor에 붙여넣고 **Run** (또는 Ctrl/Cmd+Enter) 실행.
+아래 블록 전체를 복사해 SQL Editor에 붙여넣고 **Run** 실행.
 
 ```sql
 -- 1) issues (다른 테이블이 참조하는 기준 테이블)
@@ -161,13 +177,13 @@ CREATE TABLE admin_logs (
 );
 ```
 
----
+## 테이블 확인 방법
 
-## 3. 실행 후 확인
+### 방법 1: 대시보드
+1. 왼쪽 **Table Editor** 클릭
+2. 테이블 13개가 보이는지 확인
 
-1. 왼쪽 **Table Editor**에서 테이블 13개가 보이는지 확인.
-2. 또는 다시 **SQL Editor**에서 아래 쿼리 실행:
-
+### 방법 2: SQL Editor
 ```sql
 SELECT table_name
 FROM information_schema.tables
@@ -176,75 +192,70 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-3. 로컬에서 API로 확인:
+결과에 13개 테이블이 모두 나오는지 확인.
 
+### 방법 3: 프로젝트 API
+환경 변수 설정 후:
 ```bash
 npm run dev
 curl http://localhost:3000/api/dev/check-tables
 ```
 
-`ok: true`, `missing: []` 이면 완료.
+응답:
+```json
+{
+  "ok": true,
+  "existing": ["issues", "timeline_points", ...],
+  "missing": []
+}
+```
 
----
+## 테이블 생성 후 할 일
 
-## 4. (선택) RLS 정책
+### 1. 환경 변수 설정
+`.env.local`에 Supabase 값 입력:
+- Supabase Dashboard → **Project Settings** → **API**
+- `NEXT_PUBLIC_SUPABASE_URL`: Project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: anon public
+- `SUPABASE_SERVICE_ROLE_KEY`: service_role (비공개 키)
 
-Supabase는 기본적으로 public 스키마에 RLS가 꺼져 있음. 나중에 인증·권한 적용 시 **Authentication** → **Policies**에서 테이블별 RLS 켜고 정책 추가하면 됨. MVP 초기에는 이 단계 생략해도 됨.
-
----
-
-## 5. 테이블 생성 후 할 일
-
-### 5.1 환경 변수 넣기
-
-`.env.local`에 Supabase 값 채우기.
-
-- Supabase Dashboard → **Project Settings** → **API** 에서 확인:
-  - `NEXT_PUBLIC_SUPABASE_URL` → Project URL
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY` → anon public
-  - `SUPABASE_SERVICE_ROLE_KEY` → service_role (비공개 키)
-
-저장 후 서버 재시작.
-
-### 5.2 API 동작 확인
-
+### 2. API 동작 확인
 ```bash
 npm run dev
 ```
 
 다른 터미널에서:
-
 ```bash
 # 테이블 존재 여부
 curl http://localhost:3000/api/dev/check-tables
 
-# 이슈 목록 (빈 배열 나오면 정상)
+# 이슈 목록 (빈 배열이면 정상)
 curl "http://localhost:3000/api/issues"
 
-# 이슈 하나 생성 (테스트)
+# 이슈 생성 테스트
 curl -X POST http://localhost:3000/api/issues \
   -H "Content-Type: application/json" \
   -d '{"title":"테스트 이슈","category":"사회","status":"점화"}'
 ```
 
-이슈 생성 후 다시 `GET /api/issues` 호출해서 방금 만든 이슈가 보이면 API·DB 연동 정상.
-
-### 5.3 (선택) 공개용 이슈로 보이게 하기
-
-목록 API는 `approval_status = '승인'` 인 이슈만 반환함. 테스트 이슈를 공개하려면 Supabase **Table Editor** → **issues** → 해당 행의 `approval_status`를 `승인`으로 바꾸거나, API로 PATCH:
-
+### 3. 공개용 이슈 설정
+테스트 이슈를 공개하려면:
+- Supabase **Table Editor** → **issues** → `approval_status`를 `승인`으로 변경
+- 또는 API로 PATCH:
 ```bash
-curl -X PATCH "http://localhost:3000/api/issues/여기에_이슈_UUID" \
+curl -X PATCH "http://localhost:3000/api/issues/이슈_UUID" \
   -H "Content-Type: application/json" \
   -d '{"approval_status":"승인"}'
 ```
 
-### 5.4 그다음: 화면 붙이기 (Day 5–6)
+## 테이블이 없을 때
 
-로드맵 기준 담당 A 다음 작업:
+- 위 SQL을 Supabase **SQL Editor**에서 실행
+- 또는 팀에서 사용하는 마이그레이션 스크립트 실행
 
-- 홈·카테고리 메뉴(연예/스포츠/정치/사회/기술)·이슈 목록 화면 퍼블
-- 이슈 목록에 검색/필터/정렬 UI
-- 이슈 상세 페이지: 화력·타임라인·출처 링크 영역 + 위 API 연동
+## RLS 정책 (선택)
 
-이미 있는 라우트(`app/page.tsx`, `app/entertain/page.tsx` 등)에 목록 API를 붙이고, `app/issue/[id]/page.tsx`에 상세·타임라인·출처 API를 연동하면 됨.
+초기 MVP에서는 RLS 생략 가능.
+나중에 인증·권한 적용 시:
+- **Authentication** → **Policies**에서 테이블별 RLS 활성화
+- 정책 추가
