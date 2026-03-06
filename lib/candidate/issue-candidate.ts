@@ -29,6 +29,7 @@ import {
 } from '@/lib/config/categories'
 import { validateGroups } from '@/lib/ai/perplexity-group-validator'
 import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
+import { detectBurst, getBurstLevel, formatBurstReport } from './burst-detector'
 
 const ALERT_THRESHOLD = parseInt(process.env.CANDIDATE_ALERT_THRESHOLD ?? '5')
 const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30')
@@ -974,6 +975,14 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         // 기존 이슈 없음 → 신규 등록
         // 화력 계산을 먼저 하고, 충분하면 등록 (관리자 UI 노출 방지)
         
+        // 🔥 급증 감지
+        const isBurst = detectBurst(group.items)
+        const burstLevel = getBurstLevel(group.items)
+        
+        if (isBurst) {
+            console.log(formatBurstReport(representativeTitle, group.items, burstLevel))
+        }
+        
         // 1단계: 임시 이슈 생성 (approval_status를 null로 설정해서 UI 노출 안 됨)
         const { data: tempIssue, error: tempError } = await supabaseAdmin
             .from('issues')
@@ -984,6 +993,9 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                 category: issueCategory,
                 approval_status: null as any, // 임시 상태 (UI에서 필터링됨)
                 approved_at: null,
+                is_urgent: isBurst,  // 🔥 급증 플래그
+                burst_level: burstLevel,  // 🔥 급증 강도
+                source_track: 'news_collection',  // 출처 트랙
             })
             .select('id')
             .single()
@@ -1067,7 +1079,9 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         
         // 4단계: 화력 충분 → 정식 등록 (approval_status 업데이트)
         // 화력 기반 자동 승인 판정
-        const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+        // 🔥 급증 이슈도 동일한 자동 승인 기준 적용 (30점)
+        const autoApproveThreshold = AUTO_APPROVE_THRESHOLD
+        const shouldAutoApprove = actualHeat >= autoApproveThreshold &&
             AUTO_APPROVE_CATEGORIES.includes(issueCategory)
         
         const approvalStatus = shouldAutoApprove ? '승인' : '대기'
@@ -1079,6 +1093,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                 approval_type: shouldAutoApprove ? 'auto' : null,
                 approval_heat_index: shouldAutoApprove ? actualHeat : null,
                 approved_at: shouldAutoApprove ? now.toISOString() : null,
+                created_heat_index: actualHeat,  // 등록 시점 화력 저장
             })
             .eq('id', tempIssue.id)
         
@@ -1090,13 +1105,15 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         }
 
         if (shouldAutoApprove) {
-            console.log(`[자동승인 완료] "${representativeTitle}" (카테고리: ${issueCategory}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
+            const burstTag = isBurst ? ' 🔥 [급증]' : ''
+            console.log(`[자동승인 완료]${burstTag} "${representativeTitle}" (카테고리: ${issueCategory}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
             result.created++
         } else {
-            const reason = actualHeat < AUTO_APPROVE_THRESHOLD
-                ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
+            const reason = actualHeat < autoApproveThreshold
+                ? `화력 ${actualHeat}점 (자동승인 기준 ${autoApproveThreshold}점 미만)`
                 : `${issueCategory} 카테고리는 관리자 승인 필요`
-            console.log(`[대기등록 완료] "${representativeTitle}" (${reason}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
+            const burstTag = isBurst ? ' 🔥 [급증]' : ''
+            console.log(`[대기등록 완료]${burstTag} "${representativeTitle}" (${reason}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
             // 대기 등록 → 배너 알람 목록에 추가
             result.alerts.push({
                 title: representativeTitle,
