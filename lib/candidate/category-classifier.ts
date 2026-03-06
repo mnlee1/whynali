@@ -25,8 +25,6 @@ function getGroqClient(): Groq {
     return groqInstance
 }
 
-const ENABLE_AI_CATEGORY = process.env.ENABLE_AI_CATEGORY === 'true'
-
 interface CategoryClassificationResult {
     category: IssueCategory
     confidence: number
@@ -42,7 +40,9 @@ interface CategoryClassificationResult {
 export async function classifyCategoryByAI(
     titles: string[]
 ): Promise<CategoryClassificationResult> {
-    if (!ENABLE_AI_CATEGORY) {
+    const enableAI = process.env.ENABLE_AI_CATEGORY === 'true'
+    
+    if (!enableAI) {
         throw new Error('AI 카테고리 분류가 비활성화되어 있습니다')
     }
 
@@ -150,7 +150,9 @@ export function shouldUseAIClassification(
     hasContextMatch: boolean,
     majorityScore: number
 ): boolean {
-    if (!ENABLE_AI_CATEGORY) {
+    const enableAI = process.env.ENABLE_AI_CATEGORY === 'true'
+    
+    if (!enableAI) {
         return false
     }
 
