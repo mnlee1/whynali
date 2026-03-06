@@ -38,6 +38,9 @@ async function reclassifyIssues(options: ReclassifyOptions = {}) {
         limit = 100,
     } = options
 
+    // 스크립트 실행 시 AI 분류 강제 활성화
+    process.env.ENABLE_AI_CATEGORY = 'true'
+
     console.log('=== 이슈 재분류 시작 ===\n')
     console.log(`모드: ${dryRun ? 'DRY RUN (실제 업데이트 안 함)' : '실제 업데이트'}`)
     console.log(`대상: ${all ? '전체 이슈' : category ? `${category} 카테고리` : '최근 100개'}`)
