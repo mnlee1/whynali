@@ -30,6 +30,7 @@ import {
 import { validateGroups } from '@/lib/ai/perplexity-group-validator'
 import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
 import { detectBurst, getBurstLevel, formatBurstReport } from './burst-detector'
+import { classifyCategoryByAI, shouldUseAIClassification } from './category-classifier'
 
 const ALERT_THRESHOLD = parseInt(process.env.CANDIDATE_ALERT_THRESHOLD ?? '5')
 const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30')
@@ -557,9 +558,10 @@ const CONTEXT_RULES = getAllContextRules()
  *      - 맥락 규칙 매칭되면 키워드 우선
  *      - 다수결 카테고리의 키워드 점수가 0이면 키워드 우선 (네이버 오류 판단)
  *      - 그 외에는 다수결 우선 (네이버 카테고리가 더 정확한 경우 많음)
- * 5차(폴백): 둘 다 없으면 '사회' 기본값
+ * 5차: 신뢰도 낮으면 AI 재분류 (NEW)
+ * 6차(폴백): 둘 다 없으면 '사회' 기본값
  */
-function inferCategory(items: RawItem[]): IssueCategory {
+async function inferCategory(items: RawItem[]): Promise<IssueCategory> {
     const validCategories = getCategoryIds() as IssueCategory[]
     const allTitles = items.map((i) => i.title).join(' ')
 
@@ -596,26 +598,50 @@ function inferCategory(items: RawItem[]): IssueCategory {
     const topMajority = (Object.entries(categoryCounts) as [string, number][])
         .sort((a, b) => b[1] - a[1])[0]
 
+    // 기존 로직으로 1차 분류
+    let preliminaryCategory: IssueCategory | null = null
+    
     if (contextMatched && topKeyword && topKeyword[1] > 0) {
-        return topKeyword[0]
-    }
-
-    if (topMajority && topMajority[1] > 0) {
+        preliminaryCategory = topKeyword[0]
+    } else if (topMajority && topMajority[1] > 0) {
         const majorityCategory = topMajority[0] as IssueCategory
         const majorityKeywordScore = keywordScores[majorityCategory] ?? 0
         
         if (majorityKeywordScore === 0 && topKeyword && topKeyword[1] > 0) {
-            return topKeyword[0]
+            preliminaryCategory = topKeyword[0]
+        } else {
+            preliminaryCategory = majorityCategory
         }
-        
-        return majorityCategory
+    } else if (topKeyword && topKeyword[1] > 0) {
+        preliminaryCategory = topKeyword[0]
     }
 
-    if (topKeyword && topKeyword[1] > 0) {
-        return topKeyword[0]
+    // AI 재분류 필요 여부 판단
+    const keywordScore = topKeyword?.[1] ?? 0
+    const majorityScore = topMajority?.[1] ?? 0
+    
+    if (shouldUseAIClassification(keywordScore, contextMatched, majorityScore)) {
+        try {
+            const titles = items.map(i => i.title)
+            const aiResult = await classifyCategoryByAI(titles)
+            
+            console.log(
+                `[AI 카테고리 재분류] "${items[0].title.substring(0, 40)}..." ` +
+                `키워드: ${preliminaryCategory ?? '없음'} → AI: ${aiResult.category} ` +
+                `(신뢰도: ${aiResult.confidence}%, 이유: ${aiResult.reason})`
+            )
+            
+            // 신뢰도 70% 이상이면 AI 결과 채택
+            if (aiResult.confidence >= 70) {
+                return aiResult.category
+            }
+        } catch (error) {
+            console.error('[AI 카테고리 분류 에러] 키워드 방식으로 폴백:', error)
+        }
     }
 
-    return '사회'
+    // AI 재분류 실패 또는 불필요 시 기존 결과 사용
+    return preliminaryCategory ?? '사회'
 }
 
 /**
@@ -857,7 +883,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         // 그룹 아이템은 뉴스만 포함됨. 커뮤니티는 키워드 매칭으로 별도 수집한 matchedCommunityIds 사용
         const newsIds = group.items.map((i) => i.id)
         const communityIds = matchedCommunityIds
-        const issueCategory = inferCategory(group.items)
+        const issueCategory = await inferCategory(group.items)
 
         // 자동 승인 조건 판단
         // 화력 기반 자동 승인 (뉴스 건수 무관)
