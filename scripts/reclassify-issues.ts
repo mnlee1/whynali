@@ -12,6 +12,13 @@
  * - Dry Run (실제 업데이트 안 함): npx tsx scripts/reclassify-issues.ts --dry-run
  */
 
+// 환경변수 로드
+import dotenv from 'dotenv'
+import { resolve } from 'path'
+
+// .env.local 파일 로드
+dotenv.config({ path: resolve(__dirname, '../.env.local') })
+
 import { supabaseAdmin } from '../lib/supabase/server'
 import { classifyCategoryByAI } from '../lib/candidate/category-classifier'
 import type { IssueCategory } from '@/lib/config/categories'
