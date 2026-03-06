@@ -385,33 +385,12 @@ export default function AdminVotesPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
 
-            if (action === '승인') {
-                setVotes((prev) =>
-                    prev.map((v) =>
-                        v.id === id ? { ...v, phase: '진행중', approval_status: '승인' as const } : v
-                    )
-                )
-            } else if (action === '반려') {
-                setVotes((prev) =>
-                    prev.map((v) =>
-                        v.id === id ? { ...v, approval_status: '반려' as const } : v
-                    )
-                )
-            } else if (action === '삭제') {
-                setVotes((prev) => prev.filter((v) => v.id !== id))
-            } else if (action === '종료') {
-                setVotes((prev) =>
-                    prev.map((v) =>
-                        v.id === id ? { ...v, phase: '마감' as const } : v
-                    )
-                )
-            }
-            
             setSelectedVoteIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
                 return next
             })
+            await loadVotes(filter)
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
