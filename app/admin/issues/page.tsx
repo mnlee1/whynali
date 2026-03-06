@@ -397,6 +397,40 @@ export default function AdminIssuesPage() {
             <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-lg">
                 <h2 className="text-lg font-bold text-blue-900 mb-4">이슈 관리 기준</h2>
                 
+                {/* 이슈 생성 기준 */}
+                <div className="mb-4 p-4 bg-white border border-blue-100 rounded">
+                    <h3 className="font-semibold text-blue-900 mb-3 text-sm">이슈 생성 기준 (자동 등록 조건)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 className="font-medium text-green-700 text-xs mb-2">자동 등록 → 대기</h4>
+                            <ul className="space-y-1 text-xs text-gray-700">
+                                <li>• 최근 1시간 동안 동일 이슈 후보 <span className="font-semibold text-blue-600">5건 이상</span> (뉴스+커뮤니티)</li>
+                                <li>• 화력 <span className="font-semibold text-blue-600">15점 이상</span> 필요</li>
+                                <li>• 자동으로 <code className="px-1 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[11px]">approval_status='대기'</code>로 등록</li>
+                                <li>• 관리자 대시보드에 배너 알람 표시</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="font-medium text-amber-700 text-xs mb-2">자동 승인 조건 (대기 → 승인)</h4>
+                            <ul className="space-y-1 text-xs text-gray-700">
+                                <li>• 수집 <span className="font-semibold text-blue-600">8건 이상</span> + <span className="font-semibold text-blue-600">6시간</span> 관리자 무대응 시</li>
+                                <li>• 또는 화력 <span className="font-semibold text-blue-600">30점 이상</span> + 허용 카테고리</li>
+                                <li className="text-amber-600">• 허용 카테고리: 사회/기술/스포츠</li>
+                                <li className="text-red-600">• 연예/정치는 관리자 승인 필수</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                        <h4 className="font-medium text-gray-700 text-xs mb-2">중복 방지 및 처리</h4>
+                        <ul className="space-y-1 text-xs text-gray-700">
+                            <li>• 최근 24시간 내 같은 제목 이슈 존재 시 중복 등록 방지</li>
+                            <li>• 승인/반려된 이슈는 재처리하지 않음</li>
+                            <li>• 5~7건 구간: 자동 승인 불가, 관리자 배치 처리 필요</li>
+                            <li className="text-red-600">• 화력 15점 미만: 자동 반려</li>
+                        </ul>
+                    </div>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* 화력 점수 산정 */}
                     <div className="bg-white p-4 rounded border border-blue-100">
