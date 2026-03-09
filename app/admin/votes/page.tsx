@@ -76,10 +76,13 @@ function formatDate(dateString: string): string {
     return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
+const PAGE_SIZE = 20
+
 export default function AdminVotesPage() {
     const [votes, setVotes] = useState<Vote[]>([])
     const [total, setTotal] = useState(0)
     const [filter, setFilter] = useState<FilterPhase>('대기')
+    const [page, setPage] = useState(1)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
@@ -118,7 +121,12 @@ export default function AdminVotesPage() {
     const [saving, setSaving] = useState(false)
     const [regenerateDisabled, setRegenerateDisabled] = useState(false)
 
-    const PHASE_ORDER: Record<string, number> = { '대기': 0, '진행중': 1, '마감': 2 }
+    /* 전체 탭 정렬: 대기(0) → 진행중(1) → 반려(2) → 마감(3) */
+    const SORT_ORDER = (vote: Vote): number => {
+        if (vote.approval_status === '반려') return 2
+        if (vote.phase === '마감') return 3
+        return { '대기': 0, '진행중': 1 }[vote.phase] ?? 9
+    }
 
     /* 승인된 이슈 목록 로드 */
     const loadApprovedIssues = useCallback(async () => {
@@ -254,7 +262,8 @@ export default function AdminVotesPage() {
 
             handleCloseForm()
             setFilter('대기')
-            loadVotes('대기')
+            setPage(1)
+            loadVotes('대기', 1)
         } catch (e) {
             setFormError(e instanceof Error ? e.message : '저장 실패')
         } finally {
@@ -305,7 +314,8 @@ export default function AdminVotesPage() {
 
             handleCloseForm()
             setFilter('대기')
-            loadVotes('대기')
+            setPage(1)
+            loadVotes('대기', 1)
         } catch (e) {
             setFormError(e instanceof Error ? e.message : '생성 실패')
         } finally {
@@ -313,13 +323,14 @@ export default function AdminVotesPage() {
         }
     }
 
-    const loadVotes = useCallback(async (phase: FilterPhase) => {
+    const loadVotes = useCallback(async (phase: FilterPhase, targetPage: number = 1) => {
         setLoading(true)
         setError(null)
         setSelectedVoteIds(new Set())
         try {
-            const params = new URLSearchParams({ limit: '50' })
-            
+            const offset = (targetPage - 1) * PAGE_SIZE
+            const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
+
             if (phase === '반려') {
                 params.set('approval_status', '반려')
             } else if (phase === '대기') {
@@ -328,19 +339,15 @@ export default function AdminVotesPage() {
             } else if (phase) {
                 params.set('phase', phase)
                 params.set('approval_status', '승인')
-            } else {
-                /* 전체 탭: 반려 제외 — 대기(승인 대기) + 승인 투표만 표시 */
-                params.set('approval_status', '대기,승인')
             }
+            /* 전체 탭: approval_status 조건 없음 — 반려 포함 전체 조회 */
             
             const res = await fetch(`/api/admin/votes?${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             const data: Vote[] = json.data ?? []
             if (!phase) {
-                data.sort((a, b) =>
-                    (PHASE_ORDER[a.phase] ?? 9) - (PHASE_ORDER[b.phase] ?? 9)
-                )
+                data.sort((a, b) => SORT_ORDER(a) - SORT_ORDER(b))
             }
             setVotes(data)
             setTotal(json.total ?? 0)
@@ -353,7 +360,8 @@ export default function AdminVotesPage() {
     }, [])
 
     useEffect(() => {
-        loadVotes(filter)
+        setPage(1)
+        loadVotes(filter, 1)
     }, [filter, loadVotes])
 
     const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료') => {
@@ -395,7 +403,7 @@ export default function AdminVotesPage() {
                 next.delete(id)
                 return next
             })
-            await loadVotes(filter)
+            await loadVotes(filter, page)
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
@@ -463,7 +471,7 @@ export default function AdminVotesPage() {
                 alert(`일부 항목 처리 실패:\n${errors.join('\n')}`)
             }
 
-            loadVotes(filter)
+            loadVotes(filter, page)
             setSelectedVoteIds(new Set())
         } catch (e) {
             alert(e instanceof Error ? e.message : '일괄 처리 실패')
@@ -486,7 +494,7 @@ export default function AdminVotesPage() {
                         </span>
                     )}
                     <button
-                        onClick={() => loadVotes(filter)}
+                        onClick={() => loadVotes(filter, page)}
                         className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
                     >
                         새로고침
@@ -840,9 +848,6 @@ export default function AdminVotesPage() {
                             {label}
                         </button>
                     ))}
-                    <span className="ml-auto text-sm text-gray-500 self-center">
-                        총 {total}개
-                    </span>
                 </div>
 
                 {/* 일괄 처리 버튼 */}
@@ -857,7 +862,7 @@ export default function AdminVotesPage() {
                                 disabled={bulkProcessing}
                                 className="px-3 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
                             >
-                                {filter === '반려' ? '일괄 재승인' : '일괄 승인'}
+                                일괄 승인
                             </button>
                         )}
                         {(filter === '대기' || filter === '진행중') && (
@@ -1088,6 +1093,48 @@ export default function AdminVotesPage() {
                     </tbody>
                 </table>
             </div>
+
+            {/* 페이지네이션 */}
+            {total > 0 && (
+                <div className="flex items-center justify-between mt-4">
+                    <span className="text-sm text-gray-500">
+                        {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / 총 {total}개
+                    </span>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => { setPage(1); loadVotes(filter, 1) }}
+                            disabled={page === 1 || loading}
+                            className="px-2 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                        >
+                            «
+                        </button>
+                        <button
+                            onClick={() => { setPage(page - 1); loadVotes(filter, page - 1) }}
+                            disabled={page === 1 || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                        >
+                            이전
+                        </button>
+                        <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
+                            {page} / {Math.ceil(total / PAGE_SIZE)}
+                        </span>
+                        <button
+                            onClick={() => { setPage(page + 1); loadVotes(filter, page + 1) }}
+                            disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                        >
+                            다음
+                        </button>
+                        <button
+                            onClick={() => { const last = Math.ceil(total / PAGE_SIZE); setPage(last); loadVotes(filter, last) }}
+                            disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
+                            className="px-2 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                        >
+                            »
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
