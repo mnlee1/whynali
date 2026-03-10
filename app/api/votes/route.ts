@@ -10,9 +10,11 @@ export async function GET(request: NextRequest) {
     
     let query = admin
         .from('votes')
-        .select('*, vote_choices(*), issues(id, title)')
+        .select('*, vote_choices(*), issues!inner(id, title)')
         .in('phase', ['진행중', '마감'])
         .eq('approval_status', '승인')
+        .eq('issues.approval_status', '승인')
+        .eq('issues.visibility_status', 'visible')
         .order('created_at', { ascending: false })
 
     if (issue_id) {
