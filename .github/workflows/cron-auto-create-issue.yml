@@ -1,17 +1,28 @@
-name: 이슈 후보 자동 생성 Cron (Develop)
+name: 이슈 후보 자동 생성 Cron
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # 30분마다 (뉴스 수집 주기와 동일)
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
   auto-create-issue:
     runs-on: ubuntu-latest
     steps:
-      - name: 이슈 후보 자동 생성 API 호출
+      - name: 환경별 URL 설정
+        id: env
         run: |
-          curl -X GET https://dev-whynali.vercel.app/api/cron/auto-create-issue \
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Production" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Develop" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: 이슈 후보 자동 생성 API 호출 (${{ steps.env.outputs.env_name }})
+        run: |
+          curl -X GET ${{ steps.env.outputs.url }}/api/cron/auto-create-issue \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \

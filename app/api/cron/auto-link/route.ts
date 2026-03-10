@@ -13,7 +13,7 @@ import { linkAllCommunityToIssues } from '@/lib/linker/issue-community-linker'
 import { verifyCronRequest } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 120
 
 export async function GET(request: NextRequest) {
     const authError = verifyCronRequest(request)
