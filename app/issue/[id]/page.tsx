@@ -96,7 +96,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 출처 */}
-            <SourcesSection issueId={id} />
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">출처</p>
+                </div>
+                <div className="p-4">
+                    <SourcesSection issueId={id} />
+                </div>
+            </div>
 
             {/* 투표 */}
             {voteCount !== null && voteCount > 0 && (
