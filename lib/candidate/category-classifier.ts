@@ -99,7 +99,7 @@ JSON만 출력하세요.`
         })
 
         // API 사용량 추적
-        await incrementApiUsage('groq', 'category_classification')
+        await incrementApiUsage('groq', { calls: 1, successes: 1, failures: 0 })
 
         const responseText = completion.choices[0]?.message?.content?.trim()
         if (!responseText) {

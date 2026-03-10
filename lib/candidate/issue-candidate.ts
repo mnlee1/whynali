@@ -30,12 +30,32 @@ import {
 import { validateGroups } from '@/lib/ai/perplexity-group-validator'
 import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
 import {
+    classifyCategoryByAI,
+    shouldUseAIClassification,
+} from '@/lib/candidate/category-classifier'
+import {
+    detectBurst,
+    getBurstLevel,
+    formatBurstReport,
+} from '@/lib/candidate/burst-detector'
+import { tokenize } from '@/lib/candidate/tokenizer'
+import {
+    groupItems,
+    groupItemsByAI,
+    fallbackTokenMatching,
+} from '@/lib/candidate/grouping-pipeline'
+import {
+    selectRepresentativeTitle,
+    stripMediaPrefix,
+} from '@/lib/candidate/title-selector'
+import {
     CANDIDATE_ALERT_THRESHOLD as ALERT_THRESHOLD,
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
     CANDIDATE_NO_RESPONSE_HOURS as NO_RESPONSE_HOURS,
     CANDIDATE_WINDOW_HOURS as WINDOW_HOURS,
     CANDIDATE_MIN_UNIQUE_SOURCES as MIN_UNIQUE_SOURCES,
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
+    AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
 
 /*
@@ -763,7 +783,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             if (tempError?.code === '23505') { // Unique constraint violation
                 console.log(`[Race Condition 감지] "${representativeTitle}" 이미 등록됨, 재체크`)
                 // 다시 중복 체크
-                const recheckIssue = await checkForDuplicateIssue()
+                const recheckIssue = await checkForDuplicateIssue(representativeTitle, since24h)
                 if (recheckIssue) {
                     // 기존 이슈에 수집 건 연결만 수행
                     await linkCollections(recheckIssue.id, newsIds, communityIds)
@@ -776,7 +796,7 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         }
         
         // 1.5단계: 임시 이슈 생성 직후 최종 중복 체크 (Race Condition 최종 방어)
-        const finalCheck = await checkForDuplicateIssue()
+        const finalCheck = await checkForDuplicateIssue(representativeTitle, since24h)
         if (finalCheck && finalCheck.id !== tempIssue.id) {
             console.log(`[Race Condition 방어] 임시 이슈 생성 중 중복 발견, 임시 이슈 삭제: "${representativeTitle}"`)
             // 방금 생성한 임시 이슈 삭제

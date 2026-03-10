@@ -28,3 +28,6 @@ export const CANDIDATE_MIN_UNIQUE_SOURCES = parseInt(
 export const CANDIDATE_NO_RESPONSE_HOURS = parseInt(
     process.env.CANDIDATE_NO_RESPONSE_HOURS ?? '6'
 )
+export const AUTO_APPROVE_CATEGORIES = (
+    process.env.AUTO_APPROVE_CATEGORIES ?? '사회,기술,스포츠'
+).split(',')
