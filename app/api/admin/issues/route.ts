@@ -66,9 +66,17 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
+        // 긴급 이슈 개수 계산 (화력 30점 이상 + 연예/정치 + 대기 상태)
+        const urgentCount = (data ?? []).filter(issue => 
+            issue.approval_status === '대기' &&
+            (issue.heat_index ?? 0) >= 30 &&
+            ['연예', '정치'].includes(issue.category)
+        ).length
+
         return NextResponse.json({
             data: data ?? [],
             total: count ?? 0,
+            urgentCount,
         })
     } catch (error) {
         console.error('관리자 이슈 조회 에러:', error)
