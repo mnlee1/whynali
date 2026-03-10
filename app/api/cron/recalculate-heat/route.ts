@@ -23,13 +23,13 @@ import { recalculateHeatForIssue } from '@/lib/analysis/heat'
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
+import {
+    CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
+    CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
+} from '@/lib/config/candidate-thresholds'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
-
-/* issue-candidate.ts와 동일한 환경변수 참조 */
-const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30')
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
 
 export async function GET(request: NextRequest) {
     const authError = verifyCronRequest(request)
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
                                 }
                                 
                                 result.statusChanged = (result.statusChanged ? result.statusChanged + ', ' : '')
-                                    + `${oldStatus} → ${transition.newStatus} (${transition.reason})`
+                                    + `${oldStatus} → ${transition.newStatus} (${transition.reason.message})`
                                 return { ...result, autoApproved: 0, autoRejected: 0, statusTransitioned: 1 }
                             }
                         }
