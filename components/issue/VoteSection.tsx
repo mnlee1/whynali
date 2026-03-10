@@ -104,11 +104,23 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 if (!res.ok) throw new Error(json.error)
             }
             
-            // 투표 후 데이터 갱신 (정렬 순서 유지)
+            // 투표 후 데이터 갱신 (투표 카드 순서 + 선택지 순서 유지)
             const res = await fetch(`/api/votes?issue_id=${issueId}`)
             const json = await res.json()
             if (res.ok) {
-                setVotes(json.data ?? [])
+                const newData: VoteWithChoices[] = json.data ?? []
+                setVotes((prev) => {
+                    const ordered = prev.map((v) => {
+                        const updated = newData.find((nv) => nv.id === v.id)
+                        if (!updated) return v
+                        const orderedChoices = v.vote_choices.map(
+                            (c) => updated.vote_choices.find((nc) => nc.id === c.id) ?? c
+                        )
+                        return { ...updated, vote_choices: orderedChoices }
+                    })
+                    const appended = newData.filter((nv) => !prev.find((v) => v.id === nv.id))
+                    return [...ordered, ...appended]
+                })
                 setUserVotes(json.userVotes ?? {})
             }
         } catch (e) {
