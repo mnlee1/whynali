@@ -689,13 +689,16 @@ function CommentItem({
     onReport, setEditDraft,
 }: CommentItemProps) {
     const [menuOpen, setMenuOpen] = useState(false)
+    const [showReasons, setShowReasons] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
 
+    const closeMenu = () => { setMenuOpen(false); setShowReasons(false) }
+
     useEffect(() => {
-        if (!menuOpen) return
+        if (!menuOpen) { setShowReasons(false); return }
         const handler = (e: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setMenuOpen(false)
+                closeMenu()
             }
         }
         document.addEventListener('mousedown', handler)
@@ -740,7 +743,7 @@ function CommentItem({
                             </button>
                         </div>
                     )}
-                    {/* 신고 ... 드롭다운 (타인 댓글 + 로그인 시) */}
+                    {/* 신고 ⋮ 드롭다운 (타인 댓글·답글 + 로그인 시) */}
                     {!isMine && userId && (
                         <div className="relative" ref={menuRef}>
                             <button
@@ -748,25 +751,39 @@ function CommentItem({
                                 className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
                                 aria-label="더보기"
                             >
-                                •••
+                                ⋮
                             </button>
                             {menuOpen && (
                                 <div className="absolute right-0 top-5 z-20 bg-white border border-gray-200 rounded-lg shadow-md py-1 min-w-[120px]">
                                     {isReported ? (
                                         <span className="block px-3 py-1.5 text-xs text-gray-400">신고완료</span>
+                                    ) : !showReasons ? (
+                                        /* 1단계: 신고 항목만 표시 */
+                                        <button
+                                            onClick={() => setShowReasons(true)}
+                                            className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                                        >
+                                            신고
+                                        </button>
                                     ) : (
-                                        REPORT_REASONS.map((reason) => (
-                                            <button
-                                                key={reason}
-                                                onClick={() => {
-                                                    onReport(comment.id, reason)
-                                                    setMenuOpen(false)
-                                                }}
-                                                className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                                            >
-                                                {reason}
-                                            </button>
-                                        ))
+                                        /* 2단계: 사유 선택 */
+                                        <>
+                                            <span className="block px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100">
+                                                신고 사유 선택
+                                            </span>
+                                            {REPORT_REASONS.map((reason) => (
+                                                <button
+                                                    key={reason}
+                                                    onClick={() => {
+                                                        onReport(comment.id, reason)
+                                                        closeMenu()
+                                                    }}
+                                                    className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    {reason}
+                                                </button>
+                                            ))}
+                                        </>
                                     )}
                                 </div>
                             )}
