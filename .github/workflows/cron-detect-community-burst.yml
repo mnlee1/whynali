@@ -1,12 +1,12 @@
-name: 화력 재계산 Cron
+name: 커뮤니티 급증 감지 Cron
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/3 * * * *'
   workflow_dispatch:
 
 jobs:
-  recalculate-heat:
+  detect-community-burst:
     runs-on: ubuntu-latest
     steps:
       - name: 환경별 URL 설정
@@ -20,9 +20,9 @@ jobs:
             echo "env_name=Develop" >> $GITHUB_OUTPUT
           fi
       
-      - name: 화력 재계산 API 호출 (${{ steps.env.outputs.env_name }})
+      - name: 커뮤니티 급증 감지 API 호출 (${{ steps.env.outputs.env_name }})
         run: |
-          curl -X GET ${{ steps.env.outputs.url }}/api/cron/recalculate-heat \
+          curl -X GET ${{ steps.env.outputs.url }}/api/cron/detect-community-burst \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
