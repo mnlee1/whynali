@@ -120,20 +120,25 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
     if (loading) {
         return (
-            <div className="p-4 space-y-4">
-                {[1, 2].map((i) => (
-                    <div key={i} className="p-4 border border-gray-200 rounded-xl space-y-3">
-                        <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
-                        <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
-                        <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
-                    </div>
-                ))}
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">투표</p>
+                </div>
+                <div className="p-4 space-y-4">
+                    {[1, 2].map((i) => (
+                        <div key={i} className="p-4 border border-gray-200 rounded-xl space-y-3">
+                            <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
+                            <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
+                            <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
+                        </div>
+                    ))}
+                </div>
             </div>
         )
     }
 
     if (votes.length === 0) {
-        return <p className="text-sm text-gray-500 p-4">등록된 투표가 없습니다.</p>
+        return null
     }
 
     const activeVotes = votes.filter((v) => v.phase === '진행중')
@@ -147,97 +152,102 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     }
 
     return (
-        <div className="p-4 space-y-4">
-            {/* 참여 유도 메시지 강화 */}
-            {!userId && activeVotes.length > 0 && (
-                <div className="p-4 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl">
-                    <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-10 h-10 bg-violet-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                            ?
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-sm font-semibold text-violet-900 mb-1">
-                                지금 투표에 참여하세요!
-                            </p>
-                            <p className="text-xs text-violet-700 mb-2">
-                                {totalCount.toLocaleString()}명이 이미 의견을 남겼습니다. 당신의 생각은 어떤가요?
-                            </p>
-                            <a
-                                href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
-                                className="inline-block px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
-                            >
-                                로그인하고 투표하기 →
-                            </a>
+        <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+            <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                <p className="text-sm font-semibold text-neutral-800">투표</p>
+            </div>
+            <div className="p-4 space-y-4">
+                {/* 참여 유도 메시지 강화 */}
+                {!userId && activeVotes.length > 0 && (
+                    <div className="p-4 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl">
+                        <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 w-10 h-10 bg-violet-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                                ?
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-violet-900 mb-1">
+                                    지금 투표에 참여하세요!
+                                </p>
+                                <p className="text-xs text-violet-700 mb-2">
+                                    {totalCount.toLocaleString()}명이 이미 의견을 남겼습니다. 당신의 생각은 어떤가요?
+                                </p>
+                                <a
+                                    href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
+                                    className="inline-block px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+                                >
+                                    로그인하고 투표하기 →
+                                </a>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* 로그인 사용자용 간단 안내 */}
-            {userId && activeVotes.length > 0 && (
-                <div className="p-3 bg-violet-50 border border-violet-200 rounded-lg">
-                    <p className="text-xs text-violet-700">
-                        💡 선택지를 클릭하여 투표하세요. 다시 클릭하면 취소할 수 있습니다.
-                    </p>
-                </div>
-            )}
+                {/* 로그인 사용자용 간단 안내 */}
+                {userId && activeVotes.length > 0 && (
+                    <div className="p-3 bg-violet-50 border border-violet-200 rounded-lg">
+                        <p className="text-xs text-violet-700">
+                            💡 선택지를 클릭하여 투표하세요. 다시 클릭하면 취소할 수 있습니다.
+                        </p>
+                    </div>
+                )}
 
-            {/* 진행중 투표 */}
-            {activeVotes.length > 0 && (
-                <div className="space-y-4">
-                    {activeVotes.map((vote) => (
-                        <VoteCard
-                            key={vote.id}
-                            vote={vote}
-                            myChoiceId={userVotes[vote.id] ?? null}
-                            isProcessing={submitting === vote.id}
-                            userId={userId}
-                            onVote={handleVote}
-                            highlight
-                        />
-                    ))}
-                </div>
-            )}
+                {/* 진행중 투표 */}
+                {activeVotes.length > 0 && (
+                    <div className="space-y-4">
+                        {activeVotes.map((vote) => (
+                            <VoteCard
+                                key={vote.id}
+                                vote={vote}
+                                myChoiceId={userVotes[vote.id] ?? null}
+                                isProcessing={submitting === vote.id}
+                                userId={userId}
+                                onVote={handleVote}
+                                highlight
+                            />
+                        ))}
+                    </div>
+                )}
 
-            {/* 이전 투표 (접이식, 상태별 블록) */}
-            {pastVotes.length > 0 && (
-                <div>
-                    <button
-                        onClick={() => setShowPast((p) => !p)}
-                        className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1.5 transition-colors"
-                    >
-                        <span>{showPast ? '▲' : '▼'}</span>
-                        <span>이전 투표 {pastVotes.length}개 {showPast ? '접기' : '보기'}</span>
-                    </button>
+                {/* 이전 투표 (접이식, 상태별 블록) */}
+                {pastVotes.length > 0 && (
+                    <div>
+                        <button
+                            onClick={() => setShowPast((p) => !p)}
+                            className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1.5 transition-colors"
+                        >
+                            <span>{showPast ? '▲' : '▼'}</span>
+                            <span>이전 투표 {pastVotes.length}개 {showPast ? '접기' : '보기'}</span>
+                        </button>
 
-                    {showPast && (
-                        <div className="mt-3 space-y-4">
-                            {Object.entries(pastVotesByStatus).map(([status, statusVotes]) => {
-                                if (statusVotes.length === 0) return null
-                                return (
-                                    <div key={status} className="opacity-80">
-                                        <h4 className="text-xs font-semibold text-gray-500 mb-2">
-                                            {status} 시기 투표
-                                        </h4>
-                                        <div className="space-y-3">
-                                            {statusVotes.map((vote) => (
-                                                <VoteCard
-                                                    key={vote.id}
-                                                    vote={vote}
-                                                    myChoiceId={userVotes[vote.id] ?? null}
-                                                    isProcessing={false}
-                                                    userId={userId}
-                                                    onVote={handleVote}
-                                                />
-                                            ))}
+                        {showPast && (
+                            <div className="mt-3 space-y-4">
+                                {Object.entries(pastVotesByStatus).map(([status, statusVotes]) => {
+                                    if (statusVotes.length === 0) return null
+                                    return (
+                                        <div key={status} className="opacity-80">
+                                            <h4 className="text-xs font-semibold text-gray-500 mb-2">
+                                                {status} 시기 투표
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {statusVotes.map((vote) => (
+                                                    <VoteCard
+                                                        key={vote.id}
+                                                        vote={vote}
+                                                        myChoiceId={userVotes[vote.id] ?? null}
+                                                        isProcessing={false}
+                                                        userId={userId}
+                                                        onVote={handleVote}
+                                                    />
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
