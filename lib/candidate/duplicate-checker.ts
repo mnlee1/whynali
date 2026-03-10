@@ -27,6 +27,17 @@ interface DuplicateCheckResult {
     }
     confidence?: number
     reason?: string
+    filterStats?: {
+        candidates: number
+        oppositeFiltered: number
+        numberFiltered: number
+        aiChecked: number
+    }
+}
+
+interface WordRelation {
+    words: string[]
+    relation: 'opposite' | 'synonym'
 }
 
 const AI_CONFIDENCE_THRESHOLD = parseInt(
@@ -36,16 +47,76 @@ const CHECK_WINDOW_HOURS = parseInt(
     process.env.DUPLICATE_CHECK_WINDOW_HOURS ?? '1'
 )
 
-// 반대어 쌍 (같은 인물/주제지만 반대 사건)
-const OPPOSITE_WORD_PAIRS = [
-    ['복귀', '사퇴', '퇴사', '하차'],
-    ['찬성', '반대', '거부'],
-    ['승인', '반려', '기각'],
-    ['기소', '무혐의', '불기소'],
-    ['당선', '낙선'],
-    ['체포', '석방'],
-    ['합격', '불합격'],
-    ['승리', '패배'],
+/**
+ * 단어 관계 정의
+ * - opposite: 반대어 관계 (같은 인물/주제지만 반대 사건)
+ * - synonym: 유사어 관계 (같은 의미를 다르게 표현)
+ */
+const WORD_RELATIONS: WordRelation[] = [
+    {
+        words: ['복귀'],
+        relation: 'opposite',
+    },
+    {
+        words: ['사퇴', '퇴사', '하차'],
+        relation: 'synonym',
+    },
+    {
+        words: ['찬성'],
+        relation: 'opposite',
+    },
+    {
+        words: ['반대', '거부'],
+        relation: 'synonym',
+    },
+    {
+        words: ['승인'],
+        relation: 'opposite',
+    },
+    {
+        words: ['반려', '기각'],
+        relation: 'synonym',
+    },
+    {
+        words: ['기소'],
+        relation: 'opposite',
+    },
+    {
+        words: ['무혐의', '불기소'],
+        relation: 'synonym',
+    },
+    {
+        words: ['당선'],
+        relation: 'opposite',
+    },
+    {
+        words: ['낙선'],
+        relation: 'opposite',
+    },
+    {
+        words: ['체포'],
+        relation: 'opposite',
+    },
+    {
+        words: ['석방'],
+        relation: 'opposite',
+    },
+    {
+        words: ['합격'],
+        relation: 'opposite',
+    },
+    {
+        words: ['불합격'],
+        relation: 'opposite',
+    },
+    {
+        words: ['승리'],
+        relation: 'opposite',
+    },
+    {
+        words: ['패배'],
+        relation: 'opposite',
+    },
 ]
 
 /**
@@ -61,23 +132,30 @@ function extractKeywords(title: string): string[] {
 
 /**
  * hasOppositeWords - 반대어 체크
+ * 
+ * relation === 'opposite'인 단어 그룹만 검사합니다.
+ * 유사어(synonym)는 같은 의미이므로 반대 사건으로 간주하지 않습니다.
+ * 
+ * 예시:
+ * - "윤석열 복귀" vs "윤석열 사퇴" → true (반대 사건)
+ * - "장관 사퇴" vs "장관 퇴사" → false (유사어, 같은 사건)
  */
 function hasOppositeWords(title1: string, title2: string): boolean {
     const words1 = extractKeywords(title1)
     const words2 = extractKeywords(title2)
     
-    for (const opposites of OPPOSITE_WORD_PAIRS) {
-        const has1 = opposites.some(w => words1.includes(w))
-        const has2 = opposites.some(w => words2.includes(w))
+    const oppositeGroups = WORD_RELATIONS.filter(r => r.relation === 'opposite')
+    
+    for (const group of oppositeGroups) {
+        const has1 = group.words.some(w => words1.includes(w))
+        const has2 = group.words.some(w => words2.includes(w))
         
-        // 한쪽에만 있으면 반대 사건
         if (has1 && !has2 || !has1 && has2) {
             return true
         }
         
-        // 둘 다 있지만 다른 단어면 반대 사건
-        const word1 = opposites.find(w => words1.includes(w))
-        const word2 = opposites.find(w => words2.includes(w))
+        const word1 = group.words.find(w => words1.includes(w))
+        const word2 = group.words.find(w => words2.includes(w))
         if (word1 && word2 && word1 !== word2) {
             return true
         }
@@ -202,13 +280,19 @@ async function compareByAI(
  *
  * @param supabaseAdmin - Supabase Admin 클라이언트
  * @param newTitle - 새로 생성하려는 이슈 제목
- * @returns 중복 이슈 정보 또는 null
+ * @returns 중복 이슈 정보 및 필터링 통계
  */
 export async function checkDuplicateIssue(
     supabaseAdmin: any,
     newTitle: string
 ): Promise<DuplicateCheckResult> {
-    // 1단계: 최근 N시간 이슈 조회
+    const filterStats = {
+        candidates: 0,
+        oppositeFiltered: 0,
+        numberFiltered: 0,
+        aiChecked: 0,
+    }
+    
     const cutoffTime = new Date(
         Date.now() - CHECK_WINDOW_HOURS * 60 * 60 * 1000
     ).toISOString()
@@ -220,12 +304,11 @@ export async function checkDuplicateIssue(
         .order('created_at', { ascending: false })
     
     if (!recentIssues || recentIssues.length === 0) {
-        return { isDuplicate: false }
+        return { isDuplicate: false, filterStats }
     }
     
     console.log(`[중복 체크] "${newTitle}" vs 최근 ${recentIssues.length}건 이슈`)
     
-    // 2단계: 정확한 제목 일치 (빠른 체크)
     const exactMatch = recentIssues.find((i: any) => i.title === newTitle)
     if (exactMatch) {
         console.log(`  ✓ [정확 일치] "${exactMatch.title}"`)
@@ -234,10 +317,10 @@ export async function checkDuplicateIssue(
             existingIssue: exactMatch,
             confidence: 100,
             reason: '정확한 제목 일치',
+            filterStats,
         }
     }
     
-    // 3단계: 키워드 필터링 (공통 키워드 2개 이상만 AI 체크)
     const newKeywords = extractKeywords(newTitle)
     const candidates = recentIssues.filter((existing: any) => {
         const existingKeywords = extractKeywords(existing.title)
@@ -247,29 +330,31 @@ export async function checkDuplicateIssue(
         return commonCount >= 2
     })
     
+    filterStats.candidates = candidates.length
+    
     if (candidates.length === 0) {
         console.log(`  ✓ [키워드 필터] 공통 키워드 2개 이상인 이슈 없음`)
-        return { isDuplicate: false }
+        return { isDuplicate: false, filterStats }
     }
     
     console.log(`  • [키워드 필터 통과] ${candidates.length}건`)
     
-    // 4단계: 안전 장치 체크 (상위 3개만)
     for (const candidate of candidates.slice(0, 3)) {
-        // 반대어 체크
         if (hasOppositeWords(newTitle, candidate.title)) {
             console.log(`  ✗ [반대어 감지] "${candidate.title}" (별개 사건)`)
+            filterStats.oppositeFiltered++
             continue
         }
         
-        // 숫자 차이 체크
         if (hasSignificantNumberDifference(newTitle, candidate.title)) {
             console.log(`  ✗ [연속 사건] "${candidate.title}" (1차→2차 등)`)
+            filterStats.numberFiltered++
             continue
         }
         
-        // 5단계: AI 정밀 비교
         console.log(`  ? [AI 검증] "${candidate.title}"`)
+        filterStats.aiChecked++
+        
         const aiResult = await compareByAI(newTitle, candidate.title)
         
         if (aiResult.isDuplicate) {
@@ -281,6 +366,7 @@ export async function checkDuplicateIssue(
                 existingIssue: candidate,
                 confidence: aiResult.confidence,
                 reason: aiResult.reason,
+                filterStats,
             }
         } else {
             console.log(
@@ -288,10 +374,9 @@ export async function checkDuplicateIssue(
             )
         }
         
-        // Rate Limit 방지 (3초 대기)
         await new Promise(resolve => setTimeout(resolve, 3000))
     }
     
     console.log(`  ✓ [중복 없음] AI 검증 완료`)
-    return { isDuplicate: false }
+    return { isDuplicate: false, filterStats }
 }
