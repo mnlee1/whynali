@@ -1,17 +1,28 @@
-name: 이슈 전처리 필터 Cron (Develop)
+name: 이슈 후보 필터링 Cron
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # 5분마다
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
   filter-candidates:
     runs-on: ubuntu-latest
     steps:
-      - name: 이슈 전처리 필터 API 호출
+      - name: 환경별 URL 설정
+        id: env
         run: |
-          curl -X GET https://dev-whynali.vercel.app/api/cron/filter-candidates \
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Production" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Develop" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: 이슈 후보 필터링 API 호출 (${{ steps.env.outputs.env_name }})
+        run: |
+          curl -X GET ${{ steps.env.outputs.url }}/api/cron/filter-candidates \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
