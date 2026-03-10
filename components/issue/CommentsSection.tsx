@@ -88,9 +88,6 @@ export default function CommentsSection({
     const [loadingRepliesIds, setLoadingRepliesIds] = useState<Set<string>>(new Set())
 
     /* 신고 상태 */
-    const [reportingCommentId, setReportingCommentId] = useState<string | null>(null)
-    const [reportReason, setReportReason] = useState('')
-    const [submittingReport, setSubmittingReport] = useState(false)
     const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
 
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
@@ -436,33 +433,17 @@ export default function CommentsSection({
         setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
     }
 
-    /* 신고 */
-    const handleReportStart = (commentId: string) => {
-        setReportingCommentId(commentId)
-        setReportReason('')
-    }
-
-    const handleReportSubmit = async () => {
-        if (!reportReason || !reportingCommentId || submittingReport) return
-        setSubmittingReport(true)
+    /* 신고: 드롭다운에서 사유 선택 시 바로 제출 (낙관적 업데이트) */
+    const handleReport = async (commentId: string, reason: string) => {
+        if (reportedIds.has(commentId)) return
+        setReportedIds((prev) => new Set([...prev, commentId]))
         try {
-            const res = await fetch(`/api/comments/${reportingCommentId}/report`, {
+            await fetch(`/api/comments/${commentId}/report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reason: reportReason }),
+                body: JSON.stringify({ reason }),
             })
-            const json = await res.json()
-            if (res.status === 409 || res.ok) {
-                setReportedIds((prev) => new Set([...prev, reportingCommentId]))
-                setReportingCommentId(null)
-                return
-            }
-            throw new Error(json.error)
-        } catch {
-            setReportingCommentId(null)
-        } finally {
-            setSubmittingReport(false)
-        }
+        } catch { /* 신고 실패 시 상태 유지 (UX 단순화) */ }
     }
 
     if (loading) {
@@ -512,7 +493,7 @@ export default function CommentsSection({
                                     onEditSave={handleEditSave}
                                     onDelete={handleDelete}
                                     onLike={handleLike}
-                                    onReportStart={handleReportStart}
+                                    onReport={handleReport}
                                     setEditDraft={setEditDraft}
                                 />
                             ))}
@@ -577,7 +558,7 @@ export default function CommentsSection({
                                 onReplyDraftChange={setReplyDraft}
                                 onReplySubmit={handleReplySubmit}
                                 onToggleReplies={handleToggleReplies}
-                                onReportStart={handleReportStart}
+                                onReport={handleReport}
                                 setEditDraft={setEditDraft}
                             />
                         ))}
@@ -657,44 +638,6 @@ export default function CommentsSection({
                 </div>
             </div>
 
-            {/* 신고 모달 */}
-            {reportingCommentId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
-                        <h3 className="text-sm font-semibold text-gray-800">신고 사유를 선택해 주세요</h3>
-                        <div className="space-y-2">
-                            {REPORT_REASONS.map((reason) => (
-                                <label key={reason} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="report_reason"
-                                        value={reason}
-                                        checked={reportReason === reason}
-                                        onChange={() => setReportReason(reason)}
-                                        className="accent-neutral-800"
-                                    />
-                                    <span className="text-sm text-gray-700">{reason}</span>
-                                </label>
-                            ))}
-                        </div>
-                        <div className="flex gap-2 justify-end pt-2">
-                            <button
-                                onClick={() => setReportingCommentId(null)}
-                                className="text-sm px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
-                            >
-                                취소
-                            </button>
-                            <button
-                                onClick={handleReportSubmit}
-                                disabled={!reportReason || submittingReport}
-                                className="text-sm px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {submittingReport ? '신고 중...' : '신고하기'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     )
 }
@@ -731,7 +674,7 @@ interface CommentItemProps {
     onReplyDraftChange?: (v: string) => void
     onReplySubmit?: (parentId: string) => void
     onToggleReplies?: (id: string) => void
-    onReportStart: (id: string) => void
+    onReport: (id: string, reason: string) => void
     setEditDraft: (v: string) => void
 }
 
@@ -743,8 +686,22 @@ function CommentItem({
     reportedIds,
     onEditStart, onEditCancel, onEditSave, onDelete, onLike,
     onReplyToggle, onReplyDraftChange, onReplySubmit, onToggleReplies,
-    onReportStart, setEditDraft,
+    onReport, setEditDraft,
 }: CommentItemProps) {
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
     const isDeleting = deletingId === comment.id
@@ -761,11 +718,9 @@ function CommentItem({
             isBest ? 'px-3 bg-amber-50 rounded-lg border border-amber-100' : '',
             isReply ? 'py-3' : '',
         ].join(' ')}>
-            {/* 작성자 + 시간 + 본인 액션 */}
+            {/* 작성자 + 시간 + 본인 액션 + ... 메뉴 */}
             <div className="flex items-center justify-between mb-1">
-                <span className={['text-gray-500', isReply ? 'text-xs' : 'text-xs'].join(' ')}>
-                    {authorLabel(comment)}
-                </span>
+                <span className="text-xs text-gray-500">{authorLabel(comment)}</span>
                 <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">{formatDate(comment.created_at)}</span>
                     {isMine && !isEditing && (
@@ -785,17 +740,37 @@ function CommentItem({
                             </button>
                         </div>
                     )}
+                    {/* 신고 ... 드롭다운 (타인 댓글 + 로그인 시) */}
                     {!isMine && userId && (
-                        isReported
-                            ? <span className="text-xs text-gray-300">신고완료</span>
-                            : (
-                                <button
-                                    onClick={() => onReportStart(comment.id)}
-                                    className="text-xs text-gray-400 hover:text-gray-600"
-                                >
-                                    신고
-                                </button>
-                            )
+                        <div className="relative" ref={menuRef}>
+                            <button
+                                onClick={() => setMenuOpen((v) => !v)}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
+                                aria-label="더보기"
+                            >
+                                •••
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 top-5 z-20 bg-white border border-gray-200 rounded-lg shadow-md py-1 min-w-[120px]">
+                                    {isReported ? (
+                                        <span className="block px-3 py-1.5 text-xs text-gray-400">신고완료</span>
+                                    ) : (
+                                        REPORT_REASONS.map((reason) => (
+                                            <button
+                                                key={reason}
+                                                onClick={() => {
+                                                    onReport(comment.id, reason)
+                                                    setMenuOpen(false)
+                                                }}
+                                                className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                                            >
+                                                {reason}
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -831,46 +806,51 @@ function CommentItem({
                 </p>
             )}
 
-            {/* 좋아요/싫어요 + 답글 달기 버튼 */}
+            {/* 답글 달기(좌) + 좋아요/싫어요(우) */}
             {!isEditing && (
-                <div className="flex items-center gap-2 mt-2">
-                    <button
-                        onClick={() => onLike(comment.id, 'like')}
-                        disabled={isLiking}
-                        className={[
-                            'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
-                            myType === 'like'
-                                ? 'border-blue-400 bg-blue-50 text-blue-600 font-medium'
-                                : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-                        ].join(' ')}
-                    >
-                        <span>👍</span>
-                        <span>좋아요 {comment.like_count}</span>
-                    </button>
-                    <button
-                        onClick={() => onLike(comment.id, 'dislike')}
-                        disabled={isLiking}
-                        className={[
-                            'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
-                            myType === 'dislike'
-                                ? 'border-red-400 bg-red-50 text-red-500 font-medium'
-                                : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-                        ].join(' ')}
-                    >
-                        <span>👎</span>
-                        <span>싫어요 {comment.dislike_count}</span>
-                    </button>
+                <div className="flex items-center justify-between mt-2">
                     {/* 답글 달기 버튼 (로그인 + 최상위 댓글만) */}
-                    {!isReply && userId && onReplyToggle && (
+                    <div>
+                        {!isReply && userId && onReplyToggle && (
+                            <button
+                                onClick={() => onReplyToggle(comment.id)}
+                                className="text-xs text-gray-400 hover:text-gray-600"
+                            >
+                                {isReplyFormOpen ? '취소' : '답글 달기'}
+                            </button>
+                        )}
+                    </div>
+                    {/* 좋아요/싫어요 우측 정렬 */}
+                    <div className="flex items-center gap-2">
                         <button
-                            onClick={() => onReplyToggle(comment.id)}
-                            className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+                            onClick={() => onLike(comment.id, 'like')}
+                            disabled={isLiking}
+                            className={[
+                                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
+                                myType === 'like'
+                                    ? 'border-blue-400 bg-blue-50 text-blue-600 font-medium'
+                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
+                                isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                            ].join(' ')}
                         >
-                            {isReplyFormOpen ? '취소' : '답글 달기'}
+                            <span>👍</span>
+                            <span>좋아요 {comment.like_count}</span>
                         </button>
-                    )}
+                        <button
+                            onClick={() => onLike(comment.id, 'dislike')}
+                            disabled={isLiking}
+                            className={[
+                                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
+                                myType === 'dislike'
+                                    ? 'border-red-400 bg-red-50 text-red-500 font-medium'
+                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
+                                isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                            ].join(' ')}
+                        >
+                            <span>👎</span>
+                            <span>싫어요 {comment.dislike_count}</span>
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -932,7 +912,7 @@ function CommentItem({
                             onEditSave={onEditSave}
                             onDelete={onDelete}
                             onLike={onLike}
-                            onReportStart={onReportStart}
+                            onReport={onReport}
                             setEditDraft={setEditDraft}
                         />
                     ))}
