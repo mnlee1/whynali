@@ -1,6 +1,16 @@
 import { supabaseAdmin } from '@/lib/supabase/server'
 import * as cheerio from 'cheerio'
 
+const COMMUNITY_MIN_EXPECTED_POSTS = parseInt(
+    process.env.COMMUNITY_MIN_EXPECTED_POSTS ?? '5'
+)
+
+interface CollectResult {
+    count: number
+    skipped: number
+    warning?: string
+}
+
 interface CommunityPostRow {
     title: string
     url: string
@@ -56,7 +66,7 @@ function parseTheqooTime(timeText: string): string {
 }
 
 /** 더쿠(theqoo.net) 스퀘어 게시판 메타데이터 수집 */
-export async function collectTheqoo(): Promise<number> {
+export async function collectTheqoo(): Promise<CollectResult> {
     const baseUrl = 'https://theqoo.net'
     const listUrl = `${baseUrl}/square`
 
@@ -163,7 +173,21 @@ export async function collectTheqoo(): Promise<number> {
             }
         }
 
-        if (posts.length === 0) return 0
+        // 스크래핑 장애 감지: 수집 건수가 최소 기대값보다 적으면 경고
+        if (posts.length < COMMUNITY_MIN_EXPECTED_POSTS) {
+            const warning =
+                `더쿠 수집 이상: ${posts.length}건 수집 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). ` +
+                `HTML 구조 변경 가능성 있음.`
+            console.error('[스크래핑 경고]', warning, { url: listUrl })
+
+            // 수집된 건이 있으면 그대로 INSERT (버리지 않음)
+            // 0건이면 upsert 스킵
+            if (posts.length === 0) {
+                return { count: 0, skipped: 0, warning }
+            }
+        }
+
+        if (posts.length === 0) return { count: 0, skipped: 0 }
 
         /* url UNIQUE 제약 + onConflict로 중복 URL 감지 시 view_count, comment_count 업데이트
            (migration: add_unique_constraints_for_collectors.sql) */
@@ -172,15 +196,22 @@ export async function collectTheqoo(): Promise<number> {
             .upsert(posts, { onConflict: 'url' })
             .select('id')
         if (error) throw error
-        return upserted?.length ?? 0
+        
+        return {
+            count: upserted?.length ?? 0,
+            skipped: posts.length - (upserted?.length ?? 0),
+            warning: posts.length < COMMUNITY_MIN_EXPECTED_POSTS
+                ? `수집 건수 ${posts.length}건 — 구조 변경 의심`
+                : undefined,
+        }
     } catch (error) {
         console.error('더쿠 수집 에러:', error)
-        return 0
+        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
     }
 }
 
 /** 네이트판(pann.nate.com) 랭킹 메타데이터 수집 */
-export async function collectNatePann(): Promise<number> {
+export async function collectNatePann(): Promise<CollectResult> {
     const baseUrl = 'https://pann.nate.com'
     const listUrl = `${baseUrl}/talk/ranking`
 
@@ -298,7 +329,21 @@ export async function collectNatePann(): Promise<number> {
             }
         }
 
-        if (posts.length === 0) return 0
+        // 스크래핑 장애 감지: 수집 건수가 최소 기대값보다 적으면 경고
+        if (posts.length < COMMUNITY_MIN_EXPECTED_POSTS) {
+            const warning =
+                `네이트판 수집 이상: ${posts.length}건 수집 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). ` +
+                `HTML 구조 변경 가능성 있음.`
+            console.error('[스크래핑 경고]', warning, { url: listUrl })
+
+            // 수집된 건이 있으면 그대로 INSERT (버리지 않음)
+            // 0건이면 upsert 스킵
+            if (posts.length === 0) {
+                return { count: 0, skipped: 0, warning }
+            }
+        }
+
+        if (posts.length === 0) return { count: 0, skipped: 0 }
 
         /* url UNIQUE 제약 + onConflict로 중복 URL 감지 시 view_count, comment_count 업데이트
            (migration: add_unique_constraints_for_collectors.sql) */
@@ -307,15 +352,22 @@ export async function collectNatePann(): Promise<number> {
             .upsert(posts, { onConflict: 'url' })
             .select('id')
         if (error) throw error
-        return upserted?.length ?? 0
+        
+        return {
+            count: upserted?.length ?? 0,
+            skipped: posts.length - (upserted?.length ?? 0),
+            warning: posts.length < COMMUNITY_MIN_EXPECTED_POSTS
+                ? `수집 건수 ${posts.length}건 — 구조 변경 의심`
+                : undefined,
+        }
     } catch (error) {
         console.error('네이트판 수집 에러:', error)
-        return 0
+        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
     }
 }
 
 /** 더쿠 + 네이트판 통합 수집 (3분 Cron용) */
-export async function collectAllCommunity(): Promise<{ theqoo: number; natePann: number }> {
+export async function collectAllCommunity(): Promise<{ theqoo: CollectResult; natePann: CollectResult }> {
     const [theqoo, natePann] = await Promise.all([collectTheqoo(), collectNatePann()])
     return { theqoo, natePann }
 }
