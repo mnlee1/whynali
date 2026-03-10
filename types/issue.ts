@@ -13,12 +13,16 @@ export interface Issue {
     status: IssueStatus
     category: IssueCategory
     heat_index: number | null
+    created_heat_index: number | null
     approval_status: ApprovalStatus
     approval_type: ApprovalType | null
     approval_heat_index: number | null
     approved_at: string | null
     created_at: string
     updated_at: string
+    is_urgent?: boolean
+    burst_level?: number
+    source_track?: 'news_collection' | 'community_burst'
 }
 
 export interface TimelinePoint {

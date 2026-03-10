@@ -9,11 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
+import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-thresholds'
 
 export const dynamic = 'force-dynamic'
-
-/* 이슈 목록 노출 최소 화력 기준 (issue-candidate.ts의 MIN_HEAT_TO_REGISTER와 동일) */
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
 
 export async function GET(request: NextRequest) {
     const auth = await requireAdmin()

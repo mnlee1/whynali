@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
                                 }
                                 
                                 result.statusChanged = (result.statusChanged ? result.statusChanged + ', ' : '')
-                                    + `${oldStatus} → ${transition.newStatus} (${transition.reason})`
+                                    + `${oldStatus} → ${transition.newStatus} (${transition.reason.message})`
                                 return { ...result, autoApproved: 0, autoRejected: 0, statusTransitioned: 1 }
                             }
                         }

@@ -47,9 +47,16 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         .from('discussion_topics')
         .select('id, body, created_at')
         .eq('issue_id', id)
-        .eq('approval_status', '승인')
+        .in('approval_status', ['진행중', '마감'])
         .order('created_at', { ascending: false })
         .limit(5)
+
+    /* 투표 데이터 존재 여부 확인 */
+    const { count: voteCount } = await adminClient
+        .from('votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('issue_id', id)
+        .in('phase', ['진행중', '마감'])
 
     /* 사용자 세션 확인: anon 클라이언트로 쿠키 기반 세션 조회 */
     const sessionClient = await createSupabaseServerClient()
@@ -99,12 +106,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 투표 */}
-            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">투표</p>
-                </div>
+            {voteCount !== null && voteCount > 0 && (
                 <VoteSection issueId={id} userId={userId} />
-            </div>
+            )}
 
             {/* 관련 토론 주제 */}
             {discussionTopics && discussionTopics.length > 0 && (
@@ -151,19 +155,21 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 </div>
             )}
 
-            {/* 이 이슈의 커뮤니티 */}
-            <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-semibold text-purple-800 mb-0.5">이 이슈의 커뮤니티</p>
-                    <p className="text-xs text-purple-600">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+            {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
+            {(!discussionTopics || discussionTopics.length === 0) && (
+                <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-semibold text-purple-800 mb-0.5">이 이슈의 커뮤니티</p>
+                        <p className="text-xs text-purple-600">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+                    </div>
+                    <Link
+                        href={`/community?issue_id=${id}`}
+                        className="shrink-0 text-sm px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                    >
+                        토론 보기
+                    </Link>
                 </div>
-                <Link
-                    href={`/community?issue_id=${id}`}
-                    className="shrink-0 text-sm px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                >
-                    토론 보기
-                </Link>
-            </div>
+            )}
 
             {/* 감정 표현 */}
             <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
