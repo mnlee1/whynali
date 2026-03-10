@@ -517,6 +517,27 @@ async function createNewIssue(
             newsCount: newsIds.length,
             communityCount: communityIds.length,
         })
+
+        // 긴급 이슈 조건 체크 (화력 30점 이상 + 연예/정치 카테고리)
+        const isUrgent = actualHeat >= 30 && ['연예', '정치'].includes(issueCategory)
+        if (isUrgent) {
+            console.log(`[긴급 이슈] "${representativeTitle}" Dooray 즉시 알림 대상 (카테고리: ${issueCategory}, 화력: ${actualHeat}점)`)
+            
+            // 비동기 알림 전송 (에러가 나도 이슈 등록 프로세스는 계속 진행)
+            import('@/lib/dooray-notification').then(async ({ sendDoorayImmediateAlert }) => {
+                try {
+                    await sendDoorayImmediateAlert({
+                        id: tempIssue.id,
+                        title: representativeTitle,
+                        category: issueCategory,
+                        heat_index: actualHeat,
+                        created_at: now.toISOString(),
+                    })
+                } catch (e) {
+                    console.error('[긴급 이슈] Dooray 알림 전송 실패:', e)
+                }
+            }).catch(err => console.error('[긴급 이슈] Dooray 모듈 로드 실패:', err))
+        }
     }
     
     return 'processed'
@@ -879,18 +900,43 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             continue
         }
 
-        const createResult = await createNewIssue(
-            group,
-            representativeTitle,
-            newsIds,
-            communityIds,
-            issueCategory,
-            recentCount,
-            result,
-            now,
-            since24h
-        )
-        if (createResult === 'continue') continue
+        // 5단계: 등록 결과 로깅 및 알림
+        if (shouldAutoApprove) {
+            console.log(`[자동승인 완료] "${representativeTitle}" (카테고리: ${issueCategory}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
+            result.created++
+        } else {
+            const reason = actualHeat < AUTO_APPROVE_THRESHOLD
+                ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
+                : `${issueCategory} 카테고리는 관리자 승인 필요`
+            console.log(`[대기등록 완료] "${representativeTitle}" (${reason}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
+            result.alerts.push({
+                title: representativeTitle,
+                count: recentCount,
+                newsCount: newsIds.length,
+                communityCount: communityIds.length,
+            })
+
+            // 긴급 이슈 조건 체크 (화력 30점 이상 + 연예/정치 카테고리)
+            const isUrgent = actualHeat >= 30 && ['연예', '정치'].includes(issueCategory)
+            if (isUrgent) {
+                console.log(`[긴급 이슈] "${representativeTitle}" Dooray 즉시 알림 대상 (카테고리: ${issueCategory}, 화력: ${actualHeat}점)`)
+                
+                // 비동기 알림 전송 (에러가 나도 이슈 등록 프로세스는 계속 진행)
+                import('@/lib/dooray-notification').then(async ({ sendDoorayImmediateAlert }) => {
+                    try {
+                        await sendDoorayImmediateAlert({
+                            id: tempIssue.id,
+                            title: representativeTitle,
+                            category: issueCategory,
+                            heat_index: actualHeat,
+                            created_at: now.toISOString(),
+                        })
+                    } catch (e) {
+                        console.error('[긴급 이슈] Dooray 알림 전송 실패:', e)
+                    }
+                }).catch(err => console.error('[긴급 이슈] Dooray 모듈 로드 실패:', err))
+            }
+        }
     }
 
     return result

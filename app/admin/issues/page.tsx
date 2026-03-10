@@ -14,6 +14,7 @@ import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
 import CategoryBadge from '@/components/common/CategoryBadge'
+import { UrgentIssueAlert } from '@/components/admin/UrgentIssueAlert'
 
 interface CandidateAlert {
     title: string
@@ -38,6 +39,7 @@ export default function AdminIssuesPage() {
     const [sortField, setSortField] = useState<SortField>('heat_index')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [urgentCount, setUrgentCount] = useState(0)
 
     useEffect(() => {
         fetchIssues()
@@ -111,6 +113,7 @@ export default function AdminIssuesPage() {
             const data = await response.json()
             const list: Issue[] = data.data ?? []
             setIssues(sortIssues(list))
+            setUrgentCount(data.urgentCount ?? 0)
             setLastRefreshedAt(new Date())
         } catch (err) {
             setError(err instanceof Error ? err.message : '오류 발생')
@@ -668,7 +671,43 @@ export default function AdminIssuesPage() {
                         </ul>
                     </div>
                 </div>
+
+                {/* 긴급 알림 기준 */}
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+                    <h3 className="font-semibold text-red-900 mb-3 text-sm flex items-center gap-2">
+                        🚨 긴급 이슈 알림 기준
+                    </h3>
+                    <div className="space-y-2">
+                        <div className="bg-white p-3 rounded border border-red-100">
+                            <p className="text-xs text-gray-700 mb-2">
+                                <span className="font-semibold text-red-800">즉시 처리 필요 조건:</span> 
+                                화력 <span className="font-bold text-red-600">30점 이상</span> + 
+                                카테고리 <span className="font-bold text-red-600">'연예' 또는 '정치'</span> + 
+                                승인 상태 <span className="font-bold text-red-600">'대기'</span>
+                            </p>
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                                <p className="text-xs text-gray-600 mb-1 font-medium">알림 채널</p>
+                                <ul className="space-y-1 text-xs text-gray-600 ml-4">
+                                    <li>• UI 배너: 관리자 페이지 상단에 실시간 표시 (해제 가능, 1시간 후 재표시)</li>
+                                    <li>• Dooray 즉시 알림: 이슈 등록 시점에 메신저로 즉시 전송</li>
+                                    <li>• Dooray 배치 알림: 매시 정각마다 대기 중인 긴급 이슈 목록 전송</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div className="bg-amber-50 p-3 rounded border border-amber-200">
+                            <p className="text-xs font-semibold text-amber-800 mb-1">왜 연예/정치만 긴급 알림?</p>
+                            <ul className="space-y-1 text-xs text-gray-700 ml-4">
+                                <li>• 사회/기술/스포츠는 화력 30점 이상이면 자동 승인됨 (알림 불필요)</li>
+                                <li>• 연예/정치는 민감도가 높아 관리자 승인 필수</li>
+                                <li>• 화력 15-29점은 중요도가 낮아 즉시 알림 불필요 (일반 대기 목록에서 처리)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* 긴급 이슈 알림 배너 */}
+            <UrgentIssueAlert urgentCount={urgentCount} />
 
             {/* 이슈 후보 알람 배너 (5건 이상 후보 존재 시 표시) */}
             {alerts.length > 0 && !alertsDismissed && (
