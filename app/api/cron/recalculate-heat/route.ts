@@ -24,8 +24,8 @@ import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
 import {
-    AUTO_APPROVE_THRESHOLD,
-    MIN_HEAT_TO_REGISTER,
+    CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
+    CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
 } from '@/lib/config/candidate-thresholds'
 
 export const dynamic = 'force-dynamic'

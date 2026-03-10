@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
         .from('votes')
         .select('*, vote_choices(*), issues(id, title)')
         .in('phase', ['진행중', '마감'])
+        .eq('approval_status', '승인')
         .order('created_at', { ascending: false })
 
     if (issue_id) {

@@ -36,16 +36,21 @@ export async function POST(request: NextRequest, { params }: Params) {
         )
     }
 
-    if (vote.approval_status !== '대기') {
+    if (!['대기', '승인'].includes(vote.approval_status)) {
         return NextResponse.json(
-            { error: '대기 상태의 투표만 반려할 수 있습니다.' },
+            { error: '이미 반려된 투표입니다.' },
             { status: 422 }
         )
     }
 
+    const updateData: Record<string, string> = { approval_status: '반려' }
+    if (vote.phase === '진행중') {
+        updateData.phase = '마감'
+    }
+
     const { error: updateError } = await supabaseAdmin
         .from('votes')
-        .update({ approval_status: '반려' })
+        .update(updateData)
         .eq('id', id)
 
     if (updateError) {

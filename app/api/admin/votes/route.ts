@@ -16,13 +16,14 @@ export async function GET(request: NextRequest) {
         const { searchParams } = request.nextUrl
         const phase = searchParams.get('phase')
         const approvalStatus = searchParams.get('approval_status')
-        const limit = parseInt(searchParams.get('limit') ?? '50', 10)
+        const limit = parseInt(searchParams.get('limit') ?? '20', 10)
+        const offset = parseInt(searchParams.get('offset') ?? '0', 10)
 
         let query = supabaseAdmin
             .from('votes')
             .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, created_at, issues(id, title), vote_choices(id, label, count)')
             .order('created_at', { ascending: false })
-            .limit(limit)
+            .range(offset, offset + limit - 1)
 
         if (phase && ['대기', '진행중', '마감'].includes(phase)) {
             query = query.eq('phase', phase)
@@ -44,31 +45,27 @@ export async function GET(request: NextRequest) {
             throw error
         }
 
-        // count는 필요할 때만 별도 쿼리로 가져오기
-        let count = data?.length ?? 0
-        if (count >= limit) {
-            let countQuery = supabaseAdmin
-                .from('votes')
-                .select('id', { count: 'exact', head: true })
-            
-            if (phase && ['대기', '진행중', '마감'].includes(phase)) {
-                countQuery = countQuery.eq('phase', phase)
-            }
-            
-            if (approvalStatus) {
-                const statuses = approvalStatus.split(',')
-                if (statuses.length === 1) {
-                    countQuery = countQuery.eq('approval_status', statuses[0])
-                } else {
-                    countQuery = countQuery.in('approval_status', statuses)
-                }
-            }
-            
-            const { count: totalCount } = await countQuery
-            count = totalCount ?? count
+        /* 페이지네이션용 전체 카운트 — 항상 별도 쿼리로 조회 */
+        let countQuery = supabaseAdmin
+            .from('votes')
+            .select('id', { count: 'exact', head: true })
+
+        if (phase && ['대기', '진행중', '마감'].includes(phase)) {
+            countQuery = countQuery.eq('phase', phase)
         }
 
-        return NextResponse.json({ data: data ?? [], total: count })
+        if (approvalStatus) {
+            const statuses = approvalStatus.split(',')
+            if (statuses.length === 1) {
+                countQuery = countQuery.eq('approval_status', statuses[0])
+            } else {
+                countQuery = countQuery.in('approval_status', statuses)
+            }
+        }
+
+        const { count: totalCount } = await countQuery
+
+        return NextResponse.json({ data: data ?? [], total: totalCount ?? 0 })
     } catch (e) {
         console.error('[투표 조회 API 에러]', e)
         const message = e instanceof Error ? e.message : '투표 조회 실패'

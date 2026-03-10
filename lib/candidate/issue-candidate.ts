@@ -28,26 +28,56 @@ import {
     getCategoryIds,
 } from '@/lib/config/categories'
 import { validateGroups } from '@/lib/ai/perplexity-group-validator'
-import { detectBurst, getBurstLevel, formatBurstReport } from './burst-detector'
-import { classifyCategoryByAI, shouldUseAIClassification } from './category-classifier'
-import { tokenize } from './tokenizer'
-import { selectRepresentativeTitle, type RawItem } from './title-selector'
+import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
+import {
+    classifyCategoryByAI,
+    shouldUseAIClassification,
+} from '@/lib/candidate/category-classifier'
+import {
+    detectBurst,
+    getBurstLevel,
+    formatBurstReport,
+} from '@/lib/candidate/burst-detector'
+import { tokenize } from '@/lib/candidate/tokenizer'
 import {
     groupItems,
     groupItemsByAI,
     fallbackTokenMatching,
-    type CandidateGroup,
-} from './grouping-pipeline'
+} from '@/lib/candidate/grouping-pipeline'
 import {
-    ALERT_THRESHOLD,
-    AUTO_APPROVE_THRESHOLD,
-    NO_RESPONSE_HOURS,
-    WINDOW_HOURS,
-    MIN_UNIQUE_SOURCES,
-    MIN_HEAT_TO_REGISTER,
-    COMMUNITY_MATCH_THRESHOLD,
+    selectRepresentativeTitle,
+    stripMediaPrefix,
+} from '@/lib/candidate/title-selector'
+import {
+    CANDIDATE_ALERT_THRESHOLD as ALERT_THRESHOLD,
+    CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
+    CANDIDATE_NO_RESPONSE_HOURS as NO_RESPONSE_HOURS,
+    CANDIDATE_WINDOW_HOURS as WINDOW_HOURS,
+    CANDIDATE_MIN_UNIQUE_SOURCES as MIN_UNIQUE_SOURCES,
+    CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
     AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
+
+/*
+ * 커뮤니티 글을 이슈에 매칭할 때 요구하는 최소 공통 키워드 수.
+ * 뉴스 그루핑(>= 1)과 별도로 더 엄격하게 적용해 관련 없는 글 유입 방지.
+ * 기본 2: "김연아" 한 단어만 겹쳐도 매칭되는 노이즈를 차단.
+ */
+const COMMUNITY_MATCH_THRESHOLD = parseInt(process.env.CANDIDATE_COMMUNITY_MATCH_THRESHOLD ?? '2')
+
+interface RawItem {
+    id: string
+    title: string
+    created_at: string
+    type: 'news' | 'community'
+    category: string | null  // news_data.category (커뮤니티는 null)
+    source: string | null    // news_data.source (출처 다양성 판별용, 커뮤니티는 null)
+}
+
+interface CandidateGroup {
+    tokens: string[]      // 후보 대표 토큰 (합집합으로 갱신됨)
+    items: RawItem[]
+}
 
 export interface CandidateAlert {
     title: string
@@ -168,6 +198,27 @@ async function inferCategory(items: RawItem[]): Promise<IssueCategory> {
 
     // AI 재분류 실패 또는 불필요 시 기존 결과 사용
     return preliminaryCategory ?? '사회'
+}
+
+/**
+ * isRecentlyCreated - 최근 5분 이내 동일 제목 이슈 존재 여부 확인
+ * 
+ * cron 동시 실행 시 중복 INSERT 방지용 1차 guard.
+ * collect-news와 filter-candidates가 30분 간격으로 겹쳐 실행될 때
+ * 같은 news_data를 두 인스턴스가 동시에 읽어 중복 이슈가 생기는 것을 방지합니다.
+ * 
+ * 기존 checkDuplicateIssue는 1시간 창으로 동작하고 AI 비교를 포함하므로 느림.
+ * 이 함수는 5분 이내 정확한 제목 일치만 체크하는 빠른 guard입니다.
+ */
+async function isRecentlyCreated(title: string): Promise<boolean> {
+    const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    const { data } = await supabaseAdmin
+        .from('issues')
+        .select('id')
+        .eq('title', title)
+        .gte('created_at', since)
+        .limit(1)
+    return (data?.length ?? 0) > 0
 }
 
 /**
@@ -651,17 +702,180 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         let existingIssue = await checkForDuplicateIssue(representativeTitle, since24h)
 
         if (existingIssue) {
-            const handleResult = await handleExistingIssue(
-                existingIssue,
-                newsIds,
-                communityIds,
-                representativeTitle,
-                issueCategory,
-                recentCount,
-                result,
-                now
-            )
-            if (handleResult === 'continue') continue
+            // 기존 이슈 화력 재계산 후 필터링
+            await linkCollections(existingIssue.id, newsIds, communityIds)
+            const actualHeat = await calculateHeatIndex(existingIssue.id).catch(() => 0)
+            
+            // 실제 화력이 기준 미달이면 삭제
+            if (actualHeat < MIN_HEAT_TO_REGISTER) {
+                console.log(`[필터] 기존 이슈 실제 화력 부족으로 삭제: "${representativeTitle}" (실제 화력: ${actualHeat}, 최소: ${MIN_HEAT_TO_REGISTER})`)
+                await supabaseAdmin
+                    .from('issues')
+                    .delete()
+                    .eq('id', existingIssue.id)
+                continue
+            }
+            
+            if (existingIssue.approval_status === '대기') {
+                // 화력 기반 자동 승인 판정
+                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+                
+                if (shouldAutoApprove) {
+                    // 기존 대기 이슈를 자동 승인으로 업데이트
+                    const { error: updateError } = await supabaseAdmin
+                        .from('issues')
+                        .update({ 
+                            approval_status: '승인', 
+                            approval_type: 'auto',
+                            approval_heat_index: actualHeat,
+                            approved_at: now.toISOString() 
+                        })
+                        .eq('id', existingIssue.id)
+
+                    if (!updateError) {
+                        console.log(`[자동승인 완료] 기존 이슈 "${representativeTitle}" (카테고리: ${issueCategory}, 화력: ${actualHeat}점)`)
+                        result.created++
+                    }
+                } else {
+                    const reason = actualHeat < AUTO_APPROVE_THRESHOLD
+                        ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
+                        : `${issueCategory} 카테고리는 관리자 승인 필요`
+                    console.log(`[대기유지] 기존 이슈 "${representativeTitle}" (${reason})`)
+                    // 여전히 대기 중 → 배너 알람 목록에 추가
+                    result.alerts.push({
+                        title: representativeTitle,
+                        count: recentCount,
+                        newsCount: newsIds.length,
+                        communityCount: communityIds.length,
+                    })
+                }
+            }
+            // 승인 또는 반려된 이슈는 재처리하지 않음
+            continue
+        }
+
+        // 기존 이슈 없음 → 신규 등록
+        // 화력 계산을 먼저 하고, 충분하면 등록 (관리자 UI 노출 방지)
+        
+        // 1차 guard: 최근 5분 이내 동일 제목 존재 시 즉시 스킵 (cron 동시 실행 방지)
+        if (await isRecentlyCreated(representativeTitle)) {
+            console.log('[중복 스킵 - 최근 생성]', representativeTitle)
+            continue
+        }
+        
+        // 1단계: 임시 이슈 생성 (approval_status를 null로 설정해서 UI 노출 안 됨)
+        const { data: tempIssue, error: tempError } = await supabaseAdmin
+            .from('issues')
+            .insert({
+                title: representativeTitle,
+                description: null,
+                status: '점화',
+                category: issueCategory,
+                approval_status: null as any, // 임시 상태 (UI에서 필터링됨)
+                approved_at: null,
+            })
+            .select('id')
+            .single()
+
+        if (tempError || !tempIssue) {
+            // Race Condition 가능성: 동시에 같은 이슈가 등록되었을 수 있음
+            if (tempError?.code === '23505') { // Unique constraint violation
+                console.log(`[Race Condition 감지] "${representativeTitle}" 이미 등록됨, 재체크`)
+                // 다시 중복 체크
+                const recheckIssue = await checkForDuplicateIssue(representativeTitle, since24h)
+                if (recheckIssue) {
+                    // 기존 이슈에 수집 건 연결만 수행
+                    await linkCollections(recheckIssue.id, newsIds, communityIds)
+                    console.log(`[기존 이슈 연결] "${representativeTitle}"에 ${newsIds.length}건 뉴스 + ${communityIds.length}건 커뮤니티 연결`)
+                    continue
+                }
+            }
+            console.error('임시 이슈 생성 에러:', tempError)
+            continue
+        }
+        
+        // 1.5단계: 임시 이슈 생성 직후 최종 중복 체크 (Race Condition 최종 방어)
+        const finalCheck = await checkForDuplicateIssue(representativeTitle, since24h)
+        if (finalCheck && finalCheck.id !== tempIssue.id) {
+            console.log(`[Race Condition 방어] 임시 이슈 생성 중 중복 발견, 임시 이슈 삭제: "${representativeTitle}"`)
+            // 방금 생성한 임시 이슈 삭제
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', tempIssue.id)
+            
+            // 기존 이슈에 수집 건 연결
+            await linkCollections(finalCheck.id, newsIds, communityIds)
+            const actualHeat = await calculateHeatIndex(finalCheck.id).catch(() => 0)
+            
+            // 실제 화력이 기준 미달이면 삭제
+            if (actualHeat < MIN_HEAT_TO_REGISTER) {
+                console.log(`[필터] 기존 이슈 실제 화력 부족으로 삭제: "${representativeTitle}" (실제 화력: ${actualHeat}, 최소: ${MIN_HEAT_TO_REGISTER})`)
+                await supabaseAdmin
+                    .from('issues')
+                    .delete()
+                    .eq('id', finalCheck.id)
+                continue
+            }
+            
+            // 기존 이슈가 대기 상태이고 자동 승인 조건이면 승인 처리
+            if (finalCheck.approval_status === '대기') {
+                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+                
+                if (shouldAutoApprove) {
+                    await supabaseAdmin
+                        .from('issues')
+                        .update({ 
+                            approval_status: '승인', 
+                            approval_type: 'auto',
+                            approval_heat_index: actualHeat,
+                            approved_at: now.toISOString() 
+                        })
+                        .eq('id', finalCheck.id)
+                    console.log(`[자동승인 완료] 기존 이슈 "${representativeTitle}" (카테고리: ${issueCategory}, 화력: ${actualHeat}점)`)
+                    result.created++
+                }
+            }
+            continue
+        }
+
+        // 2단계: 수집 건 연결 + 화력 계산
+        await linkCollections(tempIssue.id, newsIds, communityIds)
+        const actualHeat = await calculateHeatIndex(tempIssue.id).catch(() => 0)
+        
+        // 3단계: 화력 부족 시 삭제
+        if (actualHeat < MIN_HEAT_TO_REGISTER) {
+            console.log(`[필터] 화력 부족으로 이슈 삭제: "${representativeTitle}" (화력: ${actualHeat}, 최소: ${MIN_HEAT_TO_REGISTER})`)
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', tempIssue.id)
+            continue
+        }
+        
+        // 4단계: 화력 충분 → 정식 등록 (approval_status 업데이트)
+        // 화력 기반 자동 승인 판정
+        const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
+            AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+        
+        const approvalStatus = shouldAutoApprove ? '승인' : '대기'
+        
+        const { error: updateError } = await supabaseAdmin
+            .from('issues')
+            .update({
+                approval_status: approvalStatus,
+                approval_type: shouldAutoApprove ? 'auto' : null,
+                approval_heat_index: shouldAutoApprove ? actualHeat : null,
+                approved_at: shouldAutoApprove ? now.toISOString() : null,
+            })
+            .eq('id', tempIssue.id)
+        
+        if (updateError) {
+            console.error('이슈 상태 업데이트 에러:', updateError)
+            // 실패 시 삭제
+            await supabaseAdmin.from('issues').delete().eq('id', tempIssue.id)
             continue
         }
 

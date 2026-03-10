@@ -24,11 +24,16 @@ interface LinkResult {
     issueTitle: string
     linkedCount: number
     unlinkedCount: number
+    protected?: boolean
 }
 
 // 이슈 생성일 기준 커뮤니티 글 수집 날짜 범위 (환경변수로 조정 가능)
 const BEFORE_DAYS = parseInt(process.env.LINKER_COMMUNITY_BEFORE_DAYS ?? '1')
 const AFTER_DAYS = parseInt(process.env.LINKER_COMMUNITY_AFTER_DAYS ?? '7')
+
+const LINKER_MIN_LINKED_TO_PROTECT = parseInt(
+    process.env.LINKER_MIN_LINKED_TO_PROTECT ?? '3'
+)
 
 // 뉴스 기사·커뮤니티 제목에 자주 등장하지만 이슈 식별에 무의미한 단어
 const STOPWORDS = new Set([
@@ -231,10 +236,39 @@ export async function linkAllCommunityToIssues(): Promise<LinkResult[]> {
         // 반려된 이슈는 새 커뮤니티 글 연결하지 않고, 기존 잘못된 연결만 정리
         const isRejected = issue.approval_status === '반려'
         
+        // 현재 연결된 커뮤니티 글 건수 조회 (대량 해제 보호 판단용)
+        const { count: currentLinkedCount } = await supabaseAdmin
+            .from('community_data')
+            .select('id', { count: 'exact', head: true })
+            .eq('issue_id', issue.id)
+        
         const [linkedCount, unlinkedCount] = await Promise.all([
             isRejected ? Promise.resolve(0) : linkCommunityToIssue(issue.id, issue.title, issue.created_at),
             unlinkInvalidCommunity(issue.id, issue.title, issue.created_at),
         ])
+
+        // 대량 해제 방지 안전 장치
+        if (
+            LINKER_MIN_LINKED_TO_PROTECT > 0 &&
+            currentLinkedCount !== null &&
+            currentLinkedCount >= LINKER_MIN_LINKED_TO_PROTECT &&
+            unlinkedCount > currentLinkedCount * 0.5
+        ) {
+            console.warn('[linker 보호] 대량 해제 차단', {
+                issueId: issue.id,
+                issueTitle: issue.title,
+                currentLinkedCount,
+                unlinkedCount,
+            })
+            results.push({
+                issueId: issue.id,
+                issueTitle: issue.title,
+                linkedCount,
+                unlinkedCount: 0,
+                protected: true,
+            })
+            continue
+        }
 
         if (linkedCount > 0 || unlinkedCount > 0) {
             results.push({

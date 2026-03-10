@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: Params) {
             started_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('approval_status', '대기')
+        .in('approval_status', ['대기', '반려'])
         .select()
         .single()
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     if (!data) {
         return NextResponse.json(
-            { error: '대기 상태의 투표가 아니거나 존재하지 않습니다.' },
+            { error: '대기 또는 반려 상태의 투표가 아니거나 존재하지 않습니다.' },
             { status: 404 }
         )
     }

@@ -14,8 +14,16 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            theqoo,
-            natePann,
+            theqoo: {
+                collected: theqoo.count,
+                skipped: theqoo.skipped,
+                warning: theqoo.warning ?? null,
+            },
+            natePann: {
+                collected: natePann.count,
+                skipped: natePann.skipped,
+                warning: natePann.warning ?? null,
+            },
             timestamp: new Date().toISOString(),
         })
     } catch (error) {
