@@ -251,7 +251,7 @@ export async function linkAllNewsToIssues(): Promise<LinkResult[]> {
         .select('id, title, created_at, category, approval_status')
         .in('approval_status', ['승인', '대기', '반려'])
         .order('updated_at', { ascending: false })
-        .limit(100)
+        .limit(50)
 
     if (!issues || issues.length === 0) return []
 
