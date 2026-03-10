@@ -1,17 +1,28 @@
-name: 미연결 데이터 정리 Cron (Develop)
+name: 미연결 수집 데이터 정리 Cron
 
 on:
   schedule:
-    - cron: '0 3 * * 0'  # 매주 일요일 03:00 UTC
+    - cron: '0 3 * * 0'
   workflow_dispatch:
 
 jobs:
   cleanup-unlinked:
     runs-on: ubuntu-latest
     steps:
-      - name: 미연결 수집 데이터 정리 API 호출
+      - name: 환경별 URL 설정
+        id: env
         run: |
-          curl -X GET https://dev-whynali.vercel.app/api/cron/cleanup-unlinked \
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Production" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Develop" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: 미연결 데이터 정리 API 호출 (${{ steps.env.outputs.env_name }})
+        run: |
+          curl -X GET ${{ steps.env.outputs.url }}/api/cron/cleanup-unlinked \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \

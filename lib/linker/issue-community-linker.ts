@@ -226,7 +226,7 @@ export async function linkAllCommunityToIssues(): Promise<LinkResult[]> {
         .select('id, title, created_at, approval_status')
         .in('approval_status', ['승인', '대기', '반려'])
         .order('updated_at', { ascending: false })
-        .limit(100)
+        .limit(50)
 
     if (!issues || issues.length === 0) return []
 
