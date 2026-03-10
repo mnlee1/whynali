@@ -32,28 +32,41 @@ jobs:
               if: steps.check.outputs.is_common == 'true'
               env:
                   DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+                  COMMIT_MSG: ${{ github.event.head_commit.message }}
               run: |
                   if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
                   REPO="${{ github.repository }}"
                   BRANCH="${GITHUB_REF#refs/heads/}"
                   COMMIT="${{ github.sha }}"
-                  MSG="${{ github.event.head_commit.message }}"
                   ACTOR="${{ github.actor }}"
                   COMMIT_URL="https://github.com/$REPO/commit/$COMMIT"
                   FILES=$(cat changed_files.txt | sed 's/^/• /' | tr '\n' '\n')
-                  BODY=$(cat <<EOF
-                  {
-                      "botName": "Git 알림",
-                      "text": "🚨 공통 파일이 업데이트되었습니다!",
-                      "attachments": [{
-                          "title": "커밋 보기",
-                          "titleLink": "$COMMIT_URL",
-                          "text": "📝 변경된 파일:\n$FILES\n\n👤 작업자: $ACTOR\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL\n\n⚠️ 팀원 여러분, git pull 하세요!",
-                          "color": "red"
-                      }]
-                  }
-                  EOF
+                  
+                  # JSON 안전하게 이스케이프
+                  MSG_ESCAPED=$(echo "$COMMIT_MSG" | jq -Rs .)
+                  FILES_ESCAPED=$(echo "$FILES" | jq -Rs .)
+                  
+                  BODY=$(jq -n \
+                      --arg botName "Git 알림" \
+                      --arg text "🚨 공통 파일이 업데이트되었습니다!" \
+                      --arg title "커밋 보기" \
+                      --arg titleLink "$COMMIT_URL" \
+                      --argjson msg "$MSG_ESCAPED" \
+                      --argjson files "$FILES_ESCAPED" \
+                      --arg actor "$ACTOR" \
+                      --arg url "$COMMIT_URL" \
+                      '{
+                          botName: $botName,
+                          text: $text,
+                          attachments: [{
+                              title: $title,
+                              titleLink: $titleLink,
+                              text: ("📝 변경된 파일:\n" + $files + "\n\n👤 작업자: " + $actor + "\n💬 커밋 메시지: " + $msg + "\n🔗 커밋 링크: " + $url + "\n\n⚠️ 팀원 여러분, git pull 하세요!"),
+                              color: "red"
+                          }]
+                      }'
                   )
+                  
                   curl -s -X POST "$DOORAY_WEBHOOK_URL" \
                       -H "Content-Type: application/json" \
                       -d "$BODY"
@@ -62,27 +75,39 @@ jobs:
               if: steps.check.outputs.is_common == 'false'
               env:
                   DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+                  COMMIT_MSG: ${{ github.event.head_commit.message }}
               run: |
                   if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
                   REPO="${{ github.repository }}"
                   BRANCH="${GITHUB_REF#refs/heads/}"
                   COMMIT="${{ github.sha }}"
-                  MSG="${{ github.event.head_commit.message }}"
                   ACTOR="${{ github.actor }}"
                   COMMIT_URL="https://github.com/$REPO/commit/$COMMIT"
-                  BODY=$(cat <<EOF
-                  {
-                      "botName": "Git 알림",
-                      "text": "📢 새로운 커밋이 푸시되었습니다",
-                      "attachments": [{
-                          "title": "커밋 보기",
-                          "titleLink": "$COMMIT_URL",
-                          "text": "👤 작업자: $ACTOR\n📝 브랜치: $BRANCH\n💬 커밋 메시지: $MSG\n🔗 커밋 링크: $COMMIT_URL",
-                          "color": "blue"
-                      }]
-                  }
-                  EOF
+                  
+                  # JSON 안전하게 이스케이프
+                  MSG_ESCAPED=$(echo "$COMMIT_MSG" | jq -Rs .)
+                  
+                  BODY=$(jq -n \
+                      --arg botName "Git 알림" \
+                      --arg text "📢 새로운 커밋이 푸시되었습니다" \
+                      --arg title "커밋 보기" \
+                      --arg titleLink "$COMMIT_URL" \
+                      --argjson msg "$MSG_ESCAPED" \
+                      --arg actor "$ACTOR" \
+                      --arg branch "$BRANCH" \
+                      --arg url "$COMMIT_URL" \
+                      '{
+                          botName: $botName,
+                          text: $text,
+                          attachments: [{
+                              title: $title,
+                              titleLink: $titleLink,
+                              text: ("👤 작업자: " + $actor + "\n📝 브랜치: " + $branch + "\n💬 커밋 메시지: " + $msg + "\n🔗 커밋 링크: " + $url),
+                              color: "blue"
+                          }]
+                      }'
                   )
+                  
                   curl -s -X POST "$DOORAY_WEBHOOK_URL" \
                       -H "Content-Type: application/json" \
                       -d "$BODY"
