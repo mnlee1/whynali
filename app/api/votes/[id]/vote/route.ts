@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { checkRateLimit } from '@/lib/safety'
+import { ensurePublicUser } from '@/lib/ensure-user'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
+    const admin = createSupabaseAdminClient()
+    await ensurePublicUser(supabase, admin, user)
+
     const { allowed, reason } = checkRateLimit(user.id)
     if (!allowed) {
         return NextResponse.json({ error: reason }, { status: 429 })
@@ -34,8 +38,6 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!vote_choice_id) {
         return NextResponse.json({ error: 'vote_choice_id가 필요합니다.' }, { status: 400 })
     }
-
-    const admin = createSupabaseAdminClient()
 
     /* RPC 우선 시도 */
     const { error: rpcError } = await admin.rpc('vote_participate', {
