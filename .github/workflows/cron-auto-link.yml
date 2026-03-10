@@ -25,5 +25,5 @@ jobs:
           curl -X GET ${{ steps.env.outputs.url }}/api/cron/auto-link \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
-            --max-time 60 \
+            --max-time 120 \
             --retry 2
