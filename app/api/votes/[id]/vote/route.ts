@@ -49,7 +49,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     /* RPC가 존재하지 않는 경우에만 직접 쿼리 폴백 */
-    if (!rpcError.message?.includes('does not exist') && !rpcError.message?.includes('could not find')) {
+    const postMsg = rpcError.message?.toLowerCase() ?? ''
+    if (!postMsg.includes('does not exist') && !postMsg.includes('could not find')) {
         /* RPC가 배포된 상태에서 발생한 도메인 에러는 그대로 반환 */
         if (rpcError.message?.includes('VOTE_NOT_ACTIVE')) {
             return NextResponse.json({ error: '진행 중인 투표가 아닙니다.' }, { status: 409 })
@@ -149,7 +150,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     }
 
     /* RPC가 존재하지 않는 경우에만 직접 쿼리 폴백 */
-    if (!rpcError.message?.includes('does not exist') && !rpcError.message?.includes('could not find')) {
+    const deleteMsg = rpcError.message?.toLowerCase() ?? ''
+    if (!deleteMsg.includes('does not exist') && !deleteMsg.includes('could not find')) {
         if (rpcError.message?.includes('VOTE_NOT_FOUND')) {
             return NextResponse.json({ error: '투표 기록이 없습니다.' }, { status: 404 })
         }
