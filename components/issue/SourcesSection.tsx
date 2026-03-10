@@ -69,35 +69,33 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
 
     if (loading) {
         return (
-            <div className="py-4 text-center text-gray-500">
-                출처 로딩 중...
+            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-800">출처</p>
+                </div>
+                <div className="p-4 py-6 text-center text-gray-400 text-sm">
+                    로딩 중...
+                </div>
             </div>
         )
     }
 
-    if (error) {
-        return (
-            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
-                {error}
-            </div>
-        )
-    }
+    if (error) return null
 
     const hasNews = news.length > 0
     const hasCommunity = community.length > 0
 
-    if (!hasNews && !hasCommunity) {
-        return (
-            <div className="py-4 text-center text-gray-500">
-                등록된 출처가 없습니다.
-            </div>
-        )
-    }
+    if (!hasNews && !hasCommunity) return null
 
     const visibleNews = news.slice(0, showNewsCount)
     const visibleCommunity = community.slice(0, showCommunityCount)
 
     return (
+        <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
+            <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                <p className="text-sm font-semibold text-neutral-800">출처</p>
+            </div>
+            <div className="p-4">
         <div className="space-y-6">
             {/* 뉴스 출처 */}
             {hasNews && (
@@ -181,6 +179,8 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                     )}
                 </div>
             )}
+        </div>
+            </div>
         </div>
     )
 }
