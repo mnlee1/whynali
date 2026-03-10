@@ -51,6 +51,13 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         .order('created_at', { ascending: false })
         .limit(5)
 
+    /* 투표 데이터 존재 여부 확인 */
+    const { count: voteCount } = await adminClient
+        .from('votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('issue_id', id)
+        .in('phase', ['진행중', '마감'])
+
     /* 사용자 세션 확인: anon 클라이언트로 쿠키 기반 세션 조회 */
     const sessionClient = await createSupabaseServerClient()
     const { data: { user } } = await sessionClient.auth.getUser()
@@ -99,12 +106,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 투표 */}
-            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">투표</p>
-                </div>
+            {voteCount !== null && voteCount > 0 && (
                 <VoteSection issueId={id} userId={userId} />
-            </div>
+            )}
 
             {/* 관련 토론 주제 */}
             {discussionTopics && discussionTopics.length > 0 && (
