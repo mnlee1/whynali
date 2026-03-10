@@ -13,6 +13,7 @@ import { requireAdmin } from '@/lib/admin'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata } from '@/lib/ai/discussion-generator'
 import { clearCandidatesCache } from '@/lib/cache/candidates-cache'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,10 +45,25 @@ export async function POST(
         if (process.env.PERPLEXITY_API_KEY && data) {
             generateDiscussionTopicsInBackground(data).catch((e) => {
                 console.error('[approve] AI 토론 주제 자동 생성 실패 (이슈 승인은 정상 완료):', e)
+                writeAdminLog(
+                    'AI_DISCUSSION_GENERATION_FAILED',
+                    'issue',
+                    data.id,
+                    auth.adminEmail,
+                    JSON.stringify({ error: String(e), issueTitle: data.title })
+                ).catch(() => {})
             })
         }
 
-        return NextResponse.json({ data })
+        return NextResponse.json({
+            data,
+            aiGeneration: {
+                status: process.env.PERPLEXITY_API_KEY ? 'triggered' : 'skipped',
+                message: process.env.PERPLEXITY_API_KEY
+                    ? '토론 주제 생성 요청됨 (백그라운드)'
+                    : 'PERPLEXITY_API_KEY 없음 — 토론 주제 자동 생성 스킵',
+            },
+        })
     } catch (error) {
         console.error('이슈 승인 에러:', error)
         return NextResponse.json(
