@@ -29,16 +29,15 @@ import {
 } from '@/lib/config/categories'
 import { validateGroups } from '@/lib/ai/perplexity-group-validator'
 import { groupNewsByPerplexity, applyAIGrouping } from '@/lib/ai/perplexity-grouping'
+import {
+    CANDIDATE_ALERT_THRESHOLD as ALERT_THRESHOLD,
+    CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
+    CANDIDATE_NO_RESPONSE_HOURS as NO_RESPONSE_HOURS,
+    CANDIDATE_WINDOW_HOURS as WINDOW_HOURS,
+    CANDIDATE_MIN_UNIQUE_SOURCES as MIN_UNIQUE_SOURCES,
+    CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
+} from '@/lib/config/candidate-thresholds'
 
-const ALERT_THRESHOLD = parseInt(process.env.CANDIDATE_ALERT_THRESHOLD ?? '5')
-const AUTO_APPROVE_THRESHOLD = parseInt(process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30')
-const NO_RESPONSE_HOURS = parseInt(process.env.CANDIDATE_NO_RESPONSE_HOURS ?? '6')
-/* 건수 집계 시간 창 (시간 단위). 기본 3시간 → 임시로 24시간 */
-const WINDOW_HOURS = parseInt(process.env.CANDIDATE_WINDOW_HOURS ?? '24')
-/* 대기 등록을 위한 최소 고유 출처 수. 같은 언론사의 반복 배포를 걸러낸다 */
-const MIN_UNIQUE_SOURCES = parseInt(process.env.CANDIDATE_MIN_UNIQUE_SOURCES ?? '2')
-/* 이슈 등록 후 화력이 이 값 미만이면 자동 반려 처리 (관리자 목록에 노출 안 됨) */
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
 /*
  * 커뮤니티 글을 이슈에 매칭할 때 요구하는 최소 공통 키워드 수.
  * 뉴스 그루핑(>= 1)과 별도로 더 엄격하게 적용해 관련 없는 글 유입 방지.
@@ -499,6 +498,27 @@ function mergeRelatedGroups(groups: CandidateGroup[]): CandidateGroup[] {
     console.log(`그루핑 병합: ${beforeCount}개 → ${afterCount}개 (${beforeCount - afterCount}개 병합됨)`)
 
     return merged
+}
+
+/**
+ * isRecentlyCreated - 최근 5분 이내 동일 제목 이슈 존재 여부 확인
+ * 
+ * cron 동시 실행 시 중복 INSERT 방지용 1차 guard.
+ * collect-news와 filter-candidates가 30분 간격으로 겹쳐 실행될 때
+ * 같은 news_data를 두 인스턴스가 동시에 읽어 중복 이슈가 생기는 것을 방지합니다.
+ * 
+ * 기존 checkDuplicateIssue는 1시간 창으로 동작하고 AI 비교를 포함하므로 느림.
+ * 이 함수는 5분 이내 정확한 제목 일치만 체크하는 빠른 guard입니다.
+ */
+async function isRecentlyCreated(title: string): Promise<boolean> {
+    const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    const { data } = await supabaseAdmin
+        .from('issues')
+        .select('id')
+        .eq('title', title)
+        .gte('created_at', since)
+        .limit(1)
+    return (data?.length ?? 0) > 0
 }
 
 /**
@@ -973,6 +993,12 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
 
         // 기존 이슈 없음 → 신규 등록
         // 화력 계산을 먼저 하고, 충분하면 등록 (관리자 UI 노출 방지)
+        
+        // 1차 guard: 최근 5분 이내 동일 제목 존재 시 즉시 스킵 (cron 동시 실행 방지)
+        if (await isRecentlyCreated(representativeTitle)) {
+            console.log('[중복 스킵 - 최근 생성]', representativeTitle)
+            continue
+        }
         
         // 1단계: 임시 이슈 생성 (approval_status를 null로 설정해서 UI 노출 안 됨)
         const { data: tempIssue, error: tempError } = await supabaseAdmin
