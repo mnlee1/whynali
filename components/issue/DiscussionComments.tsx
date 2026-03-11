@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Comment } from '@/types'
+import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
@@ -95,6 +96,13 @@ export default function DiscussionComments({
     /* 신고 상태 */
     const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
 
+    /* 세이프티봇 상태 */
+    const [safetyBotEnabled, setSafetyBotEnabled] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return true
+        return localStorage.getItem('safety_bot_enabled') !== 'false'
+    })
+    const [safetyBotModalOpen, setSafetyBotModalOpen] = useState(false)
+
     useEffect(() => {
         if (serverUserId) { setUserId(serverUserId); return }
         fetch('/api/auth/me')
@@ -107,8 +115,9 @@ export default function DiscussionComments({
 
     const loadComments = useCallback(async (currentOffset: number, append: boolean) => {
         try {
+            const pending = !safetyBotEnabled ? '&includePending=true' : ''
             const res = await fetch(
-                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=latest`
+                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=latest${pending}`
             )
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -120,10 +129,11 @@ export default function DiscussionComments({
             setLoading(false)
             setLoadingMore(false)
         }
-    }, [contextParam])
+    }, [contextParam, safetyBotEnabled])
 
     useEffect(() => {
         setLoading(true)
+        setOffset(0)
         loadComments(0, false)
     }, [loadComments])
 
@@ -420,6 +430,29 @@ export default function DiscussionComments({
             <div className="mb-3">
                 <p className="text-sm text-gray-500">의견 {total.toLocaleString()}개</p>
             </div>
+
+            {/* 세이프티봇 안내 바 */}
+            <div className="flex items-center justify-between px-3 py-2 mb-3 bg-purple-50 border border-purple-100 rounded-lg">
+                <p className="text-xs text-purple-700">
+                    <span className="mr-1">🤖</span>
+                    {safetyBotEnabled
+                        ? '세이프티봇이 불쾌한 의견으로부터 보호하고 있어요.'
+                        : '세이프티봇이 꺼져 있어요. 모든 의견이 표시됩니다.'}
+                </p>
+                <button
+                    onClick={() => setSafetyBotModalOpen(true)}
+                    className="text-xs text-purple-600 hover:text-purple-800 border border-purple-200 rounded px-2 py-0.5 shrink-0 ml-2 transition-colors hover:border-purple-400"
+                >
+                    설정
+                </button>
+            </div>
+
+            {safetyBotModalOpen && (
+                <SafetyBotSettingModal
+                    onClose={() => setSafetyBotModalOpen(false)}
+                    onConfirm={(value) => setSafetyBotEnabled(value)}
+                />
+            )}
 
             {/* 의견 목록 */}
             {comments.length === 0 ? (
