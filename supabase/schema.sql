@@ -141,6 +141,17 @@ CREATE TABLE admin_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- AI 키 상태 관리
+CREATE TABLE ai_key_status (
+    provider TEXT NOT NULL,
+    key_hash TEXT NOT NULL,
+    is_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+    blocked_until TIMESTAMPTZ,
+    fail_count INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (provider, key_hash)
+);
+
 -- 인덱스
 CREATE INDEX idx_issues_category ON issues(category);
 CREATE INDEX idx_issues_status ON issues(status);
@@ -159,3 +170,5 @@ CREATE INDEX idx_community_data_created_at ON community_data(created_at);
 CREATE INDEX idx_admin_logs_created_at ON admin_logs(created_at);
 CREATE INDEX idx_admin_logs_admin_id ON admin_logs(admin_id);
 CREATE INDEX idx_admin_logs_target_type ON admin_logs(target_type);
+CREATE INDEX idx_ai_key_status_provider ON ai_key_status(provider);
+CREATE INDEX idx_ai_key_status_blocked_until ON ai_key_status(blocked_until);

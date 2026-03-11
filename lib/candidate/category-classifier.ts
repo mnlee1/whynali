@@ -7,23 +7,9 @@
  * Groq AI를 사용하여 맥락을 이해하고 올바른 카테고리를 판단합니다.
  */
 
-import Groq from 'groq-sdk'
+import { aiClient } from '@/lib/ai/ai-client'
 import type { IssueCategory } from '@/lib/config/categories'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
-
-let groqInstance: Groq | null = null
-
-function getGroqClient(): Groq {
-    if (!groqInstance) {
-        if (!process.env.GROQ_API_KEY) {
-            throw new Error('GROQ_API_KEY가 설정되지 않았습니다')
-        }
-        groqInstance = new Groq({
-            apiKey: process.env.GROQ_API_KEY,
-        })
-    }
-    return groqInstance
-}
 
 interface CategoryClassificationResult {
     category: IssueCategory
@@ -61,14 +47,17 @@ ${sampleTitles}
 - 사회: 사건사고, 지역뉴스, 정책, 교육, 환경, 일반 사회 이슈
 - 정치: 정부, 국회, 선거, 외교, 정당 관련
 - 연예: 연예인, 드라마, 영화, 음악, 방송
-- 기술: IT, 과학, 기술혁신, 스타트업
-- 스포츠: 운동경기, 선수, 팀, 스포츠 이벤트
+- 기술: IT, 과학, 기술혁신, 스타트업, 이커머스, 온라인 플랫폼, 유통/패션 기업의 신규 서비스
+- 스포츠: 실제 운동경기, 선수 활동, 팀 경기 결과, 스포츠 대회
 
 주의사항:
-- "스포츠마케팅"처럼 스포츠 관련 단어가 있어도, 주제가 지역 관광이면 "사회"
+- "스포츠마케팅"처럼 스포츠 관련 단어가 있어도, 주제가 지역 관광/마케팅이면 "사회"
+- "스포츠·IP 큐레이션", "스포츠브랜드" 등은 유통/패션 서비스이므로 "기술"
+- 무신사, 쿠팡, 네이버쇼핑 등 이커머스 플랫폼의 신규 서비스는 "기술"
 - 연예인 관련 가짜뉴스/루머도 내용에 따라 "사회" 또는 "연예"
 - 스포츠 선수의 비리/사건은 "사회"
 - 정치인의 스포츠 활동은 "정치"
+- 실제 경기 결과, 선수 활동, 대회 관련만 "스포츠"
 
 응답 형식 (JSON):
 {
@@ -80,34 +69,25 @@ ${sampleTitles}
 JSON만 출력하세요.`
 
     try {
-        const groq = getGroqClient()
+        const systemPrompt = '당신은 뉴스 카테고리 분류 전문가입니다. 맥락을 정확히 이해하고 올바른 카테고리를 판단합니다.'
         
-        const completion = await groq.chat.completions.create({
-            model: 'llama-3.1-8b-instant',  // 가벼운 모델로 변경 (토큰 소비 적음)
-            messages: [
-                {
-                    role: 'system',
-                    content: '당신은 뉴스 카테고리 분류 전문가입니다. 맥락을 정확히 이해하고 올바른 카테고리를 판단합니다.',
-                },
-                {
-                    role: 'user',
-                    content: prompt,
-                },
-            ],
+        const completion = await aiClient.complete(prompt, {
+            model: 'llama-3.1-8b-instant',
             temperature: 0.1,
-            max_tokens: 200,
+            maxTokens: 200,
+            systemPrompt,
         })
 
         // API 사용량 추적
         await incrementApiUsage('groq', { calls: 1, successes: 1, failures: 0 })
 
-        const responseText = completion.choices[0]?.message?.content?.trim()
-        if (!responseText) {
+        const content = completion.trim()
+        if (!content) {
             throw new Error('AI 응답이 비어있습니다')
         }
 
         // JSON 파싱
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+        const jsonMatch = content.match(/\{[\s\S]*\}/)
         if (!jsonMatch) {
             throw new Error('JSON 형식을 찾을 수 없습니다')
         }

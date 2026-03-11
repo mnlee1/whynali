@@ -7,6 +7,7 @@
  */
 
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import TimelineSection from '@/components/issue/TimelineSection'
@@ -28,11 +29,25 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         .from('issues')
         .select('*')
         .eq('id', id)
-        .eq('approval_status', '승인')
-        .eq('visibility_status', 'visible')
         .single()
 
     if (issueError || !issue) {
+        return (
+            <div className="container mx-auto px-4 py-6 md:py-8">
+                <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
+                    이슈를 불러올 수 없습니다.
+                </div>
+            </div>
+        )
+    }
+
+    // 병합된 이슈인 경우 원본 이슈로 리다이렉트
+    if (issue.merged_into_id) {
+        redirect(`/issue/${issue.merged_into_id}`)
+    }
+
+    // 승인되지 않았거나 숨김 처리된 이슈는 표시하지 않음
+    if (issue.approval_status !== '승인' || issue.visibility_status !== 'visible') {
         return (
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">

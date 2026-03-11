@@ -93,6 +93,19 @@ export interface CandidateResult {
 }
 
 /**
+ * shouldAutoApprove - 자동 승인 조건 판단
+ * 
+ * 화력이 임계값 이상이고 허용된 카테고리인지 확인합니다.
+ * 
+ * @param category 이슈 카테고리
+ * @param heatIndex 화력 지수
+ * @returns 자동 승인 가능 여부
+ */
+function shouldAutoApprove(category: IssueCategory, heatIndex: number): boolean {
+    return heatIndex >= AUTO_APPROVE_THRESHOLD && AUTO_APPROVE_CATEGORIES.includes(category)
+}
+
+/**
  * CATEGORY_KEYWORDS - 카테고리별 제목 키워드 사전
  * 설정 파일에서 자동 로드
  */
@@ -107,17 +120,51 @@ const CONTEXT_RULES = getAllContextRules()
 /**
  * inferCategory - 그룹 내 제목 키워드 스코어링으로 카테고리 결정
  *
- * 1차: 전체 제목을 합산해 카테고리별 키워드 매칭 수를 점수화
- * 2차: 맥락 기반 규칙 적용 (특정 키워드 조합 시 점수 대폭 증가)
- * 3차: 수집 카테고리 다수결 점수 계산
- * 4차: 키워드 점수와 다수결 점수를 비교해 더 명확한 쪽 선택
- *      - 맥락 규칙 매칭되면 키워드 우선
- *      - 다수결 카테고리의 키워드 점수가 0이면 키워드 우선 (네이버 오류 판단)
- *      - 그 외에는 다수결 우선 (네이버 카테고리가 더 정확한 경우 많음)
- * 5차: 신뢰도 낮으면 AI 재분류 (NEW)
- * 6차(폴백): 둘 다 없으면 '사회' 기본값
+ * 전략 선택 (환경변수 CATEGORY_STRATEGY):
+ * - 'ai': AI만 사용 (권장, 유지보수 불필요)
+ * - 'hybrid': 하이브리드 (키워드 우선, 신뢰도 낮으면 AI)
+ * - 'keyword': 키워드만 사용 (AI 비활성화)
+ * 
+ * AI 전용 모드:
+ * - Groq API를 사용해 맥락 기반 분류
+ * - 키워드 유지보수 불필요
+ * - 하루 평균 4개 이슈 × 250토큰 = 1,000토큰 (무료 플랜의 0.2%)
+ * 
+ * 하이브리드 모드 (기존):
+ * 1차: 키워드 + 맥락 규칙 분류
+ * 2차: 네이버 카테고리 다수결
+ * 3차: 신뢰도 낮으면 AI 재분류
+ * 4차(폴백): '사회' 기본값
  */
 async function inferCategory(items: RawItem[]): Promise<IssueCategory> {
+    const strategy = process.env.CATEGORY_STRATEGY ?? 'hybrid'  // 기본값: 하이브리드
+    
+    // AI 전용 모드
+    if (strategy === 'ai') {
+        try {
+            const titles = items.map(i => i.title)
+            const aiResult = await classifyCategoryByAI(titles)
+            
+            console.log(
+                `[AI 카테고리 분류] "${items[0].title.substring(0, 40)}..." ` +
+                `→ ${aiResult.category} (신뢰도: ${aiResult.confidence}%, 이유: ${aiResult.reason})`
+            )
+            
+            // 신뢰도 50% 이상이면 채택 (AI 전용 모드는 더 관대하게)
+            if (aiResult.confidence >= 50) {
+                return aiResult.category
+            }
+            
+            // 신뢰도 낮으면 사회 폴백
+            console.warn(`[AI 신뢰도 낮음] ${aiResult.confidence}% - 사회로 폴백`)
+            return '사회'
+        } catch (error) {
+            console.error('[AI 카테고리 분류 에러] 사회로 폴백:', error)
+            return '사회'
+        }
+    }
+    
+    // 키워드 전용 모드 또는 하이브리드 모드
     const validCategories = getCategoryIds() as IssueCategory[]
     const allTitles = items.map((i) => i.title).join(' ')
 
@@ -172,7 +219,12 @@ async function inferCategory(items: RawItem[]): Promise<IssueCategory> {
         preliminaryCategory = topKeyword[0]
     }
 
-    // AI 재분류 필요 여부 판단
+    // 키워드 전용 모드면 여기서 종료
+    if (strategy === 'keyword') {
+        return preliminaryCategory ?? '사회'
+    }
+
+    // 하이브리드 모드: AI 재분류 필요 여부 판단
     const keywordScore = topKeyword?.[1] ?? 0
     const majorityScore = topMajority?.[1] ?? 0
     
@@ -264,7 +316,9 @@ async function checkForDuplicateIssue(
     representativeTitle: string,
     since24h: string
 ): Promise<{ id: string; title: string; approval_status: string; heat_index: number | null } | null> {
-    const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
+    // AI 중복 체크는 lib/candidate/duplicate-checker.ts의 checkDuplicateIssue 사용
+    // TODO: 필요시 통합 검토
+    const enableAIDuplicateCheck = false  // 비활성화
     
     const { data: exactMatch } = await supabaseAdmin
         .from('issues')
@@ -275,36 +329,7 @@ async function checkForDuplicateIssue(
 
     let existingIssue = exactMatch?.[0] ?? null
 
-    if (!existingIssue && enableAIDuplicateCheck) {
-        const { data: recentIssues } = await supabaseAdmin
-            .from('issues')
-            .select('id, title, approval_status, heat_index')
-            .gte('created_at', since24h)
-            .order('created_at', { ascending: false })
-            .limit(20)
-        
-        if (recentIssues && recentIssues.length > 0) {
-            const { checkDuplicateWithAI } = await import('@/lib/ai/duplicate-checker')
-            
-            for (const issue of recentIssues) {
-                try {
-                    const result = await checkDuplicateWithAI(issue.title, representativeTitle)
-                    
-                    if (result.isDuplicate) {
-                        console.log(`[AI 중복 감지] "${representativeTitle}" → "${issue.title}" (${result.confidence}% - ${result.reason})`)
-                        existingIssue = issue
-                        break
-                    }
-                    
-                    await new Promise(resolve => setTimeout(resolve, 3000))
-                    
-                } catch (error) {
-                    console.error('[AI 중복 체크 에러]', error)
-                    break
-                }
-            }
-        }
-    }
+    // AI 중복 체크 로직 제거 (lib/candidate/duplicate-checker.ts 사용 권장)
     
     return existingIssue
 }
@@ -337,10 +362,7 @@ async function handleExistingIssue(
     }
     
     if (existingIssue.approval_status === '대기') {
-        const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
-            AUTO_APPROVE_CATEGORIES.includes(issueCategory)
-        
-        if (shouldAutoApprove) {
+        if (shouldAutoApprove(issueCategory, actualHeat)) {
             const { error: updateError } = await supabaseAdmin
                 .from('issues')
                 .update({ 
@@ -446,10 +468,7 @@ async function createNewIssue(
         }
         
         if (finalCheck.approval_status === '대기') {
-            const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
-                AUTO_APPROVE_CATEGORIES.includes(issueCategory)
-            
-            if (shouldAutoApprove) {
+            if (shouldAutoApprove(issueCategory, actualHeat)) {
                 await supabaseAdmin
                     .from('issues')
                     .update({ 
@@ -478,19 +497,17 @@ async function createNewIssue(
         return 'continue'
     }
     
-    const autoApproveThreshold = AUTO_APPROVE_THRESHOLD
-    const shouldAutoApprove = actualHeat >= autoApproveThreshold &&
-        AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+    const isAutoApproved = shouldAutoApprove(issueCategory, actualHeat)
     
-    const approvalStatus = shouldAutoApprove ? '승인' : '대기'
+    const approvalStatus = isAutoApproved ? '승인' : '대기'
     
     const { error: updateError } = await supabaseAdmin
         .from('issues')
         .update({
             approval_status: approvalStatus,
-            approval_type: shouldAutoApprove ? 'auto' : null,
-            approval_heat_index: shouldAutoApprove ? actualHeat : null,
-            approved_at: shouldAutoApprove ? now.toISOString() : null,
+            approval_type: isAutoApproved ? 'auto' : null,
+            approval_heat_index: isAutoApproved ? actualHeat : null,
+            approved_at: isAutoApproved ? now.toISOString() : null,
             created_heat_index: actualHeat,
         })
         .eq('id', tempIssue.id)
@@ -501,13 +518,13 @@ async function createNewIssue(
         return 'continue'
     }
 
-    if (shouldAutoApprove) {
+    if (isAutoApproved) {
         const burstTag = isBurst ? ' 🔥 [급증]' : ''
         console.log(`[자동승인 완료]${burstTag} "${representativeTitle}" (카테고리: ${issueCategory}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
         result.created++
     } else {
-        const reason = actualHeat < autoApproveThreshold
-            ? `화력 ${actualHeat}점 (자동승인 기준 ${autoApproveThreshold}점 미만)`
+        const reason = actualHeat < AUTO_APPROVE_THRESHOLD
+            ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
             : `${issueCategory} 카테고리는 관리자 승인 필요`
         const burstTag = isBurst ? ' 🔥 [급증]' : ''
         console.log(`[대기등록 완료]${burstTag} "${representativeTitle}" (${reason}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
@@ -614,6 +631,112 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
     } else {
         groups = groupItems(newsRawItems)
         console.log(`[키워드 그루핑] ${newsRawItems.length}건 → ${groups.length}개 그룹`)
+    }
+    
+    // AI 재검증: 쪼개진 그룹 병합 (ENABLE_AI_DUPLICATE_GROUP_CHECK=true)
+    const enableDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_GROUP_CHECK === 'true'
+    if (enableDuplicateCheck && groups.length >= 2) {
+        try {
+            const { detectDuplicateGroups } = await import('./duplicate-checker')
+            
+            // 카테고리별로 재검증
+            const categories = [...new Set(groups.map(g => 
+                g.items.find(i => i.type === 'news')?.category ?? 'unknown'
+            ))]
+            
+            // 모든 카테고리의 병합을 먼저 수집 (인덱스 변경 방지)
+            const allMergeRecommendations: Array<{
+                primaryIndex: number
+                secondaryIndex: number
+                primaryTitle: string
+                secondaryTitle: string
+                confidence: number
+                reason: string
+                category: string
+            }> = []
+            
+            for (const category of categories) {
+                if (category === 'unknown') continue
+                
+                const groupsInCategory = groups
+                    .map((g, idx) => ({
+                        originalIndex: idx,
+                        title: selectRepresentativeTitle(g.items),
+                        category: g.items.find(i => i.type === 'news')?.category ?? null,
+                        createdAt: g.items[0]?.created_at ?? new Date().toISOString(),
+                    }))
+                    .filter(g => g.category === category)
+                
+                if (groupsInCategory.length < 2) continue
+                
+                const mergeRecommendations = await detectDuplicateGroups(
+                    groupsInCategory,
+                    category
+                )
+                
+                // originalIndex를 사용하여 실제 groups 배열의 인덱스로 변환
+                for (const rec of mergeRecommendations) {
+                    allMergeRecommendations.push({
+                        ...rec,
+                        category,
+                    })
+                }
+            }
+            
+            // 병합 실행: secondaryIndex가 큰 것부터 처리 (인덱스 꼬임 방지)
+            // 또한 이미 병합된 그룹은 건너뜀
+            const mergedIndices = new Set<number>()
+            
+            // primaryIndex별로 그룹화 (A→B, A→C 같은 경우 모두 A로 병합)
+            const mergeMap = new Map<number, number[]>()
+            for (const rec of allMergeRecommendations) {
+                if (mergedIndices.has(rec.secondaryIndex)) continue
+                
+                if (!mergeMap.has(rec.primaryIndex)) {
+                    mergeMap.set(rec.primaryIndex, [])
+                }
+                mergeMap.get(rec.primaryIndex)!.push(rec.secondaryIndex)
+                mergedIndices.add(rec.secondaryIndex)
+            }
+            
+            // 병합 실행
+            for (const [primaryIdx, secondaryIndices] of mergeMap.entries()) {
+                const primaryGroup = groups[primaryIdx]
+                if (!primaryGroup || primaryGroup.items.length === 0) continue
+                
+                for (const secondaryIdx of secondaryIndices) {
+                    const secondaryGroup = groups[secondaryIdx]
+                    if (!secondaryGroup || secondaryGroup.items.length === 0) continue
+                    
+                    const rec = allMergeRecommendations.find(
+                        r => r.primaryIndex === primaryIdx && r.secondaryIndex === secondaryIdx
+                    )
+                    
+                    if (rec) {
+                        console.log(`[그룹 병합] "${rec.secondaryTitle}" → "${rec.primaryTitle}" (신뢰도 ${rec.confidence}%)`)
+                    }
+                    
+                    // secondary 그룹의 모든 아이템을 primary 그룹으로 이전
+                    primaryGroup.items.push(...secondaryGroup.items)
+                    primaryGroup.tokens = [
+                        ...new Set([...primaryGroup.tokens, ...secondaryGroup.tokens])
+                    ]
+                    
+                    // secondary 그룹 비우기
+                    secondaryGroup.items = []
+                }
+            }
+            
+            // 빈 그룹 제거
+            const beforeCount = groups.length
+            groups = groups.filter(g => g.items.length > 0)
+            const afterCount = groups.length
+            
+            console.log(`[AI 재검증 완료] ${beforeCount - afterCount}개 그룹 병합, 최종 ${afterCount}개 그룹\n`)
+            
+        } catch (error) {
+            console.error('[AI 중복 그룹 체크 에러] 원본 그룹 유지:', error)
+        }
     }
     
     // AI 검증: ALERT_THRESHOLD 이상 그룹만 AI로 검증 (선택적)
@@ -738,20 +861,22 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
             }
             
             if (existingIssue.approval_status === '대기') {
-                // 화력 기반 자동 승인 판정
-                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
-                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
-                
-                if (shouldAutoApprove) {
-                    // 기존 대기 이슈를 자동 승인으로 업데이트
+                if (shouldAutoApprove(issueCategory, actualHeat)) {
+                    const updateData: any = { 
+                        approval_status: '승인', 
+                        approval_type: 'auto',
+                        approval_heat_index: actualHeat,
+                        approved_at: now.toISOString()
+                    }
+                    
+                    // created_heat_index가 null이면 현재 화력으로 설정
+                    if (!existingIssue.created_heat_index) {
+                        updateData.created_heat_index = actualHeat
+                    }
+                    
                     const { error: updateError } = await supabaseAdmin
                         .from('issues')
-                        .update({ 
-                            approval_status: '승인', 
-                            approval_type: 'auto',
-                            approval_heat_index: actualHeat,
-                            approved_at: now.toISOString() 
-                        })
+                        .update(updateData)
                         .eq('id', existingIssue.id)
 
                     if (!updateError) {
@@ -763,6 +888,15 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                         ? `화력 ${actualHeat}점 (자동승인 기준 ${AUTO_APPROVE_THRESHOLD}점 미만)`
                         : `${issueCategory} 카테고리는 관리자 승인 필요`
                     console.log(`[대기유지] 기존 이슈 "${representativeTitle}" (${reason})`)
+                    
+                    // created_heat_index가 null이면 현재 화력으로 설정
+                    if (!existingIssue.created_heat_index) {
+                        await supabaseAdmin
+                            .from('issues')
+                            .update({ created_heat_index: actualHeat })
+                            .eq('id', existingIssue.id)
+                    }
+                    
                     // 여전히 대기 중 → 배너 알람 목록에 추가
                     result.alerts.push({
                         title: representativeTitle,
@@ -840,12 +974,8 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
                 continue
             }
             
-            // 기존 이슈가 대기 상태이고 자동 승인 조건이면 승인 처리
             if (finalCheck.approval_status === '대기') {
-                const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
-                    AUTO_APPROVE_CATEGORIES.includes(issueCategory)
-                
-                if (shouldAutoApprove) {
+                if (shouldAutoApprove(issueCategory, actualHeat)) {
                     await supabaseAdmin
                         .from('issues')
                         .update({ 
@@ -877,31 +1007,29 @@ export async function evaluateCandidates(): Promise<CandidateResult> {
         }
         
         // 4단계: 화력 충분 → 정식 등록 (approval_status 업데이트)
-        // 화력 기반 자동 승인 판정
-        const shouldAutoApprove = actualHeat >= AUTO_APPROVE_THRESHOLD &&
-            AUTO_APPROVE_CATEGORIES.includes(issueCategory)
+        const isAutoApproved = shouldAutoApprove(issueCategory, actualHeat)
         
-        const approvalStatus = shouldAutoApprove ? '승인' : '대기'
+        const approvalStatus = isAutoApproved ? '승인' : '대기'
         
         const { error: updateError } = await supabaseAdmin
             .from('issues')
             .update({
                 approval_status: approvalStatus,
-                approval_type: shouldAutoApprove ? 'auto' : null,
-                approval_heat_index: shouldAutoApprove ? actualHeat : null,
-                approved_at: shouldAutoApprove ? now.toISOString() : null,
+                approval_type: isAutoApproved ? 'auto' : null,
+                approval_heat_index: isAutoApproved ? actualHeat : null,
+                approved_at: isAutoApproved ? now.toISOString() : null,
+                created_heat_index: actualHeat,  // 등록 시 화력 기록
             })
             .eq('id', tempIssue.id)
         
         if (updateError) {
             console.error('이슈 상태 업데이트 에러:', updateError)
-            // 실패 시 삭제
             await supabaseAdmin.from('issues').delete().eq('id', tempIssue.id)
             continue
         }
 
         // 5단계: 등록 결과 로깅 및 알림
-        if (shouldAutoApprove) {
+        if (isAutoApproved) {
             console.log(`[자동승인 완료] "${representativeTitle}" (카테고리: ${issueCategory}, 뉴스: ${recentCount}건, 화력: ${actualHeat}점)`)
             result.created++
         } else {

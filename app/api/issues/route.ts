@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
             .select('*', { count: 'exact' })
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
-            .gte('heat_index', MIN_HEAT_TO_REGISTER) // 화력 낮은 이슈 제외
+            .is('merged_into_id', null)
+            .gte('heat_index', MIN_HEAT_TO_REGISTER)
 
         if (category) {
             query = query.eq('category', category)
