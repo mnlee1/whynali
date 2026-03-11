@@ -315,14 +315,14 @@ async function linkCollections(
 async function checkForDuplicateIssue(
     representativeTitle: string,
     since24h: string
-): Promise<{ id: string; title: string; approval_status: string; heat_index: number | null } | null> {
+): Promise<{ id: string; title: string; approval_status: string; heat_index: number | null; created_heat_index: number | null } | null> {
     // AI 중복 체크는 lib/candidate/duplicate-checker.ts의 checkDuplicateIssue 사용
     // TODO: 필요시 통합 검토
     const enableAIDuplicateCheck = false  // 비활성화
     
     const { data: exactMatch } = await supabaseAdmin
         .from('issues')
-        .select('id, title, approval_status, heat_index')
+        .select('id, title, approval_status, heat_index, created_heat_index')
         .eq('title', representativeTitle)
         .gte('created_at', since24h)
         .limit(1)
@@ -340,7 +340,7 @@ async function checkForDuplicateIssue(
  * 기존 이슈에 수집 건을 연결하고, 화력 재계산 후 자동 승인 여부를 판단합니다.
  */
 async function handleExistingIssue(
-    existingIssue: { id: string; title: string; approval_status: string; heat_index: number | null },
+    existingIssue: { id: string; title: string; approval_status: string; heat_index: number | null; created_heat_index: number | null },
     newsIds: string[],
     communityIds: string[],
     representativeTitle: string,
