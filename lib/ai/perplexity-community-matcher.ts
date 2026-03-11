@@ -9,6 +9,8 @@
  */
 
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
+import { callGroq } from './groq-client'
+import { parseJsonObject } from './parse-json-response'
 
 interface MatchInput {
     issueTitle: string
@@ -32,11 +34,6 @@ export async function matchCommunity(
     issueTitle: string,
     communityTitle: string
 ): Promise<MatchResult> {
-    const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) {
-        throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다')
-    }
-
     const prompt = `다음 두 제목이 같은 주제/이슈를 다루고 있는지 판단해주세요.
 
 [이슈 제목]
@@ -63,48 +60,23 @@ ${communityTitle}
 JSON만 반환하세요.`
 
     try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
+        const content = await callGroq(
+            [
+                {
+                    role: 'system',
+                    content: '당신은 뉴스/커뮤니티 제목의 주제 일치 여부를 판단하는 전문가입니다. 정확한 JSON 형식으로만 응답하세요.',
+                },
+                {
+                    role: 'user',
+                    content: prompt,
+                },
+            ],
+            {
                 model: 'llama-3.1-8b-instant',
-                messages: [
-                    {
-                        role: 'system',
-                        content: '당신은 뉴스/커뮤니티 제목의 주제 일치 여부를 판단하는 전문가입니다. 정확한 JSON 형식으로만 응답하세요.',
-                    },
-                    {
-                        role: 'user',
-                        content: prompt,
-                    },
-                ],
                 temperature: 0.1,
                 max_tokens: 200,
-                response_format: { type: 'json_object' }
-            }),
-        })
-
-        if (!response.ok) {
-            const errorText = await response.text()
-            
-            // Rate Limit 에러는 조용히 처리 (fallback으로 전환)
-            if (response.status === 429) {
-                console.log(`[AI Rate Limit] 토큰 방식으로 전환`)
-                return {
-                    isMatch: false,
-                    confidence: 0,
-                    reason: 'Rate Limit'
-                }
             }
-            
-            throw new Error(`Groq API 에러 ${response.status}: ${errorText}`)
-        }
-
-        const data = await response.json()
-        const content = data.choices?.[0]?.message?.content || '{}'
+        )
 
         const result = parseMatchResult(content)
         
@@ -128,27 +100,21 @@ JSON만 반환하세요.`
  * parseMatchResult - AI 응답을 파싱
  */
 function parseMatchResult(content: string): MatchResult {
-    try {
-        // JSON 추출 (마크다운 코드 블록 제거)
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) {
-            throw new Error('JSON 형식 없음')
-        }
-
-        const parsed = JSON.parse(jsonMatch[0])
-        
-        return {
-            isMatch: !!parsed.isMatch,
-            confidence: Math.min(100, Math.max(0, parseInt(parsed.confidence) || 0)),
-            reason: parsed.reason || '판단 완료'
-        }
-    } catch (error) {
-        console.error('[AI 응답 파싱 에러]', error, content)
+    const parsed = parseJsonObject<{ isMatch: boolean; confidence: number; reason: string }>(content)
+    
+    if (!parsed) {
+        console.error('[AI 응답 파싱 에러]', content.substring(0, 100))
         return {
             isMatch: false,
             confidence: 0,
             reason: '파싱 실패'
         }
+    }
+    
+    return {
+        isMatch: !!parsed.isMatch,
+        confidence: Math.min(100, Math.max(0, parseInt(String(parsed.confidence)) || 0)),
+        reason: parsed.reason || '판단 완료'
     }
 }
 

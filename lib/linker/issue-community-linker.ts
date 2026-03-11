@@ -18,6 +18,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { extractKeywords, buildDateRange, isMatch } from './linker-utils'
 
 interface LinkResult {
     issueId: string
@@ -31,86 +32,15 @@ interface LinkResult {
 const BEFORE_DAYS = parseInt(process.env.LINKER_COMMUNITY_BEFORE_DAYS ?? '1')
 const AFTER_DAYS = parseInt(process.env.LINKER_COMMUNITY_AFTER_DAYS ?? '7')
 
+// 대량 해제 보호 임계값 (기본 3, 0으로 설정 시 보호 비활성화)
 const LINKER_MIN_LINKED_TO_PROTECT = parseInt(
     process.env.LINKER_MIN_LINKED_TO_PROTECT ?? '3'
 )
 
-// 뉴스 기사·커뮤니티 제목에 자주 등장하지만 이슈 식별에 무의미한 단어
-const STOPWORDS = new Set([
-    '논란', '사건', '사고', '통보', '불참', '발표', '확인', '관련', '이후',
-    '결국', '충격', '공개', '최초', '단독', '속보', '긴급', '오늘', '어제',
-    '지금', '올해', '최근', '현재', '직접', '처음', '마지막', '드디어',
-    '알고', '보니', '위해', '대해', '통해', '따라', '의해', '부터', '까지',
-    '이번', '해당', '모든', '일부', '전체', '이미', '아직', '더욱', '매우',
-    // 방향/위치 관련 범용어 추가
-    '어디', '어디로', '어디서', '어디에', '여기', '저기', '거기',
-    // 모집/참여 관련 범용어
-    '모집', '참여', '신청', '접수', '지원', '선발',
-])
-
-/**
- * stripMediaPrefix - 언론 접두어 제거
- */
-function stripMediaPrefix(title: string): string {
-    return title.replace(/^(\[[^\]]{1,30}\]\s*)+/, '').trim()
-}
-
-// 1글자이지만 중요한 의미를 가져서 필터링하면 안 되는 예외 키워드
-const ALLOWED_ONE_CHAR_KEYWORDS = new Set([
-    '환', '뷔', '진', '첸', '츄', '뱀', '윤', '문', '안', '정', '이', '박', '김', '최',
-    '권', '조', '강', '류', '홍', '송', '백', '유', '오', '신', '양', '황', '허', '고',
-    '설', '선', '길', '표', '명', '범', '혁', '훈', '빈', '결', '률', '현', '린'
-])
-
-/**
- * extractKeywords - 제목에서 핵심 키워드 추출
- *
- * 언론 접두어 제거 → 특수문자 제거 → 공백 분리 → 2글자 미만 제거(예외 허용) → 불용어 제거
- */
-function extractKeywords(text: string): string[] {
-    return Array.from(new Set(
-        stripMediaPrefix(text)
-            .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
-            .split(/\s+/)
-            .filter((w) => (w.length >= 2 || ALLOWED_ONE_CHAR_KEYWORDS.has(w)) && !STOPWORDS.has(w))
-    ))
-}
-
-/**
- * extractTitleWords - 커뮤니티 글 제목을 단어 Set으로 변환
- *
- * includes() 부분 매칭 대신 단어 단위 정확 일치 비교를 위해 사용.
- * 예: "이재민 구호" → Set(["이재민", "구호"]) → "이재" 키워드와 매칭 안 됨
- */
-function extractTitleWords(text: string): Set<string> {
-    return new Set(
-        text
-            .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
-            .split(/\s+/)
-            .filter((w) => w.length >= 2 || ALLOWED_ONE_CHAR_KEYWORDS.has(w))
-            .map((w) => w.toLowerCase())
-    )
-}
-
-/**
- * buildDateRange - 이슈 생성일 기준 날짜 범위 반환
- */
-function buildDateRange(issueCreatedAt: string): { from: string; to: string } {
-    const issueDt = new Date(issueCreatedAt)
-    return {
-        from: new Date(issueDt.getTime() - BEFORE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-        to: new Date(issueDt.getTime() + AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-    }
-}
-
-/**
- * isMatch - 커뮤니티 글 제목이 이슈 키워드 기준을 통과하는지 판단
- */
-function isMatch(title: string, keywordsLower: string[], threshold: number): boolean {
-    const titleWords = extractTitleWords(title)
-    const matchCount = keywordsLower.filter((kw) => titleWords.has(kw)).length
-    return matchCount >= threshold
-}
+// 대량 해제 보호 비율 (기본 0.7 = 70% 이상 해제 시 경고, 1.0으로 설정 시 보호 비활성화)
+const LINKER_PROTECT_RATIO = parseFloat(
+    process.env.LINKER_PROTECT_RATIO ?? '0.7'
+)
 
 async function linkCommunityToIssue(
     issueId: string,
@@ -121,15 +51,29 @@ async function linkCommunityToIssue(
     if (keywords.length === 0) return 0
 
     const keywordsLower = keywords.map((k) => k.toLowerCase())
-    const { from, to } = buildDateRange(issueCreatedAt)
+    const { from, to } = buildDateRange(issueCreatedAt, BEFORE_DAYS, AFTER_DAYS)
 
     /*
-     * threshold: 키워드 수의 60%(ceil), 최소 2개·최대 5개.
+     * threshold: 키워드 수의 70%(ceil), 최소 3개·최대 5개.
      * 
-     * 기존 40%는 너무 느슨해서 무관한 커뮤니티 글이 많이 연결됨.
-     * 60%로 상향 + 최대값을 3→5로 증가하여 긴 제목도 정확하게 매칭.
+     * 기존 60%는 "김연경" 같은 인물명 1개 키워드만으로도 
+     * 무관한 커뮤니티 글이 연결되는 문제 발생.
+     * 70%로 상향 + 최소값을 2→3으로 증가하여 정확도 강화.
+     * 
+     * 예시:
+     * - 3개 키워드 → 3개 (100% → 최소값 적용)
+     * - 4개 키워드 → 3개 (75%)
+     * - 5개 키워드 → 4개 (80%)
+     * - 7개 키워드 → 5개 (71%)
+     * - 10개 키워드 → 5개 (50% → 최대값 적용)
      */
-    const threshold = Math.min(5, Math.max(2, Math.ceil(keywordsLower.length * 0.6)))
+    const threshold = Math.min(5, Math.max(3, Math.ceil(keywordsLower.length * 0.7)))
+    
+    // 인물명 키워드가 포함된 경우 최소 임계값 상향 (오연결 방지)
+    const personKeywords = ['김연경', '손흥민', '이강인', '옥택연', '민희진', '뉴진스', 
+                           '윤석열', '이재명', '한동훈', '황희찬', '김하성', '류현진']
+    const hasPersonKeyword = keywordsLower.some(k => personKeywords.includes(k))
+    const adjustedThreshold = hasPersonKeyword ? Math.max(threshold, 3) : threshold
 
     /* 아직 이슈에 연결되지 않은 커뮤니티 글 중 날짜 범위 내 500건 조회 */
     const { data: community } = await supabaseAdmin
@@ -144,7 +88,7 @@ async function linkCommunityToIssue(
     if (!community || community.length === 0) return 0
 
     const matchedIds = community
-        .filter((item) => isMatch(item.title, keywordsLower, threshold))
+        .filter((item) => isMatch(item.title, keywordsLower, adjustedThreshold))
         .slice(0, 20)
         .map((item) => item.id)
 
@@ -175,7 +119,7 @@ async function unlinkInvalidCommunity(
     issueCreatedAt: string
 ): Promise<number> {
     const keywords = extractKeywords(issueTitle)
-    const { from, to } = buildDateRange(issueCreatedAt)
+    const { from, to } = buildDateRange(issueCreatedAt, BEFORE_DAYS, AFTER_DAYS)
 
     /* 해당 이슈에 연결된 커뮤니티 글 전체 조회 */
     const { data: linked } = await supabaseAdmin
@@ -186,7 +130,13 @@ async function unlinkInvalidCommunity(
     if (!linked || linked.length === 0) return 0
 
     const keywordsLower = keywords.map((k) => k.toLowerCase())
-    const threshold = Math.min(5, Math.max(2, Math.ceil(keywordsLower.length * 0.6)))
+    const threshold = Math.min(5, Math.max(3, Math.ceil(keywordsLower.length * 0.7)))
+    
+    // 인물명 키워드가 포함된 경우 최소 임계값 상향 (오연결 방지)
+    const personKeywords = ['김연경', '손흥민', '이강인', '옥택연', '민희진', '뉴진스', 
+                           '윤석열', '이재명', '한동훈', '황희찬', '김하성', '류현진']
+    const hasPersonKeyword = keywordsLower.some(k => personKeywords.includes(k))
+    const adjustedThreshold = hasPersonKeyword ? Math.max(threshold, 3) : threshold
 
     const invalidIds = linked
         .filter((item) => {
@@ -194,7 +144,7 @@ async function unlinkInvalidCommunity(
             if (item.written_at < from || item.written_at > to) return true
             // 키워드 기준 미달 (키워드가 없는 이슈는 전부 해제)
             if (keywords.length === 0) return true
-            return !isMatch(item.title, keywordsLower, threshold)
+            return !isMatch(item.title, keywordsLower, adjustedThreshold)
         })
         .map((item) => item.id)
 
@@ -247,19 +197,25 @@ export async function linkAllCommunityToIssues(): Promise<LinkResult[]> {
             unlinkInvalidCommunity(issue.id, issue.title, issue.created_at),
         ])
 
-        // 대량 해제 방지 안전 장치
-        if (
+        // 대량 해제 감지 및 보호 (조건부)
+        const shouldProtect = 
             LINKER_MIN_LINKED_TO_PROTECT > 0 &&
+            LINKER_PROTECT_RATIO < 1.0 &&
             currentLinkedCount !== null &&
             currentLinkedCount >= LINKER_MIN_LINKED_TO_PROTECT &&
-            unlinkedCount > currentLinkedCount * 0.5
-        ) {
-            console.warn('[linker 보호] 대량 해제 차단', {
+            unlinkedCount > currentLinkedCount * LINKER_PROTECT_RATIO
+
+        if (shouldProtect) {
+            const ratio = ((unlinkedCount / currentLinkedCount) * 100).toFixed(1)
+            console.warn(`⚠️ [linker 보호] 대량 해제 차단 - ${issue.title}`, {
                 issueId: issue.id,
-                issueTitle: issue.title,
-                currentLinkedCount,
-                unlinkedCount,
+                현재연결: currentLinkedCount,
+                해제시도: unlinkedCount,
+                해제비율: `${ratio}%`,
+                보호임계값: `${(LINKER_PROTECT_RATIO * 100).toFixed(0)}%`,
+                권장조치: '환경변수 LINKER_PROTECT_RATIO를 1.0으로 설정하여 비활성화하거나, 로직 확인 필요',
             })
+            
             results.push({
                 issueId: issue.id,
                 issueTitle: issue.title,
@@ -268,6 +224,22 @@ export async function linkAllCommunityToIssues(): Promise<LinkResult[]> {
                 protected: true,
             })
             continue
+        }
+
+        // 대량 해제 경고 (보호하지는 않음)
+        if (
+            currentLinkedCount !== null &&
+            currentLinkedCount >= 3 &&
+            unlinkedCount > currentLinkedCount * 0.5
+        ) {
+            const ratio = ((unlinkedCount / currentLinkedCount) * 100).toFixed(1)
+            console.warn(`📊 [linker 경고] 대량 해제 감지 - ${issue.title}`, {
+                issueId: issue.id,
+                현재연결: currentLinkedCount,
+                해제건수: unlinkedCount,
+                해제비율: `${ratio}%`,
+                새연결: linkedCount,
+            })
         }
 
         if (linkedCount > 0 || unlinkedCount > 0) {

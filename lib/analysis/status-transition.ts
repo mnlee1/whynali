@@ -172,6 +172,7 @@ export function evaluateTransition(
     const elapsedHours = (Date.now() - new Date(baseTime).getTime()) / (1000 * 60 * 60)
 
     if (issue.status === '점화') {
+        // 1. 경과 시간 < 6시간: 대기
         if (elapsedHours < IGNITE_TO_DEBATE_HOURS) {
             return {
                 newStatus: null,
@@ -186,20 +187,7 @@ export function evaluateTransition(
             }
         }
 
-        if (heat < CLOSED_MAX_HEAT) {
-            return {
-                newStatus: '종결',
-                reason: {
-                    code: 'HEAT_TOO_LOW',
-                    detail: {
-                        heat,
-                        threshold: CLOSED_MAX_HEAT,
-                    },
-                    message: `화력 ${heat}점 (종결 임계값 ${CLOSED_MAX_HEAT} 미만) — 바이패스`,
-                },
-            }
-        }
-
+        // 2. 타임아웃 조건 (24시간 경과 + 화력 < 30점) - 먼저 체크!
         if (elapsedHours >= IGNITE_TIMEOUT_HOURS && heat < IGNITE_MIN_HEAT) {
             return {
                 newStatus: '종결',
@@ -215,6 +203,22 @@ export function evaluateTransition(
             }
         }
 
+        // 3. 화력 < 10점: 바이패스 종결
+        if (heat < CLOSED_MAX_HEAT) {
+            return {
+                newStatus: '종결',
+                reason: {
+                    code: 'HEAT_TOO_LOW',
+                    detail: {
+                        heat,
+                        threshold: CLOSED_MAX_HEAT,
+                    },
+                    message: `화력 ${heat}점 (종결 임계값 ${CLOSED_MAX_HEAT} 미만) — 바이패스`,
+                },
+            }
+        }
+
+        // 4. 화력 >= 30점: 논란중 전환 시도
         if (heat >= IGNITE_MIN_HEAT) {
             if (data.communityCount >= DEBATE_MIN_COMMUNITY) {
                 return {
@@ -245,6 +249,7 @@ export function evaluateTransition(
             }
         }
 
+        // 5. 그 외: 점화 유지 (10점 <= 화력 < 30점, 24시간 미만)
         return {
             newStatus: null,
             reason: {

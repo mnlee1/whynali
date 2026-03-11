@@ -383,11 +383,23 @@ export default function AdminDashboardPage() {
 
                                 <div className="space-y-2 mb-3">
                                     <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
-                                        <span className="text-gray-700 font-medium">커뮤니티 매칭</span>
+                                        <span className="text-gray-700 font-medium">카테고리 자동 분류</span>
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
                                         <span className="text-gray-700 font-medium">중복 이슈 체크</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">커뮤니티 급증 검증</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">뉴스-이슈 연결 검증</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">
+                                        <span className="text-gray-700 font-medium">커뮤니티 글 매칭</span>
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">활성</span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs bg-white/60 rounded px-3 py-2">

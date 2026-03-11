@@ -311,6 +311,13 @@ export default function AdminIssuesPage() {
             }
         }
         
+        if (issue.approval_status === '병합됨') {
+            return {
+                label: '병합됨',
+                className: 'bg-purple-100 text-purple-700 border-purple-200'
+            }
+        }
+        
         return {
             label: issue.approval_status,
             className: 'bg-gray-100 text-gray-700 border-gray-200'
@@ -521,34 +528,75 @@ export default function AdminIssuesPage() {
                 <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded">
                     <h3 className="font-semibold text-purple-900 mb-3 text-sm flex items-center gap-2">
                         <span className="text-purple-600">🤖</span>
-                        AI 활용 (선택 + 자동)
+                        AI 활용 시스템 (Groq AI - 무료, 항상 활성화)
                     </h3>
                     <div className="space-y-3">
-                        <div>
-                            <p className="font-medium text-gray-700 text-xs mb-1">
-                                <span className="text-amber-600">기본:</span> 키워드 기반 그루핑
+                        <div className="p-3 bg-white rounded border border-purple-100">
+                            <p className="font-medium text-gray-800 text-xs mb-2">
+                                Groq Llama 3.1 8B Instant 모델 사용
                             </p>
-                            <p className="text-xs text-gray-600 ml-4">뉴스 제목에서 키워드 추출 → Jaccard 유사도로 자동 그루핑</p>
-                        </div>
-                        <div>
-                            <p className="font-medium text-purple-800 text-xs mb-1">
-                                <span className="text-purple-600">선택:</span> Perplexity AI (품질 개선용, 현재 비활성화)
-                            </p>
-                            <p className="text-xs text-gray-600 ml-4">환경변수 설정 시 뉴스 그루핑 품질 향상</p>
-                        </div>
-                        <div>
-                            <p className="font-medium text-green-800 text-xs mb-1">
-                                <span className="text-green-600">자동:</span> Groq AI (무료, 항상 활성화)
-                            </p>
-                            <ul className="space-y-1 text-xs text-gray-700 ml-4">
-                                <li>• <span className="font-medium">중복 이슈 체크</span>: 4단계 검증 (제목 일치 → 키워드 → 안전장치 → AI)</li>
-                                <li>• <span className="font-medium">커뮤니티 급증 검증</span>: 진짜 이슈인지 AI 판단 (신뢰도 70% 이상)</li>
-                                <li>• <span className="font-medium">커뮤니티 매칭</span>: 이슈-커뮤니티 글 연결</li>
+                            <ul className="space-y-2 text-xs text-gray-700">
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">1.</span>
+                                    <div>
+                                        <span className="font-medium">카테고리 자동 분류</span>
+                                        <p className="text-gray-600 mt-0.5">키워드 기반 분류의 신뢰도가 낮을 때 AI로 재분류하여 정확도 향상 (5개 카테고리: 사회/정치/연예/스포츠/기술)</p>
+                                    </div>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">2.</span>
+                                    <div>
+                                        <span className="font-medium">중복 이슈 체크</span>
+                                        <p className="text-gray-600 mt-0.5">4단계 검증 (제목 일치 → 공통 키워드 → 반대어/숫자 필터 → AI 정밀 비교, 신뢰도 80% 이상)</p>
+                                    </div>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">3.</span>
+                                    <div>
+                                        <span className="font-medium">커뮤니티 급증 검증</span>
+                                        <p className="text-gray-600 mt-0.5">진짜 이슈인지 AI 판단하여 밈, 드립, 장난 글 자동 필터링 (신뢰도 70% 이상)</p>
+                                    </div>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">4.</span>
+                                    <div>
+                                        <span className="font-medium">뉴스-이슈 연결 검증</span>
+                                        <p className="text-gray-600 mt-0.5">복합 키워드 필터링 후 AI로 관련도 검증 (배치 처리로 5건씩, 관련도 70% 이상만 연결)</p>
+                                    </div>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">5.</span>
+                                    <div>
+                                        <span className="font-medium">커뮤니티 글 매칭</span>
+                                        <p className="text-gray-600 mt-0.5">이슈와 커뮤니티 글 자동 연결 (제목 기반 키워드 매칭 + AI 검증)</p>
+                                    </div>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">6.</span>
+                                    <div>
+                                        <span className="font-medium">토론 주제 생성</span>
+                                        <p className="text-gray-600 mt-0.5">이슈별 토론 주제 자동 생성 (관리자 승인 필수)</p>
+                                    </div>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-green-600 font-semibold">7.</span>
+                                    <div>
+                                        <span className="font-medium">투표 생성</span>
+                                        <p className="text-gray-600 mt-0.5">이슈별 투표 주제 및 선택지 자동 생성 (관리자 승인 필수)</p>
+                                    </div>
+                                </li>
                             </ul>
                         </div>
-                        <p className="text-purple-700 bg-purple-100 px-2 py-1 rounded text-[11px]">
-                            <span className="font-medium">법적 안전성:</span> 제목·메타데이터만 사용, 본문·요약문 미사용
-                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-2 bg-green-50 rounded border border-green-200">
+                                <p className="text-xs font-medium text-green-800 mb-1">안정성</p>
+                                <p className="text-xs text-gray-700">다중 키 순환 시스템 (Supabase 기반 키 차단 상태 공유)</p>
+                            </div>
+                            <div className="p-2 bg-blue-50 rounded border border-blue-200">
+                                <p className="text-xs font-medium text-blue-800 mb-1">법적 안전성</p>
+                                <p className="text-xs text-gray-700">제목·메타데이터만 사용, 본문·요약문 미사용</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -718,14 +766,23 @@ export default function AdminIssuesPage() {
                                 수집 데이터 기반 이슈 후보 {alerts.length}건 — 즉시 처리 필요
                             </p>
                             <ul className="space-y-1">
-                                {alerts.map((alert, i) => (
-                                    <li key={i} className="text-sm text-amber-700">
-                                        <span className="font-medium">{alert.title}</span>
-                                        <span className="ml-2 text-amber-500 text-xs">
-                                            최근 3시간 {alert.count}건 (뉴스 {alert.newsCount} + 커뮤니티 {alert.communityCount})
-                                        </span>
-                                    </li>
-                                ))}
+                                {alerts.map((alert, i) => {
+                                    const threshold = 5
+                                    const isValid = alert.count >= threshold
+                                    return (
+                                        <li key={i} className="text-sm text-amber-700">
+                                            <span className="font-medium">{alert.title}</span>
+                                            <span className="ml-2 text-amber-500 text-xs">
+                                                최근 3시간 {alert.count}건 (뉴스 {alert.newsCount} + 커뮤니티 {alert.communityCount})
+                                                {!isValid && (
+                                                    <span className="ml-2 text-red-600 font-semibold">
+                                                        ⚠️ 기준 미달 (최소 {threshold}건 필요)
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </li>
+                                    )
+                                })}
                             </ul>
                         </div>
                         <button
@@ -750,6 +807,7 @@ export default function AdminIssuesPage() {
                         { value: '반려', label: '반려 전체' },
                         { value: '반려:auto', label: '자동 반려' },
                         { value: '반려:manual', label: '관리자 반려' },
+                        { value: '병합됨', label: '병합됨' },
                     ].map(({ value, label }) => (
                         <button
                             key={label}
@@ -1004,6 +1062,15 @@ export default function AdminIssuesPage() {
                                             >
                                                 복구
                                             </button>
+                                        )}
+                                        {issue.approval_status === '병합됨' && issue.merged_into_id && (
+                                            <a
+                                                href={`/issue/${issue.merged_into_id}`}
+                                                target="_blank"
+                                                className="text-xs px-3 py-1.5 border border-purple-300 text-purple-600 rounded hover:bg-purple-50 whitespace-nowrap"
+                                            >
+                                                병합된 이슈 보기
+                                            </a>
                                         )}
                                     </div>
                                 </td>
