@@ -7,16 +7,21 @@
 
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sendAdminNotification } from '@/lib/email'
+import { getSafetyBotEnabled } from '@/lib/safety'
 
 const PENDING_THRESHOLD = 10 // 검토 대기 10건 이상 시 알림
 
 /**
  * 검토 대기 댓글 건수 확인 및 알림 발송
  * 댓글/토론 댓글 작성 시 pendingReview=true일 때 호출
+ * 세이프티봇이 OFF 상태이면 알림 발송 스킵
  */
 export async function checkAndNotifyPendingReview(): Promise<void> {
     try {
         const admin = createSupabaseAdminClient()
+
+        const enabled = await getSafetyBotEnabled(admin)
+        if (!enabled) return
         
         const { count } = await admin
             .from('comments')

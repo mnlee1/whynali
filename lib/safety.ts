@@ -4,8 +4,8 @@
  * 세이프티 공통 모듈: 입력 검증, 정제, Rate Limit
  *
  * loadBannedWords: DB safety_rules에서 금칙어 목록을 로드한다.
- *   모든 쓰기 API(생성/수정/관리자 수정)에서 이 함수를 통해 동일한 금칙어 정책을 적용한다.
- * validateContent: 길이·금칙어 검사. extraBannedWords에 loadBannedWords 결과를 전달한다.
+ * getSafetyBotEnabled: admin_settings.safety_bot_enabled 값을 1분 TTL 캐시로 조회한다.
+ * validateContent: 길이·금칙어 검사. safetyBotEnabled=false이면 즉시 { valid: true } 반환.
  * checkRateLimit: 메모리 기반 Rate Limit. 정기적으로 만료된 항목 정리.
  */
 
@@ -25,6 +25,35 @@ type ContentType = keyof typeof LENGTH_LIMITS
 
 /* ── 3. DB 금칙어 로드 (공통) ── */
 import type { SupabaseClient } from '@supabase/supabase-js'
+
+/* ── 3-1. 세이프티봇 ON/OFF 1분 TTL 캐시 ── */
+const SAFETY_BOT_CACHE_TTL = 60 * 1000
+
+let safetyBotCache: { enabled: boolean; updatedAt: number } | null = null
+
+/**
+ * getSafetyBotEnabled - admin_settings 테이블에서 safety_bot_enabled 값을 1분 TTL 캐시로 조회
+ * 캐시 유효 시 DB 조회 없이 반환, 만료 시 재조회 후 갱신
+ * DB 조회 실패 시 이전 캐시값 유지 (기본값: true)
+ */
+export async function getSafetyBotEnabled(adminClient: SupabaseClient): Promise<boolean> {
+    const now = Date.now()
+    if (safetyBotCache && now - safetyBotCache.updatedAt < SAFETY_BOT_CACHE_TTL) {
+        return safetyBotCache.enabled
+    }
+    try {
+        const { data } = await adminClient
+            .from('admin_settings')
+            .select('value')
+            .eq('key', 'safety_bot_enabled')
+            .maybeSingle()
+        const enabled = data?.value !== 'false'
+        safetyBotCache = { enabled, updatedAt: now }
+        return enabled
+    } catch {
+        return safetyBotCache?.enabled ?? true
+    }
+}
 
 /**
  * loadBannedWords - DB safety_rules 테이블에서 금칙어 목록 로드
@@ -73,12 +102,18 @@ function createWordBoundaryRegex(word: string): RegExp {
    - valid: false + pendingReview 없음 → 즉시 거부 (400)
    - valid: false + pendingReview: true → 금칙어 포함, 검토 대기 저장 가능
    - valid: true → 정상 저장
-   - extraBannedWords: DB safety_rules에서 조회한 추가 금칙어 목록 */
+   - extraBannedWords: DB safety_rules에서 조회한 추가 금칙어 목록
+   - safetyBotEnabled: false이면 검사 없이 즉시 { valid: true } 반환 */
 export function validateContent(
     text: string,
     type: ContentType,
-    extraBannedWords: string[] = []
+    extraBannedWords: string[] = [],
+    safetyBotEnabled = true
 ): { valid: boolean; pendingReview?: boolean; reason?: string } {
+    if (!safetyBotEnabled) {
+        return { valid: true }
+    }
+
     const cleaned = sanitizeText(text)
 
     if (!cleaned) {
