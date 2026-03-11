@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatDate } from '@/lib/utils/format-date'
 import type { Comment } from '@/types'
+import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
 
 interface CommentsSectionProps {
     issueId?: string
@@ -90,6 +91,10 @@ export default function CommentsSection({
     /* 신고 상태 */
     const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
 
+    /* 세이프티봇 상태 */
+    const [safetyBotEnabled, setSafetyBotEnabled] = useState(true)
+    const [safetyModalOpen, setSafetyModalOpen] = useState(false)
+
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
     useEffect(() => {
         if (serverUserId) { setUserId(serverUserId); return }
@@ -99,14 +104,21 @@ export default function CommentsSection({
             .catch(() => {})
     }, [serverUserId])
 
+    /* 세이프티봇 설정 초기화 (localStorage) */
+    useEffect(() => {
+        const stored = localStorage.getItem('safety_bot_enabled')
+        setSafetyBotEnabled(stored !== 'false')
+    }, [])
+
     const contextParam = issueId
         ? `issue_id=${issueId}`
         : `discussion_topic_id=${discussionTopicId}`
 
     /* 베스트 댓글 조회 */
-    const loadBest = useCallback(async () => {
+    const loadBest = useCallback(async (includePending: boolean) => {
         try {
-            const res = await fetch(`/api/comments?${contextParam}&best=true`)
+            const pending = includePending ? '&includePending=true' : ''
+            const res = await fetch(`/api/comments?${contextParam}&best=true${pending}`)
             const json = await res.json()
             if (res.ok) setBestComments(json.data ?? [])
         } catch { /* 베스트 조회 실패는 무시 */ }
@@ -116,11 +128,13 @@ export default function CommentsSection({
     const loadComments = useCallback(async (
         currentOffset: number,
         append: boolean,
-        currentSort: SortOption
+        currentSort: SortOption,
+        includePending: boolean
     ) => {
         try {
+            const pending = includePending ? '&includePending=true' : ''
             const res = await fetch(
-                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=${currentSort}`
+                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=${currentSort}${pending}`
             )
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -136,23 +150,32 @@ export default function CommentsSection({
 
     useEffect(() => {
         setLoading(true)
-        loadBest()
-        loadComments(0, false, sort)
-    }, [loadBest, loadComments, sort])
+        const includePending = !safetyBotEnabled
+        loadBest(includePending)
+        loadComments(0, false, sort, includePending)
+    }, [loadBest, loadComments, sort, safetyBotEnabled])
 
     const handleSortChange = (newSort: SortOption) => {
         if (newSort === sort) return
         setSort(newSort)
         setOffset(0)
         setLoading(true)
-        loadComments(0, false, newSort)
+        loadComments(0, false, newSort, !safetyBotEnabled)
     }
 
     const handleLoadMore = () => {
         const next = offset + PAGE_SIZE
         setOffset(next)
         setLoadingMore(true)
-        loadComments(next, true, sort)
+        loadComments(next, true, sort, !safetyBotEnabled)
+    }
+
+    const handleSafetyBotConfirm = (enabled: boolean) => {
+        setSafetyBotEnabled(enabled)
+        setOffset(0)
+        setLoading(true)
+        loadBest(!enabled)
+        loadComments(0, false, sort, !enabled)
     }
 
     /* Rate Limit 카운트다운 */
@@ -220,8 +243,8 @@ export default function CommentsSection({
                 return
             }
             setOffset(0)
-            loadBest()
-            await loadComments(0, false, sort)
+            loadBest(!safetyBotEnabled)
+            await loadComments(0, false, sort, !safetyBotEnabled)
         } catch {
             setWriteError('네트워크 오류가 발생했습니다. 다시 시도해 주세요.')
         } finally {
@@ -522,6 +545,27 @@ export default function CommentsSection({
                         ))}
                     </div>
                 </div>
+
+                {/* 세이프티봇 안내 바 */}
+                <div className="flex items-center justify-between px-3 py-2 mb-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-xs text-gray-500">
+                        <span className="mr-1">🛡</span>
+                        세이프티봇이 욕설, 비하 표현 등의 댓글을 가려드려요.
+                    </p>
+                    <button
+                        onClick={() => setSafetyModalOpen(true)}
+                        className="text-xs text-gray-500 hover:text-gray-700 border border-gray-300 rounded px-2 py-0.5 shrink-0 ml-2 transition-colors hover:border-gray-400"
+                    >
+                        설정
+                    </button>
+                </div>
+
+                {safetyModalOpen && (
+                    <SafetyBotSettingModal
+                        onClose={() => setSafetyModalOpen(false)}
+                        onConfirm={handleSafetyBotConfirm}
+                    />
+                )}
 
                 {/* 댓글 목록 */}
                 {comments.length === 0 ? (

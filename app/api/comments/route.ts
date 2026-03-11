@@ -27,6 +27,7 @@ async function getUserLikesMap(
 /* GET /api/comments?issue_id=&limit=&offset=&sort=latest|likes|dislikes&best=true */
 /* GET /api/comments?discussion_topic_id=&limit=&offset=&sort=latest|likes|dislikes */
 /* GET /api/comments?issue_id=&parent_id= — 특정 댓글의 답글 목록 */
+/* GET /api/comments?...&includePending=true — 세이프티봇 OFF 시 pending_review 댓글도 포함 */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
@@ -38,6 +39,8 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') ?? 'latest'
     /* best=true: score(좋아요-싫어요) 상위 3개만 반환 (베스트 댓글 영역용) */
     const best = searchParams.get('best') === 'true'
+    /* includePending=true: 세이프티봇 OFF 시 클라이언트 요청으로 pending_review 포함 */
+    const includePending = searchParams.get('includePending') === 'true'
 
     if (!issue_id && !discussion_topic_id) {
         return NextResponse.json(
@@ -56,8 +59,14 @@ export async function GET(request: NextRequest) {
     let query = admin
         .from('comments')
         .select('*, users(display_name)', { count: 'exact' })
-        .eq('visibility', 'public')
         .order(orderColumn, { ascending: false })
+
+    /* includePending=true이면 public + pending_review 모두 조회, 기본은 public만 */
+    if (includePending) {
+        query = query.in('visibility', ['public', 'pending_review'])
+    } else {
+        query = query.eq('visibility', 'public')
+    }
 
     /* parent_id가 있으면 해당 댓글의 답글만, 없으면 최상위 댓글만 조회 */
     if (parent_id) {
