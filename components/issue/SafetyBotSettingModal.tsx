@@ -56,7 +56,7 @@ export default function SafetyBotSettingModal({ onClose, onConfirm }: SafetyBotS
                 <div className="px-5 py-5 space-y-5">
                     <p className="text-sm text-gray-600 leading-relaxed">{description}</p>
 
-                    {/* 스위치 버튼 */}
+                    {/* 슬라이딩 토글 스위치 */}
                     <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-700">세이프티봇 설정</span>
                         <button
@@ -64,13 +64,26 @@ export default function SafetyBotSettingModal({ onClose, onConfirm }: SafetyBotS
                             aria-checked={enabled}
                             onClick={() => setEnabled((v) => !v)}
                             className={[
-                                'px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors',
-                                enabled
-                                    ? 'bg-neutral-900 text-white border-neutral-900'
-                                    : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400',
+                                'relative flex items-center w-16 h-8 rounded-full transition-colors duration-200 focus:outline-none',
+                                enabled ? 'bg-emerald-400' : 'bg-gray-200',
                             ].join(' ')}
                         >
-                            {enabled ? 'ON' : 'OFF'}
+                            {/* 레이블 텍스트 */}
+                            <span
+                                className={[
+                                    'absolute text-[10px] font-bold transition-all duration-200 select-none',
+                                    enabled ? 'left-2.5 text-white' : 'right-2 text-gray-400',
+                                ].join(' ')}
+                            >
+                                {enabled ? 'ON' : 'OFF'}
+                            </span>
+                            {/* 원형 핸들 */}
+                            <span
+                                className={[
+                                    'absolute w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200',
+                                    enabled ? 'translate-x-9' : 'translate-x-1',
+                                ].join(' ')}
+                            />
                         </button>
                     </div>
                 </div>
