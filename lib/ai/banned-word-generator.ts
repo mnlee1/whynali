@@ -94,11 +94,14 @@ export async function generateBannedWords(
         return { inserted: 0, skipped: 0, words: [] }
     }
 
-    /* 기존 safety_rules에서 중복 단어 조회 */
+    /* 중복 단어 조회 — banned_word, excluded_word에 있는 단어는 재생성 차단 */
+    /* excluded_word: 관리자가 명시적으로 제외 처리한 단어이므로 재생성하지 않음 */
+    /* banned_word: 이미 수동 등록된 단어이므로 중복 추가하지 않음 */
     const { data: existing } = await adminClient
         .from('safety_rules')
         .select('value')
         .in('value', extracted)
+        .in('kind', ['banned_word', 'excluded_word'])
 
     const existingSet = new Set((existing ?? []).map((r: { value: string }) => r.value))
     const newWords = extracted.filter((w) => !existingSet.has(w))
