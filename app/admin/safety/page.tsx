@@ -24,6 +24,57 @@ interface ReportItem {
 
 type LeftTab = 'ai_banned_word' | 'excluded_word'
 
+const USE_MOCK = true
+
+const MOCK_AI_RULES: SafetyRule[] = [
+    { id: 'mock-1', kind: 'ai_banned_word', value: '개새끼', created_at: '2026-03-10T09:12:00Z' },
+    { id: 'mock-2', kind: 'ai_banned_word', value: '씨발놈', created_at: '2026-03-10T10:05:00Z' },
+    { id: 'mock-3', kind: 'ai_banned_word', value: '죽어버려', created_at: '2026-03-09T22:47:00Z' },
+    { id: 'mock-4', kind: 'ai_banned_word', value: '찐따', created_at: '2026-03-09T18:33:00Z' },
+    { id: 'mock-5', kind: 'ai_banned_word', value: '병신같은', created_at: '2026-03-08T14:20:00Z' },
+]
+
+const MOCK_EXCLUDED_RULES: SafetyRule[] = [
+    { id: 'mock-ex-1', kind: 'excluded_word', value: '찐따', created_at: '2026-03-09T20:00:00Z' },
+    { id: 'mock-ex-2', kind: 'excluded_word', value: '바보', created_at: '2026-03-08T11:00:00Z' },
+]
+
+const MOCK_REPORTS: ReportItem[] = [
+    {
+        id: 'report-1',
+        comment_id: 'cmt-1',
+        reason: '욕설/혐오',
+        status: '대기',
+        created_at: '2026-03-11T08:30:00Z',
+        comment_body: '진짜 개같은 새끼들만 모여있네 여기',
+        issue_id: 'issue-abc-123',
+        discussion_topic_id: null,
+        report_count: 3,
+    },
+    {
+        id: 'report-2',
+        comment_id: 'cmt-2',
+        reason: '스팸/광고',
+        status: '대기',
+        created_at: '2026-03-11T07:15:00Z',
+        comment_body: '카카오톡 오픈채팅 ㅇㅇ1234 들어오세요 무료 정보 드려요',
+        issue_id: null,
+        discussion_topic_id: 'topic-xyz-456',
+        report_count: 1,
+    },
+    {
+        id: 'report-3',
+        comment_id: 'cmt-3',
+        reason: '욕설/혐오',
+        status: '대기',
+        created_at: '2026-03-10T23:50:00Z',
+        comment_body: '이게 기사야? 기자새끼들 제발 좀 공부하고 써라',
+        issue_id: 'issue-def-789',
+        discussion_topic_id: null,
+        report_count: 2,
+    },
+]
+
 function formatDate(dateString: string): string {
     const d = new Date(dateString)
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -40,13 +91,13 @@ export default function AdminSafetyPage() {
     const [leftTab, setLeftTab] = useState<LeftTab>('ai_banned_word')
 
     /* AI 생성 금칙어 */
-    const [aiRules, setAiRules] = useState<SafetyRule[]>([])
-    const [aiLoading, setAiLoading] = useState(true)
+    const [aiRules, setAiRules] = useState<SafetyRule[]>(MOCK_AI_RULES)
+    const [aiLoading, setAiLoading] = useState(false)
     const [aiError, setAiError] = useState<string | null>(null)
 
     /* 제외 목록 */
-    const [excludedRules, setExcludedRules] = useState<SafetyRule[]>([])
-    const [excludedLoading, setExcludedLoading] = useState(true)
+    const [excludedRules, setExcludedRules] = useState<SafetyRule[]>(MOCK_EXCLUDED_RULES)
+    const [excludedLoading, setExcludedLoading] = useState(false)
     const [excludedError, setExcludedError] = useState<string | null>(null)
 
     /* kind 변경 공통 로딩 */
@@ -54,9 +105,9 @@ export default function AdminSafetyPage() {
     const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null)
 
     /* 신고 댓글 */
-    const [reports, setReports] = useState<ReportItem[]>([])
-    const [reportsTotal, setReportsTotal] = useState(0)
-    const [reportsLoading, setReportsLoading] = useState(true)
+    const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS)
+    const [reportsTotal, setReportsTotal] = useState(MOCK_REPORTS.length)
+    const [reportsLoading, setReportsLoading] = useState(false)
     const [reportsError, setReportsError] = useState<string | null>(null)
     const [processingReportId, setProcessingReportId] = useState<string | null>(null)
 
@@ -107,6 +158,7 @@ export default function AdminSafetyPage() {
     }, [])
 
     useEffect(() => {
+        if (USE_MOCK) { setLastRefreshedAt(new Date()); return }
         loadAiRules()
         loadExcludedRules()
         loadReports()
@@ -114,6 +166,7 @@ export default function AdminSafetyPage() {
     }, [loadAiRules, loadExcludedRules, loadReports])
 
     const handleRefresh = () => {
+        if (USE_MOCK) { setLastRefreshedAt(new Date()); return }
         loadAiRules()
         loadExcludedRules()
         loadReports()
@@ -126,6 +179,20 @@ export default function AdminSafetyPage() {
         newKind: 'excluded_word' | 'ai_banned_word',
         fromKind: 'ai_banned_word' | 'excluded_word'
     ) => {
+        if (USE_MOCK) {
+            if (fromKind === 'ai_banned_word') {
+                const item = aiRules.find((r) => r.id === id)
+                if (!item) return
+                setAiRules((prev) => prev.filter((r) => r.id !== id))
+                setExcludedRules((prev) => [{ ...item, kind: 'excluded_word' }, ...prev])
+            } else {
+                const item = excludedRules.find((r) => r.id === id)
+                if (!item) return
+                setExcludedRules((prev) => prev.filter((r) => r.id !== id))
+                setAiRules((prev) => [{ ...item, kind: 'ai_banned_word' }, ...prev])
+            }
+            return
+        }
         setChangingKindId(id)
         try {
             const res = await fetch(`/api/admin/safety/rules/${id}`, {
@@ -153,6 +220,10 @@ export default function AdminSafetyPage() {
     /* ── 삭제 ── */
     const handleDeleteRule = async (id: string, value: string) => {
         if (!window.confirm(`"${value}" 항목을 삭제하시겠습니까?`)) return
+        if (USE_MOCK) {
+            setExcludedRules((prev) => prev.filter((r) => r.id !== id))
+            return
+        }
         setDeletingRuleId(id)
         try {
             const res = await fetch(`/api/admin/safety/rules?id=${id}`, { method: 'DELETE' })
@@ -169,6 +240,11 @@ export default function AdminSafetyPage() {
     /* ── 신고 처리 ── */
     const handleReportAction = async (reportId: string, action: '처리완료' | '무시') => {
         if (action === '처리완료' && !window.confirm('댓글을 삭제 처리하시겠습니까?')) return
+        if (USE_MOCK) {
+            setReports((prev) => prev.filter((r) => r.id !== reportId))
+            setReportsTotal((prev) => Math.max(0, prev - 1))
+            return
+        }
         setProcessingReportId(reportId)
         try {
             const res = await fetch(`/api/admin/reports/${reportId}`, {
@@ -229,7 +305,7 @@ export default function AdminSafetyPage() {
         <div>
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-                <h1 className="text-2xl font-bold">세이프티 관리</h1>
+                <h1 className="text-2xl font-bold">세이프티</h1>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
                         <span className="text-xs text-gray-400">
