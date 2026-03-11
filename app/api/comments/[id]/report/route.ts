@@ -1,51 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { supabaseAdmin } from '@/lib/supabase/server'
 
-const VALID_REASONS = ['스팸', '욕설/혐오', '허위정보', '기타'] as const
+export const dynamic = 'force-dynamic'
+
+const VALID_REASONS = ['욕설/혐오', '스팸/광고', '허위정보', '기타'] as const
 type ReportReason = (typeof VALID_REASONS)[number]
 
-/* POST /api/comments/:id/report */
+/* POST /api/comments/[id]/report — 특정 댓글 신고 */
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { id: commentId } = await params
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+        return NextResponse.json(
+            { error: 'UNAUTHORIZED', message: '로그인이 필요합니다.' },
+            { status: 401 }
+        )
     }
 
-    const body = await request.json()
-    const reason: ReportReason = body.reason
-    if (!VALID_REASONS.includes(reason)) {
-        return NextResponse.json({ error: '올바른 신고 사유를 선택해 주세요.' }, { status: 400 })
+    const { id: comment_id } = await params
+
+    let body: { reason?: string }
+    try {
+        body = await request.json()
+    } catch {
+        return NextResponse.json(
+            { error: 'BAD_REQUEST', message: '요청 본문을 파싱할 수 없습니다.' },
+            { status: 400 }
+        )
     }
 
-    const admin = createSupabaseAdminClient()
+    const { reason } = body
 
-    const { data: comment } = await admin
+    if (!reason) {
+        return NextResponse.json(
+            { error: 'BAD_REQUEST', message: 'reason은 필수입니다.' },
+            { status: 400 }
+        )
+    }
+
+    if (!VALID_REASONS.includes(reason as ReportReason)) {
+        return NextResponse.json(
+            { error: 'BAD_REQUEST', message: `reason은 ${VALID_REASONS.join(' | ')} 중 하나여야 합니다.` },
+            { status: 400 }
+        )
+    }
+
+    /* 댓글 존재 여부 확인 */
+    const { data: comment } = await supabaseAdmin
         .from('comments')
         .select('id')
-        .eq('id', commentId)
+        .eq('id', comment_id)
         .neq('visibility', 'deleted')
         .maybeSingle()
 
     if (!comment) {
-        return NextResponse.json({ error: '댓글을 찾을 수 없습니다.' }, { status: 404 })
+        return NextResponse.json(
+            { error: 'NOT_FOUND', message: '존재하지 않는 댓글입니다.' },
+            { status: 404 }
+        )
     }
 
-    const { error } = await admin
+    /* reports INSERT — UNIQUE(comment_id, reporter_id)로 중복 신고 방지 */
+    const { error: insertError } = await supabaseAdmin
         .from('reports')
-        .insert({ comment_id: commentId, reporter_id: user.id, reason })
+        .insert({ comment_id, reporter_id: user.id, reason, status: '대기' })
 
-    if (error) {
-        if (error.code === '23505') {
-            return NextResponse.json({ error: '이미 신고한 댓글입니다.' }, { status: 409 })
+    if (insertError) {
+        if (insertError.code === '23505') {
+            return NextResponse.json(
+                { error: 'DUPLICATE', message: '이미 신고한 댓글입니다.' },
+                { status: 409 }
+            )
         }
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json(
+            { error: 'SERVER_ERROR', message: '신고 처리 중 오류가 발생했습니다.' },
+            { status: 500 }
+        )
     }
 
-    return NextResponse.json({ success: true }, { status: 201 })
+    return NextResponse.json({ message: '신고가 접수되었습니다.' }, { status: 201 })
 }
