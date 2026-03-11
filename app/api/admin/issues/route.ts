@@ -44,15 +44,13 @@ export async function GET(request: NextRequest) {
             .from('issues')
             .select('*', { count: 'exact' })
             .not('approval_status', 'is', null)
+            .neq('approval_status', '병합됨')
             .order('heat_index', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false })
 
         // approval_status 필터 적용
         if (filterStatus) {
             query = query.eq('approval_status', filterStatus)
-        } else {
-            // 필터가 없을 때는 병합된 이슈 제외
-            query = query.neq('approval_status', '병합됨')
         }
 
         // approval_type 필터 적용
