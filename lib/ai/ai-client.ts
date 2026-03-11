@@ -6,15 +6,20 @@
  * 환경변수에 따라 적절한 AI 프로바이더를 생성합니다.
  * 프로바이더 교체 시 AI_PROVIDER 환경변수만 변경하면 됩니다.
  *
+ * Lazy initialization을 사용하여 빌드 타임에 환경변수가 필요하지 않도록 합니다.
+ *
  * 사용 예시:
  * ```typescript
- * import { aiClient } from '@/lib/ai/ai-client'
- * const response = await aiClient.complete('안녕하세요')
+ * import { getAIClient } from '@/lib/ai/ai-client'
+ * const client = getAIClient()
+ * const response = await client.complete('안녕하세요')
  * ```
  */
 
 import { GroqProvider } from './groq-provider'
 import type { AIProvider } from './ai-provider.interface'
+
+let cachedProvider: AIProvider | null = null
 
 function createProvider(): AIProvider {
     const providerName = process.env.AI_PROVIDER ?? 'groq'
@@ -29,4 +34,19 @@ function createProvider(): AIProvider {
     }
 }
 
-export const aiClient: AIProvider = createProvider()
+/**
+ * AI 클라이언트를 가져옵니다 (lazy initialization)
+ */
+export function getAIClient(): AIProvider {
+    if (!cachedProvider) {
+        cachedProvider = createProvider()
+    }
+    return cachedProvider
+}
+
+// 하위 호환성을 위한 deprecated export
+export const aiClient: AIProvider = new Proxy({} as AIProvider, {
+    get(target, prop) {
+        return getAIClient()[prop as keyof AIProvider]
+    }
+})
