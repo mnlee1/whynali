@@ -549,8 +549,10 @@ export default function CommentsSection({
                 {/* 세이프티봇 안내 바 */}
                 <div className="flex items-center justify-between px-3 py-2 mb-3 bg-gray-50 border border-gray-200 rounded-lg">
                     <p className="text-xs text-gray-500">
-                        <span className="mr-1">🛡</span>
-                        세이프티봇이 욕설, 비하 표현 등의 댓글을 가려드려요.
+                        <span className="mr-1">🤖</span>
+                        {safetyBotEnabled
+                            ? '세이프티봇이 불쾌한 댓글로부터 보호하고 있어요.'
+                            : '세이프티봇이 꺼져 있어요. 모든 댓글이 표시됩니다.'}
                     </p>
                     <button
                         onClick={() => setSafetyModalOpen(true)}
