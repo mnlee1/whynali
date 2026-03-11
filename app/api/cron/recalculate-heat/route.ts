@@ -23,13 +23,28 @@ import { recalculateHeatForIssue, calculateRecentHeat } from '@/lib/analysis/hea
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
+import type { IssueCategory } from '@/lib/config/categories'
 import {
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
+    AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
+
+/**
+ * shouldAutoApprove - 자동 승인 조건 판단
+ * 
+ * 화력이 임계값 이상이고 허용된 카테고리인지 확인합니다.
+ * 
+ * @param category 이슈 카테고리
+ * @param heatIndex 화력 지수
+ * @returns 자동 승인 가능 여부
+ */
+function shouldAutoApprove(category: IssueCategory, heatIndex: number): boolean {
+    return heatIndex >= AUTO_APPROVE_THRESHOLD && AUTO_APPROVE_CATEGORIES.includes(category)
+}
 
 export async function GET(request: NextRequest) {
     const authError = verifyCronRequest(request)
@@ -47,7 +62,7 @@ export async function GET(request: NextRequest) {
             // 점화 상태 이슈 (최대 30개, 반려 이슈 우선)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '점화')
                 .in('approval_status', ['승인', '대기', '반려'])
                 .order('approval_status', { ascending: false }) // 반려(ㅂ) > 승인(ㅅ) > 대기(ㄷ)
@@ -57,7 +72,7 @@ export async function GET(request: NextRequest) {
             // 논란중 상태 이슈 (최대 15개)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '논란중')
                 .in('approval_status', ['승인', '대기', '반려'])
                 .order('updated_at', { ascending: true })
@@ -66,7 +81,7 @@ export async function GET(request: NextRequest) {
             // 최근 업데이트된 이슈 (최대 15개, 점화/논란중 제외)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .in('approval_status', ['승인', '대기', '반려'])
                 .not('status', 'in', '(점화,논란중)')
                 .order('updated_at', { ascending: false })
@@ -131,9 +146,16 @@ export async function GET(request: NextRequest) {
                          * 대기 이슈: approval_status 자동 전환.
                          * 승인된 이슈는 화력 하락으로 반려 처리하지 않는다.
                          * 반려 시에도 approved_at을 설정하여 상태 전환 로직이 정상 작동하도록 함.
+                         * 
+                         * 자동 승인 조건:
+                         * 1. 화력 30점 이상
+                         * 2. 카테고리가 사회/기술/스포츠 중 하나
                          */
                         if (issue.approval_status === '대기') {
-                            if (heatIndex >= AUTO_APPROVE_THRESHOLD) {
+                            const category = issue.category as IssueCategory
+                            
+                            // 자동 승인: 화력 + 카테고리 모두 체크
+                            if (shouldAutoApprove(category, heatIndex)) {
                                 await supabaseAdmin
                                     .from('issues')
                                     .update({
@@ -143,9 +165,10 @@ export async function GET(request: NextRequest) {
                                         approved_at: new Date().toISOString(),
                                     })
                                     .eq('id', issue.id)
-                                result.statusChanged = '대기 → 승인'
+                                result.statusChanged = '대기 → 승인 (화력 ' + heatIndex + '점, ' + category + ')'
                                 return { ...result, autoApproved: 1, autoRejected: 0, statusTransitioned: 0 }
                             } else if (heatIndex < MIN_HEAT_TO_REGISTER) {
+                                // 자동 반려: 화력 미달
                                 await supabaseAdmin
                                     .from('issues')
                                     .update({ 
@@ -155,9 +178,10 @@ export async function GET(request: NextRequest) {
                                         approved_at: new Date().toISOString()
                                     })
                                     .eq('id', issue.id)
-                                result.statusChanged = '대기 → 반려'
+                                result.statusChanged = '대기 → 반려 (화력 ' + heatIndex + '점 미달)'
                                 return { ...result, autoApproved: 0, autoRejected: 1, statusTransitioned: 0 }
                             }
+                            // 그 외: 화력은 15-29점이지만 연예/정치 카테고리 → 대기 유지 (관리자 승인 필요)
                         }
 
                         /*

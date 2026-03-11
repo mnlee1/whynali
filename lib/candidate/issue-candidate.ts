@@ -310,16 +310,21 @@ async function linkCollections(
  * checkForDuplicateIssue - 중복 이슈 체크
  * 
  * 1단계: 정확한 제목 일치 체크
- * 2단계: AI 기반 유사 이슈 체크 (옵션)
+ * 2단계: AI 기반 유사 이슈 체크 (환경변수로 제어)
+ * 
+ * AI 중복 체크 활성화 시:
+ * - duplicate-checker.ts의 4단계 검증 실행
+ * - exact match → 키워드 필터 → 안전 필터 → AI 비교
+ * - AI 호출 실패 시 보수적으로 처리 (중복 아님으로 판정하고 계속 진행)
  */
 async function checkForDuplicateIssue(
     representativeTitle: string,
     since24h: string
 ): Promise<{ id: string; title: string; approval_status: string; heat_index: number | null; created_heat_index: number | null } | null> {
-    // AI 중복 체크는 lib/candidate/duplicate-checker.ts의 checkDuplicateIssue 사용
-    // TODO: 필요시 통합 검토
-    const enableAIDuplicateCheck = false  // 비활성화
+    // 환경변수로 AI 중복 체크 제어
+    const enableAIDuplicateCheck = process.env.ENABLE_AI_DUPLICATE_CHECK === 'true'
     
+    // 1단계: 정확한 제목 일치 체크
     const { data: exactMatch } = await supabaseAdmin
         .from('issues')
         .select('id, title, approval_status, heat_index, created_heat_index')
@@ -328,10 +333,37 @@ async function checkForDuplicateIssue(
         .limit(1)
 
     let existingIssue = exactMatch?.[0] ?? null
-
-    // AI 중복 체크 로직 제거 (lib/candidate/duplicate-checker.ts 사용 권장)
     
-    return existingIssue
+    if (existingIssue) {
+        return existingIssue
+    }
+
+    // 2단계: AI 중복 체크 (활성화된 경우)
+    if (enableAIDuplicateCheck) {
+        try {
+            const { checkDuplicateIssue } = await import('./duplicate-checker')
+            const duplicateResult = await checkDuplicateIssue(supabaseAdmin, representativeTitle)
+            
+            if (duplicateResult.isDuplicate && duplicateResult.existingIssue) {
+                console.log(
+                    `[AI 중복 감지] "${representativeTitle}" → "${duplicateResult.existingIssue.title}" ` +
+                    `(신뢰도: ${duplicateResult.confidence}%, 이유: ${duplicateResult.reason})`
+                )
+                
+                const { data: fullIssue } = await supabaseAdmin
+                    .from('issues')
+                    .select('id, title, approval_status, heat_index, created_heat_index')
+                    .eq('id', duplicateResult.existingIssue.id)
+                    .single()
+                
+                return fullIssue ?? null
+            }
+        } catch (error) {
+            console.error('[AI 중복 체크 에러] 보수적 처리 (중복 아님으로 계속 진행):', error)
+        }
+    }
+    
+    return null
 }
 
 /**
