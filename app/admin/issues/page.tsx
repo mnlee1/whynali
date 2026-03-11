@@ -807,7 +807,6 @@ export default function AdminIssuesPage() {
                         { value: '반려', label: '반려 전체' },
                         { value: '반려:auto', label: '자동 반려' },
                         { value: '반려:manual', label: '관리자 반려' },
-                        { value: '병합됨', label: '병합됨' },
                     ].map(({ value, label }) => (
                         <button
                             key={label}
