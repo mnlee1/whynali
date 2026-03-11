@@ -7,7 +7,7 @@ CREATE TABLE issues (
     title TEXT NOT NULL,
     description TEXT,
     status TEXT CHECK (status IN ('점화', '논란중', '종결')),
-    category TEXT CHECK (category IN ('연예', '스포츠', '정치', '사회', '기술')),
+    category TEXT CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계')),
     heat_index NUMERIC,
     approval_status TEXT CHECK (approval_status IN ('대기', '승인', '반려')),
     approved_at TIMESTAMPTZ,
@@ -104,7 +104,7 @@ CREATE TABLE news_data (
     link TEXT,
     source TEXT,
     published_at TIMESTAMPTZ,
-    category TEXT CHECK (category IN ('연예', '스포츠', '정치', '사회', '기술')),
+    category TEXT CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계')),
     issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -172,3 +172,20 @@ CREATE INDEX idx_admin_logs_admin_id ON admin_logs(admin_id);
 CREATE INDEX idx_admin_logs_target_type ON admin_logs(target_type);
 CREATE INDEX idx_ai_key_status_provider ON ai_key_status(provider);
 CREATE INDEX idx_ai_key_status_blocked_until ON ai_key_status(blocked_until);
+
+-- [마이그레이션] 기존 '기술' → 'IT과학' 일괄 변경
+-- Supabase 대시보드 > SQL Editor에서 직접 실행
+-- 
+-- 1. CHECK 제약 조건 먼저 삭제
+-- ALTER TABLE issues DROP CONSTRAINT IF EXISTS issues_category_check;
+-- ALTER TABLE news_data DROP CONSTRAINT IF EXISTS news_data_category_check;
+-- 
+-- 2. 데이터 변경
+-- UPDATE issues SET category = 'IT과학' WHERE category = '기술';
+-- UPDATE news_data SET category = 'IT과학' WHERE category = '기술';
+-- 
+-- 3. CHECK 제약 조건 재설정
+-- ALTER TABLE issues ADD CONSTRAINT issues_category_check 
+--   CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계'));
+-- ALTER TABLE news_data ADD CONSTRAINT news_data_category_check 
+--   CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계'));
