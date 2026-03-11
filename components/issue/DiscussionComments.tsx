@@ -4,10 +4,12 @@
  * components/issue/DiscussionComments.tsx
  *
  * 토론 주제 전용 댓글 컴포넌트.
- * CommentsSection과 동일한 구조이지만 철학적 관점 유도 UI 추가:
  * - 질문 스타터 칩 (클릭하면 textarea에 삽입)
  * - 토론 톤 안내 placeholder
- * - 베스트 댓글 상단, 정렬 옵션, 좋아요/싫어요 동일 적용
+ * - 공감/비공감 (낙관적 업데이트)
+ * - 답글(대댓글) 작성/조회/펼치기
+ * - 신고 드롭다운 (본인 의견 제외)
+ * - 세이프티봇 pending 처리
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -19,17 +21,14 @@ interface DiscussionCommentsProps {
     isClosed?: boolean
 }
 
-type SortOption = 'latest' | 'likes' | 'dislikes'
-type CommentWithLike = Comment & { userLikeType?: 'like' | 'dislike' | null }
+type CommentWithLike = Comment & {
+    userLikeType?: 'like' | 'dislike' | null
+    replyCount?: number
+}
 
 const PAGE_SIZE = 20
 const RATE_LIMIT_SECONDS = 60
-
-const SORT_LABELS: Record<SortOption, string> = {
-    latest: '최신순',
-    likes: '공감순',
-    dislikes: '비공감순',
-}
+const REPORT_REASONS = ['스팸', '욕설/혐오', '허위정보', '기타'] as const
 
 /* 클릭하면 textarea 앞부분에 삽입되는 질문 스타터 칩 */
 const STARTERS = [
@@ -63,11 +62,9 @@ export default function DiscussionComments({
     isClosed = false,
 }: DiscussionCommentsProps) {
     const [userId, setUserId] = useState<string | null>(serverUserId)
-    const [bestComments, setBestComments] = useState<CommentWithLike[]>([])
     const [comments, setComments] = useState<CommentWithLike[]>([])
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
-    const [sort, setSort] = useState<SortOption>('latest')
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -86,6 +83,18 @@ export default function DiscussionComments({
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [likingId, setLikingId] = useState<string | null>(null)
 
+    /* 답글 상태 */
+    const [replyToId, setReplyToId] = useState<string | null>(null)
+    const [replyDraft, setReplyDraft] = useState('')
+    const [submittingReply, setSubmittingReply] = useState(false)
+    const [replyError, setReplyError] = useState<string | null>(null)
+    const [repliesMap, setRepliesMap] = useState<Record<string, CommentWithLike[]>>({})
+    const [expandedRepliesIds, setExpandedRepliesIds] = useState<Set<string>>(new Set())
+    const [loadingRepliesIds, setLoadingRepliesIds] = useState<Set<string>>(new Set())
+
+    /* 신고 상태 */
+    const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
+
     useEffect(() => {
         if (serverUserId) { setUserId(serverUserId); return }
         fetch('/api/auth/me')
@@ -96,22 +105,10 @@ export default function DiscussionComments({
 
     const contextParam = `discussion_topic_id=${discussionTopicId}`
 
-    const loadBest = useCallback(async () => {
-        try {
-            const res = await fetch(`/api/comments?${contextParam}&best=true`)
-            const json = await res.json()
-            if (res.ok) setBestComments(json.data ?? [])
-        } catch { /* 무시 */ }
-    }, [contextParam])
-
-    const loadComments = useCallback(async (
-        currentOffset: number,
-        append: boolean,
-        currentSort: SortOption
-    ) => {
+    const loadComments = useCallback(async (currentOffset: number, append: boolean) => {
         try {
             const res = await fetch(
-                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=${currentSort}`
+                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=latest`
             )
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -127,23 +124,14 @@ export default function DiscussionComments({
 
     useEffect(() => {
         setLoading(true)
-        loadBest()
-        loadComments(0, false, sort)
-    }, [loadBest, loadComments, sort])
-
-    const handleSortChange = (newSort: SortOption) => {
-        if (newSort === sort) return
-        setSort(newSort)
-        setOffset(0)
-        setLoading(true)
-        loadComments(0, false, newSort)
-    }
+        loadComments(0, false)
+    }, [loadComments])
 
     const handleLoadMore = () => {
         const next = offset + PAGE_SIZE
         setOffset(next)
         setLoadingMore(true)
-        loadComments(next, true, sort)
+        loadComments(next, true)
     }
 
     const startRateLimitCountdown = useCallback(() => {
@@ -199,8 +187,7 @@ export default function DiscussionComments({
                 return
             }
             setOffset(0)
-            loadBest()
-            await loadComments(0, false, sort)
+            await loadComments(0, false)
         } catch {
             setWriteError('네트워크 오류가 발생했습니다. 다시 시도해 주세요.')
         } finally {
@@ -224,8 +211,12 @@ export default function DiscussionComments({
             if (!res.ok) throw new Error(json.error)
             setEditingId(null); setEditDraft('')
             const updatedBody = editDraft.trim()
-            setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c))
-            setBestComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c))
+            const updater = (prev: CommentWithLike[]) =>
+                prev.map((c) => c.id === commentId ? { ...c, body: updatedBody } : c)
+            setComments(updater)
+            setRepliesMap((prev) => Object.fromEntries(
+                Object.entries(prev).map(([pid, rs]) => [pid, updater(rs)])
+            ))
         } catch (e) {
             setError(e instanceof Error ? e.message : '수정 실패')
         } finally {
@@ -240,9 +231,24 @@ export default function DiscussionComments({
             const res = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setComments((prev) => prev.filter((c) => c.id !== commentId))
-            setBestComments((prev) => prev.filter((c) => c.id !== commentId))
-            setTotal((prev) => Math.max(0, prev - 1))
+
+            const isTopLevel = comments.some((c) => c.id === commentId)
+            if (isTopLevel) {
+                setComments((prev) => prev.filter((c) => c.id !== commentId))
+                setTotal((prev) => Math.max(0, prev - 1))
+            } else {
+                let parentId: string | null = null
+                for (const [pid, replies] of Object.entries(repliesMap)) {
+                    if (replies.some((r) => r.id === commentId)) { parentId = pid; break }
+                }
+                if (parentId) {
+                    const pid = parentId
+                    setRepliesMap((prev) => ({ ...prev, [pid]: prev[pid].filter((r) => r.id !== commentId) }))
+                    setComments((prev) => prev.map((c) =>
+                        c.id === pid ? { ...c, replyCount: Math.max(0, (c.replyCount ?? 0) - 1) } : c
+                    ))
+                }
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : '삭제 실패')
         } finally {
@@ -254,58 +260,32 @@ export default function DiscussionComments({
         if (!userId || likingId) return
         setLikingId(commentId)
 
-        // 현재 상태 저장 (롤백용)
-        const currentComments = [...comments]
-        const currentBestComments = [...bestComments]
+        const prevComments = [...comments]
+        const prevRepliesMap = { ...repliesMap }
 
-        // 낙관적 업데이트: 즉시 UI 반영
-        const optimisticUpdater = (prev: CommentWithLike[]) =>
-            prev.map((c) => {
+        const applyOptimistic = (list: CommentWithLike[]) =>
+            list.map((c) => {
                 if (c.id !== commentId) return c
-                
-                const currentType = c.userLikeType
-                let newLikeCount = c.like_count
-                let newDislikeCount = c.dislike_count
-                let newUserType: 'like' | 'dislike' | null = type
-
-                // 같은 타입 클릭 시 토글 (취소)
-                if (currentType === type) {
-                    newUserType = null
-                    if (type === 'like') {
-                        newLikeCount = Math.max(0, newLikeCount - 1)
-                    } else {
-                        newDislikeCount = Math.max(0, newDislikeCount - 1)
-                    }
+                const cur = c.userLikeType
+                let likes = c.like_count, dislikes = c.dislike_count
+                let newType: typeof cur = type
+                if (cur === type) {
+                    newType = null
+                    if (type === 'like') likes = Math.max(0, likes - 1)
+                    else dislikes = Math.max(0, dislikes - 1)
                 } else {
-                    // 다른 타입으로 변경
-                    if (currentType === 'like') {
-                        newLikeCount = Math.max(0, newLikeCount - 1)
-                        newDislikeCount = newDislikeCount + 1
-                    } else if (currentType === 'dislike') {
-                        newDislikeCount = Math.max(0, newDislikeCount - 1)
-                        newLikeCount = newLikeCount + 1
-                    } else {
-                        // 처음 클릭
-                        if (type === 'like') {
-                            newLikeCount = newLikeCount + 1
-                        } else {
-                            newDislikeCount = newDislikeCount + 1
-                        }
-                    }
+                    if (cur === 'like') { likes = Math.max(0, likes - 1); dislikes++ }
+                    else if (cur === 'dislike') { dislikes = Math.max(0, dislikes - 1); likes++ }
+                    else if (type === 'like') likes++
+                    else dislikes++
                 }
-
-                return {
-                    ...c,
-                    like_count: newLikeCount,
-                    dislike_count: newDislikeCount,
-                    userLikeType: newUserType
-                }
+                return { ...c, like_count: likes, dislike_count: dislikes, userLikeType: newType }
             })
 
-        setComments(optimisticUpdater)
-        setBestComments(optimisticUpdater)
-
-        // 낙관적 업데이트 후 즉시 버튼 활성화 (중복 클릭 방지를 위해 짧은 딜레이)
+        setComments(applyOptimistic)
+        setRepliesMap((prev) => Object.fromEntries(
+            Object.entries(prev).map(([pid, rs]) => [pid, applyOptimistic(rs)])
+        ))
         setTimeout(() => setLikingId(null), 300)
 
         try {
@@ -315,28 +295,108 @@ export default function DiscussionComments({
                 body: JSON.stringify({ type }),
             })
             const json = await res.json()
-            
             if (!res.ok) {
-                // 실패 시 롤백
-                setComments(currentComments)
-                setBestComments(currentBestComments)
+                setComments(prevComments)
+                setRepliesMap(prevRepliesMap)
                 return
             }
-
-            // 서버 응답으로 최종 확정
-            const serverUpdater = (prev: CommentWithLike[]) =>
-                prev.map((c) =>
+            const applyServer = (list: CommentWithLike[]) =>
+                list.map((c) =>
                     c.id === commentId
                         ? { ...c, like_count: json.like_count, dislike_count: json.dislike_count, userLikeType: json.userType }
                         : c
                 )
-            setComments(serverUpdater)
-            setBestComments(serverUpdater)
+            setComments(applyServer)
+            setRepliesMap((prev) => Object.fromEntries(
+                Object.entries(prev).map(([pid, rs]) => [pid, applyServer(rs)])
+            ))
         } catch {
-            // 네트워크 오류 시 롤백
-            setComments(currentComments)
-            setBestComments(currentBestComments)
+            setComments(prevComments)
+            setRepliesMap(prevRepliesMap)
         }
+    }
+
+    /* 답글 폼 토글 */
+    const handleReplyToggle = (commentId: string) => {
+        if (replyToId === commentId) {
+            setReplyToId(null)
+            setReplyDraft('')
+            setReplyError(null)
+        } else {
+            setReplyToId(commentId)
+            setReplyDraft('')
+            setReplyError(null)
+        }
+    }
+
+    /* 답글 제출 */
+    const handleReplySubmit = async (parentId: string) => {
+        if (!replyDraft.trim() || submittingReply) return
+        setSubmittingReply(true)
+        setReplyError(null)
+        try {
+            const res = await fetch('/api/comments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    issue_id: null,
+                    discussion_topic_id: discussionTopicId,
+                    parent_id: parentId,
+                    content: replyDraft.trim(),
+                }),
+            })
+            const json = await res.json()
+            if (res.status === 429) {
+                setReplyError(json.error ?? '잠시 후 다시 시도해 주세요.')
+                startRateLimitCountdown()
+                return
+            }
+            if (!res.ok) { setReplyError(json.error ?? '오류가 발생했습니다.'); return }
+            setReplyDraft('')
+            setReplyToId(null)
+            if (!json.pending && json.data) {
+                const newReply: CommentWithLike = { ...json.data, userLikeType: null, replyCount: 0 }
+                setRepliesMap((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), newReply] }))
+                setExpandedRepliesIds((prev) => new Set([...prev, parentId]))
+                setComments((prev) => prev.map((c) =>
+                    c.id === parentId ? { ...c, replyCount: (c.replyCount ?? 0) + 1 } : c
+                ))
+            }
+        } finally {
+            setSubmittingReply(false)
+        }
+    }
+
+    /* 답글 목록 토글 */
+    const handleToggleReplies = async (commentId: string) => {
+        if (expandedRepliesIds.has(commentId)) {
+            setExpandedRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
+            return
+        }
+        if (!repliesMap[commentId]) {
+            setLoadingRepliesIds((prev) => new Set([...prev, commentId]))
+            try {
+                const res = await fetch(`/api/comments?${contextParam}&parent_id=${commentId}&limit=50&offset=0`)
+                const json = await res.json()
+                if (res.ok) setRepliesMap((prev) => ({ ...prev, [commentId]: json.data ?? [] }))
+            } finally {
+                setLoadingRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
+            }
+        }
+        setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
+    }
+
+    /* 신고 */
+    const handleReport = async (commentId: string, reason: string) => {
+        if (reportedIds.has(commentId)) return
+        setReportedIds((prev) => new Set([...prev, commentId]))
+        try {
+            await fetch(`/api/comments/${commentId}/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
+            })
+        } catch { /* 신고 실패 시 상태 유지 */ }
     }
 
     if (loading) {
@@ -356,48 +416,9 @@ export default function DiscussionComments({
         <div>
             {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
-            {/* 베스트 의견 */}
-            {bestComments.length > 0 && (
-                <div className="mb-5">
-                    <p className="text-xs font-semibold text-purple-500 mb-2 uppercase tracking-wide">
-                        주목받는 의견
-                    </p>
-                    <ul className="space-y-2">
-                        {bestComments.map((c) => (
-                            <DiscussionCommentItem
-                                key={`best-${c.id}`}
-                                comment={c} userId={userId} isBest
-                                editingId={editingId} editDraft={editDraft}
-                                submittingEdit={submittingEdit} deletingId={deletingId} likingId={likingId}
-                                onEditStart={handleEditStart} onEditCancel={handleEditCancel}
-                                onEditSave={handleEditSave} onDelete={handleDelete}
-                                onLike={handleLike} setEditDraft={setEditDraft}
-                            />
-                        ))}
-                    </ul>
-                    <hr className="mt-4 border-purple-100" />
-                </div>
-            )}
-
-            {/* 정렬 + 총 개수 */}
-            <div className="flex items-center justify-between mb-3">
+            {/* 총 개수 */}
+            <div className="mb-3">
                 <p className="text-sm text-gray-500">의견 {total.toLocaleString()}개</p>
-                <div className="flex gap-1">
-                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => handleSortChange(s)}
-                            className={[
-                                'text-xs px-2.5 py-1 rounded border transition-colors',
-                                sort === s
-                                    ? 'border-purple-600 bg-purple-600 text-white'
-                                    : 'border-gray-200 text-gray-500 hover:border-purple-300',
-                            ].join(' ')}
-                        >
-                            {SORT_LABELS[s]}
-                        </button>
-                    ))}
-                </div>
             </div>
 
             {/* 의견 목록 */}
@@ -408,12 +429,33 @@ export default function DiscussionComments({
                     {comments.map((c) => (
                         <DiscussionCommentItem
                             key={c.id}
-                            comment={c} userId={userId}
-                            editingId={editingId} editDraft={editDraft}
-                            submittingEdit={submittingEdit} deletingId={deletingId} likingId={likingId}
-                            onEditStart={handleEditStart} onEditCancel={handleEditCancel}
-                            onEditSave={handleEditSave} onDelete={handleDelete}
-                            onLike={handleLike} setEditDraft={setEditDraft}
+                            comment={c}
+                            userId={userId}
+                            editingId={editingId}
+                            editDraft={editDraft}
+                            submittingEdit={submittingEdit}
+                            deletingId={deletingId}
+                            likingId={likingId}
+                            replyToId={replyToId}
+                            replyDraft={replyDraft}
+                            submittingReply={submittingReply}
+                            replyError={replyError}
+                            rateLimitCountdown={rateLimitCountdown}
+                            replies={repliesMap[c.id]}
+                            repliesExpanded={expandedRepliesIds.has(c.id)}
+                            repliesLoading={loadingRepliesIds.has(c.id)}
+                            reportedIds={reportedIds}
+                            onEditStart={handleEditStart}
+                            onEditCancel={handleEditCancel}
+                            onEditSave={handleEditSave}
+                            onDelete={handleDelete}
+                            onLike={handleLike}
+                            onReplyToggle={handleReplyToggle}
+                            onReplyDraftChange={setReplyDraft}
+                            onReplySubmit={handleReplySubmit}
+                            onToggleReplies={handleToggleReplies}
+                            onReport={handleReport}
+                            setEditDraft={setEditDraft}
                         />
                     ))}
                 </ul>
@@ -519,47 +561,131 @@ export default function DiscussionComments({
 interface DiscussionCommentItemProps {
     comment: CommentWithLike
     userId: string | null
-    isBest?: boolean
+    isReply?: boolean
     editingId: string | null
     editDraft: string
     submittingEdit: boolean
     deletingId: string | null
     likingId: string | null
+    replyToId?: string | null
+    replyDraft?: string
+    submittingReply?: boolean
+    replyError?: string | null
+    rateLimitCountdown?: number
+    replies?: CommentWithLike[]
+    repliesExpanded?: boolean
+    repliesLoading?: boolean
+    reportedIds: Set<string>
     onEditStart: (c: Comment) => void
     onEditCancel: () => void
     onEditSave: (id: string) => void
     onDelete: (id: string) => void
     onLike: (id: string, type: 'like' | 'dislike') => void
+    onReplyToggle?: (id: string) => void
+    onReplyDraftChange?: (v: string) => void
+    onReplySubmit?: (parentId: string) => void
+    onToggleReplies?: (id: string) => void
+    onReport: (id: string, reason: string) => void
     setEditDraft: (v: string) => void
 }
 
 function DiscussionCommentItem({
-    comment, userId, isBest,
+    comment, userId, isReply,
     editingId, editDraft, submittingEdit, deletingId, likingId,
-    onEditStart, onEditCancel, onEditSave, onDelete, onLike, setEditDraft,
+    replyToId, replyDraft, submittingReply, replyError, rateLimitCountdown,
+    replies, repliesExpanded, repliesLoading,
+    reportedIds,
+    onEditStart, onEditCancel, onEditSave, onDelete, onLike,
+    onReplyToggle, onReplyDraftChange, onReplySubmit, onToggleReplies,
+    onReport, setEditDraft,
 }: DiscussionCommentItemProps) {
+    const [menuOpen, setMenuOpen] = useState(false)
+    const [showReasons, setShowReasons] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    const closeMenu = () => { setMenuOpen(false); setShowReasons(false) }
+
+    useEffect(() => {
+        if (!menuOpen) { setShowReasons(false); return }
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) closeMenu()
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
     const isDeleting = deletingId === comment.id
     const isLiking = likingId === comment.id
     const myType = comment.userLikeType ?? null
+    const replyCount = comment.replyCount ?? 0
+    const isReplyFormOpen = replyToId === comment.id
+    const hasReplies = replyCount > 0 || ((replies?.length ?? 0) > 0)
+    const isReported = reportedIds.has(comment.id)
 
     return (
-        <li className={[
-            'py-4',
-            isBest ? 'px-3 bg-purple-50 rounded-lg border border-purple-100' : '',
-        ].join(' ')}>
+        <li className={['py-4', isReply ? 'py-3' : ''].join(' ')}>
             <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-gray-500">{authorLabel(comment)}</span>
                 <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
                     {isMine && !isEditing && (
                         <div className="flex gap-2">
-                            <button onClick={() => onEditStart(comment)} className="text-xs text-gray-500 hover:text-gray-700">수정</button>
-                            <button onClick={() => onDelete(comment.id)} disabled={isDeleting}
-                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50">
+                            <button
+                                onClick={() => onEditStart(comment)}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                                수정
+                            </button>
+                            <button
+                                onClick={() => onDelete(comment.id)}
+                                disabled={isDeleting}
+                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                            >
                                 {isDeleting ? '삭제 중...' : '삭제'}
                             </button>
+                        </div>
+                    )}
+                    {/* 신고 ⋮ 드롭다운 (타인 의견 + 로그인 시) */}
+                    {!isMine && userId && (
+                        <div className="relative" ref={menuRef}>
+                            <button
+                                onClick={() => setMenuOpen((v) => !v)}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
+                                aria-label="더보기"
+                            >
+                                ⋮
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 top-5 z-20 bg-white border border-gray-200 rounded-lg shadow-md py-1 min-w-[120px]">
+                                    {isReported ? (
+                                        <span className="block px-3 py-1.5 text-xs text-gray-400">신고완료</span>
+                                    ) : !showReasons ? (
+                                        <button
+                                            onClick={() => setShowReasons(true)}
+                                            className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                                        >
+                                            신고
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <span className="block px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100">
+                                                신고 사유 선택
+                                            </span>
+                                            {REPORT_REASONS.map((reason) => (
+                                                <button
+                                                    key={reason}
+                                                    onClick={() => { onReport(comment.id, reason); closeMenu() }}
+                                                    className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    {reason}
+                                                </button>
+                                            ))}
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -574,47 +700,139 @@ function DiscussionCommentItem({
                         className="w-full px-3 py-2 text-sm border border-purple-200 rounded resize-none focus:outline-none focus:border-purple-400"
                     />
                     <div className="flex gap-2 justify-end">
-                        <button onClick={onEditCancel}
-                            className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
+                        <button
+                            onClick={onEditCancel}
+                            className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                        >
                             취소
                         </button>
-                        <button onClick={() => onEditSave(comment.id)} disabled={!editDraft.trim() || submittingEdit}
-                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50">
+                        <button
+                            onClick={() => onEditSave(comment.id)}
+                            disabled={!editDraft.trim() || submittingEdit}
+                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                        >
                             {submittingEdit ? '저장 중...' : '저장'}
                         </button>
                     </div>
                 </div>
             ) : (
-                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{comment.body}</p>
+                <p className={[
+                    'text-gray-800 leading-relaxed whitespace-pre-wrap',
+                    isReply ? 'text-xs' : 'text-sm',
+                ].join(' ')}>
+                    {comment.body}
+                </p>
             )}
 
+            {/* 답글 달기(좌) + 공감/비공감(우) */}
             {!isEditing && (
-                <div className="flex items-center gap-2 mt-2">
-                    <button
-                        onClick={() => onLike(comment.id, 'like')}
-                        disabled={!userId || isLiking}
-                        className={[
-                            'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
-                            myType === 'like' ? 'border-purple-400 bg-purple-50 text-purple-600 font-medium' : 'border-gray-200 text-gray-500 hover:border-purple-300',
-                            (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-                        ].join(' ')}
-                    >
-                        <span>👍</span>
-                        <span>공감 {comment.like_count}</span>
-                    </button>
-                    <button
-                        onClick={() => onLike(comment.id, 'dislike')}
-                        disabled={!userId || isLiking}
-                        className={[
-                            'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
-                            myType === 'dislike' ? 'border-red-400 bg-red-50 text-red-500 font-medium' : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-                        ].join(' ')}
-                    >
-                        <span>👎</span>
-                        <span>비공감 {comment.dislike_count}</span>
-                    </button>
+                <div className="flex items-center justify-between mt-2">
+                    <div>
+                        {!isReply && userId && onReplyToggle && (
+                            <button
+                                onClick={() => onReplyToggle(comment.id)}
+                                className="text-xs text-gray-400 hover:text-purple-500"
+                            >
+                                {isReplyFormOpen ? '취소' : '답글 달기'}
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => onLike(comment.id, 'like')}
+                            disabled={!userId || isLiking}
+                            className={[
+                                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
+                                myType === 'like'
+                                    ? 'border-purple-400 bg-purple-50 text-purple-600 font-medium'
+                                    : 'border-gray-200 text-gray-500 hover:border-purple-300',
+                                (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                            ].join(' ')}
+                        >
+                            <span>👍</span>
+                            <span>공감 {comment.like_count}</span>
+                        </button>
+                        <button
+                            onClick={() => onLike(comment.id, 'dislike')}
+                            disabled={!userId || isLiking}
+                            className={[
+                                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
+                                myType === 'dislike'
+                                    ? 'border-red-400 bg-red-50 text-red-500 font-medium'
+                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
+                                (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                            ].join(' ')}
+                        >
+                            <span>👎</span>
+                            <span>비공감 {comment.dislike_count}</span>
+                        </button>
+                    </div>
                 </div>
+            )}
+
+            {/* 인라인 답글 작성 폼 */}
+            {!isReply && isReplyFormOpen && onReplyDraftChange && onReplySubmit && (
+                <div className="mt-3 pl-4 border-l-2 border-purple-100">
+                    {replyError && <p className="text-xs text-red-500 mb-1">{replyError}</p>}
+                    <textarea
+                        value={replyDraft ?? ''}
+                        onChange={(e) => onReplyDraftChange(e.target.value)}
+                        placeholder="답글을 입력하세요..."
+                        rows={2}
+                        className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg resize-none focus:outline-none focus:border-purple-400"
+                    />
+                    <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs text-gray-400">{(replyDraft ?? '').length} / 1000</span>
+                        <button
+                            onClick={() => onReplySubmit(comment.id)}
+                            disabled={!replyDraft?.trim() || submittingReply || (rateLimitCountdown ?? 0) > 0}
+                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {submittingReply ? '등록 중...' : '등록'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* 답글 펼치기/접기 버튼 */}
+            {!isReply && hasReplies && onToggleReplies && (
+                <button
+                    onClick={() => onToggleReplies(comment.id)}
+                    className="mt-2 text-xs text-purple-500 hover:text-purple-700"
+                >
+                    {repliesLoading
+                        ? '불러오는 중...'
+                        : repliesExpanded
+                            ? '답글 접기'
+                            : `답글 ${replyCount}개 보기`}
+                </button>
+            )}
+
+            {/* 답글 목록 */}
+            {!isReply && repliesExpanded && replies && replies.length > 0 && (
+                <ul className="mt-2 pl-8 border-l border-purple-100 divide-y divide-purple-50">
+                    {replies.map((reply) => (
+                        <DiscussionCommentItem
+                            key={reply.id}
+                            comment={reply}
+                            userId={userId}
+                            isReply
+                            editingId={editingId}
+                            editDraft={editDraft}
+                            submittingEdit={submittingEdit}
+                            deletingId={deletingId}
+                            likingId={likingId}
+                            reportedIds={reportedIds}
+                            onEditStart={onEditStart}
+                            onEditCancel={onEditCancel}
+                            onEditSave={onEditSave}
+                            onDelete={onDelete}
+                            onLike={onLike}
+                            onReport={onReport}
+                            setEditDraft={setEditDraft}
+                        />
+                    ))}
+                </ul>
             )}
         </li>
     )
