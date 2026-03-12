@@ -96,11 +96,20 @@ export default function AdminSafetyPage() {
         try {
             const res = await fetch('/api/admin/reports?status=대기')
             const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-            setReports(json.data ?? [])
-            setReportsTotal(json.total ?? 0)
+            if (!res.ok) {
+                throw new Error(json.error ?? `HTTP ${res.status}: 신고 목록 조회 실패`)
+            }
+            if (!json.data || !Array.isArray(json.data)) {
+                console.warn('[safety] 신고 API 응답 구조 이상:', json)
+                setReportsError('API 응답 구조가 올바르지 않습니다.')
+                return
+            }
+            setReports(json.data)
+            setReportsTotal(json.total ?? json.data.length)
         } catch (e) {
-            setReportsError(e instanceof Error ? e.message : '조회 실패')
+            const errorMsg = e instanceof Error ? e.message : '신고 목록 조회 실패'
+            setReportsError(errorMsg)
+            console.error('[safety] loadReports 에러:', e)
         } finally {
             setReportsLoading(false)
         }
