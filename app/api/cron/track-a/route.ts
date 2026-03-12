@@ -43,6 +43,7 @@ interface AIVerificationResult {
     confidence: number
     reason: string
     searchKeyword: string
+    issueTitle: string  // 이슈 제목도 AI가 생성
 }
 
 /**
@@ -106,7 +107,7 @@ async function verifyIssueByAI(
     try {
         const titlesText = sampleTitles.slice(0, 5).map((t, i) => `${i + 1}. ${t}`).join('\n')
         
-        const prompt = `커뮤니티에서 급증한 키워드가 뉴스 이슈가 될 만한지 판단하고, 네이버 뉴스 검색용 키워드를 추출하세요.
+        const prompt = `커뮤니티에서 급증한 키워드가 뉴스 이슈가 될 만한지 판단하고, 법적으로 안전한 이슈 제목을 생성하세요.
 
 키워드: "${keyword}"
 관련 게시글:
@@ -117,13 +118,27 @@ ${titlesText}
 2. 단순 유행어/밈 → 이슈 아님 (예: "띵작", "레전드", "ㅋㅋㅋ")
 3. 스팸/홍보 → 이슈 아님
 4. 정보 가치 없는 반응 → 이슈 아님
+5. 스포츠 경기/대회 → 이슈 (예: "WBC 한국 경기", "손흥민 골")
+
+이슈 제목 생성 규칙 (법적 안전성 최우선):
+- 특정인 비방/명예훼손 금지: "OO 논란" 대신 "OO 관련 이슈" 사용
+- 단정적 표현 금지: "OO 사건", "OO 사고" 대신 "OO 관련 논의"
+- 스포츠 경기: "OO 경기", "OO 대회" (안전)
+- 일반 사건: "OO 관련 이슈", "OO 논의", "OO 화제"
+- 간결하게 15자 이내
+- 사실 확인 안 된 내용은 "OO 관련 논의" 형태로
+
+예시:
+- 좋음: "WBC 한국 경기", "무신사 관련 논의", "이재명 재판 화제"
+- 나쁨: "무신사 논란", "이재명 유죄", "OO 사기 사건"
 
 응답 형식 (JSON만):
 {
   "isIssue": true/false,
   "confidence": 0-100,
   "reason": "판단 이유 (한 줄)",
-  "searchKeyword": "네이버 뉴스 검색용 키워드 (이슈가 아니면 빈 문자열)"
+  "searchKeyword": "네이버 뉴스 검색용 키워드 (이슈가 아니면 빈 문자열)",
+  "issueTitle": "생성된 이슈 제목 (이슈가 아니면 빈 문자열)"
 }`
 
         const content = await callGroq(
@@ -131,7 +146,7 @@ ${titlesText}
             {
                 model: 'llama-3.1-8b-instant',
                 temperature: 0.2,
-                max_tokens: 200,
+                max_tokens: 300,  // 이슈 제목 추가로 토큰 늘림
             }
         )
         
@@ -141,7 +156,8 @@ ${titlesText}
                 isIssue: false, 
                 confidence: 0, 
                 reason: 'JSON 파싱 실패',
-                searchKeyword: ''
+                searchKeyword: '',
+                issueTitle: ''
             }
         }
         
@@ -150,6 +166,7 @@ ${titlesText}
             confidence: result.confidence,
             reason: result.reason,
             searchKeyword: result.searchKeyword || keyword,
+            issueTitle: result.issueTitle || `${keyword} 관련 이슈`,  // fallback
         }
         
     } catch (error) {
@@ -158,7 +175,8 @@ ${titlesText}
             isIssue: false, 
             confidence: 0, 
             reason: `에러: ${error}`,
-            searchKeyword: ''
+            searchKeyword: '',
+            issueTitle: ''
         }
     }
 }
@@ -239,6 +257,7 @@ async function processTrackA(): Promise<{ success: number; failed: number }> {
         }
         
         console.log(`  ✓ [AI 검증 통과] 신뢰도 ${aiResult.confidence}% - ${aiResult.reason}`)
+        console.log(`  이슈 제목: "${aiResult.issueTitle}"`)
         console.log(`  검색 키워드: "${aiResult.searchKeyword}"`)
         
         // 4-2. 네이버 뉴스 즉시 타겟 검색
@@ -252,8 +271,8 @@ async function processTrackA(): Promise<{ success: number; failed: number }> {
         
         console.log(`  ✓ [뉴스 발견] 네이버 뉴스 ${newsItems.length}건`)
         
-        // 4-3. 이슈 제목 생성 및 중복 체크
-        const issueTitle = `${burst.keyword} 관련 논란`
+        // 4-3. 중복 체크 (AI가 생성한 제목 사용)
+        const issueTitle = aiResult.issueTitle
         const duplicateCheck = await checkDuplicateIssue(supabaseAdmin, issueTitle)
         
         if (duplicateCheck.isDuplicate) {
@@ -304,7 +323,36 @@ async function processTrackA(): Promise<{ success: number; failed: number }> {
             .update({ issue_id: newIssue.id })
             .in('id', newsItems.map(n => n.id))
         
-        // 4-8. 화력 계산
+        // 4-8. 타임라인 자동 생성 (뉴스 기준)
+        // 가장 빠른 뉴스를 "발단"으로, 이후 뉴스들은 "전개"로
+        try {
+            const sortedNews = [...newsItems].sort((a, b) => 
+                new Date(a.published_at).getTime() - new Date(b.published_at).getTime()
+            )
+            
+            const timelinePoints = sortedNews.slice(0, 5).map((news, index) => ({
+                issue_id: newIssue.id,
+                occurred_at: news.published_at,
+                source_url: news.link,
+                stage: (index === 0 ? '발단' : '전개') as '발단' | '전개' | '파생' | '진정',
+            }))
+            
+            if (timelinePoints.length > 0) {
+                const { error: timelineError } = await supabaseAdmin
+                    .from('timeline_points')
+                    .insert(timelinePoints)
+                
+                if (timelineError) {
+                    console.error('  ⚠️  타임라인 생성 에러:', timelineError.message, timelineError.details)
+                } else {
+                    console.log(`  ✓ [타임라인 생성] ${timelinePoints.length}개 포인트`)
+                }
+            }
+        } catch (timelineErr) {
+            console.error('  ⚠️  타임라인 생성 예외:', timelineErr)
+        }
+        
+        // 4-9. 화력 계산
         const heatIndex = await calculateHeatIndex(newIssue.id).catch(() => 0)
         
         // 화력 15점 미만이면 이슈 삭제
@@ -357,9 +405,16 @@ export async function POST(req: NextRequest) {
         const result = await processTrackA()
         return NextResponse.json(result)
     } catch (error) {
-        console.error('[트랙 A] 에러:', error)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorStack = error instanceof Error ? error.stack : undefined
+        
+        console.error('[트랙 A] 에러:', errorMessage)
+        if (errorStack) {
+            console.error('[트랙 A] 스택:', errorStack)
+        }
+        
         return NextResponse.json({ 
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage,
             success: 0,
             failed: 0
         }, { status: 500 })
