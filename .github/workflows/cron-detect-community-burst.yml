@@ -1,8 +1,8 @@
-name: 커뮤니티 급증 감지 Cron
+name: 커뮤니티 급증 감지 Cron (비활성화 - 트랙 A로 통합)
 
 on:
-  schedule:
-    - cron: '*/3 * * * *'
+  # schedule:
+  #   - cron: '*/3 * * * *'
   workflow_dispatch:
 
 jobs:

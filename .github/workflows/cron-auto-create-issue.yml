@@ -1,8 +1,8 @@
-name: 이슈 후보 자동 생성 Cron
+name: 이슈 후보 자동 생성 Cron (비활성화 - 트랙 A로 통합)
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
+  # schedule:
+  #   - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:

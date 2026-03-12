@@ -94,3 +94,67 @@ export async function collectNaverNews(category: string): Promise<number> {
 
     return 0
 }
+
+/**
+ * searchNaverNewsByKeyword - 키워드로 네이버 뉴스 즉시 타겟 검색 (트랙 A 전용)
+ * 
+ * @param keyword AI가 추출한 핵심 키워드
+ * @returns 검색된 뉴스 아이템 배열 (DB 저장 완료)
+ */
+export async function searchNaverNewsByKeyword(keyword: string): Promise<Array<{
+    id: string
+    title: string
+    link: string
+    source: string
+    published_at: string
+}>> {
+    const clientId = process.env.NAVER_CLIENT_ID
+    const clientSecret = process.env.NAVER_CLIENT_SECRET
+
+    if (!clientId || !clientSecret) {
+        throw new Error('네이버 API 키가 설정되지 않았습니다')
+    }
+
+    // sort=sim (관련도순)으로 해당 키워드의 핵심 뉴스를 타겟팅
+    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(keyword)}&display=20&sort=sim`
+
+    const response = await fetch(url, {
+        headers: {
+            'X-Naver-Client-Id': clientId,
+            'X-Naver-Client-Secret': clientSecret,
+        },
+    })
+
+    if (!response.ok) {
+        console.error(`네이버 API 에러 (키워드: ${keyword}):`, response.status)
+        return []
+    }
+
+    const data = await response.json()
+    const items: NaverNewsItem[] = data.items ?? []
+
+    if (items.length === 0) {
+        return []
+    }
+
+    const newsData = items.map((item) => ({
+        title: stripHtmlTags(item.title),
+        link: item.link,
+        source: extractSource(item.originallink ?? item.link),
+        published_at: new Date(item.pubDate).toISOString(),
+        category: '미분류', // 트랙 A에서는 나중에 AI 분류 예정
+    }))
+
+    // DB 저장 (중복 방지)
+    const { error, data: upserted } = await supabaseAdmin
+        .from('news_data')
+        .upsert(newsData, { onConflict: 'link', ignoreDuplicates: true })
+        .select('id, title, link, source, published_at')
+
+    if (error) {
+        console.error('뉴스 저장 에러:', error)
+        throw error
+    }
+
+    return upserted ?? []
+}
