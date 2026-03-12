@@ -89,7 +89,8 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const { data, error } = await supabaseAdmin
+        // 이슈 생성
+        const { data: newIssue, error } = await supabaseAdmin
             .from('issues')
             .insert({
                 title: title.trim(),
@@ -103,7 +104,10 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error
 
-        return NextResponse.json({ data }, { status: 201 })
+        // 화력 계산 (수동 생성 이슈는 화력 체크 안 함 - 관리자가 직접 생성)
+        // 화력 계산 로직이 있다면 여기서 실행
+        
+        return NextResponse.json({ data: newIssue }, { status: 201 })
     } catch (error) {
         console.error('Issue create error:', error)
         return NextResponse.json(

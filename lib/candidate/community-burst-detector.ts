@@ -288,6 +288,18 @@ export async function detectCommunityBurst(): Promise<number> {
         
         // 화력 계산 및 등록 시점 화력 저장
         const heatIndex = await calculateHeatIndex(newIssue.id).catch(() => 0)
+        
+        // 화력 15점 미만이면 이슈 삭제
+        const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER || '15')
+        if (heatIndex < MIN_HEAT_TO_REGISTER) {
+            console.log(`  ❌ [화력 부족] "${issueTitle}" (화력: ${heatIndex}점, 최소: ${MIN_HEAT_TO_REGISTER}점) - 이슈 삭제`)
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', newIssue.id)
+            continue
+        }
+        
         await supabaseAdmin
             .from('issues')
             .update({ 
