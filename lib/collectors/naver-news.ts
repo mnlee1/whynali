@@ -101,7 +101,7 @@ export async function collectNaverNews(category: string): Promise<number> {
  * @param keyword AI가 추출한 핵심 키워드
  * @returns 검색된 뉴스 아이템 배열 (DB 저장 완료)
  */
-export async function searchNaverNewsByKeyword(keyword: string): Promise<Array<{
+export async function searchNaverNewsByKeyword(keyword: string, category: string = '사회'): Promise<Array<{
     id: string
     title: string
     link: string
@@ -137,18 +137,32 @@ export async function searchNaverNewsByKeyword(keyword: string): Promise<Array<{
         return []
     }
 
-    const newsData = items.map((item) => ({
+    // 최근 30일 이내 뉴스만 필터링 (오래된 뉴스 제외)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    const recentItems = items.filter(item => {
+        const publishedDate = new Date(item.pubDate)
+        return publishedDate >= thirtyDaysAgo
+    })
+
+    if (recentItems.length === 0) {
+        console.log(`  ℹ️  최근 30일 이내 뉴스 없음 (전체 ${items.length}건 중 0건)`)
+        return []
+    }
+
+    const newsData = recentItems.map((item) => ({
         title: stripHtmlTags(item.title),
         link: item.link,
         source: extractSource(item.originallink ?? item.link),
         published_at: new Date(item.pubDate).toISOString(),
-        category: '사회', // 트랙 A에서는 기본 카테고리로 저장 (나중에 AI 분류)
+        category: category,  // 파라미터로 받은 카테고리 사용
     }))
 
-    // DB 저장 (중복 방지)
+    // DB 저장 (중복 방지: 같은 링크는 덮어쓰기)
     const { error, data: upserted } = await supabaseAdmin
         .from('news_data')
-        .upsert(newsData, { onConflict: 'link', ignoreDuplicates: true })
+        .upsert(newsData, { onConflict: 'link' })  // ignoreDuplicates 제거
         .select('id, title, link, source, published_at')
 
     if (error) {
