@@ -142,7 +142,7 @@ export async function searchNaverNewsByKeyword(keyword: string): Promise<Array<{
         link: item.link,
         source: extractSource(item.originallink ?? item.link),
         published_at: new Date(item.pubDate).toISOString(),
-        category: '미분류', // 트랙 A에서는 나중에 AI 분류 예정
+        category: '사회', // 트랙 A에서는 기본 카테고리로 저장 (나중에 AI 분류)
     }))
 
     // DB 저장 (중복 방지)
