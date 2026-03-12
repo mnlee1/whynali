@@ -26,6 +26,7 @@ import { calculateHeatIndex } from '@/lib/analysis/heat'
 import { tokenize } from '@/lib/candidate/tokenizer'
 import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
 import type { IssueCategory } from '@/lib/config/categories'
+import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
 
 const ENABLE_TRACK_A = process.env.ENABLE_TRACK_A === 'true'
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
@@ -104,6 +105,18 @@ async function verifyIssueByAI(
     keyword: string,
     sampleTitles: string[]
 ): Promise<AIVerificationResult> {
+    // Rate Limit 상태 체크 (Critical 우선순위)
+    if (shouldSkipDueToRateLimit({ priority: 'critical', taskName: '트랙 A 이슈 검증' })) {
+        console.log('  ⚠️  [Rate Limit] 시스템 과부하, 건너뛰기')
+        return {
+            isIssue: false,
+            confidence: 0,
+            reason: 'Rate Limit 과부하',
+            searchKeyword: '',
+            issueTitle: ''
+        }
+    }
+    
     try {
         const titlesText = sampleTitles.slice(0, 5).map((t, i) => `${i + 1}. ${t}`).join('\n')
         
@@ -150,6 +163,9 @@ ${titlesText}
             }
         )
         
+        // 성공 기록
+        recordRateLimitSuccess()
+        
         const result = parseJsonObject<AIVerificationResult>(content)
         if (!result) {
             return { 
@@ -171,6 +187,12 @@ ${titlesText}
         
     } catch (error) {
         console.error('[AI 이슈 검증 에러]', error)
+        
+        // Rate Limit 실패 기록
+        if (error instanceof Error && error.message.includes('Rate Limit')) {
+            recordRateLimitFailure()
+        }
+        
         return { 
             isIssue: false, 
             confidence: 0, 
