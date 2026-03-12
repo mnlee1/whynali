@@ -623,13 +623,24 @@ export default function AdminIssuesPage() {
                                 <li>• 관리자 UI에 🔥 아이콘 표시</li>
                             </ul>
                         </div>
+                        <div>
+                            <h4 className="font-medium text-orange-700 text-xs mb-2 flex items-center gap-1">
+                                <span>⚠️</span> 즉시 처리 필요
+                            </h4>
+                            <ul className="space-y-1 text-xs text-gray-700">
+                                <li>• 화력 <span className="font-semibold text-orange-600">30점 이상</span> + 연예/정치</li>
+                                <li>• 승인 상태: <code className="px-1 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[11px]">대기</code></li>
+                                <li>• 관리자 UI에 ⚠️ 아이콘 + "즉시 처리 필요" 뱃지</li>
+                                <li>• Dooray 메신저 알림 발송 (즉시 + 매시 정각)</li>
+                            </ul>
+                        </div>
                     </div>
                     <div className="mt-3 pt-3 border-t border-gray-100">
                         <h4 className="font-medium text-amber-700 text-xs mb-2">자동 승인 조건</h4>
                         <ul className="space-y-1 text-xs text-gray-700">
                             <li>• 일반/급증 공통: 화력 <span className="font-semibold text-blue-600">30점 이상</span> + 허용 카테고리</li>
-                            <li className="text-amber-600">• 허용 카테고리: 사회/기술/스포츠</li>
-                            <li className="text-red-600">• 연예/정치는 관리자 승인 필수</li>
+                            <li className="text-amber-600">• 허용 카테고리: 사회/경제/IT과학/생활문화/세계/스포츠/<span className="font-semibold">연예</span></li>
+                            <li className="text-red-600">• <span className="font-semibold">정치만</span> 관리자 승인 필수 (민감도 높음)</li>
                             <li className="text-purple-600">• 커뮤니티 급증은 자동 승인 없음 (관리자 필수)</li>
                         </ul>
                     </div>
@@ -932,7 +943,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-64">
+                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">
                                 액션
                             </th>
                         </tr>
@@ -953,6 +964,13 @@ export default function AdminIssuesPage() {
                                         {issue.is_urgent && (
                                             <span className="text-red-500" title="급증 이슈">🔥</span>
                                         )}
+                                        {/* 즉시 처리 필요 표시: 화력 30점 이상 + 연예/정치 + 대기 */}
+                                        {!issue.is_urgent && 
+                                         issue.approval_status === '대기' && 
+                                         (issue.heat_index ?? 0) >= 30 && 
+                                         ['연예', '정치'].includes(issue.category) && (
+                                            <span className="text-orange-500" title="즉시 처리 필요 (화력 30점 이상)">⚠️</span>
+                                        )}
                                         <a
                                             href={`/issue/${issue.id}`}
                                             target="_blank"
@@ -968,6 +986,14 @@ export default function AdminIssuesPage() {
                                         {issue.source_track === 'news_collection' && issue.is_urgent && (
                                             <span className="px-2 py-0.5 text-[10px] bg-orange-100 text-orange-700 rounded font-medium whitespace-nowrap">
                                                 뉴스 급증
+                                            </span>
+                                        )}
+                                        {/* 즉시 처리 필요 뱃지 */}
+                                        {issue.approval_status === '대기' && 
+                                         (issue.heat_index ?? 0) >= 30 && 
+                                         ['연예', '정치'].includes(issue.category) && (
+                                            <span className="px-2 py-0.5 text-[10px] bg-red-100 text-red-700 rounded font-medium whitespace-nowrap">
+                                                즉시 처리 필요
                                             </span>
                                         )}
                                     </div>
@@ -1022,54 +1048,106 @@ export default function AdminIssuesPage() {
                                 <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap w-40">
                                     {formatDate(issue.created_at)}
                                 </td>
-                                <td className="px-4 py-3 text-sm w-64">
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setPreviewIssue(issue)}
-                                            className="text-xs px-3 py-1.5 border border-blue-300 text-blue-600 rounded hover:bg-blue-50 whitespace-nowrap"
-                                        >
-                                            미리보기
-                                        </button>
+                                <td className="px-2 py-3 text-sm w-24">
+                                    <div className="flex justify-center gap-1">
+                                        {/* 미리보기 버튼 */}
+                                        <div className="relative group">
+                                            <button
+                                                onClick={() => setPreviewIssue(issue)}
+                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                미리보기
+                                            </span>
+                                        </div>
+                                        
+                                        {/* 승인/반려 버튼 */}
                                         {issue.approval_status === '대기' && (
                                             <>
-                                                <button
-                                                    onClick={() => handleApprove(issue.id)}
-                                                    className="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600"
-                                                >
-                                                    승인
-                                                </button>
-                                                <button
-                                                    onClick={() => handleReject(issue.id)}
-                                                    className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600"
-                                                >
-                                                    반려
-                                                </button>
+                                                <div className="relative group">
+                                                    <button
+                                                        onClick={() => handleApprove(issue.id)}
+                                                        className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                        승인
+                                                    </span>
+                                                </div>
+                                                <div className="relative group">
+                                                    <button
+                                                        onClick={() => handleReject(issue.id)}
+                                                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                        반려
+                                                    </span>
+                                                </div>
                                             </>
                                         )}
+                                        
+                                        {/* 승인됨 -> 반려 */}
                                         {issue.approval_status === '승인' && (
-                                            <button
-                                                onClick={() => handleReject(issue.id)}
-                                                className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600"
-                                            >
-                                                반려
-                                            </button>
+                                            <div className="relative group">
+                                                <button
+                                                    onClick={() => handleReject(issue.id)}
+                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                    반려
+                                                </span>
+                                            </div>
                                         )}
+                                        
+                                        {/* 반려됨 -> 복구 */}
                                         {issue.approval_status === '반려' && (
-                                            <button
-                                                onClick={() => handleRestore(issue.id)}
-                                                className="px-3 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500"
-                                            >
-                                                복구
-                                            </button>
+                                            <div className="relative group">
+                                                <button
+                                                    onClick={() => handleRestore(issue.id)}
+                                                    className="p-1.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                </button>
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                    복구
+                                                </span>
+                                            </div>
                                         )}
+                                        
+                                        {/* 병합됨 -> 이동 */}
                                         {issue.approval_status === '병합됨' && issue.merged_into_id && (
-                                            <a
-                                                href={`/issue/${issue.merged_into_id}`}
-                                                target="_blank"
-                                                className="text-xs px-3 py-1.5 border border-purple-300 text-purple-600 rounded hover:bg-purple-50 whitespace-nowrap"
-                                            >
-                                                병합된 이슈 보기
-                                            </a>
+                                            <div className="relative group">
+                                                <a
+                                                    href={`/issue/${issue.merged_into_id}`}
+                                                    target="_blank"
+                                                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors block"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                    </svg>
+                                                </a>
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                    병합된 이슈 보기
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
                                 </td>
