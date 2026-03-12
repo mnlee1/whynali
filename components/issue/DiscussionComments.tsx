@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Comment } from '@/types'
+import ReportModal from '@/components/issue/ReportModal'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
@@ -85,6 +86,11 @@ export default function DiscussionComments({
     const [submittingEdit, setSubmittingEdit] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [likingId, setLikingId] = useState<string | null>(null)
+
+    /* 신고 상태 */
+    const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
+    const [showReportModal, setShowReportModal] = useState(false)
+    const [reportTargetComment, setReportTargetComment] = useState<{ id: string; body: string; authorNickname: string } | null>(null)
 
     useEffect(() => {
         if (serverUserId) { setUserId(serverUserId); return }
@@ -339,6 +345,29 @@ export default function DiscussionComments({
         }
     }
 
+    /* 신고 모달 열기 */
+    const handleOpenReportModal = (comment: Comment) => {
+        setReportTargetComment({
+            id: comment.id,
+            body: comment.body,
+            authorNickname: authorLabel(comment),
+        })
+        setShowReportModal(true)
+    }
+
+    /* 신고: 모달에서 사유 선택 후 제출 (낙관적 업데이트) */
+    const handleReport = async (commentId: string, reason: string) => {
+        if (reportedIds.has(commentId)) return
+        setReportedIds((prev) => new Set([...prev, commentId]))
+        try {
+            await fetch(`/api/comments/${commentId}/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
+            })
+        } catch { /* 신고 실패 시 상태 유지 (UX 단순화) */ }
+    }
+
     if (loading) {
         return (
             <div className="space-y-3">
@@ -369,9 +398,10 @@ export default function DiscussionComments({
                                 comment={c} userId={userId} isBest
                                 editingId={editingId} editDraft={editDraft}
                                 submittingEdit={submittingEdit} deletingId={deletingId} likingId={likingId}
+                                reportedIds={reportedIds}
                                 onEditStart={handleEditStart} onEditCancel={handleEditCancel}
                                 onEditSave={handleEditSave} onDelete={handleDelete}
-                                onLike={handleLike} setEditDraft={setEditDraft}
+                                onLike={handleLike} onOpenReportModal={handleOpenReportModal} setEditDraft={setEditDraft}
                             />
                         ))}
                     </ul>
@@ -411,9 +441,10 @@ export default function DiscussionComments({
                             comment={c} userId={userId}
                             editingId={editingId} editDraft={editDraft}
                             submittingEdit={submittingEdit} deletingId={deletingId} likingId={likingId}
+                            reportedIds={reportedIds}
                             onEditStart={handleEditStart} onEditCancel={handleEditCancel}
                             onEditSave={handleEditSave} onDelete={handleDelete}
-                            onLike={handleLike} setEditDraft={setEditDraft}
+                            onLike={handleLike} onOpenReportModal={handleOpenReportModal} setEditDraft={setEditDraft}
                         />
                     ))}
                 </ul>
@@ -510,6 +541,16 @@ export default function DiscussionComments({
                     </p>
                 )}
             </div>
+
+            {/* 신고 모달 */}
+            {showReportModal && reportTargetComment && (
+                <ReportModal
+                    isOpen={showReportModal}
+                    onClose={() => setShowReportModal(false)}
+                    comment={reportTargetComment}
+                    onReport={handleReport}
+                />
+            )}
         </div>
     )
 }
@@ -525,24 +566,28 @@ interface DiscussionCommentItemProps {
     submittingEdit: boolean
     deletingId: string | null
     likingId: string | null
+    reportedIds: Set<string>
     onEditStart: (c: Comment) => void
     onEditCancel: () => void
     onEditSave: (id: string) => void
     onDelete: (id: string) => void
     onLike: (id: string, type: 'like' | 'dislike') => void
+    onOpenReportModal: (comment: Comment) => void
     setEditDraft: (v: string) => void
 }
 
 function DiscussionCommentItem({
     comment, userId, isBest,
     editingId, editDraft, submittingEdit, deletingId, likingId,
-    onEditStart, onEditCancel, onEditSave, onDelete, onLike, setEditDraft,
+    reportedIds,
+    onEditStart, onEditCancel, onEditSave, onDelete, onLike, onOpenReportModal, setEditDraft,
 }: DiscussionCommentItemProps) {
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
     const isDeleting = deletingId === comment.id
     const isLiking = likingId === comment.id
     const myType = comment.userLikeType ?? null
+    const isReported = reportedIds.has(comment.id)
 
     return (
         <li className={[
@@ -561,6 +606,16 @@ function DiscussionCommentItem({
                                 {isDeleting ? '삭제 중...' : '삭제'}
                             </button>
                         </div>
+                    )}
+                    {!isMine && userId && (
+                        <button
+                            onClick={() => onOpenReportModal(comment)}
+                            disabled={isReported}
+                            className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label="신고"
+                        >
+                            {isReported ? '신고완료' : '⋮'}
+                        </button>
                     )}
                 </div>
             </div>

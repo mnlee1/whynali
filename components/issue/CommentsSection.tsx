@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatDate } from '@/lib/utils/format-date'
 import type { Comment } from '@/types'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
+import ReportModal from '@/components/issue/ReportModal'
 
 interface CommentsSectionProps {
     issueId?: string
@@ -32,7 +33,6 @@ type CommentWithLike = Comment & {
 
 const PAGE_SIZE = 20
 const RATE_LIMIT_SECONDS = 60
-const REPORT_REASONS = ['스팸', '욕설/혐오', '허위정보', '기타'] as const
 
 const SORT_LABELS: Record<SortOption, string> = {
     latest: '최신순',
@@ -90,6 +90,8 @@ export default function CommentsSection({
 
     /* 신고 상태 */
     const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
+    const [showReportModal, setShowReportModal] = useState(false)
+    const [reportTargetComment, setReportTargetComment] = useState<{ id: string; body: string; authorNickname: string } | null>(null)
 
     /* 세이프티봇 상태 */
     const [safetyBotEnabled, setSafetyBotEnabled] = useState(true)
@@ -456,7 +458,17 @@ export default function CommentsSection({
         setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
     }
 
-    /* 신고: 드롭다운에서 사유 선택 시 바로 제출 (낙관적 업데이트) */
+    /* 신고 모달 열기 */
+    const handleOpenReportModal = (comment: Comment) => {
+        setReportTargetComment({
+            id: comment.id,
+            body: comment.body,
+            authorNickname: authorLabel(comment),
+        })
+        setShowReportModal(true)
+    }
+
+    /* 신고: 모달에서 사유 선택 후 제출 (낙관적 업데이트) */
     const handleReport = async (commentId: string, reason: string) => {
         if (reportedIds.has(commentId)) return
         setReportedIds((prev) => new Set([...prev, commentId]))
@@ -516,7 +528,7 @@ export default function CommentsSection({
                                     onEditSave={handleEditSave}
                                     onDelete={handleDelete}
                                     onLike={handleLike}
-                                    onReport={handleReport}
+                                    onOpenReportModal={handleOpenReportModal}
                                     setEditDraft={setEditDraft}
                                 />
                             ))}
@@ -604,7 +616,7 @@ export default function CommentsSection({
                                 onReplyDraftChange={setReplyDraft}
                                 onReplySubmit={handleReplySubmit}
                                 onToggleReplies={handleToggleReplies}
-                                onReport={handleReport}
+                                onOpenReportModal={handleOpenReportModal}
                                 setEditDraft={setEditDraft}
                             />
                         ))}
@@ -684,6 +696,15 @@ export default function CommentsSection({
                 </div>
             </div>
 
+            {/* 신고 모달 */}
+            {showReportModal && reportTargetComment && (
+                <ReportModal
+                    isOpen={showReportModal}
+                    onClose={() => setShowReportModal(false)}
+                    comment={reportTargetComment}
+                    onReport={handleReport}
+                />
+            )}
         </>
     )
 }
@@ -720,7 +741,7 @@ interface CommentItemProps {
     onReplyDraftChange?: (v: string) => void
     onReplySubmit?: (parentId: string) => void
     onToggleReplies?: (id: string) => void
-    onReport: (id: string, reason: string) => void
+    onOpenReportModal: (comment: Comment) => void
     setEditDraft: (v: string) => void
 }
 
@@ -732,24 +753,8 @@ function CommentItem({
     reportedIds,
     onEditStart, onEditCancel, onEditSave, onDelete, onLike,
     onReplyToggle, onReplyDraftChange, onReplySubmit, onToggleReplies,
-    onReport, setEditDraft,
+    onOpenReportModal, setEditDraft,
 }: CommentItemProps) {
-    const [menuOpen, setMenuOpen] = useState(false)
-    const [showReasons, setShowReasons] = useState(false)
-    const menuRef = useRef<HTMLDivElement>(null)
-
-    const closeMenu = () => { setMenuOpen(false); setShowReasons(false) }
-
-    useEffect(() => {
-        if (!menuOpen) { setShowReasons(false); return }
-        const handler = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                closeMenu()
-            }
-        }
-        document.addEventListener('mousedown', handler)
-        return () => document.removeEventListener('mousedown', handler)
-    }, [menuOpen])
 
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
@@ -789,51 +794,16 @@ function CommentItem({
                             </button>
                         </div>
                     )}
-                    {/* 신고 ⋮ 드롭다운 (타인 댓글·답글 + 로그인 시) */}
+                    {/* 신고 버튼 (타인 댓글·답글 + 로그인 시) */}
                     {!isMine && userId && (
-                        <div className="relative" ref={menuRef}>
-                            <button
-                                onClick={() => setMenuOpen((v) => !v)}
-                                className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
-                                aria-label="더보기"
-                            >
-                                ⋮
-                            </button>
-                            {menuOpen && (
-                                <div className="absolute right-0 top-5 z-20 bg-white border border-gray-200 rounded-lg shadow-md py-1 min-w-[120px]">
-                                    {isReported ? (
-                                        <span className="block px-3 py-1.5 text-xs text-gray-400">신고완료</span>
-                                    ) : !showReasons ? (
-                                        /* 1단계: 신고 항목만 표시 */
-                                        <button
-                                            onClick={() => setShowReasons(true)}
-                                            className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                                        >
-                                            신고
-                                        </button>
-                                    ) : (
-                                        /* 2단계: 사유 선택 */
-                                        <>
-                                            <span className="block px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100">
-                                                신고 사유 선택
-                                            </span>
-                                            {REPORT_REASONS.map((reason) => (
-                                                <button
-                                                    key={reason}
-                                                    onClick={() => {
-                                                        onReport(comment.id, reason)
-                                                        closeMenu()
-                                                    }}
-                                                    className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                                                >
-                                                    {reason}
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                        <button
+                            onClick={() => onOpenReportModal(comment)}
+                            disabled={isReported}
+                            className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label="신고"
+                        >
+                            {isReported ? '신고완료' : '⋮'}
+                        </button>
                     )}
                 </div>
             </div>
@@ -975,7 +945,7 @@ function CommentItem({
                             onEditSave={onEditSave}
                             onDelete={onDelete}
                             onLike={onLike}
-                            onReport={onReport}
+                            onOpenReportModal={onOpenReportModal}
                             setEditDraft={setEditDraft}
                         />
                     ))}
