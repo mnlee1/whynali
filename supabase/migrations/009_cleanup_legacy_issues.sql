@@ -11,7 +11,7 @@ BEGIN
     SELECT COUNT(*) INTO legacy_count FROM issues WHERE source_track IS NULL OR source_track != 'track_a';
     SELECT COUNT(*) INTO track_a_count FROM issues WHERE source_track = 'track_a';
     
-    RAISE NOTICE '=== 이슈 정리 시작 ===';
+    RAISE NOTICE '이슈 정리 시작';
     RAISE NOTICE '트랙 A 이슈: % 건 (유지)', track_a_count;
     RAISE NOTICE '레거시 이슈: % 건 (삭제 예정)', legacy_count;
 END $$;
@@ -62,6 +62,6 @@ DECLARE
     remaining_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO remaining_count FROM issues;
-    RAISE NOTICE '=== 정리 완료 ===';
+    RAISE NOTICE '정리 완료';
     RAISE NOTICE '남은 이슈: % 건 (모두 트랙 A)', remaining_count;
 END $$;
