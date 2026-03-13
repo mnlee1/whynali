@@ -28,7 +28,7 @@ type CommentWithLike = Comment & {
     replyCount?: number
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
 /* 클릭하면 textarea 앞부분에 삽입되는 질문 스타터 칩 */
@@ -438,84 +438,8 @@ export default function DiscussionComments({
                 <p className="text-sm text-gray-500">의견 {total.toLocaleString()}개</p>
             </div>
 
-            {/* 세이프티봇 안내 바 */}
-            <div className="flex items-center justify-between px-3 py-2 mb-3 bg-purple-50 border border-purple-100 rounded-lg">
-                <p className="text-xs text-purple-700">
-                    <span className="mr-1">🤖</span>
-                    {safetyBotEnabled
-                        ? '세이프티봇이 불쾌한 의견으로부터 보호하고 있어요.'
-                        : '세이프티봇이 꺼져 있어요. 모든 의견이 표시됩니다.'}
-                </p>
-                <button
-                    onClick={() => setSafetyBotModalOpen(true)}
-                    className="text-xs text-purple-600 hover:text-purple-800 border border-purple-200 rounded px-2 py-0.5 shrink-0 ml-2 transition-colors hover:border-purple-400"
-                >
-                    설정
-                </button>
-            </div>
-
-            {safetyBotModalOpen && (
-                <SafetyBotSettingModal
-                    onClose={() => setSafetyBotModalOpen(false)}
-                    onConfirm={(value) => setSafetyBotEnabled(value)}
-                />
-            )}
-
-            {/* 의견 목록 */}
-            {comments.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">첫 번째 의견을 남겨보세요.</p>
-            ) : (
-                <ul className="divide-y divide-purple-50 mb-4">
-                    {comments.map((c) => (
-                        <DiscussionCommentItem
-                            key={c.id}
-                            comment={c}
-                            userId={userId}
-                            editingId={editingId}
-                            editDraft={editDraft}
-                            submittingEdit={submittingEdit}
-                            deletingId={deletingId}
-                            likingId={likingId}
-                            replyToId={replyToId}
-                            replyDraft={replyDraft}
-                            submittingReply={submittingReply}
-                            replyError={replyError}
-                            rateLimitCountdown={rateLimitCountdown}
-                            replies={repliesMap[c.id]}
-                            repliesExpanded={expandedRepliesIds.has(c.id)}
-                            repliesLoading={loadingRepliesIds.has(c.id)}
-                            reportedIds={reportedIds}
-                            onEditStart={handleEditStart}
-                            onEditCancel={handleEditCancel}
-                            onEditSave={handleEditSave}
-                            onDelete={handleDelete}
-                            onLike={handleLike}
-                            onReplyToggle={handleReplyToggle}
-                            onReplyDraftChange={setReplyDraft}
-                            onReplySubmit={handleReplySubmit}
-                            onToggleReplies={handleToggleReplies}
-                            onOpenReportModal={handleOpenReportModal}
-                            onReport={handleReport}
-                            setEditDraft={setEditDraft}
-                        />
-                    ))}
-                </ul>
-            )}
-
-            {comments.length < total && (
-                <div className="text-center mb-5">
-                    <button
-                        onClick={handleLoadMore}
-                        disabled={loadingMore}
-                        className="text-sm px-5 py-2 border border-purple-200 rounded text-purple-600 hover:bg-purple-50 disabled:opacity-50"
-                    >
-                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개)`}
-                    </button>
-                </div>
-            )}
-
             {/* 작성 폼 */}
-            <div className="pt-4 border-t border-purple-100">
+            <div className="pb-4 border-b border-purple-100 mb-4">
                 {isClosed ? (
                     <p className="text-sm text-gray-400 text-center py-3">
                         종료된 토론입니다. 의견을 작성할 수 없습니다.
@@ -593,6 +517,82 @@ export default function DiscussionComments({
                     </p>
                 )}
             </div>
+
+            {/* 세이프티봇 안내 바 */}
+            <div className="flex items-center justify-between px-3 py-2 mb-3 bg-purple-50 border border-purple-100 rounded-lg">
+                <p className="text-xs text-purple-700">
+                    <span className="mr-1">🤖</span>
+                    {safetyBotEnabled
+                        ? '세이프티봇이 불쾌한 의견으로부터 보호하고 있어요.'
+                        : '세이프티봇이 꺼져 있어요. 모든 의견이 표시됩니다.'}
+                </p>
+                <button
+                    onClick={() => setSafetyBotModalOpen(true)}
+                    className="text-xs text-purple-600 hover:text-purple-800 border border-purple-200 rounded px-2 py-0.5 shrink-0 ml-2 transition-colors hover:border-purple-400"
+                >
+                    설정
+                </button>
+            </div>
+
+            {safetyBotModalOpen && (
+                <SafetyBotSettingModal
+                    onClose={() => setSafetyBotModalOpen(false)}
+                    onConfirm={(value) => setSafetyBotEnabled(value)}
+                />
+            )}
+
+            {/* 의견 목록 */}
+            {comments.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">첫 번째 의견을 남겨보세요.</p>
+            ) : (
+                <ul className="divide-y divide-purple-50 mb-4">
+                    {comments.map((c) => (
+                        <DiscussionCommentItem
+                            key={c.id}
+                            comment={c}
+                            userId={userId}
+                            editingId={editingId}
+                            editDraft={editDraft}
+                            submittingEdit={submittingEdit}
+                            deletingId={deletingId}
+                            likingId={likingId}
+                            replyToId={replyToId}
+                            replyDraft={replyDraft}
+                            submittingReply={submittingReply}
+                            replyError={replyError}
+                            rateLimitCountdown={rateLimitCountdown}
+                            replies={repliesMap[c.id]}
+                            repliesExpanded={expandedRepliesIds.has(c.id)}
+                            repliesLoading={loadingRepliesIds.has(c.id)}
+                            reportedIds={reportedIds}
+                            onEditStart={handleEditStart}
+                            onEditCancel={handleEditCancel}
+                            onEditSave={handleEditSave}
+                            onDelete={handleDelete}
+                            onLike={handleLike}
+                            onReplyToggle={handleReplyToggle}
+                            onReplyDraftChange={setReplyDraft}
+                            onReplySubmit={handleReplySubmit}
+                            onToggleReplies={handleToggleReplies}
+                            onOpenReportModal={handleOpenReportModal}
+                            onReport={handleReport}
+                            setEditDraft={setEditDraft}
+                        />
+                    ))}
+                </ul>
+            )}
+
+            {comments.length < total && (
+                <div className="text-center mb-5">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="text-sm px-5 py-2 border border-purple-200 rounded text-purple-600 hover:bg-purple-50 disabled:opacity-50"
+                    >
+                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개)`}
+                    </button>
+                </div>
+            )}
 
             {reportTargetComment && (
                 <ReportModal

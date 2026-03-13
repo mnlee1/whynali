@@ -26,7 +26,7 @@ type SortOption = 'latest' | 'likes' | 'dislikes'
 
 type CommentWithLike = Comment & { userLikeType?: 'like' | 'dislike' | null }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -436,72 +436,8 @@ export default function CommentsSection({
                 </div>
             )}
 
-            {/* 정렬 옵션 + 총 댓글 수 */}
-            <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500">댓글 {total.toLocaleString()}개</p>
-                <div className="flex gap-1">
-                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => handleSortChange(s)}
-                            className={[
-                                'text-xs px-2.5 py-1 rounded border transition-colors',
-                                sort === s
-                                    ? 'border-gray-800 bg-gray-800 text-white'
-                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            ].join(' ')}
-                        >
-                            {SORT_LABELS[s]}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 댓글 목록 */}
-            {comments.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">
-                    첫 번째 댓글을 작성해보세요.
-                </p>
-            ) : (
-                <ul className="divide-y divide-gray-100 mb-4">
-                    {comments.map((comment) => (
-                        <CommentItem
-                            key={comment.id}
-                            comment={comment}
-                            userId={userId}
-                            editingId={editingId}
-                            editDraft={editDraft}
-                            submittingEdit={submittingEdit}
-                            deletingId={deletingId}
-                            likingId={likingId}
-                            reportedIds={reportedIds}
-                            onEditStart={handleEditStart}
-                            onEditCancel={handleEditCancel}
-                            onEditSave={handleEditSave}
-                            onDelete={handleDelete}
-                            onLike={handleLike}
-                            onOpenReportModal={handleOpenReportModal}
-                            setEditDraft={setEditDraft}
-                        />
-                    ))}
-                </ul>
-            )}
-
-            {/* 더보기 */}
-            {hasMore && (
-                <div className="text-center mb-6">
-                    <button
-                        onClick={handleLoadMore}
-                        disabled={loadingMore}
-                        className="text-sm px-5 py-2 border border-neutral-300 rounded-lg text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
-                    >
-                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개 남음)`}
-                    </button>
-                </div>
-            )}
-
             {/* 작성 폼 */}
-            <div className="pt-4 border-t border-gray-100">
+            <div className="pb-4 border-b border-gray-100 mb-4">
                 {isClosed ? (
                     <p className="text-sm text-gray-400 text-center py-3">
                         종료된 토론입니다. 댓글을 작성할 수 없습니다.
@@ -565,6 +501,70 @@ export default function CommentsSection({
                     </div>
                 )}
             </div>
+
+            {/* 정렬 옵션 + 총 댓글 수 */}
+            <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-500">댓글 {total.toLocaleString()}개</p>
+                <div className="flex gap-1">
+                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => handleSortChange(s)}
+                            className={[
+                                'text-xs px-2.5 py-1 rounded border transition-colors',
+                                sort === s
+                                    ? 'border-gray-800 bg-gray-800 text-white'
+                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
+                            ].join(' ')}
+                        >
+                            {SORT_LABELS[s]}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* 댓글 목록 */}
+            {comments.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">
+                    첫 번째 댓글을 작성해보세요.
+                </p>
+            ) : (
+                <ul className="divide-y divide-gray-100 mb-4">
+                    {comments.map((comment) => (
+                        <CommentItem
+                            key={comment.id}
+                            comment={comment}
+                            userId={userId}
+                            editingId={editingId}
+                            editDraft={editDraft}
+                            submittingEdit={submittingEdit}
+                            deletingId={deletingId}
+                            likingId={likingId}
+                            reportedIds={reportedIds}
+                            onEditStart={handleEditStart}
+                            onEditCancel={handleEditCancel}
+                            onEditSave={handleEditSave}
+                            onDelete={handleDelete}
+                            onLike={handleLike}
+                            onOpenReportModal={handleOpenReportModal}
+                            setEditDraft={setEditDraft}
+                        />
+                    ))}
+                </ul>
+            )}
+
+            {/* 더보기 */}
+            {hasMore && (
+                <div className="text-center mb-6">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="text-sm px-5 py-2 border border-neutral-300 rounded-lg text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
+                    >
+                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개 남음)`}
+                    </button>
+                </div>
+            )}
 
             {reportTargetComment && (
                 <ReportModal
