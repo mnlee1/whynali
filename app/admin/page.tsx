@@ -80,6 +80,45 @@ interface ApiCostsSummary {
     }
 }
 
+interface Stats24h {
+    collection: {
+        news: {
+            total: number
+            bySource: Record<string, { total: number; linked: number }>
+        }
+        community: {
+            total: number
+            bySite: Record<string, { total: number; linked: number }>
+        }
+    }
+    issues: {
+        created: number
+        pending: number
+        approved: number
+        rejected: number
+        merged: number
+    }
+    linking: {
+        news: {
+            linked: number
+            unlinked: number
+            rate: number
+        }
+        community: {
+            linked: number
+            unlinked: number
+            rate: number
+        }
+    }
+    warnings: Array<{
+        type: string
+        severity: 'critical' | 'warning'
+        message: string
+        value: number
+    }>
+    timestamp: string
+}
+
 // ─── 서브 컴포넌트 ────────────────────────────────────────
 
 function StatCard({
@@ -156,16 +195,19 @@ export default function AdminDashboardPage() {
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
     const [apiCosts, setApiCosts] = useState<ApiCostsSummary | null>(null)
     const [costsLoading, setCostsLoading] = useState(true)
+    const [stats24h, setStats24h] = useState<Stats24h | null>(null)
+    const [stats24hLoading, setStats24hLoading] = useState(true)
 
     const fetchAll = async () => {
         console.log('[Admin Dashboard] fetchAll 시작')
         setStatsLoading(true)
         setLogsLoading(true)
         setCostsLoading(true)
+        setStats24hLoading(true)
 
         try {
             console.log('[Admin Dashboard] 핵심 API 호출 시작 (병렬 처리)')
-            const [issuesRes, discussionsRes, safetyRes, collectionsRes, logsRes, apiUsageRes] =
+            const [issuesRes, discussionsRes, safetyRes, collectionsRes, logsRes, apiUsageRes, stats24hRes] =
                 await Promise.all([
                     fetch('/api/admin/issues?approval_status=대기'),
                     fetch('/api/admin/discussions?status=대기'),
@@ -173,11 +215,12 @@ export default function AdminDashboardPage() {
                     fetch('/api/admin/collections'),
                     fetch('/api/admin/logs?limit=8'),
                     fetch('/api/admin/api-usage'),
+                    fetch('/api/admin/stats-24h'),
                 ])
 
             console.log('[Admin Dashboard] 핵심 API 응답 받음')
 
-            const [issuesData, discussionsData, safetyData, collectionsData, logsData, apiUsageData] =
+            const [issuesData, discussionsData, safetyData, collectionsData, logsData, apiUsageData, stats24hData] =
                 await Promise.all([
                     issuesRes.ok ? issuesRes.json() : null,
                     discussionsRes.ok ? discussionsRes.json() : null,
@@ -185,6 +228,7 @@ export default function AdminDashboardPage() {
                     collectionsRes.ok ? collectionsRes.json() : null,
                     logsRes.ok ? logsRes.json() : null,
                     apiUsageRes.ok ? apiUsageRes.json() : null,
+                    stats24hRes.ok ? stats24hRes.json() : null,
                 ])
 
             const news24h = collectionsData
@@ -206,6 +250,7 @@ export default function AdminDashboardPage() {
 
             setRecentLogs(logsData?.data ?? [])
             setApiCosts(apiUsageData)
+            setStats24h(stats24hData)
             setLastRefreshedAt(new Date())
         } catch (error) {
             console.error('[Admin Dashboard] 데이터 로드 에러:', error)
@@ -213,6 +258,7 @@ export default function AdminDashboardPage() {
             setStatsLoading(false)
             setLogsLoading(false)
             setCostsLoading(false)
+            setStats24hLoading(false)
         }
 
         fetch('/api/admin/candidates')
@@ -324,6 +370,263 @@ export default function AdminDashboardPage() {
                     accent="green"
                     loading={statsLoading}
                 />
+            </div>
+
+            {/* 24시간 요약 통계 */}
+            <div className="mb-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-sm font-semibold text-gray-800">최근 24시간 요약</h2>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                수집 → 이슈 생성 → 연결 프로세스 모니터링
+                            </p>
+                        </div>
+                    </div>
+
+                    {stats24hLoading ? (
+                        <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-24 bg-gray-100 rounded animate-pulse" />
+                            ))}
+                        </div>
+                    ) : !stats24h ? (
+                        <p className="text-sm text-gray-400 py-4 text-center">데이터를 불러올 수 없습니다</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* 경고 배너 */}
+                            {stats24h.warnings.length > 0 && (
+                                <div className="space-y-2">
+                                    {stats24h.warnings.map((warning, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`p-3 rounded-lg border ${
+                                                warning.severity === 'critical'
+                                                    ? 'bg-red-50 border-red-300'
+                                                    : 'bg-yellow-50 border-yellow-300'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className={`px-2 py-1 text-xs font-bold rounded ${
+                                                        warning.severity === 'critical'
+                                                            ? 'bg-red-500 text-white'
+                                                            : 'bg-yellow-500 text-white'
+                                                    }`}
+                                                >
+                                                    {warning.severity === 'critical' ? '치명' : '경고'}
+                                                </span>
+                                                <p
+                                                    className={`text-sm font-medium ${
+                                                        warning.severity === 'critical'
+                                                            ? 'text-red-800'
+                                                            : 'text-yellow-800'
+                                                    }`}
+                                                >
+                                                    {warning.message}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* 1단계: 수집 */}
+                            <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                            1
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-900">데이터 수집</p>
+                                            <p className="text-xs text-gray-500">뉴스 · 커뮤니티</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-bold text-blue-600">
+                                            {(stats24h.collection.news.total + stats24h.collection.community.total).toLocaleString()}
+                                        </p>
+                                        <p className="text-xs text-gray-500">건</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-white/60 rounded p-3">
+                                        <p className="text-xs text-gray-600 mb-1">뉴스</p>
+                                        <p className="text-lg font-bold text-gray-900">
+                                            {stats24h.collection.news.total.toLocaleString()}
+                                        </p>
+                                        {Object.keys(stats24h.collection.news.bySource).length > 0 && (
+                                            <div className="mt-2 space-y-1">
+                                                {Object.entries(stats24h.collection.news.bySource).map(([source, data]) => (
+                                                    <div key={source} className="flex justify-between text-xs">
+                                                        <span className="text-gray-600">{source}</span>
+                                                        <span className="font-medium text-gray-900">{data.total}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="bg-white/60 rounded p-3">
+                                        <p className="text-xs text-gray-600 mb-1">커뮤니티</p>
+                                        <p className="text-lg font-bold text-gray-900">
+                                            {stats24h.collection.community.total.toLocaleString()}
+                                        </p>
+                                        {Object.keys(stats24h.collection.community.bySite).length > 0 && (
+                                            <div className="mt-2 space-y-1">
+                                                {Object.entries(stats24h.collection.community.bySite).map(([site, data]) => (
+                                                    <div key={site} className="flex justify-between text-xs">
+                                                        <span className="text-gray-600">{site}</span>
+                                                        <span className="font-medium text-gray-900">{data.total}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2단계: 이슈 생성 */}
+                            <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                            2
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-900">이슈 생성</p>
+                                            <p className="text-xs text-gray-500">AI 자동 생성 · 관리자 승인</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-bold text-purple-600">
+                                            {stats24h.issues.created.toLocaleString()}
+                                        </p>
+                                        <p className="text-xs text-gray-500">건</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-2">
+                                    <div className="bg-white/60 rounded p-2 text-center">
+                                        <p className="text-xs text-gray-600 mb-1">대기</p>
+                                        <p className="text-lg font-bold text-yellow-600">
+                                            {stats24h.issues.pending}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white/60 rounded p-2 text-center">
+                                        <p className="text-xs text-gray-600 mb-1">승인</p>
+                                        <p className="text-lg font-bold text-green-600">
+                                            {stats24h.issues.approved}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white/60 rounded p-2 text-center">
+                                        <p className="text-xs text-gray-600 mb-1">반려</p>
+                                        <p className="text-lg font-bold text-red-600">
+                                            {stats24h.issues.rejected}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white/60 rounded p-2 text-center">
+                                        <p className="text-xs text-gray-600 mb-1">병합</p>
+                                        <p className="text-lg font-bold text-gray-600">
+                                            {stats24h.issues.merged}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 bg-white/60 rounded p-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-600">승인률</span>
+                                        <span className="text-lg font-bold text-purple-600">
+                                            {stats24h.issues.created > 0
+                                                ? Math.round((stats24h.issues.approved / stats24h.issues.created) * 100)
+                                                : 0}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3단계: 이슈 연결 */}
+                            <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                            3
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-900">이슈 연결</p>
+                                            <p className="text-xs text-gray-500">수집 데이터 ↔ 이슈 매칭</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-white/60 rounded p-3">
+                                        <p className="text-xs text-gray-600 mb-2">뉴스 연결</p>
+                                        <div className="flex items-end justify-between mb-2">
+                                            <div>
+                                                <p className="text-lg font-bold text-green-600">
+                                                    {stats24h.linking.news.linked}
+                                                </p>
+                                                <p className="text-xs text-gray-500">연결됨</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-medium text-gray-400">
+                                                    {stats24h.linking.news.unlinked}
+                                                </p>
+                                                <p className="text-xs text-gray-500">미연결</p>
+                                            </div>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div
+                                                className="bg-green-500 h-2 rounded-full"
+                                                style={{ width: `${stats24h.linking.news.rate}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-600 text-center mt-1">
+                                            연결률 {stats24h.linking.news.rate}%
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-white/60 rounded p-3">
+                                        <p className="text-xs text-gray-600 mb-2">커뮤니티 연결</p>
+                                        <div className="flex items-end justify-between mb-2">
+                                            <div>
+                                                <p className="text-lg font-bold text-green-600">
+                                                    {stats24h.linking.community.linked}
+                                                </p>
+                                                <p className="text-xs text-gray-500">연결됨</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-medium text-gray-400">
+                                                    {stats24h.linking.community.unlinked}
+                                                </p>
+                                                <p className="text-xs text-gray-500">미연결</p>
+                                            </div>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div
+                                                className="bg-green-500 h-2 rounded-full"
+                                                style={{ width: `${stats24h.linking.community.rate}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-600 text-center mt-1">
+                                            연결률 {stats24h.linking.community.rate}%
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 타임스탬프 */}
+                            <div className="text-center">
+                                <p className="text-xs text-gray-400">
+                                    마지막 업데이트: {new Date(stats24h.timestamp).toLocaleString('ko-KR')}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* AI 시스템 현황 */}
