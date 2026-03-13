@@ -456,12 +456,15 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-24">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-40">
                                 <button
                                     onClick={() => handleSort('heat_index')}
                                     className="flex items-center gap-1 hover:text-gray-700"
                                 >
-                                    화력
+                                    <div className="flex flex-col items-start">
+                                        <span>화력 추이</span>
+                                        <span className="text-[10px] text-gray-400 font-normal normal-case">등록 시 → 현재</span>
+                                    </div>
                                     {sortField === 'heat_index' && (
                                         <span className="text-purple-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                                     )}
@@ -511,13 +514,31 @@ export default function AdminIssuesPage() {
                                         )
                                     })()}
                                 </td>
-                                <td className="px-4 py-3 text-sm whitespace-nowrap w-24">
+                                <td className="px-4 py-3 text-sm whitespace-nowrap w-40">
                                     {(() => {
-                                        const heatMeta = getHeatMeta(issue.heat_index)
+                                        const currentHeat = issue.heat_index ?? 0
+                                        const createdHeat = issue.created_heat_index ?? currentHeat
+                                        const heatMeta = getHeatMeta(currentHeat)
+                                        
+                                        const diff = currentHeat - createdHeat
+                                        const diffIcon = diff > 0 ? '↑' : diff < 0 ? '↓' : ''
+                                        const diffColor = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'
+                                        
                                         return (
-                                            <span className={heatMeta.className}>
-                                                {heatMeta.label}
-                                            </span>
+                                            <div className="flex items-center gap-1">
+                                                <span className={heatMeta.className}>
+                                                    {createdHeat}점
+                                                </span>
+                                                <span className="text-gray-400">→</span>
+                                                <span className={heatMeta.className}>
+                                                    {currentHeat}점
+                                                </span>
+                                                {diff !== 0 && (
+                                                    <span className={`text-xs ${diffColor}`}>
+                                                        {diffIcon}
+                                                    </span>
+                                                )}
+                                            </div>
                                         )
                                     })()}
                                 </td>
