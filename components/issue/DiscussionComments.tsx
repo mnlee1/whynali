@@ -758,6 +758,20 @@ function DiscussionCommentItem({
     const hasReplies = replyCount > 0 || ((replies?.length ?? 0) > 0)
     const isReported = reportedIds.has(comment.id)
 
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
     return (
         <li className={[
             'py-4',
@@ -778,14 +792,29 @@ function DiscussionCommentItem({
                         </div>
                     )}
                     {!isMine && userId && (
-                        <button
-                            onClick={() => onOpenReportModal(comment)}
-                            disabled={isReported}
-                            className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="신고"
-                        >
-                            {isReported ? '신고완료' : '⋮'}
-                        </button>
+                        <div className="relative" ref={menuRef}>
+                            {isReported ? (
+                                <span className="text-xs text-gray-400 px-1">신고완료</span>
+                            ) : (
+                                <button
+                                    onClick={() => setMenuOpen((prev) => !prev)}
+                                    className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
+                                    aria-label="더보기"
+                                >
+                                    ⋮
+                                </button>
+                            )}
+                            {menuOpen && (
+                                <div className="absolute right-0 top-6 z-10 w-28 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                                    <button
+                                        onClick={() => { setMenuOpen(false); onOpenReportModal(comment) }}
+                                        className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                        신고하기
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
