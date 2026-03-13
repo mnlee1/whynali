@@ -4,8 +4,9 @@
  * 토론 주제 자동 마감 크론잡
  * GitHub Actions: .github/workflows/cron-auto-end-discussions.yml (매 시간)
  *
- * - 종결 이슈 연결 토론: 마감 당일 24시간 내 댓글 발생 시 +1일 연장, 없으면 마감
- * - 일반 이슈 토론: auto_end_date 경과 즉시 마감
+ * 종결 이슈 연결 토론만 처리:
+ * - 마감 당일 24시간 내 댓글 발생 시 +1일 연장
+ * - 댓글이 없으면 마감
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -57,8 +58,6 @@ export async function GET(request: NextRequest) {
                     } else {
                         toClose.push(topic.id)
                     }
-                } else {
-                    toClose.push(topic.id)
                 }
             }
 
