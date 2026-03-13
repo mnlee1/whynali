@@ -162,15 +162,23 @@ export default function AdminIssuesPage() {
         }
         
         if (issue.approval_status === '승인') {
-            return {
-                label: '승인',
-                className: 'bg-green-100 text-green-700 border-green-200'
+            // approval_type으로 자동/관리자 구분
+            if (issue.approval_type === 'auto') {
+                return {
+                    label: '자동 승인',
+                    className: 'bg-blue-100 text-blue-700 border-blue-200'
+                }
+            } else {
+                return {
+                    label: '관리자 승인',
+                    className: 'bg-green-100 text-green-700 border-green-200'
+                }
             }
         }
         
         if (issue.approval_status === '반려') {
             return {
-                label: '반려',
+                label: '관리자 반려',
                 className: 'bg-red-100 text-red-700 border-red-200'
             }
         }
