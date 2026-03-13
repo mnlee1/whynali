@@ -115,8 +115,12 @@ export async function POST(request: NextRequest) {
             title: title ? sanitizeText(title) : null,
             phase: '대기',
             issue_status_snapshot: issue?.status,
-            is_ai_generated: Boolean(is_ai_generated),
         }
+        
+        // DB 마이그레이션 적용 후 주석 해제
+        // if (typeof is_ai_generated === 'boolean') {
+        //     voteData.is_ai_generated = is_ai_generated
+        // }
 
         if (auto_end_date) {
             voteData.auto_end_date = auto_end_date

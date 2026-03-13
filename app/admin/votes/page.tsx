@@ -40,7 +40,7 @@ interface Vote {
     auto_end_date: string | null
     auto_end_participants: number | null
     created_at: string
-    is_ai_generated: boolean
+    is_ai_generated?: boolean
     issues: { id: string; title: string } | null
     vote_choices: VoteChoice[]
 }
@@ -208,16 +208,20 @@ export default function AdminVotesPage() {
                 }
             }
 
+            const bodyData: any = {
+                issue_id: selectedIssue.id,
+                title: voteTitle.trim(),
+                choices: validChoices,
+                ...autoEndOptions,
+            }
+            
+            // DB 마이그레이션 적용 후 주석 해제
+            // bodyData.is_ai_generated = isAiFilled
+            
             const res = await fetch('/api/admin/votes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    issue_id: selectedIssue.id,
-                    title: voteTitle.trim(),
-                    choices: validChoices,
-                    is_ai_generated: isAiFilled,
-                    ...autoEndOptions,
-                }),
+                body: JSON.stringify(bodyData),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
