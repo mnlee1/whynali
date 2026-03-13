@@ -17,6 +17,7 @@ interface DiscussionTopic {
     approval_status: '대기' | '진행중' | '마감'
     approved_at: string | null
     created_at: string
+    updated_at?: string | null
     issues: { id: string; title: string } | null
 }
 
@@ -45,6 +46,14 @@ function formatDate(dateString: string): string {
     return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
+function formatRelativeTime(dateString: string): string {
+    const diff = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
+    if (diff < 60) return `${diff}초 전`
+    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`
+    return `${Math.floor(diff / 86400)}일 전`
+}
+
 export default function AdminDiscussionsPage() {
     const [topics, setTopics] = useState<DiscussionTopic[]>([])
     const [total, setTotal] = useState(0)
@@ -60,24 +69,14 @@ export default function AdminDiscussionsPage() {
 
     /* 통합 생성 폼 */
     const [showCreateForm, setShowCreateForm] = useState(false)
-    const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai')
     const [approvedIssues, setApprovedIssues] = useState<Issue[]>([])
     const [loadingIssues, setLoadingIssues] = useState(false)
     const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
     const [newContent, setNewContent] = useState('')
-    const [aiCount, setAiCount] = useState(3)
     const [submitting, setSubmitting] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
-
-    /* AI 미리보기 */
-    const [generatedTopics, setGeneratedTopics] = useState<Array<{
-        content: string
-    }>>([])
-    const [showPreview, setShowPreview] = useState(false)
-    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
     const [generating, setGenerating] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [regenerateDisabled, setRegenerateDisabled] = useState(false)
+    const [isAiFilled, setIsAiFilled] = useState(false)
 
     /* 수정 폼 */
     const [editingId, setEditingId] = useState<string | null>(null)
@@ -112,103 +111,30 @@ export default function AdminDiscussionsPage() {
         setShowCreateForm(false)
         setSelectedIssue(null)
         setNewContent('')
-        setCreateMode('ai')
         setFormError(null)
-        setGeneratedTopics([])
-        setShowPreview(false)
-        setSelectedIndices(new Set())
+        setIsAiFilled(false)
     }
 
-    /* AI 생성 (미리보기) */
-    const handleGenerate = async () => {
+    /* AI 생성으로 textarea 채우기 */
+    const handleAiFill = async () => {
         if (!selectedIssue || generating) return
-
         setGenerating(true)
         setFormError(null)
-
         try {
             const res = await fetch('/api/admin/discussions/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: selectedIssue.id, count: aiCount }),
+                body: JSON.stringify({ issue_id: selectedIssue.id, count: 1 }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-
-            const topics = json.data.map((t: any) => ({
-                content: t.content || ''
-            }))
-
-            setGeneratedTopics(topics)
-            setSelectedIndices(new Set(topics.map((_: any, idx: number) => idx)))
-            setShowPreview(true)
+            const content = json.data?.[0]?.content ?? ''
+            setNewContent(content)
+            setIsAiFilled(true)
         } catch (e) {
             setFormError(e instanceof Error ? e.message : 'AI 생성 실패')
         } finally {
             setGenerating(false)
-        }
-    }
-
-    /* 재생성 */
-    const handleRegenerate = async () => {
-        if (regenerateDisabled) return
-        setRegenerateDisabled(true)
-        await handleGenerate()
-        setTimeout(() => setRegenerateDisabled(false), 5000)
-    }
-
-    /* 전체 선택/해제 */
-    const handleTogglePreviewAll = () => {
-        if (selectedIndices.size === generatedTopics.length) {
-            setSelectedIndices(new Set())
-        } else {
-            setSelectedIndices(new Set(generatedTopics.map((_, idx) => idx)))
-        }
-    }
-
-    /* 개별 선택 토글 */
-    const handleTogglePreviewSelect = (idx: number) => {
-        const newSet = new Set(selectedIndices)
-        if (newSet.has(idx)) {
-            newSet.delete(idx)
-        } else {
-            newSet.add(idx)
-        }
-        setSelectedIndices(newSet)
-    }
-
-    /* 선택 항목 등록 */
-    const handleSaveSelected = async () => {
-        if (!selectedIssue || saving || selectedIndices.size === 0) return
-
-        setSaving(true)
-        setFormError(null)
-
-        try {
-            const selectedTopics = generatedTopics.filter((_, idx) => selectedIndices.has(idx))
-
-            for (const topic of selectedTopics) {
-                const res = await fetch('/api/admin/discussions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        issue_id: selectedIssue.id,
-                        content: topic.content,
-                        is_ai_generated: true,
-                        approval_status: '대기',
-                    }),
-                })
-                const json = await res.json()
-                if (!res.ok) throw new Error(json.error)
-            }
-
-            handleCloseForm()
-            setFilter('대기')
-            loadTopics('대기')
-        } catch (e) {
-            setFormError(e instanceof Error ? e.message : '등록 실패')
-        } finally {
-            setSaving(false)
         }
     }
 
@@ -226,7 +152,7 @@ export default function AdminDiscussionsPage() {
                 body: JSON.stringify({
                     issue_id: selectedIssue.id,
                     content: newContent.trim(),
-                    is_ai_generated: false,
+                    is_ai_generated: isAiFilled,
                     approval_status: '대기',
                 }),
             })
@@ -370,7 +296,7 @@ export default function AdminDiscussionsPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             setTopics((prev) =>
-                prev.map((t) => t.id === id ? { ...t, body: json.data.body } : t)
+                prev.map((t) => t.id === id ? { ...t, body: json.data.body, updated_at: json.data.updated_at ?? new Date().toISOString() } : t)
             )
             setEditingId(null)
             setEditDraft('')
@@ -478,35 +404,6 @@ export default function AdminDiscussionsPage() {
                         <p className="text-sm text-red-500">{formError}</p>
                     )}
 
-                    {/* 생성 방식 선택 */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-600">생성 방식</label>
-                        <div className="flex gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="createMode"
-                                    value="ai"
-                                    checked={createMode === 'ai'}
-                                    onChange={(e) => setCreateMode(e.target.value as 'ai')}
-                                    className="w-4 h-4 text-blue-500"
-                                />
-                                <span className="text-sm">AI 자동 생성</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="createMode"
-                                    value="manual"
-                                    checked={createMode === 'manual'}
-                                    onChange={(e) => setCreateMode(e.target.value as 'manual')}
-                                    className="w-4 h-4 text-blue-500"
-                                />
-                                <span className="text-sm">직접 작성</span>
-                            </label>
-                        </div>
-                    </div>
-
                     {/* 이슈 선택 */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-gray-600">대상 이슈 (승인된 이슈만)</label>
@@ -531,137 +428,51 @@ export default function AdminDiscussionsPage() {
                         )}
                     </div>
 
-                    {/* AI 모드: 생성 개수 */}
-                    {createMode === 'ai' && !showPreview && (
-                        <div className="space-y-2 p-3 bg-purple-50 border border-purple-200 rounded">
-                            <p className="text-xs text-purple-700">
-                                이슈 메타데이터(제목·카테고리·화력)만 사용. 본문 미사용.
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <label className="text-xs font-medium text-gray-600">생성 개수</label>
-                                <select
-                                    value={aiCount}
-                                    onChange={(e) => setAiCount(Number(e.target.value))}
-                                    className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none"
-                                    disabled={generating}
-                                >
-                                    {[1, 2, 3, 4, 5].map((n) => (
-                                        <option key={n} value={n}>{n}개</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* AI 미리보기 */}
-                    {createMode === 'ai' && showPreview && (
-                        <div className="space-y-3 p-3 bg-white border border-gray-200 rounded">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-800">
-                                    생성 결과 ({generatedTopics.length}개)
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={handleTogglePreviewAll}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
-                                >
-                                    {selectedIndices.size === generatedTopics.length ? '전체 해제' : '전체 선택'}
-                                </button>
-                            </div>
-
-                            <div className="space-y-2 max-h-96 overflow-y-auto">
-                                {generatedTopics.map((topic, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={[
-                                            'p-3 border rounded transition-colors',
-                                            selectedIndices.has(idx)
-                                                ? 'border-blue-300 bg-blue-50'
-                                                : 'border-gray-200 bg-white'
-                                        ].join(' ')}
-                                    >
-                                        <label className="flex items-start gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedIndices.has(idx)}
-                                                onChange={() => handleTogglePreviewSelect(idx)}
-                                                className="mt-0.5 w-4 h-4"
-                                            />
-                                            <p className="flex-1 text-sm text-gray-900">
-                                                {topic.content}
-                                            </p>
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="flex gap-2 pt-2 border-t">
-                                <button
-                                    type="button"
-                                    onClick={handleRegenerate}
-                                    disabled={regenerateDisabled || generating}
-                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-                                >
-                                    {regenerateDisabled ? '재생성 대기 중...' : '🔄 재생성'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSaveSelected}
-                                    disabled={saving || selectedIndices.size === 0}
-                                    className="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                >
-                                    {saving ? '등록 중...' : `선택 항목 등록 (${selectedIndices.size})`}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 직접 작성 모드: 토론 주제 내용 */}
-                    {createMode === 'manual' && (
-                        <div className="space-y-1">
+                    {/* 토론 주제 내용 */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
                             <label className="text-xs font-medium text-gray-600">토론 주제 내용</label>
-                            <textarea
-                                value={newContent}
-                                onChange={(e) => setNewContent(e.target.value)}
-                                placeholder="토론 주제 내용을 입력하세요"
-                                rows={3}
-                                maxLength={500}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400 resize-none"
-                            />
-                            <p className="text-xs text-gray-400 text-right">{newContent.length}/500</p>
-                        </div>
-                    )}
-
-                    {!showPreview && (
-                        <div className="flex gap-2 justify-end">
                             <button
                                 type="button"
-                                onClick={handleCloseForm}
-                                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                                onClick={handleAiFill}
+                                disabled={!selectedIssue || generating}
+                                className="text-xs px-2.5 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
                             >
-                                취소
+                                {generating ? 'AI 생성 중...' : '✨ AI 생성'}
                             </button>
-                            {createMode === 'ai' ? (
-                                <button
-                                    type="button"
-                                    onClick={handleGenerate}
-                                    disabled={!selectedIssue || generating}
-                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                >
-                                    {generating ? 'AI 생성 중...' : 'AI 생성'}
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={handleSubmitManual}
-                                    disabled={!selectedIssue || !newContent.trim() || submitting}
-                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                >
-                                    {submitting ? '생성 중...' : '생성'}
-                                </button>
-                            )}
                         </div>
-                    )}
+                        <textarea
+                            value={newContent}
+                            onChange={(e) => {
+                                setNewContent(e.target.value)
+                                setIsAiFilled(false)
+                            }}
+                            placeholder="토론 주제 내용을 직접 입력하거나, AI 생성 버튼을 눌러 자동 생성하세요"
+                            rows={3}
+                            maxLength={500}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400 resize-none"
+                        />
+                        <p className="text-xs text-gray-400 text-right">{newContent.length}/500</p>
+                    </div>
+
+                    {/* 하단 버튼 */}
+                    <div className="flex gap-2 justify-end">
+                        <button
+                            type="button"
+                            onClick={handleCloseForm}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSubmitManual}
+                            disabled={!selectedIssue || !newContent.trim() || submitting}
+                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                        >
+                            {submitting ? '생성 중...' : '생성'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -863,7 +674,12 @@ export default function AdminDiscussionsPage() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-500">
-                                            {formatDate(topic.created_at)}
+                                            <div>{formatDate(topic.created_at)}</div>
+                                            {topic.updated_at && (
+                                                <div className="text-xs text-blue-500 mt-0.5">
+                                                    {formatRelativeTime(topic.updated_at)} 수정됨
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {!isEditing && (
