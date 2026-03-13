@@ -364,7 +364,7 @@ export default function AdminVotesPage() {
         loadVotes(filter, 1)
     }, [filter, loadVotes])
 
-    const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료') => {
+    const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료' | '재개') => {
         let confirmMsg = ''
         
         if (action === '승인') {
@@ -375,6 +375,8 @@ export default function AdminVotesPage() {
             confirmMsg = '이 투표를 영구 삭제하시겠습니까? 투표와 선택지가 모두 삭제됩니다.'
         } else if (action === '종료') {
             confirmMsg = '이 투표를 즉시 종료하시겠습니까?'
+        } else if (action === '재개') {
+            confirmMsg = '이 투표를 다시 진행중 상태로 재개하시겠습니까? 자동 마감 조건(날짜/참여자 수)이 초기화됩니다.'
         }
         
         if (!window.confirm(confirmMsg)) return
@@ -392,6 +394,8 @@ export default function AdminVotesPage() {
                 method = 'DELETE'
             } else if (action === '종료') {
                 endpoint = `/api/admin/votes/${id}/close`
+            } else if (action === '재개') {
+                endpoint = `/api/admin/votes/${id}/reopen`
             }
             
             const res = await fetch(endpoint, { method })
@@ -1075,6 +1079,15 @@ export default function AdminVotesPage() {
                                                         </button>
                                                     )}
                                                 </div>
+                                            )}
+                                            {vote.phase === '마감' && (
+                                                <button
+                                                    onClick={() => handleAction(vote.id, '재개')}
+                                                    disabled={isProcessing}
+                                                    className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                >
+                                                    재개
+                                                </button>
                                             )}
                                             {vote.approval_status === '반려' && vote.phase !== '대기' && (
                                                 <button
