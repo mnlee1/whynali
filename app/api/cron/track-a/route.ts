@@ -28,7 +28,56 @@ import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
 import type { IssueCategory } from '@/lib/config/categories'
 import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
 
-const ENABLE_TRACK_A = process.env.ENABLE_TRACK_A === 'true'
+/**
+ * autoApproveUrgentIssues - 긴급 이슈 타임아웃 자동 승인
+ * 
+ * 조건: approval_status='대기' AND is_urgent=true AND created_at < N시간 전
+ * 처리: approval_status='승인', approval_type='auto', approved_at=now()
+ * 
+ * 환경변수:
+ * - URGENT_AUTO_APPROVE_HOURS: 타임아웃 기준 (기본 2시간)
+ */
+async function autoApproveUrgentIssues(): Promise<{ count: number; issues: string[] }> {
+    const timeoutHours = parseInt(process.env.URGENT_AUTO_APPROVE_HOURS ?? '2')
+    const cutoffTime = new Date(Date.now() - timeoutHours * 60 * 60 * 1000).toISOString()
+    
+    const { data: urgentIssues } = await supabaseAdmin
+        .from('issues')
+        .select('id, title, category, heat_index')
+        .eq('approval_status', '대기')
+        .eq('is_urgent', true)
+        .lt('created_at', cutoffTime)
+    
+    if (!urgentIssues || urgentIssues.length === 0) {
+        return { count: 0, issues: [] }
+    }
+    
+    const approvedTitles: string[] = []
+    const now = new Date().toISOString()
+    
+    for (const issue of urgentIssues) {
+        const { error } = await supabaseAdmin
+            .from('issues')
+            .update({
+                approval_status: '승인',
+                approval_type: 'auto',
+                approved_at: now,
+            })
+            .eq('id', issue.id)
+        
+        if (!error) {
+            console.log(
+                `[긴급 자동승인] ${issue.title} ` +
+                `(카테고리: ${issue.category}, 화력: ${issue.heat_index ?? '?'}점, 대기시간: ${timeoutHours}시간+)`
+            )
+            approvedTitles.push(issue.title)
+        }
+    }
+    
+    return { count: approvedTitles.length, issues: approvedTitles }
+}
+
+
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
 const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
@@ -1015,17 +1064,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    if (!ENABLE_TRACK_A) {
-        return NextResponse.json({ 
-            message: '트랙 A 비활성화됨 (ENABLE_TRACK_A=false)',
-            success: 0,
-            failed: 0
-        })
-    }
-    
     try {
+        const urgentApprovalResult = await autoApproveUrgentIssues()
         const result = await processTrackA()
-        return NextResponse.json(result)
+        
+        return NextResponse.json({
+            ...result,
+            urgentApproved: urgentApprovalResult.count,
+            urgentApprovedIssues: urgentApprovalResult.issues,
+        })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         const errorStack = error instanceof Error ? error.stack : undefined
