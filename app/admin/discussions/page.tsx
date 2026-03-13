@@ -528,13 +528,15 @@ export default function AdminDiscussionsPage() {
                                 일괄 종료
                             </button>
                         )}
-                        <button
-                            onClick={() => handleBulkAction('삭제')}
-                            disabled={bulkProcessing}
-                            className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
-                        >
-                            일괄 삭제
-                        </button>
+                        {filter === '대기' && (
+                            <button
+                                onClick={() => handleBulkAction('삭제')}
+                                disabled={bulkProcessing}
+                                className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                            >
+                                일괄 삭제
+                            </button>
+                        )}
                         <button
                             onClick={() => setSelectedTopicIds(new Set())}
                             className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
@@ -734,14 +736,15 @@ export default function AdminDiscussionsPage() {
                                                             재개
                                                         </button>
                                                     )}
-                                                    {/* 삭제 버튼: 모든 상태에서 노출 */}
-                                                    <button
-                                                        onClick={() => handleDelete(topic.id)}
-                                                        disabled={isProcessing}
-                                                        className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
-                                                    >
-                                                        삭제
-                                                    </button>
+                                                    {topic.approval_status === '대기' && (
+                                                        <button
+                                                            onClick={() => handleDelete(topic.id)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                                                        >
+                                                            삭제
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
