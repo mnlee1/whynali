@@ -396,28 +396,8 @@ export default function AdminDiscussionsPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            const nextStatus =
-                action === '진행중' ? '진행중' :
-                action === '마감' ? '마감' : '대기'
             
-            /* 필터와 맞지 않으면 목록에서 제거, 맞으면 상태만 업데이트 */
-            if (filter && filter !== nextStatus) {
-                setTopics((prev) => prev.filter((t) => t.id !== id))
-                setTotal((prev) => Math.max(0, prev - 1))
-            } else {
-                setTopics((prev) =>
-                    prev.map((t) =>
-                        t.id === id
-                            ? {
-                                  ...t,
-                                  approval_status: nextStatus as DiscussionTopic['approval_status'],
-                                  approved_at: action === '진행중' ? new Date().toISOString() : null,
-                              }
-                            : t
-                    )
-                )
-            }
-            
+            loadTopics(filter)
             setSelectedTopicIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
@@ -440,9 +420,7 @@ export default function AdminDiscussionsPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             
-            /* 목록에서 제거하고 total count 감소 */
-            setTopics((prev) => prev.filter((t) => t.id !== id))
-            setTotal((prev) => Math.max(0, prev - 1))
+            loadTopics(filter)
             setSelectedTopicIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
@@ -899,13 +877,22 @@ export default function AdminDiscussionsPage() {
                                                         수정
                                                     </button>
                                                     {topic.approval_status === '대기' && (
-                                                        <button
-                                                            onClick={() => handleAction(topic.id, '진행중')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                                        >
-                                                            승인
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '진행중')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                            >
+                                                                승인
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '마감')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50"
+                                                            >
+                                                                마감
+                                                            </button>
+                                                        </>
                                                     )}
                                                     {topic.approval_status === '진행중' && (
                                                         <button
