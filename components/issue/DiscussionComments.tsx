@@ -409,61 +409,8 @@ export default function DiscussionComments({
                 </div>
             )}
 
-            {/* 정렬 + 총 개수 */}
-            <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500">의견 {total.toLocaleString()}개</p>
-                <div className="flex gap-1">
-                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => handleSortChange(s)}
-                            className={[
-                                'text-xs px-2.5 py-1 rounded border transition-colors',
-                                sort === s
-                                    ? 'border-purple-600 bg-purple-600 text-white'
-                                    : 'border-gray-200 text-gray-500 hover:border-purple-300',
-                            ].join(' ')}
-                        >
-                            {SORT_LABELS[s]}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 의견 목록 */}
-            {comments.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">첫 번째 의견을 남겨보세요.</p>
-            ) : (
-                <ul className="divide-y divide-purple-50 mb-4">
-                    {comments.map((c) => (
-                        <DiscussionCommentItem
-                            key={c.id}
-                            comment={c} userId={userId}
-                            editingId={editingId} editDraft={editDraft}
-                            submittingEdit={submittingEdit} deletingId={deletingId} likingId={likingId}
-                            reportedIds={reportedIds}
-                            onEditStart={handleEditStart} onEditCancel={handleEditCancel}
-                            onEditSave={handleEditSave} onDelete={handleDelete}
-                            onLike={handleLike} onOpenReportModal={handleOpenReportModal} setEditDraft={setEditDraft}
-                        />
-                    ))}
-                </ul>
-            )}
-
-            {comments.length < total && (
-                <div className="text-center mb-5">
-                    <button
-                        onClick={handleLoadMore}
-                        disabled={loadingMore}
-                        className="text-sm px-5 py-2 border border-purple-200 rounded text-purple-600 hover:bg-purple-50 disabled:opacity-50"
-                    >
-                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개)`}
-                    </button>
-                </div>
-            )}
-
             {/* 작성 폼 */}
-            <div className="pt-4 border-t border-purple-100">
+            <div className="pb-4 border-b border-purple-100 mb-4">
                 {isClosed ? (
                     <p className="text-sm text-gray-400 text-center py-3">
                         종료된 토론입니다. 의견을 작성할 수 없습니다.
@@ -541,6 +488,59 @@ export default function DiscussionComments({
                     </p>
                 )}
             </div>
+
+            {/* 정렬 + 총 개수 */}
+            <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-500">의견 {total.toLocaleString()}개</p>
+                <div className="flex gap-1">
+                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => handleSortChange(s)}
+                            className={[
+                                'text-xs px-2.5 py-1 rounded border transition-colors',
+                                sort === s
+                                    ? 'border-purple-600 bg-purple-600 text-white'
+                                    : 'border-gray-200 text-gray-500 hover:border-purple-300',
+                            ].join(' ')}
+                        >
+                            {SORT_LABELS[s]}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* 의견 목록 */}
+            {comments.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">첫 번째 의견을 남겨보세요.</p>
+            ) : (
+                <ul className="divide-y divide-purple-50 mb-4">
+                    {comments.map((c) => (
+                        <DiscussionCommentItem
+                            key={c.id}
+                            comment={c} userId={userId}
+                            editingId={editingId} editDraft={editDraft}
+                            submittingEdit={submittingEdit} deletingId={deletingId} likingId={likingId}
+                            reportedIds={reportedIds}
+                            onEditStart={handleEditStart} onEditCancel={handleEditCancel}
+                            onEditSave={handleEditSave} onDelete={handleDelete}
+                            onLike={handleLike} onOpenReportModal={handleOpenReportModal} setEditDraft={setEditDraft}
+                        />
+                    ))}
+                </ul>
+            )}
+
+            {comments.length < total && (
+                <div className="text-center mb-5">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="text-sm px-5 py-2 border border-purple-200 rounded text-purple-600 hover:bg-purple-50 disabled:opacity-50"
+                    >
+                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개)`}
+                    </button>
+                </div>
+            )}
 
             {/* 신고 모달 */}
             {showReportModal && reportTargetComment && (

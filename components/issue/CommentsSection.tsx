@@ -537,6 +537,65 @@ export default function CommentsSection({
                     </div>
                 )}
 
+                {/* 작성 폼 */}
+                <div className="pb-4 border-b border-gray-100 mb-4">
+                    {isClosed ? (
+                        <p className="text-sm text-gray-400 text-center py-3">
+                            종료된 토론입니다. 댓글을 작성할 수 없습니다.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {writeErrorType === 'rate_limit' && writeError && (
+                                <div className="flex items-center gap-3 px-3 py-2 bg-yellow-50 border border-yellow-300 rounded text-sm">
+                                    <span className="text-yellow-700 flex-1">{writeError}</span>
+                                    {rateLimitCountdown > 0 && (
+                                        <span className="text-yellow-800 font-semibold tabular-nums shrink-0">
+                                            {rateLimitCountdown}초 후 재시도 가능
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            {writeErrorType !== 'rate_limit' && writeError && (
+                                <p className="text-sm text-red-500">{writeError}</p>
+                            )}
+                            {pendingNotice && (
+                                <p className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-300 rounded px-3 py-2">
+                                    {pendingNotice}
+                                </p>
+                            )}
+                            <textarea
+                                value={draft}
+                                onChange={(e) => {
+                                    setDraft(e.target.value)
+                                    if (writeErrorType === 'validation') {
+                                        setWriteError(null)
+                                        setWriteErrorType(null)
+                                    }
+                                }}
+                                onClick={() => { if (!userId) redirectToLogin() }}
+                                placeholder={userId ? '댓글을 입력하세요...' : '댓글을 작성하려면 로그인하세요'}
+                                rows={3}
+                                className={[
+                                    'w-full px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none',
+                                    writeErrorType === 'validation'
+                                        ? 'border-red-400 focus:border-red-400'
+                                        : 'border-gray-300 focus:border-neutral-400',
+                                ].join(' ')}
+                            />
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-400">{draft.length} / 1000</span>
+                                <button
+                                    onClick={handleWrite}
+                                    disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
+                                    className="text-sm px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                                >
+                                    {submittingWrite ? '등록 중...' : '등록'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {/* 정렬 옵션 + 총 댓글 수 */}
                 <div className="flex items-center justify-between mb-3">
                     <p className="text-sm text-gray-500">댓글 {total.toLocaleString()}개</p>
@@ -635,65 +694,6 @@ export default function CommentsSection({
                         </button>
                     </div>
                 )}
-
-                {/* 작성 폼 */}
-                <div className="pt-4 border-t border-gray-100">
-                    {isClosed ? (
-                        <p className="text-sm text-gray-400 text-center py-3">
-                            종료된 토론입니다. 댓글을 작성할 수 없습니다.
-                        </p>
-                    ) : (
-                        <div className="space-y-2">
-                            {writeErrorType === 'rate_limit' && writeError && (
-                                <div className="flex items-center gap-3 px-3 py-2 bg-yellow-50 border border-yellow-300 rounded text-sm">
-                                    <span className="text-yellow-700 flex-1">{writeError}</span>
-                                    {rateLimitCountdown > 0 && (
-                                        <span className="text-yellow-800 font-semibold tabular-nums shrink-0">
-                                            {rateLimitCountdown}초 후 재시도 가능
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                            {writeErrorType !== 'rate_limit' && writeError && (
-                                <p className="text-sm text-red-500">{writeError}</p>
-                            )}
-                            {pendingNotice && (
-                                <p className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-300 rounded px-3 py-2">
-                                    {pendingNotice}
-                                </p>
-                            )}
-                            <textarea
-                                value={draft}
-                                onChange={(e) => {
-                                    setDraft(e.target.value)
-                                    if (writeErrorType === 'validation') {
-                                        setWriteError(null)
-                                        setWriteErrorType(null)
-                                    }
-                                }}
-                                onClick={() => { if (!userId) redirectToLogin() }}
-                                placeholder={userId ? '댓글을 입력하세요...' : '댓글을 작성하려면 로그인하세요'}
-                                rows={3}
-                                className={[
-                                    'w-full px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none',
-                                    writeErrorType === 'validation'
-                                        ? 'border-red-400 focus:border-red-400'
-                                        : 'border-gray-300 focus:border-neutral-400',
-                                ].join(' ')}
-                            />
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-400">{draft.length} / 1000</span>
-                                <button
-                                    onClick={handleWrite}
-                                    disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
-                                    className="text-sm px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                                >
-                                    {submittingWrite ? '등록 중...' : '등록'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
             </div>
 
             {/* 신고 모달 */}
