@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json()
-        const { issue_id, title, choices, auto_end_date, auto_end_participants } = body
+        const { issue_id, title, choices, auto_end_date, auto_end_participants, is_ai_generated = false } = body
 
         if (!issue_id) {
             return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
             title: title ? sanitizeText(title) : null,
             phase: '대기',
             issue_status_snapshot: issue?.status,
+            is_ai_generated: Boolean(is_ai_generated),
         }
 
         if (auto_end_date) {
