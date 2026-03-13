@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
             const { data, error } = await supabaseAdmin
                 .from('discussion_topics')
-                .update({ body: sanitized })
+                .update({ body: sanitized, updated_at: new Date().toISOString() })
                 .eq('id', id)
                 .select()
                 .single()

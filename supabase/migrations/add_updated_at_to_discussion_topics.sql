@@ -1,10 +1,14 @@
+-- discussion_topics 테이블에 updated_at 컬럼 추가
 ALTER TABLE discussion_topics
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 
+-- body 수정 시 updated_at 자동 갱신 트리거
 CREATE OR REPLACE FUNCTION update_discussion_topics_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = now();
+  IF OLD.body IS DISTINCT FROM NEW.body THEN
+    NEW.updated_at = now();
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

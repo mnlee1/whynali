@@ -296,7 +296,7 @@ export default function AdminDiscussionsPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             setTopics((prev) =>
-                prev.map((t) => t.id === id ? { ...t, body: json.data.body, updated_at: json.data.updated_at ?? new Date().toISOString() } : t)
+                prev.map((t) => t.id === id ? { ...t, body: json.data.body, updated_at: json.data.updated_at ?? null } : t)
             )
             setEditingId(null)
             setEditDraft('')
