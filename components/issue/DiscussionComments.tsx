@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Comment } from '@/types'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
+import ReportModal from '@/components/issue/ReportModal'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
@@ -29,7 +30,6 @@ type CommentWithLike = Comment & {
 
 const PAGE_SIZE = 20
 const RATE_LIMIT_SECONDS = 60
-const REPORT_REASONS = ['스팸', '욕설/혐오', '허위정보', '기타'] as const
 
 /* 클릭하면 textarea 앞부분에 삽입되는 질문 스타터 칩 */
 const STARTERS = [
@@ -95,6 +95,8 @@ export default function DiscussionComments({
 
     /* 신고 상태 */
     const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
+    const [reportModalOpen, setReportModalOpen] = useState(false)
+    const [reportTargetComment, setReportTargetComment] = useState<Comment | null>(null)
 
     /* 세이프티봇 상태 */
     const [safetyBotEnabled, setSafetyBotEnabled] = useState<boolean>(() => {
@@ -396,7 +398,12 @@ export default function DiscussionComments({
         setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
     }
 
-    /* 신고 */
+    /* 신고 모달 */
+    const handleOpenReportModal = (comment: Comment) => {
+        setReportTargetComment(comment)
+        setReportModalOpen(true)
+    }
+
     const handleReport = async (commentId: string, reason: string) => {
         if (reportedIds.has(commentId)) return
         setReportedIds((prev) => new Set([...prev, commentId]))
@@ -487,6 +494,7 @@ export default function DiscussionComments({
                             onReplyDraftChange={setReplyDraft}
                             onReplySubmit={handleReplySubmit}
                             onToggleReplies={handleToggleReplies}
+                            onOpenReportModal={handleOpenReportModal}
                             onReport={handleReport}
                             setEditDraft={setEditDraft}
                         />
@@ -585,6 +593,19 @@ export default function DiscussionComments({
                     </p>
                 )}
             </div>
+
+            {reportTargetComment && (
+                <ReportModal
+                    isOpen={reportModalOpen}
+                    onClose={() => { setReportModalOpen(false); setReportTargetComment(null) }}
+                    comment={{
+                        id: reportTargetComment.id,
+                        body: reportTargetComment.body,
+                        authorNickname: reportTargetComment.display_name || `사용자 …${reportTargetComment.user_id.slice(-4)}`,
+                    }}
+                    onReport={handleReport}
+                />
+            )}
         </div>
     )
 }
@@ -618,6 +639,7 @@ interface DiscussionCommentItemProps {
     onReplyDraftChange?: (v: string) => void
     onReplySubmit?: (parentId: string) => void
     onToggleReplies?: (id: string) => void
+    onOpenReportModal: (c: Comment) => void
     onReport: (id: string, reason: string) => void
     setEditDraft: (v: string) => void
 }
@@ -630,18 +652,17 @@ function DiscussionCommentItem({
     reportedIds,
     onEditStart, onEditCancel, onEditSave, onDelete, onLike,
     onReplyToggle, onReplyDraftChange, onReplySubmit, onToggleReplies,
-    onReport, setEditDraft,
+    onOpenReportModal, onReport, setEditDraft,
 }: DiscussionCommentItemProps) {
     const [menuOpen, setMenuOpen] = useState(false)
-    const [showReasons, setShowReasons] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
 
-    const closeMenu = () => { setMenuOpen(false); setShowReasons(false) }
-
     useEffect(() => {
-        if (!menuOpen) { setShowReasons(false); return }
+        if (!menuOpen) return
         const handler = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) closeMenu()
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -680,7 +701,6 @@ function DiscussionCommentItem({
                             </button>
                         </div>
                     )}
-                    {/* 신고 ⋮ 드롭다운 (타인 의견 + 로그인 시) */}
                     {!isMine && userId && (
                         <div className="relative" ref={menuRef}>
                             <button
@@ -688,35 +708,19 @@ function DiscussionCommentItem({
                                 className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
                                 aria-label="더보기"
                             >
-                                ⋮
+                                {isReported ? '신고완료' : '⋮'}
                             </button>
                             {menuOpen && (
-                                <div className="absolute right-0 top-5 z-20 bg-white border border-gray-200 rounded-lg shadow-md py-1 min-w-[120px]">
-                                    {isReported ? (
-                                        <span className="block px-3 py-1.5 text-xs text-gray-400">신고완료</span>
-                                    ) : !showReasons ? (
-                                        <button
-                                            onClick={() => setShowReasons(true)}
-                                            className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                                        >
-                                            신고
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <span className="block px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100">
-                                                신고 사유 선택
-                                            </span>
-                                            {REPORT_REASONS.map((reason) => (
-                                                <button
-                                                    key={reason}
-                                                    onClick={() => { onReport(comment.id, reason); closeMenu() }}
-                                                    className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                                                >
-                                                    {reason}
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
+                                <div className="absolute right-0 top-5 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[100px]">
+                                    <button
+                                        onClick={() => {
+                                            setMenuOpen(false)
+                                            onOpenReportModal(comment)
+                                        }}
+                                        className="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                        신고하기
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -861,6 +865,7 @@ function DiscussionCommentItem({
                             onEditSave={onEditSave}
                             onDelete={onDelete}
                             onLike={onLike}
+                            onOpenReportModal={onOpenReportModal}
                             onReport={onReport}
                             setEditDraft={setEditDraft}
                         />

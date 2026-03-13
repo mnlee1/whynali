@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatDate } from '@/lib/utils/format-date'
 import type { Comment } from '@/types'
+import ReportModal from '@/components/issue/ReportModal'
 
 interface CommentsSectionProps {
     issueId?: string
@@ -68,6 +69,10 @@ export default function CommentsSection({
     const [submittingEdit, setSubmittingEdit] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [likingId, setLikingId] = useState<string | null>(null)
+
+    const [reportModalOpen, setReportModalOpen] = useState(false)
+    const [reportTargetComment, setReportTargetComment] = useState<Comment | null>(null)
+    const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
 
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
     useEffect(() => {
@@ -261,6 +266,24 @@ export default function CommentsSection({
         }
     }
 
+    /* 신고 모달 */
+    const handleOpenReportModal = (comment: Comment) => {
+        setReportTargetComment(comment)
+        setReportModalOpen(true)
+    }
+
+    const handleReport = async (commentId: string, reason: string) => {
+        if (reportedIds.has(commentId)) return
+        setReportedIds((prev) => new Set([...prev, commentId]))
+        try {
+            await fetch(`/api/comments/${commentId}/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
+            })
+        } catch { /* 신고 실패 시 상태 유지 */ }
+    }
+
     /* 댓글 좋아요/싫어요 토글 (낙관적 업데이트) */
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
         if (!userId) {
@@ -398,11 +421,13 @@ export default function CommentsSection({
                                 submittingEdit={submittingEdit}
                                 deletingId={deletingId}
                                 likingId={likingId}
+                                reportedIds={reportedIds}
                                 onEditStart={handleEditStart}
                                 onEditCancel={handleEditCancel}
                                 onEditSave={handleEditSave}
                                 onDelete={handleDelete}
                                 onLike={handleLike}
+                                onOpenReportModal={handleOpenReportModal}
                                 setEditDraft={setEditDraft}
                             />
                         ))}
@@ -449,11 +474,13 @@ export default function CommentsSection({
                             submittingEdit={submittingEdit}
                             deletingId={deletingId}
                             likingId={likingId}
+                            reportedIds={reportedIds}
                             onEditStart={handleEditStart}
                             onEditCancel={handleEditCancel}
                             onEditSave={handleEditSave}
                             onDelete={handleDelete}
                             onLike={handleLike}
+                            onOpenReportModal={handleOpenReportModal}
                             setEditDraft={setEditDraft}
                         />
                     ))}
@@ -538,6 +565,19 @@ export default function CommentsSection({
                     </div>
                 )}
             </div>
+
+            {reportTargetComment && (
+                <ReportModal
+                    isOpen={reportModalOpen}
+                    onClose={() => { setReportModalOpen(false); setReportTargetComment(null) }}
+                    comment={{
+                        id: reportTargetComment.id,
+                        body: reportTargetComment.body,
+                        authorNickname: reportTargetComment.display_name || `사용자 …${reportTargetComment.user_id.slice(-4)}`,
+                    }}
+                    onReport={handleReport}
+                />
+            )}
         </div>
     )
 }
@@ -553,24 +593,42 @@ interface CommentItemProps {
     submittingEdit: boolean
     deletingId: string | null
     likingId: string | null
+    reportedIds: Set<string>
     onEditStart: (c: Comment) => void
     onEditCancel: () => void
     onEditSave: (id: string) => void
     onDelete: (id: string) => void
     onLike: (id: string, type: 'like' | 'dislike') => void
+    onOpenReportModal: (c: Comment) => void
     setEditDraft: (v: string) => void
 }
 
 function CommentItem({
     comment, userId, isBest,
     editingId, editDraft, submittingEdit, deletingId, likingId,
-    onEditStart, onEditCancel, onEditSave, onDelete, onLike, setEditDraft,
+    reportedIds,
+    onEditStart, onEditCancel, onEditSave, onDelete, onLike, onOpenReportModal, setEditDraft,
 }: CommentItemProps) {
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
     const isDeleting = deletingId === comment.id
     const isLiking = likingId === comment.id
     const myType = comment.userLikeType ?? null
+    const isReported = reportedIds.has(comment.id)
 
     return (
         <li className={[
@@ -601,6 +659,30 @@ function CommentItem({
                             >
                                 {isDeleting ? '삭제 중...' : '삭제'}
                             </button>
+                        </div>
+                    )}
+                    {!isMine && userId && (
+                        <div className="relative" ref={menuRef}>
+                            <button
+                                onClick={() => setMenuOpen((v) => !v)}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
+                                aria-label="더보기"
+                            >
+                                {isReported ? '신고완료' : '⋮'}
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 top-5 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[100px]">
+                                    <button
+                                        onClick={() => {
+                                            setMenuOpen(false)
+                                            onOpenReportModal(comment)
+                                        }}
+                                        className="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                        신고하기
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
