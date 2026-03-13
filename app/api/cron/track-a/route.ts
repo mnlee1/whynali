@@ -28,59 +28,10 @@ import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
 import type { IssueCategory } from '@/lib/config/categories'
 import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
 
-/**
- * autoApproveUrgentIssues - 긴급 이슈 타임아웃 자동 승인
- * 
- * 조건: approval_status='대기' AND is_urgent=true AND created_at < N시간 전
- * 처리: approval_status='승인', approval_type='auto', approved_at=now()
- * 
- * 환경변수:
- * - URGENT_AUTO_APPROVE_HOURS: 타임아웃 기준 (기본 2시간)
- */
-async function autoApproveUrgentIssues(): Promise<{ count: number; issues: string[] }> {
-    const timeoutHours = parseInt(process.env.URGENT_AUTO_APPROVE_HOURS ?? '2')
-    const cutoffTime = new Date(Date.now() - timeoutHours * 60 * 60 * 1000).toISOString()
-    
-    const { data: urgentIssues } = await supabaseAdmin
-        .from('issues')
-        .select('id, title, category, heat_index')
-        .eq('approval_status', '대기')
-        .eq('is_urgent', true)
-        .lt('created_at', cutoffTime)
-    
-    if (!urgentIssues || urgentIssues.length === 0) {
-        return { count: 0, issues: [] }
-    }
-    
-    const approvedTitles: string[] = []
-    const now = new Date().toISOString()
-    
-    for (const issue of urgentIssues) {
-        const { error } = await supabaseAdmin
-            .from('issues')
-            .update({
-                approval_status: '승인',
-                approval_type: 'auto',
-                approved_at: now,
-            })
-            .eq('id', issue.id)
-        
-        if (!error) {
-            console.log(
-                `[긴급 자동승인] ${issue.title} ` +
-                `(카테고리: ${issue.category}, 화력: ${issue.heat_index ?? '?'}점, 대기시간: ${timeoutHours}시간+)`
-            )
-            approvedTitles.push(issue.title)
-        }
-    }
-    
-    return { count: approvedTitles.length, issues: approvedTitles }
-}
-
-
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
 const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
+const AUTO_APPROVE_HEAT_THRESHOLD = parseInt(process.env.AUTO_APPROVE_HEAT_THRESHOLD ?? '30')
 
 // Rate Limit 완화 설정
 const MAX_KEYWORDS_PER_RUN = parseInt(process.env.TRACK_A_MAX_KEYWORDS ?? '1')  // 한 번에 처리할 키워드 수 (기본 1개)
@@ -1009,15 +960,24 @@ async function processTrackA(): Promise<{
             continue
         }
         
+        // 화력 기반 자동 승인 판단
+        const shouldAutoApprove = heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD
+        const approvalStatus = shouldAutoApprove ? '승인' : '대기'
+        const now = new Date().toISOString()
+        
         await supabaseAdmin
             .from('issues')
             .update({ 
                 heat_index: heatIndex,
-                created_heat_index: heatIndex
+                created_heat_index: heatIndex,
+                approval_status: approvalStatus,
+                approval_type: shouldAutoApprove ? 'auto' : null,
+                approved_at: shouldAutoApprove ? now : null,
             })
             .eq('id', newIssue.id)
         
-        console.log(`  ✅ [이슈 후보 등록] "${finalIssueTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점, 카테고리: ${category})`)
+        const statusLabel = shouldAutoApprove ? `승인 (화력 ${heatIndex}점 ≥ ${AUTO_APPROVE_HEAT_THRESHOLD}점)` : '대기'
+        console.log(`  ✅ [이슈 등록 완료] "${finalIssueTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점, 상태: ${statusLabel})`)
         successCount++
         
         // Rate Limit 완화: AI 호출 간 충분한 대기
@@ -1065,14 +1025,8 @@ export async function POST(req: NextRequest) {
     }
     
     try {
-        const urgentApprovalResult = await autoApproveUrgentIssues()
         const result = await processTrackA()
-        
-        return NextResponse.json({
-            ...result,
-            urgentApproved: urgentApprovalResult.count,
-            urgentApprovedIssues: urgentApprovalResult.issues,
-        })
+        return NextResponse.json(result)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         const errorStack = error instanceof Error ? error.stack : undefined
