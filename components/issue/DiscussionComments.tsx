@@ -23,7 +23,7 @@ interface DiscussionCommentsProps {
 type SortOption = 'latest' | 'likes' | 'dislikes'
 type CommentWithLike = Comment & { userLikeType?: 'like' | 'dislike' | null }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
 const SORT_LABELS: Record<SortOption, string> = {

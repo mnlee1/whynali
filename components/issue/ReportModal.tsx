@@ -3,9 +3,12 @@
  *
  * 댓글 신고 전체화면 모달
  * - 신고 대상 정보 (작성자 마스킹, 댓글 내용)
+ * - 라디오 버튼 사유 선택
  */
 
 'use client'
+
+import { useState } from 'react'
 
 interface ReportModalProps {
     isOpen: boolean
@@ -18,6 +21,22 @@ interface ReportModalProps {
     onReport: (commentId: string, reason: string) => void
 }
 
+type ReportOption = {
+    id: string
+    label: string
+    dbValue: string
+}
+
+const REPORT_OPTIONS: ReportOption[] = [
+    { id: 'hate', label: '혐오/차별적/생명경시/욕설 표현입니다.', dbValue: '욕설/혐오' },
+    { id: 'spam', label: '스팸홍보/도배글입니다', dbValue: '스팸/광고' },
+    { id: 'obscene', label: '음란물입니다.', dbValue: '기타' },
+    { id: 'illegal', label: '불법정보를 포함하고 있습니다.', dbValue: '허위정보' },
+    { id: 'youth', label: '청소년에게 유해한 내용입니다.', dbValue: '기타' },
+    { id: 'privacy', label: '개인정보 노출 게시물입니다.', dbValue: '기타' },
+    { id: 'offensive', label: '불쾌한 표현이 있습니다.', dbValue: '기타' },
+]
+
 function maskNickname(nickname: string): string {
     if (nickname.length <= 4) return nickname
     return nickname.slice(0, 4) + '****'
@@ -29,10 +48,15 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 export default function ReportModal({ isOpen, onClose, comment, onReport }: ReportModalProps) {
+    const [selectedOption, setSelectedOption] = useState<string | null>(null)
+
     if (!isOpen) return null
 
     const handleSubmit = () => {
-        onReport(comment.id, '기타')
+        if (!selectedOption) return
+        const option = REPORT_OPTIONS.find((o) => o.id === selectedOption)
+        if (!option) return
+        onReport(comment.id, option.dbValue)
         onClose()
     }
 
@@ -63,11 +87,43 @@ export default function ReportModal({ isOpen, onClose, comment, onReport }: Repo
                     </div>
                 </div>
 
+                {/* 사유 선택 */}
+                <div className="px-6 py-4">
+                    <p className="text-sm font-semibold text-gray-800 mb-3">사유선택</p>
+                    <div className="space-y-2">
+                        {REPORT_OPTIONS.map((option) => (
+                            <div
+                                key={option.id}
+                                className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
+                                    selectedOption === option.id
+                                        ? 'border-green-500'
+                                        : 'border-gray-200'
+                                }`}
+                                onClick={() => setSelectedOption(option.id)}
+                            >
+                                <input
+                                    type="radio"
+                                    id={`report-${option.id}`}
+                                    name="report-reason"
+                                    value={option.id}
+                                    checked={selectedOption === option.id}
+                                    onChange={() => setSelectedOption(option.id)}
+                                    className="w-4 h-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                />
+                                <label htmlFor={`report-${option.id}`} className="flex-1 text-sm text-gray-700 cursor-pointer">
+                                    {option.label}
+                                </label>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 {/* 하단 버튼 */}
                 <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
                     <button
                         onClick={handleSubmit}
-                        className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                        disabled={!selectedOption}
+                        className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600 transition-colors"
                     >
                         신고하기
                     </button>

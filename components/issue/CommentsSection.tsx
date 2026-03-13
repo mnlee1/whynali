@@ -31,7 +31,7 @@ type CommentWithLike = Comment & {
     replyCount?: number
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
 const SORT_LABELS: Record<SortOption, string> = {
