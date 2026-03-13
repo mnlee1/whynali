@@ -726,22 +726,13 @@ export default function AdminDiscussionsPage() {
                                                         </button>
                                                     )}
                                                     {topic.approval_status === '마감' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleAction(topic.id, '복구')}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
-                                                            >
-                                                                복구
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleAction(topic.id, '진행중')}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                                            >
-                                                                재개
-                                                            </button>
-                                                        </>
+                                                        <button
+                                                            onClick={() => handleAction(topic.id, '진행중')}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                        >
+                                                            재개
+                                                        </button>
                                                     )}
                                                     {/* 삭제 버튼: 모든 상태에서 노출 */}
                                                     <button
