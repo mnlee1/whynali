@@ -38,19 +38,35 @@ WHERE issue_id IN (
     WHERE source_track IS NULL OR source_track != 'track_a'
 );
 
--- 4. 토론 주제 삭제 (있다면)
-DELETE FROM discussions
-WHERE issue_id IN (
-    SELECT id FROM issues 
-    WHERE source_track IS NULL OR source_track != 'track_a'
-);
+-- 4. 토론 주제 삭제 (테이블이 있다면)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'discussions') THEN
+        DELETE FROM discussions
+        WHERE issue_id IN (
+            SELECT id FROM issues 
+            WHERE source_track IS NULL OR source_track != 'track_a'
+        );
+        RAISE NOTICE 'discussions 테이블 정리 완료';
+    ELSE
+        RAISE NOTICE 'discussions 테이블 없음 - 건너뜀';
+    END IF;
+END $$;
 
--- 5. 투표 삭제 (있다면)
-DELETE FROM votes
-WHERE issue_id IN (
-    SELECT id FROM issues 
-    WHERE source_track IS NULL OR source_track != 'track_a'
-);
+-- 5. 투표 삭제 (테이블이 있다면)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'votes') THEN
+        DELETE FROM votes
+        WHERE issue_id IN (
+            SELECT id FROM issues 
+            WHERE source_track IS NULL OR source_track != 'track_a'
+        );
+        RAISE NOTICE 'votes 테이블 정리 완료';
+    ELSE
+        RAISE NOTICE 'votes 테이블 없음 - 건너뜀';
+    END IF;
+END $$;
 
 -- 6. 레거시 이슈 삭제
 DELETE FROM issues
