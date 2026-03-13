@@ -16,6 +16,7 @@ interface DiscussionTopic {
     is_ai_generated: boolean
     approval_status: '대기' | '진행중' | '마감'
     approved_at: string | null
+    auto_end_date?: string | null
     created_at: string
     updated_at?: string | null
     issues: { id: string; title: string } | null
@@ -308,10 +309,15 @@ export default function AdminDiscussionsPage() {
     }
 
     const handleAction = async (id: string, action: '진행중' | '마감' | '복구') => {
+        const topic = topics.find(t => t.id === id)
         const confirmMsg =
-            action === '진행중' ? '이 토론 주제를 승인하시겠습니까?' :
-            action === '마감' ? '이 토론 주제를 종료하시겠습니까? 댓글 작성이 차단됩니다.' :
-            '이 토론 주제를 대기 상태로 복구하시겠습니까?'
+            action === '진행중'
+                ? topic?.approval_status === '마감'
+                    ? '이 토론 주제를 진행중으로 재개하시겠습니까? 자동 마감 조건이 초기화됩니다.'
+                    : '이 토론 주제를 승인하시겠습니까?'
+                : action === '마감'
+                ? '이 토론 주제를 종료하시겠습니까? 댓글 작성이 차단됩니다.'
+                : '이 토론 주제를 대기 상태로 복구하시겠습니까?'
         if (!window.confirm(confirmMsg)) return
         setProcessingId(id)
         try {
@@ -720,13 +726,22 @@ export default function AdminDiscussionsPage() {
                                                         </button>
                                                     )}
                                                     {topic.approval_status === '마감' && (
-                                                        <button
-                                                            onClick={() => handleAction(topic.id, '복구')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
-                                                        >
-                                                            복구
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '복구')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
+                                                            >
+                                                                복구
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '진행중')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                            >
+                                                                재개
+                                                            </button>
+                                                        </>
                                                     )}
                                                     {/* 삭제 버튼: 모든 상태에서 노출 */}
                                                     <button

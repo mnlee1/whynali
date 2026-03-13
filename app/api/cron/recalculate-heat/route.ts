@@ -23,6 +23,7 @@ import { recalculateHeatForIssue } from '@/lib/analysis/heat'
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
+import { closeDiscussionsOnIssueClosed } from '@/lib/discussion-auto-closer'
 import {
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
@@ -141,11 +142,15 @@ export async function GET(request: NextRequest) {
                                     })
                                     .eq('id', issue.id)
                                 
-                                // 이슈가 '종결' 상태로 전환되면 관련 투표 자동 마감
+                                // 이슈가 '종결' 상태로 전환되면 관련 투표/토론 자동 마감
                                 if (transition.newStatus === '종결') {
-                                    const { count } = await closeVotesOnIssueClosed(issue.id)
-                                    if (count > 0) {
-                                        console.log(`[투표 자동 마감] 이슈 ${issue.id} 종결 → ${count}개 투표 마감`)
+                                    const { count: voteCount } = await closeVotesOnIssueClosed(issue.id)
+                                    if (voteCount > 0) {
+                                        console.log(`[투표 자동 마감] 이슈 ${issue.id} 종결 → ${voteCount}개 투표 마감`)
+                                    }
+                                    const { count: discussionCount } = await closeDiscussionsOnIssueClosed(issue.id)
+                                    if (discussionCount > 0) {
+                                        console.log(`[토론 마감 예약] 이슈 ${issue.id} 종결 → ${discussionCount}개 토론 7일 후 마감`)
                                     }
                                 }
                                 
