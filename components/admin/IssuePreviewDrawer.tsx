@@ -71,6 +71,7 @@ export default function IssuePreviewDrawer({
     const heatMeta = getHeatMeta(issue.heat_index)
     const statusStyle = STATUS_STYLE[issue.status] ?? 'bg-gray-50 text-gray-600 border-gray-200'
     const isPending = issue.approval_status === '대기'
+    const isMerged = issue.approval_status === '병합됨'
 
     return (
         <>
@@ -179,11 +180,28 @@ export default function IssuePreviewDrawer({
                         </button>
                     </div>
                 )}
-                {!isPending && (
+                {!isPending && !isMerged && (
                     <div className="shrink-0 px-6 py-4 border-t border-neutral-200 bg-white">
                         <button
                             onClick={onClose}
                             className="w-full py-2.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                        >
+                            닫기
+                        </button>
+                    </div>
+                )}
+                {isMerged && issue.merged_into_id && (
+                    <div className="shrink-0 px-6 py-4 border-t border-neutral-200 bg-white flex gap-3">
+                        <a
+                            href={`/issue/${issue.merged_into_id}`}
+                            target="_blank"
+                            className="flex-1 py-2.5 text-sm font-medium text-center bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+                        >
+                            병합된 이슈 보기
+                        </a>
+                        <button
+                            onClick={onClose}
+                            className="px-5 py-2.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                         >
                             닫기
                         </button>

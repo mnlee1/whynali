@@ -4,7 +4,6 @@
  * components/issue/DiscussionComments.tsx
  *
  * 토론 주제 전용 댓글 컴포넌트.
- * CommentsSection과 동일한 구조이지만 철학적 관점 유도 UI 추가:
  * - 질문 스타터 칩 (클릭하면 textarea에 삽입)
  * - 토론 톤 안내 placeholder
  * - 베스트 댓글 상단, 정렬 옵션, 좋아요/싫어요 동일 적용
@@ -30,12 +29,6 @@ type CommentWithLike = Comment & {
 
 const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
-
-const SORT_LABELS: Record<SortOption, string> = {
-    latest: '최신순',
-    likes: '공감순',
-    dislikes: '비공감순',
-}
 
 /* 클릭하면 textarea 앞부분에 삽입되는 질문 스타터 칩 */
 const STARTERS = [
@@ -69,11 +62,9 @@ export default function DiscussionComments({
     isClosed = false,
 }: DiscussionCommentsProps) {
     const [userId, setUserId] = useState<string | null>(serverUserId)
-    const [bestComments, setBestComments] = useState<CommentWithLike[]>([])
     const [comments, setComments] = useState<CommentWithLike[]>([])
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
-    const [sort, setSort] = useState<SortOption>('latest')
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -156,7 +147,7 @@ export default function DiscussionComments({
             setLoading(false)
             setLoadingMore(false)
         }
-    }, [contextParam])
+    }, [contextParam, safetyBotEnabled])
 
     useEffect(() => {
         setLoading(true)
@@ -479,6 +470,94 @@ export default function DiscussionComments({
         } catch { /* 신고 실패 시 상태 유지 (UX 단순화) */ }
     }
 
+    /* 답글 폼 토글 */
+    const handleReplyToggle = (commentId: string) => {
+        if (replyToId === commentId) {
+            setReplyToId(null)
+            setReplyDraft('')
+            setReplyError(null)
+        } else {
+            setReplyToId(commentId)
+            setReplyDraft('')
+            setReplyError(null)
+        }
+    }
+
+    /* 답글 제출 */
+    const handleReplySubmit = async (parentId: string) => {
+        if (!replyDraft.trim() || submittingReply) return
+        setSubmittingReply(true)
+        setReplyError(null)
+        try {
+            const res = await fetch('/api/comments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    issue_id: null,
+                    discussion_topic_id: discussionTopicId,
+                    parent_id: parentId,
+                    content: replyDraft.trim(),
+                }),
+            })
+            const json = await res.json()
+            if (res.status === 429) {
+                setReplyError(json.error ?? '잠시 후 다시 시도해 주세요.')
+                startRateLimitCountdown()
+                return
+            }
+            if (!res.ok) { setReplyError(json.error ?? '오류가 발생했습니다.'); return }
+            setReplyDraft('')
+            setReplyToId(null)
+            if (!json.pending && json.data) {
+                const newReply: CommentWithLike = { ...json.data, userLikeType: null, replyCount: 0 }
+                setRepliesMap((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), newReply] }))
+                setExpandedRepliesIds((prev) => new Set([...prev, parentId]))
+                setComments((prev) => prev.map((c) =>
+                    c.id === parentId ? { ...c, replyCount: (c.replyCount ?? 0) + 1 } : c
+                ))
+            }
+        } finally {
+            setSubmittingReply(false)
+        }
+    }
+
+    /* 답글 목록 토글 */
+    const handleToggleReplies = async (commentId: string) => {
+        if (expandedRepliesIds.has(commentId)) {
+            setExpandedRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
+            return
+        }
+        if (!repliesMap[commentId]) {
+            setLoadingRepliesIds((prev) => new Set([...prev, commentId]))
+            try {
+                const res = await fetch(`/api/comments?${contextParam}&parent_id=${commentId}&limit=50&offset=0`)
+                const json = await res.json()
+                if (res.ok) setRepliesMap((prev) => ({ ...prev, [commentId]: json.data ?? [] }))
+            } finally {
+                setLoadingRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
+            }
+        }
+        setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
+    }
+
+    /* 신고 모달 */
+    const handleOpenReportModal = (comment: Comment) => {
+        setReportTargetComment(comment)
+        setReportModalOpen(true)
+    }
+
+    const handleReport = async (commentId: string, reason: string) => {
+        if (reportedIds.has(commentId)) return
+        setReportedIds((prev) => new Set([...prev, commentId]))
+        try {
+            await fetch(`/api/comments/${commentId}/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
+            })
+        } catch { /* 신고 실패 시 상태 유지 */ }
+    }
+
     if (loading) {
         return (
             <div className="space-y-3">
@@ -748,6 +827,20 @@ function DiscussionCommentItem({
     onReplyToggle, onReplyDraftChange, onReplySubmit, onToggleReplies,
     onOpenReportModal, setEditDraft,
 }: DiscussionCommentItemProps) {
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
     const isDeleting = deletingId === comment.id
@@ -784,9 +877,17 @@ function DiscussionCommentItem({
                     <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
                     {isMine && !isEditing && (
                         <div className="flex gap-2">
-                            <button onClick={() => onEditStart(comment)} className="text-xs text-gray-500 hover:text-gray-700">수정</button>
-                            <button onClick={() => onDelete(comment.id)} disabled={isDeleting}
-                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50">
+                            <button
+                                onClick={() => onEditStart(comment)}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                                수정
+                            </button>
+                            <button
+                                onClick={() => onDelete(comment.id)}
+                                disabled={isDeleting}
+                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                            >
                                 {isDeleting ? '삭제 중...' : '삭제'}
                             </button>
                         </div>
@@ -828,12 +929,17 @@ function DiscussionCommentItem({
                         className="w-full px-3 py-2 text-sm border border-purple-200 rounded resize-none focus:outline-none focus:border-purple-400"
                     />
                     <div className="flex gap-2 justify-end">
-                        <button onClick={onEditCancel}
-                            className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
+                        <button
+                            onClick={onEditCancel}
+                            className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                        >
                             취소
                         </button>
-                        <button onClick={() => onEditSave(comment.id)} disabled={!editDraft.trim() || submittingEdit}
-                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50">
+                        <button
+                            onClick={() => onEditSave(comment.id)}
+                            disabled={!editDraft.trim() || submittingEdit}
+                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                        >
                             {submittingEdit ? '저장 중...' : '저장'}
                         </button>
                     </div>
@@ -844,6 +950,7 @@ function DiscussionCommentItem({
                 </p>
             )}
 
+            {/* 답글 달기(좌) + 공감/비공감(우) */}
             {!isEditing && (
                 <div className="flex items-center justify-between mt-2">
                     <div>

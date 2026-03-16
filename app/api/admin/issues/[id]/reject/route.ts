@@ -7,7 +7,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
-import { clearCandidatesCache } from '@/lib/cache/candidates-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +31,6 @@ export async function POST(
             .single()
 
         if (error) throw error
-
-        clearCandidatesCache()
 
         return NextResponse.json({ data })
     } catch (error) {
