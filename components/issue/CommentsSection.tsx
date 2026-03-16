@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatDate } from '@/lib/utils/format-date'
 import type { Comment } from '@/types'
+import ReportModal from '@/components/issue/ReportModal'
 
 interface CommentsSectionProps {
     issueId?: string
@@ -25,7 +26,7 @@ type SortOption = 'latest' | 'likes' | 'dislikes'
 
 type CommentWithLike = Comment & { userLikeType?: 'like' | 'dislike' | null }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -68,6 +69,10 @@ export default function CommentsSection({
     const [submittingEdit, setSubmittingEdit] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [likingId, setLikingId] = useState<string | null>(null)
+
+    const [reportModalOpen, setReportModalOpen] = useState(false)
+    const [reportTargetComment, setReportTargetComment] = useState<Comment | null>(null)
+    const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
 
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
     useEffect(() => {
@@ -261,6 +266,24 @@ export default function CommentsSection({
         }
     }
 
+    /* 신고 모달 */
+    const handleOpenReportModal = (comment: Comment) => {
+        setReportTargetComment(comment)
+        setReportModalOpen(true)
+    }
+
+    const handleReport = async (commentId: string, reason: string) => {
+        if (reportedIds.has(commentId)) return
+        setReportedIds((prev) => new Set([...prev, commentId]))
+        try {
+            await fetch(`/api/comments/${commentId}/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
+            })
+        } catch { /* 신고 실패 시 상태 유지 */ }
+    }
+
     /* 댓글 좋아요/싫어요 토글 (낙관적 업데이트) */
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
         if (!userId) {
@@ -398,11 +421,13 @@ export default function CommentsSection({
                                 submittingEdit={submittingEdit}
                                 deletingId={deletingId}
                                 likingId={likingId}
+                                reportedIds={reportedIds}
                                 onEditStart={handleEditStart}
                                 onEditCancel={handleEditCancel}
                                 onEditSave={handleEditSave}
                                 onDelete={handleDelete}
                                 onLike={handleLike}
+                                onOpenReportModal={handleOpenReportModal}
                                 setEditDraft={setEditDraft}
                             />
                         ))}
@@ -411,70 +436,8 @@ export default function CommentsSection({
                 </div>
             )}
 
-            {/* 정렬 옵션 + 총 댓글 수 */}
-            <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500">댓글 {total.toLocaleString()}개</p>
-                <div className="flex gap-1">
-                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => handleSortChange(s)}
-                            className={[
-                                'text-xs px-2.5 py-1 rounded border transition-colors',
-                                sort === s
-                                    ? 'border-gray-800 bg-gray-800 text-white'
-                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
-                            ].join(' ')}
-                        >
-                            {SORT_LABELS[s]}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 댓글 목록 */}
-            {comments.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">
-                    첫 번째 댓글을 작성해보세요.
-                </p>
-            ) : (
-                <ul className="divide-y divide-gray-100 mb-4">
-                    {comments.map((comment) => (
-                        <CommentItem
-                            key={comment.id}
-                            comment={comment}
-                            userId={userId}
-                            editingId={editingId}
-                            editDraft={editDraft}
-                            submittingEdit={submittingEdit}
-                            deletingId={deletingId}
-                            likingId={likingId}
-                            onEditStart={handleEditStart}
-                            onEditCancel={handleEditCancel}
-                            onEditSave={handleEditSave}
-                            onDelete={handleDelete}
-                            onLike={handleLike}
-                            setEditDraft={setEditDraft}
-                        />
-                    ))}
-                </ul>
-            )}
-
-            {/* 더보기 */}
-            {hasMore && (
-                <div className="text-center mb-6">
-                    <button
-                        onClick={handleLoadMore}
-                        disabled={loadingMore}
-                        className="text-sm px-5 py-2 border border-neutral-300 rounded-lg text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
-                    >
-                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개 남음)`}
-                    </button>
-                </div>
-            )}
-
             {/* 작성 폼 */}
-            <div className="pt-4 border-t border-gray-100">
+            <div className="pb-4 border-b border-gray-100 mb-4">
                 {isClosed ? (
                     <p className="text-sm text-gray-400 text-center py-3">
                         종료된 토론입니다. 댓글을 작성할 수 없습니다.
@@ -538,6 +501,83 @@ export default function CommentsSection({
                     </div>
                 )}
             </div>
+
+            {/* 정렬 옵션 + 총 댓글 수 */}
+            <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-500">댓글 {total.toLocaleString()}개</p>
+                <div className="flex gap-1">
+                    {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => handleSortChange(s)}
+                            className={[
+                                'text-xs px-2.5 py-1 rounded border transition-colors',
+                                sort === s
+                                    ? 'border-gray-800 bg-gray-800 text-white'
+                                    : 'border-gray-200 text-gray-500 hover:border-gray-400',
+                            ].join(' ')}
+                        >
+                            {SORT_LABELS[s]}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* 댓글 목록 */}
+            {comments.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">
+                    첫 번째 댓글을 작성해보세요.
+                </p>
+            ) : (
+                <ul className="divide-y divide-gray-100 mb-4">
+                    {comments.map((comment) => (
+                        <CommentItem
+                            key={comment.id}
+                            comment={comment}
+                            userId={userId}
+                            editingId={editingId}
+                            editDraft={editDraft}
+                            submittingEdit={submittingEdit}
+                            deletingId={deletingId}
+                            likingId={likingId}
+                            reportedIds={reportedIds}
+                            onEditStart={handleEditStart}
+                            onEditCancel={handleEditCancel}
+                            onEditSave={handleEditSave}
+                            onDelete={handleDelete}
+                            onLike={handleLike}
+                            onOpenReportModal={handleOpenReportModal}
+                            setEditDraft={setEditDraft}
+                        />
+                    ))}
+                </ul>
+            )}
+
+            {/* 더보기 */}
+            {hasMore && (
+                <div className="text-center mb-6">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="text-sm px-5 py-2 border border-neutral-300 rounded-lg text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
+                    >
+                        {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개 남음)`}
+                    </button>
+                </div>
+            )}
+
+            {reportTargetComment && (
+                <ReportModal
+                    isOpen={reportModalOpen}
+                    onClose={() => { setReportModalOpen(false); setReportTargetComment(null) }}
+                    comment={{
+                        id: reportTargetComment.id,
+                        body: reportTargetComment.body,
+                        authorNickname: reportTargetComment.display_name || `사용자 …${reportTargetComment.user_id.slice(-4)}`,
+                    }}
+                    onReport={handleReport}
+                />
+            )}
         </div>
     )
 }
@@ -553,24 +593,42 @@ interface CommentItemProps {
     submittingEdit: boolean
     deletingId: string | null
     likingId: string | null
+    reportedIds: Set<string>
     onEditStart: (c: Comment) => void
     onEditCancel: () => void
     onEditSave: (id: string) => void
     onDelete: (id: string) => void
     onLike: (id: string, type: 'like' | 'dislike') => void
+    onOpenReportModal: (c: Comment) => void
     setEditDraft: (v: string) => void
 }
 
 function CommentItem({
     comment, userId, isBest,
     editingId, editDraft, submittingEdit, deletingId, likingId,
-    onEditStart, onEditCancel, onEditSave, onDelete, onLike, setEditDraft,
+    reportedIds,
+    onEditStart, onEditCancel, onEditSave, onDelete, onLike, onOpenReportModal, setEditDraft,
 }: CommentItemProps) {
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
     const isMine = userId === comment.user_id
     const isEditing = editingId === comment.id
     const isDeleting = deletingId === comment.id
     const isLiking = likingId === comment.id
     const myType = comment.userLikeType ?? null
+    const isReported = reportedIds.has(comment.id)
 
     return (
         <li className={[
@@ -601,6 +659,30 @@ function CommentItem({
                             >
                                 {isDeleting ? '삭제 중...' : '삭제'}
                             </button>
+                        </div>
+                    )}
+                    {!isMine && userId && (
+                        <div className="relative" ref={menuRef}>
+                            <button
+                                onClick={() => setMenuOpen((v) => !v)}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
+                                aria-label="더보기"
+                            >
+                                {isReported ? '신고완료' : '⋮'}
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 top-5 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[100px]">
+                                    <button
+                                        onClick={() => {
+                                            setMenuOpen(false)
+                                            onOpenReportModal(comment)
+                                        }}
+                                        className="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                        신고하기
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
