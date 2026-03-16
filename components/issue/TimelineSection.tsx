@@ -63,9 +63,13 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
         const fetchTimeline = async () => {
             try {
                 setLoading(true)
+                console.log('[TimelineSection] Fetching timeline for issue:', issueId)
                 const response = await getTimeline(issueId)
+                console.log('[TimelineSection] Timeline response:', response)
+                console.log('[TimelineSection] Timeline data count:', response.data?.length ?? 0)
                 setTimeline(response.data)
             } catch (err) {
+                console.error('[TimelineSection] Error fetching timeline:', err)
                 setError(err instanceof Error ? err.message : '타임라인 조회 실패')
             } finally {
                 setLoading(false)
