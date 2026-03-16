@@ -1,0 +1,81 @@
+name: Track-A Weekly Report
+
+on:
+  schedule:
+    # 매주 월요일 오전 10시 (KST 19시 UTC)
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+
+jobs:
+  weekly-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Weekly Report
+        id: report
+        run: |
+          echo "## 트랙A 주간 리포트" > report.md
+          echo "" >> report.md
+          
+          echo "### 1. 헬스 체크" >> report.md
+          npx tsx scripts/monitor_track_a_health.ts >> report.md 2>&1 || true
+          echo "" >> report.md
+          
+          echo "### 2. 퍼널 분석" >> report.md
+          npx tsx scripts/analyze_track_a_funnel.ts >> report.md 2>&1 || true
+          echo "" >> report.md
+          
+          echo "### 3. 이슈 무결성" >> report.md
+          npx tsx scripts/verify_all_issues_integrity.ts >> report.md 2>&1 || true
+          
+          # 파일 내용 읽기
+          REPORT=$(cat report.md)
+          
+          # GitHub Output에 저장 (멀티라인)
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # 요약 추출 (마지막 50줄만)
+          SUMMARY=$(tail -50 report.md)
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$SUMMARY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Send Dooray Weekly Report
+        run: |
+          # 요약만 Dooray로 전송 (전체는 너무 길어서)
+          SUMMARY="${{ steps.report.outputs.summary }}"
+          
+          # JSON escape
+          SUMMARY_JSON=$(echo "$SUMMARY" | jq -Rs .)
+          
+          curl -X POST "${{ secrets.DOORAY_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"botName\": \"트랙A 주간 리포트\",
+              \"botIconImage\": \"https://static.dooray.com/static_images/dooray-bot.png\",
+              \"text\": \"📊 **트랙A 주간 리포트**\n\n$SUMMARY_JSON\n\n[전체 리포트 보기](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\"
+            }"
+
+      - name: Upload Report as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: track-a-weekly-report
+          path: report.md
+          retention-days: 30
