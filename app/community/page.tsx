@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import { formatDate } from '@/lib/utils/format-date'
 import SearchBar from '@/components/common/SearchBar'
+import type { DiscussionTopic } from '@/types'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
