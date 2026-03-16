@@ -7,6 +7,7 @@
 
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sendAdminNotification } from '@/lib/email'
+import { sendDoorayReportAlert } from '@/lib/dooray-notification'
 
 const PENDING_THRESHOLD = 10 // 검토 대기 10건 이상 시 알림
 
@@ -106,34 +107,7 @@ export async function notifyPendingReports(): Promise<{ success: boolean; report
         const urgentReports = reports.filter(r => r.reason === '욕설/혐오')
         const normalReports = reports.filter(r => r.reason !== '욕설/혐오')
         
-        // 4. 알림 HTML 생성
-        let htmlContent = `
-            <h2>📋 미처리 신고 알림</h2>
-            <p>검토 대기 중인 신고가 <strong>${reports.length}건</strong> 있습니다.</p>
-            <p style="color: #666; font-size: 14px;">
-                매일 낮 12시 정기 알림입니다. (긴급 건 제외)
-            </p>
-        `
-        
-        if (urgentReports.length > 0) {
-            htmlContent += `
-                <div style="background: #fee; padding: 12px; border-left: 4px solid #d00; margin: 16px 0;">
-                    <h3 style="color: #d00; margin: 0 0 8px 0;">🔴 긴급 검토 필요 (욕설/혐오)</h3>
-                    <p style="margin: 0;">${urgentReports.length}건</p>
-                </div>
-            `
-        }
-        
-        if (normalReports.length > 0) {
-            htmlContent += `
-                <div style="background: #ffc; padding: 12px; border-left: 4px solid #fa0; margin: 16px 0;">
-                    <h3 style="color: #f80; margin: 0 0 8px 0;">🟡 일반 신고</h3>
-                    <p style="margin: 0;">${normalReports.length}건</p>
-                </div>
-            `
-        }
-        
-        // 5. 우선순위 상위 5건 미리보기
+        // 4. 우선순위 정렬 및 상위 보고서 생성
         type ReportWithCount = typeof reports[number] & { report_count: number }
         const reportsWithCount: ReportWithCount[] = reports.map(r => ({
             ...r,
@@ -148,63 +122,26 @@ export async function notifyPendingReports(): Promise<{ success: boolean; report
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         })
         
-        const topReports = sortedReports.slice(0, 5)
+        // 5. Dooray 알림 데이터 준비
+        const topReports = sortedReports.slice(0, 5).map(r => ({
+            reason: r.reason,
+            reportCount: r.report_count,
+            commentBody: (r.comments as any)?.body ?? '(삭제된 댓글)'
+        }))
         
-        htmlContent += `
-            <h3>📌 우선 검토 대상 (상위 5건)</h3>
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <thead>
-                    <tr style="background: #f5f5f5;">
-                        <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">사유</th>
-                        <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">신고 건수</th>
-                        <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">댓글 내용</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `
-        
-        for (const report of topReports) {
-            const commentBody = (report.comments as any)?.body ?? '(삭제된 댓글)'
-            const displayBody = commentBody.length > 50 ? commentBody.substring(0, 50) + '...' : commentBody
-            const reasonBadge = report.reason === '욕설/혐오' 
-                ? `<span style="background: #d00; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${report.reason}</span>`
-                : `<span style="background: #fa0; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${report.reason}</span>`
-            
-            htmlContent += `
-                <tr>
-                    <td style="padding: 8px; border: 1px solid #ddd;">${reasonBadge}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
-                        ${report.report_count >= 2 ? `<strong>${report.report_count}건</strong>` : '1건'}
-                    </td>
-                    <td style="padding: 8px; border: 1px solid #ddd; color: #666;">${displayBody}</td>
-                </tr>
-            `
-        }
-        
-        htmlContent += `
-                </tbody>
-            </table>
-            <p style="margin-top: 24px;">
-                <a href="${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.vercel.app'}/admin/safety" 
-                   style="display: inline-block; background: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
-                    세이프티 관리 페이지로 이동
-                </a>
-            </p>
-            <hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;">
-            <p style="color: #999; font-size: 12px;">
-                · 욕설/혐오 신고는 1건만 접수되어도 즉시 알림 발송됩니다 (1시간 쿨다운)<br>
-                · 일반 신고는 매일 낮 12시에 배치 알림으로 발송됩니다<br>
-                · 2건 이상 신고된 댓글은 높은 우선순위로 표시됩니다
-            </p>
-        `
-        
-        // 6. 알림 발송
-        await sendAdminNotification({
-            subject: `[세이프티] 미처리 신고 ${reports.length}건 (긴급 ${urgentReports.length}건)`,
-            html: htmlContent
+        // 6. Dooray 알림 발송
+        const dooraySuccess = await sendDoorayReportAlert({
+            reportCount: reports.length,
+            urgentCount: urgentReports.length,
+            normalCount: normalReports.length,
+            topReports
         })
         
-        console.log(`[신고 알림] 발송 완료: 전체 ${reports.length}건, 긴급 ${urgentReports.length}건`)
+        if (dooraySuccess) {
+            console.log(`[신고 알림] Dooray 발송 완료: 전체 ${reports.length}건, 긴급 ${urgentReports.length}건`)
+        } else {
+            console.warn(`[신고 알림] Dooray 발송 실패 (환경변수 확인 필요)`)
+        }
         
         return { 
             success: true, 
