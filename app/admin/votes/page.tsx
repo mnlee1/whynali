@@ -212,11 +212,9 @@ export default function AdminVotesPage() {
                 issue_id: selectedIssue.id,
                 title: voteTitle.trim(),
                 choices: validChoices,
+                is_ai_generated: isAiFilled,
                 ...autoEndOptions,
             }
-            
-            // DB 마이그레이션 적용 후 주석 해제
-            // bodyData.is_ai_generated = isAiFilled
             
             const res = await fetch('/api/admin/votes', {
                 method: 'POST',

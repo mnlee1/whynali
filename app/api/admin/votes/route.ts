@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
         let query = supabaseAdmin
             .from('votes')
-            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, created_at, issues(id, title), vote_choices(id, label, count)')
+            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, is_ai_generated, created_at, issues(id, title), vote_choices(id, label, count)')
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
@@ -117,10 +117,9 @@ export async function POST(request: NextRequest) {
             issue_status_snapshot: issue?.status,
         }
         
-        // DB 마이그레이션 적용 후 주석 해제
-        // if (typeof is_ai_generated === 'boolean') {
-        //     voteData.is_ai_generated = is_ai_generated
-        // }
+        if (typeof is_ai_generated === 'boolean') {
+            voteData.is_ai_generated = is_ai_generated
+        }
 
         if (auto_end_date) {
             voteData.auto_end_date = auto_end_date
