@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error
 
-        await writeAdminLog('금칙어 추가', 'safety_rule', data.id, auth.adminEmail)
+        await writeAdminLog('금칙어 추가', 'safety_rule', data.id, auth.adminEmail, word)
         return NextResponse.json({ data }, { status: 201 })
     } catch {
         return NextResponse.json({ error: '금칙어 추가 실패' }, { status: 500 })
@@ -79,6 +79,14 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'id가 필요합니다.' }, { status: 400 })
         }
 
+        const { data: rule, error: selectError } = await supabaseAdmin
+            .from('safety_rules')
+            .select('value')
+            .eq('id', id)
+            .single()
+
+        if (selectError) throw selectError
+
         const { error } = await supabaseAdmin
             .from('safety_rules')
             .delete()
@@ -86,7 +94,7 @@ export async function DELETE(request: NextRequest) {
 
         if (error) throw error
 
-        await writeAdminLog('금칙어 삭제', 'safety_rule', id, auth.adminEmail)
+        await writeAdminLog('금칙어 삭제', 'safety_rule', id, auth.adminEmail, rule?.value ?? null)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '금칙어 삭제 실패' }, { status: 500 })

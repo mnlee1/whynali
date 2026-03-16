@@ -149,7 +149,8 @@ export async function POST(request: NextRequest) {
             throw choicesError
         }
 
-        await writeAdminLog('투표 생성', 'vote', vote.id, auth.adminEmail)
+        const details = vote.title ? vote.title.slice(0, 200) : null
+        await writeAdminLog('투표 생성', 'vote', vote.id, auth.adminEmail, details)
         return NextResponse.json({ data: { ...vote, vote_choices: voteChoices } }, { status: 201 })
     } catch {
         return NextResponse.json({ error: '투표 생성 실패' }, { status: 500 })

@@ -24,7 +24,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     const { data: vote, error: voteError } = await supabaseAdmin
         .from('votes')
-        .select('phase, approval_status')
+        .select('phase, approval_status, title')
         .eq('id', id)
         .single()
 
@@ -59,6 +59,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: deleteError.message }, { status: 500 })
     }
 
-    await writeAdminLog('투표 삭제', 'vote', id, auth.adminEmail)
+    const details = vote.title ? vote.title.slice(0, 200) : null
+    await writeAdminLog('투표 삭제', 'vote', id, auth.adminEmail, details)
     return NextResponse.json({ success: true }, { status: 200 })
 }
