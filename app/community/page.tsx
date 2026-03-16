@@ -8,9 +8,6 @@ import { formatDate } from '@/lib/utils/format-date'
 import SearchBar from '@/components/common/SearchBar'
 import type { DiscussionTopic } from '@/types'
 
-// ISR: 15분(900초)마다 페이지 재생성
-export const revalidate = 900
-
 type TopicWithIssue = DiscussionTopic & {
     issues: { id: string; title: string } | null
     opinionCount?: number
