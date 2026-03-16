@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { parseLimitOffset, parseEnum } from '@/lib/parse-params'
 import type { IssueCategory, IssueStatus } from '@/types/issue'
 import { getCategoryIds } from '@/lib/config/categories'
+import { validateIssueCreation } from '@/lib/validation/issue-creation'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,30 +83,40 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const { title, description, status, category } = body
 
-        if (!title || typeof title !== 'string') {
+        // 이슈 생성 데이터 검증
+        const validation = validateIssueCreation({
+            title: title?.trim(),
+            description: description?.trim() ?? null,
+            status: status ?? '점화',
+            category: category ?? '사회',
+            source_track: 'manual',  // 수동 생성 이슈는 'manual'로 표시
+            approval_status: '대기',
+        })
+
+        if (!validation.isValid) {
             return NextResponse.json(
-                { error: 'VALIDATION_ERROR', message: 'title 필수' },
+                { error: 'VALIDATION_ERROR', message: validation.error },
                 { status: 400 }
             )
         }
 
-        // 이슈 생성
+        // 이슈 생성 (검증된 데이터 사용)
         const { data: newIssue, error } = await supabaseAdmin
             .from('issues')
-            .insert({
-                title: title.trim(),
-                description: description?.trim() ?? null,
-                status: status ?? '점화',
-                category: category ?? '사회',
-                approval_status: '대기',
-            })
+            .insert(validation.validated!)
             .select()
             .single()
 
         if (error) throw error
 
-        // 화력 계산 (수동 생성 이슈는 화력 체크 안 함 - 관리자가 직접 생성)
-        // 화력 계산 로직이 있다면 여기서 실행
+        // 화력 계산 (수동 생성 이슈도 계산)
+        const { calculateHeatIndex } = await import('@/lib/analysis/heat')
+        try {
+            await calculateHeatIndex(newIssue.id)
+        } catch (heatError) {
+            console.error('화력 계산 실패:', heatError)
+            // 화력 계산 실패해도 이슈 생성은 성공
+        }
         
         return NextResponse.json({ data: newIssue }, { status: 201 })
     } catch (error) {

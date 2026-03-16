@@ -6,14 +6,36 @@
 
 ### 주요 AI 활용 기능
 
-왜난리 프로젝트는 다음 기능에 AI를 사용합니다:
+왜난리 프로젝트는 다음 기능에 AI를 사용합니다 (2026.03 기준):
 
-1. AI 카테고리 분류 (8개 카테고리 자동 분류)
-2. AI 커뮤니티 매칭 (상위 10개 샘플링)
-3. AI 뉴스 연결 검증 (오연결 방지)
-4. AI 중복 이슈 감지 (동일 사건 다른 표현 병합)
-5. AI 중복 그룹 감지 (쪼개진 그룹 재검증)
-6. 트랙A 급증 감지 시스템
+**✅ 활성화된 AI 기능**
+
+1. **AI 카테고리 분류** (`ENABLE_AI_CATEGORY=true`)
+    - 8개 카테고리 자동 분류
+    - 하루 평균 4개 이슈 × 250토큰 = 1,000토큰/일
+
+2. **AI 커뮤니티 매칭** (`ENABLE_AI_COMMUNITY_MATCHING=true`)
+    - 상위 10개만 샘플링하여 AI 검사
+    - 도돌이표 문제 해결
+
+3. **AI 뉴스 연결 검증** (`ENABLE_AI_NEWS_VALIDATION=true`)
+    - 키워드 매칭 후 AI로 실제 관련도 검증
+    - 오연결 방지
+    - 하루 약 121,000토큰 (전체의 약 60%)
+
+4. **AI 중복 이슈 감지** (`ENABLE_AI_DUPLICATE_CHECK=true`)
+    - 같은 사건을 다르게 표현한 이슈 자동 병합
+    - Confidence 80% 이상만 중복 처리
+
+5. **AI 중복 그룹 감지** (`ENABLE_AI_DUPLICATE_GROUP_CHECK=true`)
+    - 키워드 그루핑 후 쪼개진 그룹 재검증 및 병합
+
+**❌ 비활성화된 AI 기능**
+
+- **AI 그룹 검증** (`ENABLE_AI_GROUP_VALIDATION=false`)
+- **AI 그루핑** (`ENABLE_AI_GROUPING=false`)
+    - Perplexity 응답 품질 문제로 비활성화
+    - 키워드 방식 사용 중
 
 ### 예상 토큰 사용량
 

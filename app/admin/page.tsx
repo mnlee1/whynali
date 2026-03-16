@@ -24,13 +24,6 @@ interface DashboardStats {
     community24h: number
 }
 
-interface CandidateAlert {
-    title: string
-    count: number
-    newsCount: number
-    communityCount: number
-}
-
 interface RecentLog {
     id: string
     action: string
@@ -188,8 +181,6 @@ const ACTION_BADGE: Record<string, string> = {
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [statsLoading, setStatsLoading] = useState(true)
-    const [alerts, setAlerts] = useState<CandidateAlert[]>([])
-    const [alertsDismissed, setAlertsDismissed] = useState(false)
     const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
     const [logsLoading, setLogsLoading] = useState(true)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
@@ -260,15 +251,6 @@ export default function AdminDashboardPage() {
             setCostsLoading(false)
             setStats24hLoading(false)
         }
-
-        fetch('/api/admin/candidates')
-            .then(res => res.ok ? res.json() : null)
-            .then(data => {
-                setAlerts(data?.alerts ?? [])
-            })
-            .catch(err => {
-                console.error('[Admin Dashboard] Candidates 에러:', err)
-            })
     }
 
     useEffect(() => {
@@ -310,35 +292,6 @@ export default function AdminDashboardPage() {
                     </button>
                 </div>
             </div>
-
-            {/* 이슈 후보 알람 배너 */}
-            {alerts.length > 0 && !alertsDismissed && (
-                <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-lg">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                            <p className="text-sm font-semibold text-amber-800 mb-2">
-                                이슈 후보 {alerts.length}건 — 검토 필요
-                            </p>
-                            <ul className="space-y-1">
-                                {alerts.map((alert, i) => (
-                                    <li key={i} className="text-sm text-amber-700">
-                                        <span className="font-medium">{alert.title}</span>
-                                        <span className="ml-2 text-amber-500 text-xs">
-                                            최근 1시간 {alert.count}건 (뉴스 {alert.newsCount} + 커뮤니티 {alert.communityCount})
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                        <button
-                            onClick={() => setAlertsDismissed(true)}
-                            className="text-amber-400 hover:text-amber-600 text-xs shrink-0"
-                        >
-                            닫기
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* 핵심 지표 카드 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

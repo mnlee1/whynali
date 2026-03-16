@@ -150,9 +150,17 @@ export async function GET(request: NextRequest) {
                          * 자동 승인 조건:
                          * 1. 화력 30점 이상
                          * 2. 카테고리가 사회/기술/스포츠 중 하나
+                         * 
+                         * 자동 반려 유예 기간 (2026-03-13):
+                         * - 이슈 생성 후 10분 이내는 자동 반려 보류
+                         * - Race Condition 방지: 뉴스 연결 완료 대기
                          */
                         if (issue.approval_status === '대기') {
                             const category = issue.category as IssueCategory
+                            
+                            // 생성 후 10분 이내 이슈는 자동 반려 보류 (뉴스 연결 완료 대기)
+                            const ageMinutes = (Date.now() - new Date(issue.created_at).getTime()) / 60000
+                            const isNewIssue = ageMinutes < 10
                             
                             // 자동 승인: 화력 + 카테고리 모두 체크
                             if (shouldAutoApprove(category, heatIndex)) {
@@ -167,21 +175,11 @@ export async function GET(request: NextRequest) {
                                     .eq('id', issue.id)
                                 result.statusChanged = '대기 → 승인 (화력 ' + heatIndex + '점, ' + category + ')'
                                 return { ...result, autoApproved: 1, autoRejected: 0, statusTransitioned: 0 }
-                            } else if (heatIndex < MIN_HEAT_TO_REGISTER) {
-                                // 자동 반려: 화력 미달
-                                await supabaseAdmin
-                                    .from('issues')
-                                    .update({ 
-                                        approval_status: '반려',
-                                        approval_type: 'auto',
-                                        approval_heat_index: heatIndex,
-                                        approved_at: new Date().toISOString()
-                                    })
-                                    .eq('id', issue.id)
-                                result.statusChanged = '대기 → 반려 (화력 ' + heatIndex + '점 미달)'
-                                return { ...result, autoApproved: 0, autoRejected: 1, statusTransitioned: 0 }
                             }
-                            // 그 외: 화력은 15-29점이지만 연예/정치 카테고리 → 대기 유지 (관리자 승인 필요)
+                            // 자동 반려 제거 (2026-03-16):
+                            // - 화력이 15점 미만으로 떨어져도 자동 반려하지 않음
+                            // - 이미 등록된 이슈는 관리자가 직접 판단
+                            // - 화력 15-29점 → 대기 유지 (관리자 승인 필요)
                         }
 
                         /*

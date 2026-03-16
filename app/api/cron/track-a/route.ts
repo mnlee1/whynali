@@ -27,6 +27,8 @@ import { tokenize } from '@/lib/candidate/tokenizer'
 import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
 import type { IssueCategory } from '@/lib/config/categories'
 import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
+import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
+import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
 
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
@@ -578,14 +580,24 @@ async function verifyIssueByAI(
 - ✅ 이슈: 사회적 논란, 연예 뉴스, 정치 이슈, 스포츠 경기, 사건사고, 화제작
 - ❌ 이슈 아님: 단순 유행어/밈, 스팸/홍보, 의미 없는 반응글, 일상 대화
 
-## 3단계: 카테고리 분류
+## 3단계: 카테고리 분류 (정확히 판단)
 다음 중 하나 선택:
-- "연예": 연예인, 드라마, 영화, 음악
-- "스포츠": 경기, 선수, 대회
-- "정치": 정치인, 정책, 선거
-- "사회": 사건사고, 법원, 복지, 교육
-- "기술": IT, 과학, 게임, 스타트업
-- "세계": 국제 뉴스, 외국 사건
+- "사회": 사건사고, 법원 판결, 복지, 교육, 사회 이슈, 생활, 여행, 음식, 건강
+- "정치": 정치인, 정부 정책, 국회, 선거, 외교
+- "연예": 연예인, 아이돌, 드라마, 영화, 음악, 방송
+- "스포츠": 스포츠 경기, 선수, 대회, 올림픽, 월드컵
+- "경제": 기업, 주식, 부동산, 금융, 경제 정책
+- "기술": IT, 과학, 게임, AI, 스타트업, 반도체, 연구
+- "세계": 국제 뉴스, 외국 사건, 해외 이슈
+
+⚠️ 카테고리 판단 우선순위:
+1. 스포츠 관련 (경기, 선수) → "스포츠" (예: WBC는 스포츠)
+2. 기업 비즈니스 관련 → "경제" (예: 두끼 마케팅은 경제)
+3. 연예인/드라마/영화 → "연예"
+4. 사건사고/법원/교육/생활/문화 → "사회"
+5. 정치인/정책 → "정치"
+6. IT/과학/기술/연구 → "기술"
+7. 불명확하면 → "사회"
 
 ## 4단계: 임시 제목 생성
 키워드 기반 임시 이슈 제목 (8~15자)
@@ -649,7 +661,7 @@ async function verifyIssueByAI(
         }
         
         // category 유효성 검사
-        const validCategories: IssueCategory[] = ['연예', '스포츠', '정치', '사회', '기술', '세계']
+        const validCategories: IssueCategory[] = ['사회', '정치', '연예', '스포츠', '경제', '기술', '세계']
         const category = validCategories.includes(result.category) ? result.category : '사회'
         
         return {
@@ -832,19 +844,35 @@ async function processTrackA(): Promise<{
             continue
         }
         
+        // 트랙A 검증
+        const trackAValidation = validateTrackAIssue(relevantCommunityIds.length)
+        if (!trackAValidation.isValid) {
+            console.error(`  ✗ [트랙A 검증 실패] ${trackAValidation.error}`)
+            failedCount++
+            continue
+        }
+        
         console.log(`  최종 제목: "${finalIssueTitle}"`)
         
-        // 4-5. 이슈 후보 등록
+        // 이슈 생성 데이터 검증
+        const issueValidation = validateIssueCreation({
+            title: finalIssueTitle,
+            category,
+            source_track: 'track_a',  // 명시적으로 지정
+            approval_status: '대기',
+            status: '점화',
+        })
+        
+        if (!issueValidation.isValid) {
+            console.error(`  ✗ [이슈 검증 실패] ${issueValidation.error}`)
+            failedCount++
+            continue
+        }
+        
+        // 4-5. 이슈 후보 등록 (검증된 데이터 사용)
         const { data: newIssue, error: createError } = await supabaseAdmin
             .from('issues')
-            .insert({
-                title: finalIssueTitle,
-                description: null,
-                status: '점화',
-                category,
-                approval_status: '대기',
-                source_track: 'track_a',
-            })
+            .insert(issueValidation.validated!)
             .select('id')
             .single()
         
@@ -960,14 +988,16 @@ async function processTrackA(): Promise<{
             continue
         }
         
-        // 화력 기반 자동 승인 판단
-        const shouldAutoApprove = heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD
+        // 화력 기반 자동 승인 판단 (연예/정치는 수동 승인 필수)
+        const MANUAL_REVIEW_CATEGORIES: IssueCategory[] = ['연예', '정치']
+        const requiresManualReview = MANUAL_REVIEW_CATEGORIES.includes(category)
+        const shouldAutoApprove = heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD && !requiresManualReview
         const approvalStatus = shouldAutoApprove ? '승인' : '대기'
         const now = new Date().toISOString()
-        
+
         await supabaseAdmin
             .from('issues')
-            .update({ 
+            .update({
                 heat_index: heatIndex,
                 created_heat_index: heatIndex,
                 approval_status: approvalStatus,
@@ -975,9 +1005,25 @@ async function processTrackA(): Promise<{
                 approved_at: shouldAutoApprove ? now : null,
             })
             .eq('id', newIssue.id)
-        
-        const statusLabel = shouldAutoApprove ? `승인 (화력 ${heatIndex}점 ≥ ${AUTO_APPROVE_HEAT_THRESHOLD}점)` : '대기'
+
+        const statusLabel = shouldAutoApprove
+            ? `자동승인 (화력 ${heatIndex}점 ≥ ${AUTO_APPROVE_HEAT_THRESHOLD}점)`
+            : requiresManualReview && heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD
+                ? `수동승인 대기 (${category} 카테고리)`
+                : '대기'
         console.log(`  ✅ [이슈 등록 완료] "${finalIssueTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점, 상태: ${statusLabel})`)
+
+        // 연예/정치 + 화력 30 이상 → 관리자 즉시 Dooray 알림
+        if (requiresManualReview && heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD) {
+            sendDoorayImmediateAlert({
+                id: newIssue.id,
+                title: finalIssueTitle,
+                category,
+                heat_index: heatIndex,
+                created_at: now,
+            }).catch(e => console.error('[Dooray 즉시 알림 실패]', e))
+        }
+
         successCount++
         
         // Rate Limit 완화: AI 호출 간 충분한 대기

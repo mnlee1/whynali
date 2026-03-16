@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { DiscussionTopic } from '@/types'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { formatDate } from '@/lib/utils/format-date'
 import SearchBar from '@/components/common/SearchBar'
+
+// ISR: 15분(900초)마다 페이지 재생성
+export const revalidate = 900
 
 type TopicWithIssue = DiscussionTopic & {
     issues: { id: string; title: string } | null

@@ -80,16 +80,44 @@ export default function AdminIssuesPage() {
         try {
             setLoading(true)
             const params = new URLSearchParams()
-            params.append('source_track', 'track_a')
+            
+            // 필터 값에 따라 approval_status와 approval_type 설정
             if (filter) {
-                params.append('approval_status', filter)
+                if (filter === '승인전체') {
+                    // 승인 전체: 자동 승인 + 관리자 승인 모두
+                    params.append('approval_status', '승인')
+                } else if (filter === '자동승인') {
+                    // 자동 승인만
+                    params.append('approval_status', '승인')
+                    params.append('approval_type', 'auto')
+                } else if (filter === '관리자승인') {
+                    // 관리자 승인만
+                    params.append('approval_status', '승인')
+                    params.append('approval_type', 'manual')
+                } else if (filter === '관리자반려') {
+                    // 관리자 반려만
+                    params.append('approval_status', '반려')
+                    params.append('approval_type', 'manual')
+                } else {
+                    // 대기 또는 기타
+                    params.append('approval_status', filter)
+                }
             }
             
             const url = `/api/admin/issues?${params.toString()}`
+            console.log('[관리자 이슈] API 호출:', url)
             const response = await fetch(url)
             if (!response.ok) throw new Error('이슈 조회 실패')
             const data = await response.json()
             const list: Issue[] = data.data ?? []
+            console.log('[관리자 이슈] 응답:', list.length, '개 이슈')
+            if (list.length > 0) {
+                console.log('[관리자 이슈] 첫 번째 이슈:', {
+                    title: list[0].title,
+                    approval_status: list[0].approval_status,
+                    approval_type: list[0].approval_type,
+                })
+            }
             setIssues(sortIssues(list))
             setLastRefreshedAt(new Date())
         } catch (err) {
@@ -177,9 +205,17 @@ export default function AdminIssuesPage() {
         }
         
         if (issue.approval_status === '반려') {
-            return {
-                label: '관리자 반려',
-                className: 'bg-red-100 text-red-700 border-red-200'
+            // approval_type으로 자동/관리자 구분
+            if (issue.approval_type === 'auto') {
+                return {
+                    label: '자동 반려',
+                    className: 'bg-gray-100 text-gray-700 border-gray-200'
+                }
+            } else {
+                return {
+                    label: '관리자 반려',
+                    className: 'bg-red-100 text-red-700 border-red-200'
+                }
             }
         }
         
@@ -232,8 +268,8 @@ export default function AdminIssuesPage() {
         <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">트랙 A 이슈 관리</h1>
-                    <p className="text-sm text-gray-600 mt-1">커뮤니티 급증 기반 AI 검증 이슈</p>
+                    <h1 className="text-2xl font-bold">이슈 관리</h1>
+                    <p className="text-sm text-gray-600 mt-1">트랙 A (자동) + 수동 생성 이슈 전체</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
@@ -258,15 +294,15 @@ export default function AdminIssuesPage() {
                     <div className="p-4 bg-white border border-purple-100 rounded">
                         <h3 className="font-semibold text-purple-900 mb-3 text-sm flex items-center gap-2">
                             <span className="text-purple-600">💬</span>
-                            트랙 A: 커뮤니티 급증 감지 (3분 주기)
+                            트랙 A: 커뮤니티 급증 감지 (30분 주기)
                         </h3>
                         <div className="space-y-3 ml-4">
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">1단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    커뮤니티 글에서 <span className="font-semibold">24시간간 특정 키워드가 3건 이상</span> 급증하면 감지
+                                    커뮤니티 글에서 <span className="font-semibold">10분간 특정 키워드가 10건 이상</span> 급증하면 감지
                                     <span className="block text-gray-500 mt-1">
-                                        (테스트 환경: 임계값 3건, 윈도우 24시간 - 프로덕션 환경에서는 10분간 10건으로 조정 예정)
+                                        (임계값: 10건, 시간창: 10분)
                                     </span>
                                 </p>
                             </div>
@@ -275,6 +311,7 @@ export default function AdminIssuesPage() {
                                 <p className="text-xs text-gray-700">
                                     <span className="font-semibold text-purple-700">AI가 진짜 이슈인지 검증</span> (밈, 드립, jpg 같은 무의미한 키워드 자동 필터링, 신뢰도 70% 이상)
                                     <span className="block text-gray-500 mt-1">• 키워드 메타데이터만 사용 (법적 안전)</span>
+                                    <span className="block text-gray-500 mt-1">• AI가 임시 제목 및 검색 키워드 제안</span>
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
@@ -282,74 +319,65 @@ export default function AdminIssuesPage() {
                                 <p className="text-xs text-gray-700">
                                     네이버 뉴스를 검색해서 <span className="font-semibold">관련 뉴스 1건 이상</span> 확인 (언론 팩트 체크)
                                     <span className="block text-gray-500 mt-1">• 최근 30일 이내 뉴스만 검색</span>
+                                    <span className="block text-gray-500 mt-1">• 뉴스 0건이면 등록 보류 (루머 가능성)</span>
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">4단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-blue-700">AI가 뉴스 필터링</span> - 키워드와 무관한 뉴스 제거
-                                    <span className="block text-gray-500 mt-1">• 예: "WBC" 검색 시 "WBC 이탈리아", "WBC 멕시코" 등 한국과 무관한 뉴스 자동 필터링</span>
+                                    <span className="font-semibold text-blue-700">AI 중복 체크 (4단계 검증)</span>
+                                    <span className="block text-gray-500 mt-1">• 1단계: 정확한 제목 일치</span>
+                                    <span className="block text-gray-500 mt-1">• 2단계: 키워드 필터링 (공통 키워드 2개 이상)</span>
+                                    <span className="block text-gray-500 mt-1">• 3단계: 반대어/연속사건 감지 ("복귀" vs "사퇴", "1차" vs "2차")</span>
+                                    <span className="block text-gray-500 mt-1">• 4단계: AI 정밀 비교 (신뢰도 80% 이상)</span>
+                                    <span className="block text-blue-600 mt-1">• 중복 발견 시: 커뮤니티 글만 기존 이슈에 추가 (새 이슈 생성 안 함)</span>
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">5단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-green-700">관련 뉴스 제목 기반 이슈 제목 생성</span>
-                                    <span className="block text-gray-500 mt-1">• AI가 필터링된 뉴스 제목들을 분석하여 정확한 이슈 제목 생성 (뉴스 헤드라인 스타일)</span>
-                                    <span className="block text-gray-500 mt-1">• 예: "WBC 한국 8강 확정" (관련 뉴스 9건 분석)</span>
+                                    <span className="font-semibold text-orange-700">AI 통합 작업: 뉴스 필터링 + 커뮤니티 필터링 + 최종 제목 생성</span>
+                                    <span className="block text-gray-500 mt-1">• AI가 키워드와 무관한 뉴스 제거 (예: "WBC" 검색 시 "WBC 이탈리아" 제외)</span>
+                                    <span className="block text-gray-500 mt-1">• AI가 이슈 제목과 무관한 커뮤니티 글 제거</span>
+                                    <span className="block text-gray-500 mt-1">• AI가 필터링된 뉴스 제목들을 분석하여 최종 이슈 제목 생성 (8-15자, 사실 중심)</span>
+                                    <span className="block text-red-600 mt-1">• 관련 커뮤니티 글 0건이면 이슈 생성 건너뛰기</span>
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">6단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-blue-700">AI 중복 체크 (4단계)</span>
-                                    <span className="block text-gray-500 mt-1">• 1단계: 정확한 제목 일치 → 2단계: 키워드 필터링 (공통 2개 이상)</span>
-                                    <span className="block text-gray-500 mt-1">• 3단계: 반대어/연속사건 감지 ("복귀" vs "사퇴", "1차" vs "2차")</span>
-                                    <span className="block text-gray-500 mt-1">• 4단계: AI 정밀 비교 (신뢰도 80% 이상)</span>
-                                    <span className="block text-gray-500 mt-1">• 중복 발견 시: 기존 이슈에 필터링된 데이터만 추가</span>
+                                    <span className="font-semibold text-blue-700">이슈 등록</span> (대기 상태로 생성)
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">7단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-orange-700">AI가 커뮤니티 글 필터링 (이슈 등록 전)</span>
-                                    <span className="block text-gray-500 mt-1">• 이슈 제목과 관련된 커뮤니티 글만 선별</span>
-                                    <span className="block text-gray-500 mt-1">• 예: "WBC 한국 8강" 이슈 → "WBC 이탈리아" 글 제외</span>
-                                    <span className="block text-red-600 mt-1">• 관련 글 0건이면 이슈 생성 건너뛰기 (효율성)</span>
+                                    커뮤니티 글 연결 (이미 필터링됨)
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">8단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-blue-700">이슈 등록</span> (필터링된 관련 커뮤니티 글 보장)
+                                    뉴스 연결 (필터링된 관련 뉴스만)
+                                    <span className="block text-red-600 mt-1">• 연결된 뉴스 0건이면 이슈 삭제 (다른 이슈에 이미 연결됨)</span>
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">9단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    커뮤니티 글 연결 (이미 필터링됨)
+                                    <span className="font-semibold text-amber-700">타임라인 자동 생성 (필수)</span>
+                                    <span className="block text-gray-500 mt-1">• 연결된 뉴스 기준으로 발단/전개 단계 자동 생성 (최대 5개)</span>
+                                    <span className="block text-red-600 mt-1">• 타임라인 생성 실패 시 이슈 삭제</span>
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-purple-600 font-semibold text-xs">10단계:</span>
                                 <p className="text-xs text-gray-700">
-                                    뉴스 연결 (필터링된 관련 뉴스만)
-                                </p>
-                            </div>
-                            <div className="flex items-start gap-2">
-                                <span className="text-purple-600 font-semibold text-xs">11단계:</span>
-                                <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-amber-700">타임라인 자동 생성 (필수)</span>
-                                    <span className="block text-gray-500 mt-1">• 연결된 뉴스 기준으로 발단/전개 단계 자동 생성</span>
-                                    <span className="block text-gray-500 mt-1">• 타임라인 생성 실패 시 이슈 삭제</span>
-                                </p>
-                            </div>
-                            <div className="flex items-start gap-2">
-                                <span className="text-purple-600 font-semibold text-xs">12단계:</span>
-                                <p className="text-xs text-gray-700">
-                                    화력 15점 이상 확인 후 <span className="font-semibold text-amber-700">'대기' 상태로 등록 완료</span>
-                                    <span className="block text-gray-500 mt-1">• 15점 미만이면 이슈 삭제</span>
-                                    <span className="block text-red-600 mt-1">• 트랙 A는 자동 승인 없음 (관리자 승인 필수)</span>
+                                    화력 계산 및 최종 승인 판단
+                                    <span className="block text-red-600 mt-1">• 화력 15점 미만이면 이슈 삭제 (등록하지 않음)</span>
+                                    <span className="block text-gray-500 mt-1">• 화력 30점 이상 + 자동 승인 카테고리(사회/경제/기술/세계/스포츠) → 자동 승인</span>
+                                    <span className="block text-amber-600 mt-1">• 그 외(연예/정치는 수동 승인 필수, 또는 화력 15-29점) → 대기 (관리자 승인 필수)</span>
+                                    <span className="block text-blue-600 mt-1">• 등록 후 화력이 15점 미만으로 떨어져도 대기 상태 유지 (자동 반려 안 함)</span>
                                 </p>
                             </div>
                         </div>
@@ -358,42 +386,45 @@ export default function AdminIssuesPage() {
                     <div className="p-4 bg-green-50 border border-green-200 rounded">
                         <h3 className="font-semibold text-green-900 mb-3 text-sm">✅ 트랙 A 개선 효과</h3>
                         <ul className="space-y-2 text-xs text-gray-700 ml-4">
+                            <li>• <span className="font-semibold">AI 통합 작업</span>: 뉴스 필터링 + 커뮤니티 필터링 + 제목 생성을 1번의 AI 호출로 처리 (Rate Limit 완화)</li>
                             <li>• <span className="font-semibold">뉴스 필터링</span>: AI가 키워드와 관련 없는 뉴스 자동 제거 (정확도 대폭 향상)</li>
-                            <li>• <span className="font-semibold">커뮤니티 필터링</span>: AI가 이슈와 무관한 커뮤니티 글 자동 제거 (이슈 등록 전 필터링으로 효율성 향상)</li>
-                            <li>• <span className="font-semibold">이슈 제목 품질</span>: 실제 뉴스 제목 기반 생성으로 팩트 체크됨</li>
+                            <li>• <span className="font-semibold">커뮤니티 필터링</span>: AI가 이슈와 무관한 커뮤니티 글 자동 제거 (이슈 등록 전 필터링)</li>
+                            <li>• <span className="font-semibold">이슈 제목 품질</span>: 필터링된 뉴스 제목 기반 생성으로 팩트 체크됨 (8-15자, 사실 중심)</li>
                             <li>• <span className="font-semibold">타임라인 필수</span>: 모든 이슈가 타임라인 포함 (생성 실패 시 이슈 삭제)</li>
                             <li>• <span className="font-semibold">법적 안전</span>: 커뮤니티 게시글 내용 사용 안 함 (메타데이터만 사용)</li>
                             <li>• <span className="font-semibold">중복 방지 (4단계)</span>: 제목 일치 → 키워드 필터 → 반대어/숫자 감지 → AI 정밀 비교 (신뢰도 80%)</li>
+                            <li>• <span className="font-semibold">품질 관리</span>: 화력 15점 미만, 뉴스 0건, 커뮤니티 0건, 타임라인 생성 실패 시 이슈 자동 삭제</li>
                         </ul>
                     </div>
 
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded">
                         <h3 className="font-semibold text-amber-900 mb-3 text-sm">⚠️ 관리자 확인 포인트</h3>
                         <ul className="space-y-2 text-xs text-gray-700 ml-4">
-                            <li>• <span className="font-semibold">이슈 제목</span>: 뉴스 기반 생성으로 정확하지만, 맥락 확인 필요</li>
+                            <li>• <span className="font-semibold">이슈 제목</span>: AI가 필터링된 뉴스 제목들을 분석하여 생성 (8-15자, 사실 중심)</li>
                             <li>• <span className="font-semibold">연결된 뉴스</span>: AI 필터링으로 관련 뉴스만 연결 (무관한 뉴스 제거됨)</li>
                             <li>• <span className="font-semibold">연결된 커뮤니티</span>: AI 필터링으로 관련 글만 연결 (무관한 글 제거됨)</li>
-                            <li>• <span className="font-semibold">타임라인</span>: 발단/전개가 논리적으로 연결되는지 확인 (자동 생성)</li>
+                            <li>• <span className="font-semibold">타임라인</span>: 연결된 뉴스 기준으로 발단/전개 자동 생성 (최대 5개, 없으면 이슈 삭제됨)</li>
                             <li>• <span className="font-semibold">중복 체크</span>: AI가 4단계 검증했지만 최종 확인 권장</li>
+                            <li>• <span className="font-semibold">화력 추이</span>: 등록 시점과 현재 화력 비교 (15점 미만 이슈는 등록 단계에서 자동 삭제)</li>
                         </ul>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="p-3 bg-blue-50 rounded border border-blue-200">
-                            <p className="text-xs font-medium text-blue-800 mb-1">화력 기준</p>
-                            <p className="text-xs text-gray-700">15점 이상 (이슈 등록 최소 기준)</p>
+                            <p className="text-xs font-medium text-blue-800 mb-1">급증 임계값</p>
+                            <p className="text-xs text-gray-700">10분간 10건 이상</p>
                         </div>
                         <div className="p-3 bg-purple-50 rounded border border-purple-200">
-                            <p className="text-xs font-medium text-purple-800 mb-1">승인 정책</p>
-                            <p className="text-xs text-gray-700">자동 승인 없음 (관리자 필수)</p>
+                            <p className="text-xs font-medium text-purple-800 mb-1">화력 기준</p>
+                            <p className="text-xs text-gray-700">15점 이상 (이슈 등록 최소 기준)</p>
                         </div>
                         <div className="p-3 bg-green-50 rounded border border-green-200">
-                            <p className="text-xs font-medium text-green-800 mb-1">타임라인</p>
-                            <p className="text-xs text-gray-700">모든 이슈에 필수 (없으면 삭제)</p>
+                            <p className="text-xs font-medium text-green-800 mb-1">승인 정책</p>
+                            <p className="text-xs text-gray-700">화력 30점 이상 + 자동 승인 카테고리 (사회/경제/기술/세계/스포츠, 연예/정치는 수동 필수)</p>
                         </div>
                         <div className="p-3 bg-red-50 rounded border border-red-200">
-                            <p className="text-xs font-medium text-red-800 mb-1">법적 안전</p>
-                            <p className="text-xs text-gray-700">메타데이터만 사용 (콘텐츠 미사용)</p>
+                            <p className="text-xs font-medium text-red-800 mb-1">품질 관리</p>
+                            <p className="text-xs text-gray-700">화력 15점 미만, 뉴스 0건, 커뮤니티 0건, 타임라인 실패 시 자동 삭제</p>
                         </div>
                     </div>
                 </div>
@@ -405,8 +436,10 @@ export default function AdminIssuesPage() {
                     {[
                         { value: '', label: '전체' },
                         { value: '대기', label: '대기' },
-                        { value: '승인', label: '승인' },
-                        { value: '반려', label: '반려' },
+                        { value: '승인전체', label: '승인 전체' },
+                        { value: '자동승인', label: '자동 승인' },
+                        { value: '관리자승인', label: '관리자 승인' },
+                        { value: '관리자반려', label: '관리자 반려' },
                     ].map(({ value, label }) => (
                         <button
                             key={label}
