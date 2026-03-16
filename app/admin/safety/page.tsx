@@ -59,6 +59,7 @@ export default function AdminSafetyPage() {
     const [reportsLoading, setReportsLoading] = useState(true)
     const [reportsError, setReportsError] = useState<string | null>(null)
     const [processingReportId, setProcessingReportId] = useState<string | null>(null)
+    const [processGuideOpen, setProcessGuideOpen] = useState(true)
 
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
@@ -91,6 +92,26 @@ export default function AdminSafetyPage() {
         }
     }, [])
 
+    /* 우선순위 계산 함수 */
+    const calculatePriority = (reason: string, count: number): number => {
+        let priority = 0
+        
+        if (reason === '욕설/혐오') {
+            priority = 1000 // 최우선
+            if (count >= 2) priority += 100 // 2건 이상은 더 높은 우선순위
+        } else if (count >= 3) {
+            priority = 500 // 3건 이상은 우선 검토
+        } else if (count >= 2) {
+            priority = 300 // 2건은 일반 검토
+        } else {
+            priority = 100 // 1건은 낮은 우선순위
+        }
+        
+        priority += count * 10 // 건수가 많을수록 약간 더 높은 우선순위
+        
+        return priority
+    }
+
     const loadReports = useCallback(async () => {
         setReportsLoading(true); setReportsError(null)
         try {
@@ -104,7 +125,15 @@ export default function AdminSafetyPage() {
                 setReportsError('API 응답 구조가 올바르지 않습니다.')
                 return
             }
-            setReports(json.data)
+            
+            // 우선순위 기반 정렬
+            const sortedData = json.data.sort((a: ReportItem, b: ReportItem) => {
+                const priorityA = calculatePriority(a.reason, a.report_count)
+                const priorityB = calculatePriority(b.reason, b.report_count)
+                return priorityB - priorityA // 높은 우선순위가 먼저
+            })
+            
+            setReports(sortedData)
             setReportsTotal(json.total ?? json.data.length)
         } catch (e) {
             const errorMsg = e instanceof Error ? e.message : '신고 목록 조회 실패'
@@ -195,6 +224,7 @@ export default function AdminSafetyPage() {
             setProcessingReportId(null)
         }
     }
+
 
     /* ── 탭 버튼 헬퍼 ── */
     function TabBtn<T extends string>({
@@ -360,14 +390,102 @@ export default function AdminSafetyPage() {
                         )}
                     </h2>
 
-                    {/* 신고 처리 프로세스 안내 */}
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 space-y-1">
-                        <p className="font-medium">신고 처리 프로세스:</p>
-                        <ol className="list-decimal pl-4 space-y-0.5">
-                            <li>신고 건수 2건 이상 또는 &apos;욕설/혐오&apos; 사유는 우선 검토 권장</li>
-                            <li>댓글 내용 확인 후 &apos;댓글 삭제&apos; — 해당 댓글이 즉시 숨김 처리됨</li>
-                            <li>정상 댓글로 판단되면 &apos;무시&apos; — 신고가 기각되고 댓글 유지</li>
-                        </ol>
+                    {/* 신고 처리 프로세스 안내 (접기/펼치기) */}
+                    <div className="mb-4 bg-blue-50 border border-blue-200 rounded overflow-hidden">
+                        <button
+                            onClick={() => setProcessGuideOpen(!processGuideOpen)}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-blue-100 transition-colors"
+                        >
+                            <span className="font-bold text-sm text-blue-900">
+                                📋 신고 처리 프로세스
+                            </span>
+                            <span className="text-blue-700 text-lg leading-none">
+                                {processGuideOpen ? '▼' : '▶'}
+                            </span>
+                        </button>
+                        
+                        {processGuideOpen && (
+                            <div className="px-4 pb-4 text-xs text-blue-900 space-y-3 animate-in slide-in-from-top duration-200">
+                                <div className="space-y-2">
+                                    <div className="bg-white/60 p-2 rounded">
+                                        <p className="font-semibold text-blue-800 mb-1">1. 자동 처리 정책 (실시간)</p>
+                                        <ul className="space-y-1 leading-relaxed text-blue-700">
+                                            <li className="flex items-start gap-1">
+                                                <span className="text-red-600 font-bold shrink-0">즉시 알림:</span>
+                                                <span>&apos;욕설/혐오&apos; 신고 1건 이상 → 관리자에게 즉시 이메일 발송 (1시간 쿨다운)</span>
+                                            </li>
+                                            <li className="flex items-start gap-1">
+                                                <span className="text-orange-600 font-bold shrink-0">자동 숨김:</span>
+                                                <span>욕설/혐오 2건, 스팸/광고 3건, 허위정보 3건, 기타 5건 이상 → comments.visibility=&apos;pending_review&apos; 자동 전환 (임시 숨김)</span>
+                                            </li>
+                                            <li className="flex items-start gap-1">
+                                                <span className="text-blue-600 font-bold shrink-0">배치 알림:</span>
+                                                <span>매일 12시에 미처리 신고 목록 이메일 발송 (긴급 건 제외)</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="bg-white/60 p-2 rounded">
+                                        <p className="font-semibold text-blue-800 mb-1">2. 신고 건수 이해하기</p>
+                                        <p className="leading-relaxed text-blue-700">
+                                            <span className="font-medium">신고 건수</span>는 같은 댓글에 대해 여러 사용자가 신고한 총 횟수입니다. 
+                                            예: 댓글 A를 유저 3명이 각각 신고 → [3건 신고] 표시. 
+                                            <span className="font-medium">2건 이상 = 다수가 문제로 인식</span> → 실제 문제일 가능성 높음.
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="bg-white/60 p-2 rounded">
+                                        <p className="font-semibold text-blue-800 mb-1">3. 우선순위 판단</p>
+                                        <ul className="space-y-1 leading-relaxed text-blue-700">
+                                            <li className="flex items-start gap-1">
+                                                <span className="text-red-600 font-bold shrink-0">🔴</span>
+                                                <span><span className="font-medium">&apos;욕설/혐오&apos; 사유</span>는 1건만 신고되어도 최우선 검토 (심각한 유해 콘텐츠)</span>
+                                            </li>
+                                            <li className="flex items-start gap-1">
+                                                <span className="text-orange-500 font-bold shrink-0">🟡</span>
+                                                <span><span className="font-medium">2건 이상 신고</span>는 오신고 가능성 낮음 → 우선 검토</span>
+                                            </li>
+                                            <li className="flex items-start gap-1">
+                                                <span className="text-gray-400 font-bold shrink-0">⚪</span>
+                                                <span>1건 신고(기타 사유)는 낮은 우선순위</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div className="bg-white/60 p-2 rounded">
+                                        <p className="font-semibold text-blue-800 mb-1">4. 처리 결정</p>
+                                        <div className="space-y-1.5 leading-relaxed text-blue-700">
+                                            <div>
+                                                <span className="font-medium text-red-700">[댓글 삭제]</span> 
+                                                <span className="ml-1">→ reports.status=&apos;처리완료&apos; + comments.visibility=&apos;deleted&apos;</span>
+                                                <p className="ml-3 text-[11px] text-blue-600 mt-0.5">
+                                                    · 댓글이 사용자 화면에서 즉시 숨겨짐 (삭제된 댓글로 표시)
+                                                    <br />· 명확한 위반(욕설/스팸/허위정보)만 삭제 권장
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <span className="font-medium text-gray-700">[무시]</span> 
+                                                <span className="ml-1">→ reports.status=&apos;무시&apos; (댓글은 그대로 유지)</span>
+                                                <p className="ml-3 text-[11px] text-blue-600 mt-0.5">
+                                                    · 정상 의견 표현, 오신고로 판단 시 선택
+                                                    <br />· 애매한 경우 무시 우선 (표현의 자유 존중)
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-amber-50 border border-amber-200 p-2 rounded">
+                                        <p className="font-semibold text-amber-900 mb-1">판단 기준</p>
+                                        <p className="leading-relaxed text-amber-800 text-[11px]">
+                                            · 원문 보기로 문맥 파악 필수
+                                            <br />· 비판적이지만 욕설 없는 의견은 정상 (무시)
+                                            <br />· 신고 건수가 많을수록 실제 문제일 가능성 높음
+                                            <br />· 과도한 삭제는 표현의 자유 침해 → 명확한 위반만 삭제
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {reportsError && <p className="text-sm text-red-500 mb-3">{reportsError}</p>}
@@ -389,10 +507,47 @@ export default function AdminSafetyPage() {
                                 const isProcessing = processingReportId === report.id
                                 const contextLink = report.issue_id ? `/issue/${report.issue_id}` : null
                                 const isHate = report.reason === '욕설/혐오'
+                                const isMultiReport = report.report_count >= 2
+                                
+                                // 우선순위 레벨 결정
+                                let priorityLevel = 'low' // 기본: 낮은 우선순위
+                                let priorityBadge = '⚪'
+                                let priorityLabel = '낮은 우선순위'
+                                
+                                if (isHate && isMultiReport) {
+                                    priorityLevel = 'critical'
+                                    priorityBadge = '🔴'
+                                    priorityLabel = '최우선 검토'
+                                } else if (isHate) {
+                                    priorityLevel = 'critical'
+                                    priorityBadge = '🔴'
+                                    priorityLabel = '최우선 검토'
+                                } else if (report.report_count >= 3) {
+                                    priorityLevel = 'high'
+                                    priorityBadge = '🟡'
+                                    priorityLabel = '우선 검토'
+                                } else if (isMultiReport) {
+                                    priorityLevel = 'medium'
+                                    priorityBadge = '🟢'
+                                    priorityLabel = '일반 검토'
+                                }
+                                
+                                // 우선순위별 배경색
+                                const bgColor = priorityLevel === 'critical' 
+                                    ? 'bg-red-50 border-red-200' 
+                                    : priorityLevel === 'high' 
+                                    ? 'bg-orange-50 border-orange-200' 
+                                    : priorityLevel === 'medium'
+                                    ? 'bg-yellow-50 border-yellow-200'
+                                    : 'bg-gray-50 border-gray-200'
+                                
                                 return (
-                                    <li key={report.id} className="p-3 border border-red-100 bg-red-50 rounded">
+                                    <li key={report.id} className={`p-3 border rounded ${bgColor}`}>
                                         <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-xs font-medium">
+                                                    {priorityBadge} {priorityLabel}
+                                                </span>
                                                 <span className={[
                                                     'text-xs px-2 py-0.5 rounded font-medium text-white',
                                                     isHate ? 'bg-red-600' : 'bg-red-400',
