@@ -44,9 +44,10 @@ export const CATEGORIES: CategoryConfig[] = [
         keywords: [
             '배우', '가수', '아이돌', '드라마', '영화', '방송', '팬', '연기',
             '뮤직비디오', '콘서트', '공연', '데뷔', '컴백', '연예인', '스타', '오디션',
-            '활동', 'SM', 'JYP', 'HYBE', '걸그룹', '보이그룹', '솔로', '앨범', '뮤지컬',
+            // '활동' 제거: 너무 범용적이어서 "사회적 활동", "경제 활동" 등과 오매칭
+            'SM', 'JYP', 'HYBE', '걸그룹', '보이그룹', '솔로', '앨범', '뮤지컬',
             '소속사', '매니저', '스캔들', '열애', '결혼', '이혼', '임신', '은퇴',
-            '넷플릭스', '유튜브', '엔터', '아티스트',
+            '넷플릭스', '유튜브', '엔터', '아티스트', '연예활동',
             // 연예인 부동산 관련 (추가)
             '김태희', '비', '송혜교', '현빈', '이민호', '전지현', '한남더힐', '더힐',
             '펜트하우스', '고급빌라', '연예인주택', '셀럽', '연예계',
@@ -67,12 +68,15 @@ export const CATEGORIES: CategoryConfig[] = [
             '득점', '올림픽', '월드컵', '체육', '코치', '트레이드', '시즌', '챔피언',
             '골', '타자', '투수', '수비', '공격', '패', '승', '골키퍼', '에이전트',
             '구단', '팀', '육상', '수영', '탁구', '테니스', '골프', '마라톤',
+            'MVP', '프로리그', 'K리그', 'KBO', 'NBA', 'EPL', 'MLB',
         ],
         contextRules: [
             { keywords: ['선수', '경기'], boost: 15 },
             { keywords: ['감독', '선수'], boost: 15 },
             { keywords: ['우승', '경기'], boost: 12 },
             { keywords: ['리그', '시즌'], boost: 12 },
+            { keywords: ['득점', '경기'], boost: 12 },
+            { keywords: ['골', '경기'], boost: 12 },
         ],
     },
     {
@@ -119,11 +123,44 @@ export const CATEGORIES: CategoryConfig[] = [
             '학교폭력', '직장내괴롭힘', '갑질', '인종차별',
             '교통사고', '산업재해', '식품안전',
             '불법', '점용', '재조사', '하천', '계곡', '시설',
+            // 생활문화 키워드 통합
+            '맛집', '여행', '뷰티', '육아', '교육', '건강', '의료',
+            '병원', '음식', '레시피', '인테리어', '반려동물', '웰빙', '다이어트',
+            '문화', '전시', '공연', '책', '독서',
+            '요리', '카페', '맛', '먹방', '관광', '숙소', '호텔',
+            '화장품', '메이크업', '스킨케어', '성형', '미용',
         ],
         contextRules: [
             { keywords: ['사고', '사망'], boost: 15 },
             { keywords: ['범죄', '체포'], boost: 15 },
             { keywords: ['부동산', '청약'], boost: 12 },
+            { keywords: ['맛집', '추천'], boost: 12 },
+            { keywords: ['여행', '추천'], boost: 10 },
+            { keywords: ['전시', '개최'], boost: 10 },
+        ],
+    },
+    {
+        id: '경제',
+        label: '경제',
+        badgeColors: {
+            bg: 'bg-yellow-100',
+            text: 'text-yellow-700',
+            border: 'border-yellow-200',
+        },
+        gradientColors: 'from-yellow-500 via-orange-500 to-red-500',
+        keywords: [
+            '주가', '코스피', '코스닥', '환율', '금리', '부동산', '아파트', '청약',
+            '물가', '인플레', 'GDP', '무역', '수출', '수입', '관세', 'IMF',
+            '한국은행', '기준금리', '증시', '펀드', '채권', '경기침체',
+            '실업률', '최저임금', '임금', '기업실적', '영업이익', '매출',
+            '경제', '재정', '예산', '세금', '세율', '조세', '투자',
+        ],
+        contextRules: [
+            { keywords: ['주가', '급등'], boost: 15 },
+            { keywords: ['금리', '인상'], boost: 15 },
+            { keywords: ['부동산', '가격'], boost: 12 },
+            { keywords: ['청약', '경쟁률'], boost: 12 },
+            { keywords: ['기업', '실적'], boost: 12 },
         ],
     },
     {
@@ -136,16 +173,21 @@ export const CATEGORIES: CategoryConfig[] = [
         },
         gradientColors: 'from-violet-500 via-blue-500 to-cyan-500',
         keywords: [
+            // IT 키워드
             'AI', '인공지능', '반도체', '스마트폰', '앱', '플랫폼', '스타트업',
             '구글', '애플', '메타', '삼성전자', 'LG전자', 'SK하이닉스', '소프트웨어',
             '클라우드', '데이터', '사이버', '해킹', '개발자', '코딩', '로봇',
             '드론', '자율주행', '전기차', '배터리', '디지털', '서비스', '유튜브',
             '타이어', 'OE', '신차용', 'BMW', '벤츠', '아우디', '테슬라',
             '현대차', '기아', '넥센타이어', '한국타이어',
-            '기술', '과학', '연구', '실험', 'DGIST', 'KAIST', 'POSTECH', 'GIST',
+            '무신사', '쿠팡', '네이버쇼핑', '이커머스', '온라인쇼핑', '유통',
+            '패션', '브랜드', '큐레이션', '스토어', '론칭', '입점', '판매',
+            // 과학 키워드
+            '과학', '연구', '실험', 'DGIST', 'KAIST', 'POSTECH', 'GIST',
             '연구소', '연구원', '논문', '발표', '개발', '특허', '혁신',
             '뇌과학', '신경과학', '생명과학', '의료기기', '바이오', '제약',
             '미인도', '복원', '분석', '알고리즘', '머신러닝', '딥러닝',
+            '우주', 'NASA', '로켓', '위성', '발견', '천체', '탐사',
         ],
         contextRules: [
             { keywords: ['타이어', 'OE'], boost: 15 },
@@ -162,7 +204,35 @@ export const CATEGORIES: CategoryConfig[] = [
             { keywords: ['뇌', '과학'], boost: 18 },
             { keywords: ['미인도', 'AI'], boost: 20 },
             { keywords: ['연구', '개발'], boost: 12 },
-            { keywords: ['기술', '개발'], boost: 12 },
+            { keywords: ['무신사', '큐레이션'], boost: 18 },
+            { keywords: ['무신사', '스토어'], boost: 18 },
+            { keywords: ['이커머스', '플랫폼'], boost: 15 },
+            { keywords: ['온라인쇼핑', '서비스'], boost: 12 },
+            { keywords: ['우주', '발사'], boost: 15 },
+            { keywords: ['NASA', '발견'], boost: 12 },
+        ],
+    },
+    {
+        id: '세계',
+        label: '세계',
+        badgeColors: {
+            bg: 'bg-indigo-100',
+            text: 'text-indigo-700',
+            border: 'border-indigo-200',
+        },
+        gradientColors: 'from-indigo-500 via-blue-500 to-sky-500',
+        keywords: [
+            '미국', '중국', '일본', '러시아', 'EU', 'UN', 'NATO',
+            '트럼프', '바이든', '시진핑', '푸틴', '우크라이나', '가자', '이스라엘',
+            '북한', '김정은', '외교', '정상회담', '제재', '분쟁', '전쟁',
+            '해외', '국제', '글로벌', '외신', '타국', '외국',
+            '영국', '프랑스', '독일', '캐나다', '호주', '인도', '브라질',
+        ],
+        contextRules: [
+            { keywords: ['미국', '대통령'], boost: 15 },
+            { keywords: ['중국', '외교'], boost: 12 },
+            { keywords: ['전쟁', '분쟁'], boost: 18 },
+            { keywords: ['국제', '회담'], boost: 12 },
         ],
     },
 ]
@@ -215,3 +285,15 @@ export function getAllContextRules(): Array<{
  * Union 타입을 자동 생성하여 타입 안정성 유지
  */
 export type IssueCategory = (typeof CATEGORIES)[number]['id']
+
+/**
+ * UI 표시용 카테고리 라벨 매핑
+ * DB/내부값(id)을 UI 표시 라벨로 변환
+ */
+export const CATEGORY_LABELS: Record<string, string> = CATEGORIES.reduce(
+    (acc, cat) => {
+        acc[cat.id] = cat.label
+        return acc
+    },
+    {} as Record<string, string>
+)

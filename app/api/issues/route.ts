@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
             .select('*', { count: 'exact' })
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
-            .gte('heat_index', MIN_HEAT_TO_REGISTER) // 화력 낮은 이슈 제외
+            .is('merged_into_id', null)
+            .gte('heat_index', MIN_HEAT_TO_REGISTER)
 
         if (category) {
             query = query.eq('category', category)
@@ -76,38 +77,5 @@ export async function GET(request: NextRequest) {
     }
 }
 
-export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json()
-        const { title, description, status, category } = body
-
-        if (!title || typeof title !== 'string') {
-            return NextResponse.json(
-                { error: 'VALIDATION_ERROR', message: 'title 필수' },
-                { status: 400 }
-            )
-        }
-
-        const { data, error } = await supabaseAdmin
-            .from('issues')
-            .insert({
-                title: title.trim(),
-                description: description?.trim() ?? null,
-                status: status ?? '점화',
-                category: category ?? '사회',
-                approval_status: '대기',
-            })
-            .select()
-            .single()
-
-        if (error) throw error
-
-        return NextResponse.json({ data }, { status: 201 })
-    } catch (error) {
-        console.error('Issue create error:', error)
-        return NextResponse.json(
-            { error: 'CREATE_ERROR', message: '이슈 생성 실패' },
-            { status: 500 }
-        )
-    }
-}
+// POST 메서드는 제거됨 - 이슈는 트랙 A 프로세스를 통해서만 생성됨
+// 수동 생성 기능은 실제 사용 사례가 없어 2026-03-16에 제거됨

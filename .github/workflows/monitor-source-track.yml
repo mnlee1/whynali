@@ -1,0 +1,33 @@
+name: Monitor Source Track Null Issues
+
+on:
+    schedule:
+        - cron: '0 1 * * *'  # 매일 오전 10시 (KST, UTC+9)
+    workflow_dispatch:
+
+jobs:
+    check-source-track:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Check source_track null issues
+              env:
+                  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+                  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+              run: npx tsx scripts/monitor_source_track_null.ts
+
+            - name: Notify on failure
+              if: failure()
+              run: |
+                  echo "⚠️ source_track이 null인 이슈 발견!"
+                  echo "즉시 확인이 필요합니다."
