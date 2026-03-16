@@ -72,6 +72,7 @@ export interface DiscussionTopic {
     approval_status: '대기' | '진행중' | '마감'
     approved_at?: string
     created_at: string
+    updated_at?: string | null
 }
 
 // 감정 표현
