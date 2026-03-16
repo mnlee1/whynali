@@ -29,5 +29,5 @@ export const CANDIDATE_NO_RESPONSE_HOURS = parseInt(
     process.env.CANDIDATE_NO_RESPONSE_HOURS ?? '6'
 )
 export const AUTO_APPROVE_CATEGORIES = (
-    process.env.AUTO_APPROVE_CATEGORIES ?? '사회,기술,스포츠'
+    process.env.AUTO_APPROVE_CATEGORIES ?? '사회,경제,IT과학,생활문화,세계,스포츠'
 ).split(',')

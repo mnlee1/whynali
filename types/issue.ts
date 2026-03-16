@@ -2,7 +2,7 @@ import type { IssueCategory } from '@/lib/config/categories'
 
 export type IssueStatus = '점화' | '논란중' | '종결'
 export type { IssueCategory }
-export type ApprovalStatus = '대기' | '승인' | '반려'
+export type ApprovalStatus = '대기' | '승인' | '반려' | '병합됨'
 export type ApprovalType = 'auto' | 'manual'
 export type TimelineStage = '발단' | '전개' | '파생' | '진정'
 
@@ -18,11 +18,12 @@ export interface Issue {
     approval_type: ApprovalType | null
     approval_heat_index: number | null
     approved_at: string | null
+    merged_into_id: string | null
     created_at: string
     updated_at: string
     is_urgent?: boolean
     burst_level?: number
-    source_track?: 'news_collection' | 'community_burst'
+    source_track?: 'track_a' // 트랙 A 프로세스로만 생성 (2026-03-16: manual 제거)
 }
 
 export interface TimelinePoint {
