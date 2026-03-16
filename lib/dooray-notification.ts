@@ -82,3 +82,108 @@ export async function sendDoorayUrgentAlert(issues: UrgentIssue[]): Promise<bool
 export async function sendDoorayImmediateAlert(issue: UrgentIssue): Promise<boolean> {
     return sendDoorayUrgentAlert([issue])
 }
+
+/* ── 신고 알림 전용 ── */
+
+export interface UrgentReport {
+    commentId: string
+    commentBody: string
+    reason: string
+    reportCount: number
+    context: string
+    contextUrl: string
+}
+
+/**
+ * 긴급 신고 Dooray 즉시 알림 (욕설/혐오 전용)
+ */
+export async function sendDoorayUrgentReport(report: UrgentReport): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    try {
+        const message: DoorayMessage = {
+            botName: '왜난리 신고봇',
+            text: `🚨 **긴급 신고 알림**\n\n욕설/혐오 댓글이 신고되었습니다. 즉시 확인이 필요합니다.`,
+            attachments: [{
+                title: `${report.reason} ${report.reportCount}건`,
+                text: `위치: ${report.context}\n내용: ${report.commentBody.slice(0, 100)}${report.commentBody.length > 100 ? '...' : ''}\n\n[즉시 처리하기](${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/admin/safety) | [원문 보기](${report.contextUrl})`,
+                color: 'red'
+            }]
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log(`[Dooray] ✅ 긴급 신고 알림 전송 완료`)
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 긴급 신고 알림 전송 실패:', error)
+        return false
+    }
+}
+
+export interface PendingReportsSummary {
+    totalCount: number
+    reasonCounts: Record<string, number>
+}
+
+/**
+ * 미처리 신고 Dooray 배치 알림 (매일 12시)
+ */
+export async function sendDoorayPendingReports(summary: PendingReportsSummary): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (summary.totalCount === 0) {
+        console.log('[Dooray] 미처리 신고가 없어 알림을 건너뜁니다.')
+        return false
+    }
+
+    try {
+        const reasonText = Object.entries(summary.reasonCounts)
+            .map(([reason, count]) => `• ${reason}: ${count}건`)
+            .join('\n')
+
+        const message: DoorayMessage = {
+            botName: '왜난리 신고봇',
+            text: `📋 **미처리 신고 ${summary.totalCount}건**\n\n처리 대기 중인 신고가 있습니다.`,
+            attachments: [{
+                title: '사유별 현황',
+                text: `${reasonText}\n\n[신고 목록 확인하기](${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/admin/safety)`,
+                color: 'orange'
+            }]
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log(`[Dooray] ✅ 미처리 신고 배치 알림 전송 완료`)
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 미처리 신고 알림 전송 실패:', error)
+        return false
+    }
+}
