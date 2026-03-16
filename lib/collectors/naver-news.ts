@@ -94,3 +94,83 @@ export async function collectNaverNews(category: string): Promise<number> {
 
     return 0
 }
+
+/**
+ * searchNaverNewsByKeyword - 키워드로 네이버 뉴스 즉시 타겟 검색 (트랙 A 전용)
+ * 
+ * @param keyword AI가 추출한 핵심 키워드
+ * @param category 이슈 카테고리
+ * @returns 검색된 뉴스 아이템 배열 (DB 저장 완료, search_keyword 포함)
+ */
+export async function searchNaverNewsByKeyword(keyword: string, category: string = '사회'): Promise<Array<{
+    id: string
+    title: string
+    link: string
+    source: string
+    published_at: string
+}>> {
+    const clientId = process.env.NAVER_CLIENT_ID
+    const clientSecret = process.env.NAVER_CLIENT_SECRET
+
+    if (!clientId || !clientSecret) {
+        throw new Error('네이버 API 키가 설정되지 않았습니다')
+    }
+
+    // sort=sim (관련도순)으로 해당 키워드의 핵심 뉴스를 타겟팅
+    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(keyword)}&display=20&sort=sim`
+
+    const response = await fetch(url, {
+        headers: {
+            'X-Naver-Client-Id': clientId,
+            'X-Naver-Client-Secret': clientSecret,
+        },
+    })
+
+    if (!response.ok) {
+        console.error(`네이버 API 에러 (키워드: ${keyword}):`, response.status)
+        return []
+    }
+
+    const data = await response.json()
+    const items: NaverNewsItem[] = data.items ?? []
+
+    if (items.length === 0) {
+        return []
+    }
+
+    // 최근 30일 이내 뉴스만 필터링 (오래된 뉴스 제외)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    const recentItems = items.filter(item => {
+        const publishedDate = new Date(item.pubDate)
+        return publishedDate >= thirtyDaysAgo
+    })
+
+    if (recentItems.length === 0) {
+        console.log(`  ℹ️  최근 30일 이내 뉴스 없음 (전체 ${items.length}건 중 0건)`)
+        return []
+    }
+
+    const newsData = recentItems.map((item) => ({
+        title: stripHtmlTags(item.title),
+        link: item.link,
+        source: extractSource(item.originallink ?? item.link),
+        published_at: new Date(item.pubDate).toISOString(),
+        category: category,
+        search_keyword: keyword,  // 트랙A 검색 키워드 저장
+    }))
+
+    // DB 저장 (중복 방지: 같은 링크는 덮어쓰기)
+    const { error, data: upserted } = await supabaseAdmin
+        .from('news_data')
+        .upsert(newsData, { onConflict: 'link' })  // ignoreDuplicates 제거
+        .select('id, title, link, source, published_at')
+
+    if (error) {
+        console.error('뉴스 저장 에러:', error)
+        throw error
+    }
+
+    return upserted ?? []
+}
