@@ -127,7 +127,10 @@ export async function GET(request: NextRequest) {
         if (users.length < perPage) break
     }
 
+    let userId: string
+
     if (existing) {
+        userId = existing.id
         const needsUpdate =
             !existing.user_metadata?.provider_id ||
             existing.user_metadata?.provider !== 'naver'
@@ -149,6 +152,14 @@ export async function GET(request: NextRequest) {
         if (createError || !newUser.user) {
             return redirectError(createError?.message ?? '계정 생성에 실패했습니다.')
         }
+        userId = newUser.user.id
+
+        await admin.from('users').insert({
+            id: userId,
+            provider: '네이버',
+            provider_id: naverId,
+            display_name: name,
+        })
     }
 
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
