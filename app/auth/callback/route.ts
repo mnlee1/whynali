@@ -34,8 +34,11 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (sessionError || !user) {
+        console.error('[auth/callback] 세션 오류:', sessionError)
         return NextResponse.redirect(new URL('/', requestUrl.origin))
     }
+
+    console.log('[auth/callback] 유저 로그인:', user.id, user.email)
 
     const { data: userData, error: userError } = await supabase
         .from('users')
@@ -43,9 +46,18 @@ export async function GET(request: NextRequest) {
         .eq('id', user.id)
         .single()
 
+    console.log('[auth/callback] DB 유저 조회:', {
+        userId: user.id,
+        userData,
+        userError: userError?.message,
+        needsOnboarding: userData ? !userData.terms_agreed_at : 'no_user_data'
+    })
+
     if (!userError && userData && !userData.terms_agreed_at) {
+        console.log('[auth/callback] → /onboarding 리다이렉트')
         return NextResponse.redirect(new URL('/onboarding', requestUrl.origin))
     }
 
+    console.log('[auth/callback] → 메인 리다이렉트:', redirectPath)
     return response
 }
