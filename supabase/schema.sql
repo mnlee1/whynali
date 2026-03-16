@@ -10,6 +10,7 @@ CREATE TABLE issues (
     category TEXT CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계')),
     heat_index NUMERIC,
     approval_status TEXT CHECK (approval_status IN ('대기', '승인', '반려')),
+    approval_heat_index INTEGER,
     approved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -64,7 +65,14 @@ CREATE TABLE votes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     issue_id UUID REFERENCES issues(id) ON DELETE CASCADE,
     title TEXT,
-    phase TEXT,
+    phase TEXT CHECK (phase IN ('대기', '진행중', '마감')) DEFAULT '대기',
+    approval_status TEXT CHECK (approval_status IN ('대기', '승인', '반려')) DEFAULT '대기',
+    issue_status_snapshot TEXT,
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+    auto_end_date TIMESTAMPTZ,
+    auto_end_participants INTEGER,
+    is_ai_generated BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
