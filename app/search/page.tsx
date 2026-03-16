@@ -1,8 +1,10 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { formatDate } from '@/lib/utils/format-date'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
+import SearchHeader from '@/components/search/SearchHeader'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
