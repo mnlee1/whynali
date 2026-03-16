@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { notifyUrgentReport } from '@/lib/safety-notification'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,10 +51,10 @@ export async function POST(
         )
     }
 
-    /* 댓글 존재 여부 확인 */
+    /* 댓글 존재 여부 확인 (이슈/토론 정보도 함께) */
     const { data: comment } = await supabaseAdmin
         .from('comments')
-        .select('id')
+        .select('id, body, issue_id, discussion_topic_id')
         .eq('id', comment_id)
         .neq('visibility', 'deleted')
         .maybeSingle()
@@ -77,11 +78,51 @@ export async function POST(
                 { status: 409 }
             )
         }
+        console.error('[comments/report] INSERT 실패:', insertError)
         return NextResponse.json(
             { error: 'SERVER_ERROR', message: '신고 처리 중 오류가 발생했습니다.' },
             { status: 500 }
         )
     }
 
-    return NextResponse.json({ message: '신고가 접수되었습니다.' }, { status: 201 })
+    /* 신고 건수 확인 (현재 신고 포함) */
+    const { count: reportCount } = await supabaseAdmin
+        .from('reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('comment_id', comment_id)
+        .eq('status', '대기')
+
+    const currentReportCount = reportCount ?? 1
+
+    /* 자동 임시 숨김 임계값 체크 */
+    const shouldAutoHide = 
+        (reason === '욕설/혐오' && currentReportCount >= 2) ||
+        (reason === '스팸/광고' && currentReportCount >= 3) ||
+        (reason === '허위정보' && currentReportCount >= 3) ||
+        (reason === '기타' && currentReportCount >= 5)
+
+    if (shouldAutoHide) {
+        await supabaseAdmin
+            .from('comments')
+            .update({ visibility: 'pending_review', updated_at: new Date().toISOString() })
+            .eq('id', comment_id)
+    }
+
+    /* 욕설/혐오는 즉시 알림 (비동기, 실패해도 신고는 성공) */
+    if (reason === '욕설/혐오') {
+        void notifyUrgentReport({
+            commentId: comment_id,
+            commentBody: comment.body,
+            reason,
+            reportCount: currentReportCount,
+            issueId: comment.issue_id,
+            discussionTopicId: comment.discussion_topic_id,
+        })
+    }
+
+    return NextResponse.json({ 
+        message: shouldAutoHide 
+            ? '신고가 접수되었습니다. 다수 신고로 인해 해당 댓글이 임시 숨김 처리되었습니다.'
+            : '신고가 접수되었습니다.'
+    }, { status: 201 })
 }
