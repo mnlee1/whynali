@@ -25,17 +25,23 @@ export async function POST() {
         
         // 2. 기존 뉴스 전체 삭제 (트랙A 이전 레거시 데이터)
         console.log('[1/3] 기존 뉴스 삭제 중...')
-        const { error: deleteError, count } = await supabaseAdmin
+        
+        // 삭제 전 카운트 확인
+        const { count: beforeCount } = await supabaseAdmin
+            .from('news_data')
+            .select('*', { count: 'exact', head: true })
+            .or('search_keyword.is.null,search_keyword.eq.')
+        
+        const { error: deleteError } = await supabaseAdmin
             .from('news_data')
             .delete()
             .or('search_keyword.is.null,search_keyword.eq.')
-            .select('*', { count: 'exact', head: true })
         
         if (deleteError && deleteError.code !== 'PGRST116') {
             throw deleteError
         }
         
-        console.log(`  → ${count ?? 0}건 삭제됨`)
+        console.log(`  → ${beforeCount ?? 0}건 삭제됨`)
         
         // 3. 통계 확인
         const { count: remainingCount } = await supabaseAdmin
@@ -48,7 +54,7 @@ export async function POST() {
         return NextResponse.json({
             success: true,
             message: '마이그레이션 완료',
-            deleted: count ?? 0,
+            deleted: beforeCount ?? 0,
             remaining: remainingCount ?? 0,
         })
     } catch (error) {
