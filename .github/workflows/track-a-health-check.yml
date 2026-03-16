@@ -1,0 +1,65 @@
+name: Track-A Health Check
+
+on:
+  schedule:
+    # 매일 오전 9시 (KST 18시 UTC)
+    - cron: '0 9 * * *'
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Track-A Health Check
+        id: health_check
+        run: |
+          OUTPUT=$(npx tsx scripts/monitor_track_a_health.ts 2>&1 || echo "FAILED")
+          echo "$OUTPUT"
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # 실패 여부 체크
+          if echo "$OUTPUT" | grep -q "경고\|❌"; then
+            echo "has_warning=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_warning=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Send Dooray Notification on Warning
+        if: steps.health_check.outputs.has_warning == 'true'
+        run: |
+          curl -X POST "${{ secrets.DOORAY_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "botName": "트랙A 모니터",
+              "botIconImage": "https://static.dooray.com/static_images/dooray-bot.png",
+              "text": "⚠️ **트랙A 헬스 체크 경고 발생**\n\n문제가 감지되었습니다. 확인이 필요합니다.\n\n[GitHub Actions 로그 보기](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            }'
+
+      - name: Send Success Notification
+        if: steps.health_check.outputs.has_warning == 'false'
+        run: |
+          curl -X POST "${{ secrets.DOORAY_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "botName": "트랙A 모니터",
+              "botIconImage": "https://static.dooray.com/static_images/dooray-bot.png",
+              "text": "✅ **트랙A 일일 헬스 체크 정상**\n\n시스템이 정상 작동 중입니다."
+            }'

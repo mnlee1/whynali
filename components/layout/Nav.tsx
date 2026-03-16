@@ -18,8 +18,7 @@ export default function Nav({ mobile = false }: NavProps) {
         { name: CATEGORY_LABELS['정치'], href: '/politics', id: '정치' },
         { name: CATEGORY_LABELS['사회'], href: '/society', id: '사회' },
         { name: CATEGORY_LABELS['경제'], href: '/economy', id: '경제' },
-        { name: CATEGORY_LABELS['IT과학'], href: '/it-science', id: 'IT과학' },
-        { name: CATEGORY_LABELS['생활문화'], href: '/lifestyle', id: '생활문화' },
+        { name: CATEGORY_LABELS['기술'], href: '/tech', id: '기술' },
         { name: CATEGORY_LABELS['세계'], href: '/world', id: '세계' },
         { name: '커뮤니티', href: '/community', id: 'community' },
     ]

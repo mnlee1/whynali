@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { DiscussionTopic } from '@/types'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatDate } from '@/lib/utils/format-date'
 import SearchBar from '@/components/common/SearchBar'
+import type { DiscussionTopic } from '@/types'
 
 type TopicWithIssue = DiscussionTopic & {
     issues: { id: string; title: string } | null

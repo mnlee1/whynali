@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('news_data')
             .select(
-                'id, title, link, source, published_at, created_at, issue_id, issues(id, title)',
+                'id, title, link, source, published_at, created_at, issue_id, search_keyword, issues(id, title)',
                 { count: 'exact' }
             )
             .order(sort, { ascending, nullsFirst: false })
