@@ -1,10 +1,10 @@
 /**
  * app/admin/collections/page.tsx
  *
- * [관리자 - 수집 현황 페이지]
+ * [관리자 - 시스템 모니터링 페이지]
  *
- * 뉴스·커뮤니티 수집 통계와 목록을 보여줍니다.
- * 컬럼 헤더 클릭 소팅, 연결/미연결/전체 탭 필터, 페이지네이션을 지원합니다.
+ * 트랙A 프로세스 상태, 커뮤니티 수집 상태, 경고 등을 모니터링합니다.
+ * 상세 데이터는 접기/펼치기로 필요시에만 표시합니다.
  */
 
 'use client'
@@ -13,6 +13,37 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 // ─── 타입 ────────────────────────────────────────────────
+
+interface TrackAStats {
+    lastRun: {
+        timestamp: string | null
+        nextRun: string
+        status: 'success' | 'error' | 'unknown'
+        minutesAgo: number | null
+    }
+    last24h: {
+        issuesCreated: number
+        trackAIssues: number
+        manualIssues: number
+        trackAPercentage: number
+    }
+    communityCollection: {
+        lastCollected: string | null
+        last24h: number
+        last3h: number
+        status: 'active' | 'warning' | 'stopped'
+        minutesAgo: number | null
+    }
+    warnings: Array<{
+        type: 'critical' | 'warning' | 'info'
+        message: string
+        details?: string
+    }>
+    diagnostics: {
+        possibleCauses: string[]
+        recommendations: string[]
+    }
+}
 
 interface CollectionStats {
     news: {
@@ -37,6 +68,7 @@ interface NewsItem {
     published_at: string | null
     created_at: string
     issue_id: string | null
+    search_keyword: string  // 항상 있음 (트랙A 필수)
     issues: { id: string; title: string } | null
 }
 
@@ -207,9 +239,15 @@ function Pagination({
 // ─── 메인 페이지 ─────────────────────────────────────────
 
 export default function AdminCollectionsPage() {
+    const [trackAStats, setTrackAStats] = useState<TrackAStats | null>(null)
     const [stats, setStats] = useState<CollectionStats | null>(null)
     const [statsLoading, setStatsLoading] = useState(true)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+    const [showDetails, setShowDetails] = useState(false)
+    const [diagnosing, setDiagnosing] = useState(false)
+    const [diagnosis, setDiagnosis] = useState<any>(null)
+    const [collecting, setCollecting] = useState(false)
+    const [collectResult, setCollectResult] = useState<any>(null)
 
     // 뉴스 목록 상태
     const [newsResult, setNewsResult] = useState<ListResult<NewsItem> | null>(null)
@@ -230,15 +268,73 @@ export default function AdminCollectionsPage() {
 
     // ─── fetch ──────────────────────────────────────────
 
+    const fetchTrackAStats = async () => {
+        try {
+            const res = await fetch('/api/admin/collections/track-a-stats')
+            if (!res.ok) return
+            setTrackAStats(await res.json())
+        } catch (error) {
+            console.error('트랙A 통계 조회 실패:', error)
+        }
+    }
+
     const fetchStats = async () => {
         setStatsLoading(true)
         try {
-            const res = await fetch('/api/admin/collections')
-            if (!res.ok) return
-            setStats(await res.json())
+            const [trackARes, statsRes] = await Promise.all([
+                fetch('/api/admin/collections/track-a-stats'),
+                fetch('/api/admin/collections')
+            ])
+            
+            if (trackARes.ok) setTrackAStats(await trackARes.json())
+            if (statsRes.ok) setStats(await statsRes.json())
+            
             setLastRefreshedAt(new Date())
         } finally {
             setStatsLoading(false)
+        }
+    }
+
+    const runDiagnosis = async () => {
+        setDiagnosing(true)
+        try {
+            const res = await fetch('/api/admin/collections/diagnose')
+            if (res.ok) {
+                setDiagnosis(await res.json())
+            }
+        } catch (error) {
+            console.error('진단 실패:', error)
+        } finally {
+            setDiagnosing(false)
+        }
+    }
+
+    const runManualCollect = async () => {
+        setCollecting(true)
+        setCollectResult(null)
+        try {
+            const res = await fetch('/api/admin/collections/manual-collect', {
+                method: 'POST'
+            })
+            const data = await res.json()
+            setCollectResult(data)
+            
+            // 수집 성공 시 통계 자동 갱신
+            if (data.success) {
+                setTimeout(() => {
+                    fetchStats()
+                }, 2000)
+            }
+        } catch (error) {
+            console.error('수동 수집 실패:', error)
+            setCollectResult({
+                success: false,
+                error: 'FETCH_ERROR',
+                message: 'API 호출 실패',
+                details: String(error)
+            })
+        } finally {
+            setCollecting(false)
         }
     }
 
@@ -250,14 +346,14 @@ export default function AdminCollectionsPage() {
     ) => {
         setNewsLoading(true)
         try {
-            const linked =
-                linkFilter === 'linked' ? '&linked=true' :
-                linkFilter === 'unlinked' ? '&linked=false' : ''
-            const res = await fetch(
-                `/api/admin/collections/news?page=${page}&sort=${sort}&order=${order}${linked}`
-            )
-            if (!res.ok) return
-            setNewsResult(await res.json())
+                    const linked =
+                        linkFilter === 'linked' ? '&linked=true' :
+                        linkFilter === 'unlinked' ? '&linked=false' : ''
+                    const res = await fetch(
+                        `/api/admin/collections/news?page=${page}&sort=${sort}&order=${order}${linked}`
+                    )
+                    if (!res.ok) return
+                    setNewsResult(await res.json())
         } finally {
             setNewsLoading(false)
         }
@@ -379,13 +475,38 @@ export default function AdminCollectionsPage() {
 
     // ─── 렌더 ────────────────────────────────────────────
 
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'active':
+            case 'success':
+                return 'text-green-600 bg-green-50 border-green-200'
+            case 'warning':
+                return 'text-yellow-600 bg-yellow-50 border-yellow-200'
+            case 'stopped':
+            case 'error':
+                return 'text-red-600 bg-red-50 border-red-200'
+            default:
+                return 'text-gray-600 bg-gray-50 border-gray-200'
+        }
+    }
+
+    const formatTimeAgo = (minutes: number | null) => {
+        if (minutes === null) return '알 수 없음'
+        if (minutes < 1) return '방금 전'
+        if (minutes < 60) return `${minutes}분 전`
+        const hours = Math.floor(minutes / 60)
+        if (hours < 24) return `${hours}시간 전`
+        const days = Math.floor(hours / 24)
+        return `${days}일 전`
+    }
+
     return (
         <div>
-
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">수집 현황</h1>
+                    <h1 className="text-2xl font-bold">시스템 모니터링</h1>
+                    <p className="text-sm text-gray-500 mt-1">트랙A 프로세스 및 수집 시스템 상태</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
@@ -403,29 +524,317 @@ export default function AdminCollectionsPage() {
                 </div>
             </div>
 
-            {/* 요약 통계 카드 */}
-            {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white border rounded-lg p-4">
-                        <StatCard label="뉴스 총 수집" value={stats.news.total} />
-                    </div>
-                    <div className="bg-white border rounded-lg p-4">
-                        <StatCard label="뉴스 이슈 연결" value={stats.news.linked} />
-                    </div>
-                    <div className="bg-white border rounded-lg p-4">
-                        <StatCard label="커뮤니티 총 수집" value={stats.community.total} />
-                    </div>
-                    <div className="bg-white border rounded-lg p-4">
-                        <StatCard label="커뮤니티 이슈 연결" value={stats.community.linked} />
+            {/* 경고 및 알림 */}
+            {trackAStats && trackAStats.warnings.length > 0 && (
+                <div className="mb-6 space-y-3">
+                    {trackAStats.warnings.map((warning, index) => (
+                        <div
+                            key={index}
+                            className={`p-4 rounded-lg border ${
+                                warning.type === 'critical'
+                                    ? 'bg-red-50 border-red-200'
+                                    : warning.type === 'warning'
+                                    ? 'bg-yellow-50 border-yellow-200'
+                                    : 'bg-blue-50 border-blue-200'
+                            }`}
+                        >
+                            <div className="flex items-start gap-3">
+                                <span className="text-lg mt-0.5">
+                                    {warning.type === 'critical' ? '🔴' : warning.type === 'warning' ? '⚠️' : 'ℹ️'}
+                                </span>
+                                <div className="flex-1">
+                                    <p className={`text-sm font-medium ${
+                                        warning.type === 'critical'
+                                            ? 'text-red-700'
+                                            : warning.type === 'warning'
+                                            ? 'text-yellow-700'
+                                            : 'text-blue-700'
+                                    }`}>
+                                        {warning.message}
+                                    </p>
+                                    {warning.details && (
+                                        <p className="text-xs text-gray-600 mt-1">{warning.details}</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {/* 진단 정보 */}
+                    {trackAStats.diagnostics.possibleCauses.length > 0 && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-2">🔍 가능한 원인</h3>
+                            <ul className="space-y-1">
+                                {trackAStats.diagnostics.possibleCauses.map((cause, idx) => (
+                                    <li key={idx} className="text-xs text-gray-600 pl-2">
+                                        {cause}
+                                    </li>
+                                ))}
+                            </ul>
+                            
+                            {trackAStats.diagnostics.recommendations.length > 0 && (
+                                <>
+                                    <h3 className="text-sm font-semibold text-gray-700 mt-4 mb-2">💡 해결 방법</h3>
+                                    <ul className="space-y-1">
+                                        {trackAStats.diagnostics.recommendations.map((rec, idx) => (
+                                            <li key={idx} className="text-xs text-gray-600 pl-2">
+                                                {rec}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
+                            )}
+                            
+                            {/* 진단 버튼 */}
+                            <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                                <button
+                                    onClick={runDiagnosis}
+                                    disabled={diagnosing}
+                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                    {diagnosing ? '진단 중...' : '🔍 상세 진단 실행'}
+                                </button>
+                                <button
+                                    onClick={runManualCollect}
+                                    disabled={collecting}
+                                    className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                                >
+                                    {collecting ? '수집 중...' : '▶️ 수동 수집 실행'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* 수동 수집 결과 */}
+                    {collectResult && (
+                        <div className={`border rounded-lg p-4 mt-3 ${
+                            collectResult.success 
+                                ? 'bg-green-50 border-green-200' 
+                                : 'bg-red-50 border-red-200'
+                        }`}>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-semibold text-gray-700">
+                                    {collectResult.success ? '✅ 수집 성공' : '❌ 수집 실패'}
+                                </h3>
+                                <button
+                                    onClick={() => setCollectResult(null)}
+                                    className="text-xs text-gray-400 hover:text-gray-600"
+                                >
+                                    닫기
+                                </button>
+                            </div>
+                            
+                            {collectResult.success ? (
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-gray-700">더쿠:</span>
+                                        <span className="font-medium text-green-700">
+                                            {collectResult.theqoo.collected}건 수집 
+                                            {collectResult.theqoo.skipped > 0 && 
+                                                ` (${collectResult.theqoo.skipped}건 스킵)`
+                                            }
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-gray-700">네이트판:</span>
+                                        <span className="font-medium text-green-700">
+                                            {collectResult.natePann.collected}건 수집
+                                            {collectResult.natePann.skipped > 0 && 
+                                                ` (${collectResult.natePann.skipped}건 스킵)`
+                                            }
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-gray-500">
+                                        <span>소요 시간:</span>
+                                        <span>{collectResult.elapsed}</span>
+                                    </div>
+                                    {(collectResult.theqoo.warning || collectResult.natePann.warning) && (
+                                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                                            {collectResult.theqoo.warning && <p>⚠️ 더쿠: {collectResult.theqoo.warning}</p>}
+                                            {collectResult.natePann.warning && <p>⚠️ 네이트판: {collectResult.natePann.warning}</p>}
+                                        </div>
+                                    )}
+                                    <p className="text-xs text-green-600 mt-2">
+                                        💡 통계가 자동으로 갱신됩니다 (2초 후)
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-sm">
+                                    <p className="text-red-700 font-medium">{collectResult.message}</p>
+                                    {collectResult.details && (
+                                        <pre className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded overflow-x-auto">
+                                            {collectResult.details}
+                                        </pre>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* 진단 결과 */}
+                    {diagnosis && (
+                        <div className="bg-white border border-gray-300 rounded-lg p-4 mt-3">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-semibold text-gray-700">📊 진단 결과</h3>
+                                <button
+                                    onClick={() => setDiagnosis(null)}
+                                    className="text-xs text-gray-400 hover:text-gray-600"
+                                >
+                                    닫기
+                                </button>
+                            </div>
+                            
+                            {diagnosis.criticalIssue && (
+                                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
+                                    <p className="text-sm font-bold text-red-700">🚨 핵심 문제</p>
+                                    <p className="text-sm text-red-600 mt-1">{diagnosis.criticalIssue}</p>
+                                </div>
+                            )}
+                            
+                            {diagnosis.currentBranch && (
+                                <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                    <p className="text-xs text-yellow-700">
+                                        현재 브랜치: <code className="font-mono font-bold">{diagnosis.currentBranch}</code>
+                                    </p>
+                                    <p className="text-xs text-yellow-600 mt-1">
+                                        ⚠️ GitHub Actions 크론은 main/develop 브랜치에서만 실행됩니다
+                                    </p>
+                                </div>
+                            )}
+                            
+                            <p className="text-sm font-medium text-gray-800 mb-3">{diagnosis.conclusion}</p>
+                            
+                            <div className="space-y-2">
+                                {diagnosis.checks.map((check: any, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-2 text-xs">
+                                        <span>
+                                            {check.status === 'ok' ? '✅' : check.status === 'warning' ? '⚠️' : '❌'}
+                                        </span>
+                                        <div className="flex-1">
+                                            <span className="font-medium">{check.name}:</span>{' '}
+                                            <span className="text-gray-600">{check.message}</span>
+                                            {check.details && (
+                                                <pre className="mt-1 text-xs text-gray-500 bg-gray-50 p-2 rounded overflow-x-auto">
+                                                    {JSON.stringify(check.details, null, 2)}
+                                                </pre>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 트랙A 프로세스 상태 */}
+            {trackAStats && (
+                <div className="bg-white border rounded-lg p-6 mb-6">
+                    <h2 className="text-lg font-semibold mb-4">트랙A 프로세스 상태</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className={`p-4 rounded-lg border ${getStatusColor(trackAStats.lastRun.status)}`}>
+                            <p className="text-xs text-gray-500 mb-1">마지막 이슈 생성</p>
+                            <p className="text-xl font-bold">
+                                {trackAStats.lastRun.minutesAgo !== null
+                                    ? formatTimeAgo(trackAStats.lastRun.minutesAgo)
+                                    : '없음'}
+                            </p>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+                            <p className="text-xs text-gray-500 mb-1">다음 실행 예정</p>
+                            <p className="text-xl font-bold text-blue-600">
+                                {new Date(trackAStats.lastRun.nextRun).toLocaleTimeString('ko-KR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                })}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">30분 주기</p>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
+                            <p className="text-xs text-gray-500 mb-1">24시간 이슈 생성</p>
+                            <p className="text-xl font-bold text-gray-900">
+                                {trackAStats.last24h.issuesCreated}건
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                                트랙A {trackAStats.last24h.trackAIssues}건 ({trackAStats.last24h.trackAPercentage}%)
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* ── 수집 뉴스 목록 ── */}
+            {/* 커뮤니티 수집 상태 */}
+            {trackAStats && (
+                <div className="bg-white border rounded-lg p-6 mb-6">
+                    <h2 className="text-lg font-semibold mb-4">커뮤니티 수집 상태</h2>
+                    
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                        <p className="font-medium mb-1">📌 수집 전략 (선별적 크롤링)</p>
+                        <ul className="text-xs space-y-0.5 ml-4 list-disc">
+                            <li>더쿠: 스퀘어 게시판 인기글</li>
+                            <li>네이트판: 랭킹 페이지 인기글</li>
+                            <li>이슈 연결 게시글 지속 추적</li>
+                            <li>인기글 (조회수 3만+ 또는 댓글 50+) 추가 크롤링</li>
+                        </ul>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className={`p-4 rounded-lg border ${getStatusColor(trackAStats.communityCollection.status)}`}>
+                            <p className="text-xs text-gray-500 mb-1">마지막 수집</p>
+                            <p className="text-xl font-bold">
+                                {formatTimeAgo(trackAStats.communityCollection.minutesAgo)}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                                상태: {trackAStats.communityCollection.status === 'active' ? '정상' : '경고'}
+                            </p>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
+                            <p className="text-xs text-gray-500 mb-1">24시간 수집</p>
+                            <p className="text-xl font-bold text-gray-900">
+                                {trackAStats.communityCollection.last24h.toLocaleString()}건
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">3분 주기</p>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
+                            <p className="text-xs text-gray-500 mb-1">최근 3시간</p>
+                            <p className="text-xl font-bold text-gray-900">
+                                {trackAStats.communityCollection.last3h.toLocaleString()}건
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 상세 데이터 접기/펼치기 */}
+            <div className="mb-6">
+                <button
+                    onClick={() => setShowDetails(!showDetails)}
+                    className="w-full p-4 text-left bg-white border rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-between"
+                >
+                    <span className="font-medium text-gray-700">
+                        {showDetails ? '▼' : '▶'} 상세 수집 데이터 {showDetails ? '접기' : '펼치기'}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                        트랙A 검색 뉴스 및 커뮤니티 수집 목록
+                    </span>
+                </button>
+            </div>
+
+            {/* 상세 데이터 (접기/펼치기) */}
+            {showDetails && (
+                <div className="space-y-10">
+            {/* ── 트랙A 검색 뉴스 목록 ── */}
             <section className="mb-10">
                 <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-base font-semibold text-gray-800">수집 뉴스</h2>
-                    <CronBadge label="30분 주기" />
+                    <h2 className="text-base font-semibold text-gray-800">트랙A 검색 뉴스</h2>
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        AI 키워드 검색 전용
+                    </span>
                     {!newsLoading && newsResult && (
                         <span className="text-xs text-gray-400 ml-auto">
                             총 {newsResult.total.toLocaleString()}건
@@ -447,6 +856,9 @@ export default function AdminCollectionsPage() {
                                 </th>
                                 <Th label="출처" col="source" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
                                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                                    검색 키워드
+                                </th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                                     연결 이슈
                                 </th>
                                 <Th label="발행일" col="published_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
@@ -456,11 +868,11 @@ export default function AdminCollectionsPage() {
                         <tbody className="divide-y divide-gray-100">
                             {newsLoading ? (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
+                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
                                 </tr>
                             ) : !newsResult || newsResult.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 뉴스가 없습니다</td>
+                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 뉴스가 없습니다</td>
                                 </tr>
                             ) : (
                                 newsResult.data.map((item) => (
@@ -476,6 +888,11 @@ export default function AdminCollectionsPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{item.source}</td>
+                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                            <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                                {item.search_keyword}
+                                            </span>
+                                        </td>
                                         <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                                             {item.issues ? (
                                                 <Link href={`/issue/${item.issues.id}`} target="_blank"
@@ -508,6 +925,9 @@ export default function AdminCollectionsPage() {
                 <div className="flex items-center gap-2 mb-3">
                     <h2 className="text-base font-semibold text-gray-800">수집 커뮤니티</h2>
                     <CronBadge label="3분 주기" />
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                        인기글 선별 수집
+                    </span>
                     {!communityLoading && communityResult && (
                         <span className="text-xs text-gray-400 ml-auto">
                             총 {communityResult.total.toLocaleString()}건
@@ -606,6 +1026,8 @@ export default function AdminCollectionsPage() {
                     />
                 )}
             </section>
+                </div>
+            )}
         </div>
     )
 }

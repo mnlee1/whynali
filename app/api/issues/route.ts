@@ -3,7 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { parseLimitOffset, parseEnum } from '@/lib/parse-params'
 import type { IssueCategory, IssueStatus } from '@/types/issue'
 import { getCategoryIds } from '@/lib/config/categories'
-import { validateIssueCreation } from '@/lib/validation/issue-creation'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,52 +77,5 @@ export async function GET(request: NextRequest) {
     }
 }
 
-export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json()
-        const { title, description, status, category } = body
-
-        // 이슈 생성 데이터 검증
-        const validation = validateIssueCreation({
-            title: title?.trim(),
-            description: description?.trim() ?? null,
-            status: status ?? '점화',
-            category: category ?? '사회',
-            source_track: 'manual',  // 수동 생성 이슈는 'manual'로 표시
-            approval_status: '대기',
-        })
-
-        if (!validation.isValid) {
-            return NextResponse.json(
-                { error: 'VALIDATION_ERROR', message: validation.error },
-                { status: 400 }
-            )
-        }
-
-        // 이슈 생성 (검증된 데이터 사용)
-        const { data: newIssue, error } = await supabaseAdmin
-            .from('issues')
-            .insert(validation.validated!)
-            .select()
-            .single()
-
-        if (error) throw error
-
-        // 화력 계산 (수동 생성 이슈도 계산)
-        const { calculateHeatIndex } = await import('@/lib/analysis/heat')
-        try {
-            await calculateHeatIndex(newIssue.id)
-        } catch (heatError) {
-            console.error('화력 계산 실패:', heatError)
-            // 화력 계산 실패해도 이슈 생성은 성공
-        }
-        
-        return NextResponse.json({ data: newIssue }, { status: 201 })
-    } catch (error) {
-        console.error('Issue create error:', error)
-        return NextResponse.json(
-            { error: 'CREATE_ERROR', message: '이슈 생성 실패' },
-            { status: 500 }
-        )
-    }
-}
+// POST 메서드는 제거됨 - 이슈는 트랙 A 프로세스를 통해서만 생성됨
+// 수동 생성 기능은 실제 사용 사례가 없어 2026-03-16에 제거됨

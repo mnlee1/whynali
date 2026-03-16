@@ -23,7 +23,7 @@ export interface Issue {
     updated_at: string
     is_urgent?: boolean
     burst_level?: number
-    source_track?: 'news_collection' | 'community_burst'
+    source_track?: 'track_a' // 트랙 A 프로세스로만 생성 (2026-03-16: manual 제거)
 }
 
 export interface TimelinePoint {

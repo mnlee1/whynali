@@ -2,9 +2,12 @@
  * lib/validation/issue-creation.ts
  * 
  * 이슈 생성 시 필수 필드 검증
+ * 
+ * 수정 이력:
+ * - 2026-03-16: 수동 생성 기능 제거, track_a만 허용
  */
 
-export type SourceTrack = 'track_a' | 'manual'
+export type SourceTrack = 'track_a'
 
 export interface IssueCreationData {
     title: string
@@ -19,6 +22,7 @@ export interface IssueCreationData {
  * 이슈 생성 데이터 검증
  * 
  * source_track이 null로 생성되는 것을 방지하기 위한 필수 검증
+ * 이슈는 트랙 A 프로세스를 통해서만 생성됨
  */
 export function validateIssueCreation(data: Partial<IssueCreationData>): {
     isValid: boolean
@@ -38,16 +42,15 @@ export function validateIssueCreation(data: Partial<IssueCreationData>): {
     if (!data.source_track) {
         return { 
             isValid: false, 
-            error: 'source_track은 필수 필드입니다. "track_a" 또는 "manual"을 지정해야 합니다' 
+            error: 'source_track은 필수 필드입니다. "track_a"만 허용됩니다' 
         }
     }
 
-    // 3. source_track 값 검증
-    const validSourceTracks: SourceTrack[] = ['track_a', 'manual']
-    if (!validSourceTracks.includes(data.source_track)) {
+    // 3. source_track 값 검증 (track_a만 허용)
+    if (data.source_track !== 'track_a') {
         return { 
             isValid: false, 
-            error: `source_track은 "track_a" 또는 "manual"만 가능합니다. 현재 값: ${data.source_track}` 
+            error: `source_track은 "track_a"만 가능합니다. 현재 값: ${data.source_track}` 
         }
     }
 
