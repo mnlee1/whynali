@@ -23,6 +23,9 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { checkDuplicateIssue } from './duplicate-checker'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
 import { calculateHeatIndex } from '@/lib/analysis/heat'
+import { callGroq } from '@/lib/ai/groq-client'
+import { parseJsonObject } from '@/lib/ai/parse-json-response'
+import { tokenize } from './tokenizer'
 
 const ENABLE_BURST = process.env.ENABLE_COMMUNITY_BURST === 'true'
 const BURST_THRESHOLD = parseInt(
@@ -39,19 +42,13 @@ interface KeywordBurst {
 }
 
 /**
- * extractKeywords - 제목에서 키워드 추출
+ * extractCommunityKeywords - 커뮤니티 글 제목에서 키워드 추출
+ * 
+ * 간단한 버전의 키워드 추출기입니다.
+ * burst detection용으로 빠른 처리가 필요합니다.
  */
-function extractKeywords(title: string): string[] {
-    const stopwords = new Set([
-        '있다', '하다', '되다', '이다', '그', '저', '것',
-        '수', '등', '및', '또', '또는', '그리고', '하지만',
-    ])
-    
-    return title
-        .replace(/[^\wㄱ-ㅎㅏ-ㅣ가-힣\s]/g, ' ')
-        .split(/\s+/)
-        .filter(w => w.length >= 2 && !stopwords.has(w))
-        .map(w => w.toLowerCase())
+function extractCommunityKeywords(title: string): string[] {
+    return tokenize(title).map(w => w.toLowerCase())
 }
 
 /**
@@ -64,14 +61,10 @@ async function verifyIssueByAI(
     keyword: string,
     sampleTitles: string[]
 ): Promise<{ isIssue: boolean; confidence: number; reason: string }> {
-    const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) {
-        return { isIssue: false, confidence: 0, reason: 'API 키 없음' }
-    }
-    
-    const titlesText = sampleTitles.slice(0, 5).map((t, i) => `${i + 1}. ${t}`).join('\n')
-    
-    const prompt = `커뮤니티에서 급증한 키워드가 뉴스 이슈가 될 만한지 판단:
+    try {
+        const titlesText = sampleTitles.slice(0, 5).map((t, i) => `${i + 1}. ${t}`).join('\n')
+        
+        const prompt = `커뮤니티에서 급증한 키워드가 뉴스 이슈가 될 만한지 판단:
 
 키워드: "${keyword}"
 관련 게시글:
@@ -90,34 +83,19 @@ ${titlesText}
   "reason": "판단 이유 (한 줄)"
 }`
 
-    try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
+        const content = await callGroq(
+            [{ role: 'user', content: prompt }],
+            {
+                model: 'llama-3.1-8b-instant',
                 temperature: 0.2,
                 max_tokens: 200,
-            }),
-        })
+            }
+        )
         
-        if (!response.ok) {
-            throw new Error(`Groq API 에러 ${response.status}`)
-        }
-        
-        const data = await response.json()
-        const content = data.choices?.[0]?.message?.content?.trim()
-        
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) {
+        const result = parseJsonObject<{ isIssue: boolean; confidence: number; reason: string }>(content)
+        if (!result) {
             return { isIssue: false, confidence: 0, reason: 'JSON 파싱 실패' }
         }
-        
-        const result = JSON.parse(jsonMatch[0])
         
         await incrementApiUsage('groq', { calls: 1, successes: 1 })
         
@@ -208,7 +186,7 @@ export async function detectCommunityBurst(): Promise<number> {
     const keywordMap = new Map<string, Array<{ id: string; title: string; created_at: string }>>()
     
     for (const post of recentPosts) {
-        const keywords = extractKeywords(post.title)
+        const keywords = extractCommunityKeywords(post.title)
         for (const kw of keywords) {
             if (!keywordMap.has(kw)) {
                 keywordMap.set(kw, [])
@@ -310,6 +288,18 @@ export async function detectCommunityBurst(): Promise<number> {
         
         // 화력 계산 및 등록 시점 화력 저장
         const heatIndex = await calculateHeatIndex(newIssue.id).catch(() => 0)
+        
+        // 화력 15점 미만이면 이슈 삭제
+        const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER || '15')
+        if (heatIndex < MIN_HEAT_TO_REGISTER) {
+            console.log(`  ❌ [화력 부족] "${issueTitle}" (화력: ${heatIndex}점, 최소: ${MIN_HEAT_TO_REGISTER}점) - 이슈 삭제`)
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', newIssue.id)
+            continue
+        }
+        
         await supabaseAdmin
             .from('issues')
             .update({ 

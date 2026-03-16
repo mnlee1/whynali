@@ -18,6 +18,9 @@
  */
 
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
+import { callGroq } from '@/lib/ai/groq-client'
+import { parseJsonObject } from '@/lib/ai/parse-json-response'
+import { tokenize } from './tokenizer'
 
 interface DuplicateCheckResult {
     isDuplicate: boolean
@@ -120,14 +123,13 @@ const WORD_RELATIONS: WordRelation[] = [
 ]
 
 /**
- * extractKeywords - 제목에서 키워드 추출 (간단 버전)
+ * extractKeywords - 제목에서 키워드 추출
+ * 
+ * tokenizer.ts의 tokenize를 사용하되 lowercase 변환 추가.
+ * 중복 체크용으로 대소문자를 구분하지 않습니다.
  */
 function extractKeywords(title: string): string[] {
-    return title
-        .replace(/[^\wㄱ-ㅎㅏ-ㅣ가-힣\s]/g, ' ')
-        .split(/\s+/)
-        .filter(w => w.length >= 2)
-        .map(w => w.toLowerCase())
+    return tokenize(title).map(w => w.toLowerCase())
 }
 
 /**
@@ -203,12 +205,8 @@ async function compareByAI(
     newTitle: string,
     existingTitle: string
 ): Promise<{ isDuplicate: boolean; confidence: number; reason: string }> {
-    const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) {
-        return { isDuplicate: false, confidence: 0, reason: 'API 키 없음' }
-    }
-    
-    const prompt = `두 이슈 제목이 같은 사건/논란인지 판단:
+    try {
+        const prompt = `두 이슈 제목이 같은 사건/논란인지 판단:
 
 [신규] ${newTitle}
 [기존] ${existingTitle}
@@ -227,37 +225,20 @@ async function compareByAI(
   "reason": "판단 이유 (한 줄)"
 }`
 
-    try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
+        const content = await callGroq(
+            [{ role: 'user', content: prompt }],
+            {
+                model: 'llama-3.1-8b-instant',
                 temperature: 0.2,
                 max_tokens: 200,
-            }),
-        })
+            }
+        )
         
-        if (!response.ok) {
-            throw new Error(`Groq API 에러 ${response.status}`)
-        }
-        
-        const data = await response.json()
-        const content = data.choices?.[0]?.message?.content?.trim()
-        
-        // JSON 파싱
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) {
+        const result = parseJsonObject<{ isDuplicate: boolean; confidence: number; reason: string }>(content)
+        if (!result) {
             return { isDuplicate: false, confidence: 0, reason: 'JSON 파싱 실패' }
         }
         
-        const result = JSON.parse(jsonMatch[0])
-        
-        // API 사용량 추적
         await incrementApiUsage('groq', { calls: 1, successes: 1 })
         
         return {
@@ -270,7 +251,6 @@ async function compareByAI(
         console.error('[AI 중복 체크 에러]', error)
         await incrementApiUsage('groq', { calls: 1, failures: 1 })
         
-        // 에러 시 안전하게 별개로 처리
         return { isDuplicate: false, confidence: 0, reason: `에러: ${error}` }
     }
 }
@@ -379,4 +359,104 @@ export async function checkDuplicateIssue(
     
     console.log(`  ✓ [중복 없음] AI 검증 완료`)
     return { isDuplicate: false, filterStats }
+}
+
+/**
+ * GroupMergeRecommendation - 그룹 병합 추천 결과
+ */
+export interface GroupMergeRecommendation {
+    primaryIndex: number
+    secondaryIndex: number
+    primaryTitle: string
+    secondaryTitle: string
+    confidence: number
+    reason: string
+}
+
+/**
+ * detectDuplicateGroups - 같은 배치 내 쪼개진 그룹 감지
+ * 
+ * 키워드 그루핑 후 같은 카테고리 내에서 쪼개진 그룹들을
+ * AI로 재검증하여 병합 추천 목록을 반환합니다.
+ * 
+ * @param groups 이슈 후보 그룹 배열 (originalIndex 포함)
+ * @param category 카테고리 (같은 카테고리만 비교)
+ * @returns 병합 추천 목록
+ */
+export async function detectDuplicateGroups(
+    groups: Array<{ 
+        originalIndex: number
+        title: string
+        category: string | null
+        createdAt: string 
+    }>,
+    category: string
+): Promise<GroupMergeRecommendation[]> {
+    const recommendations: GroupMergeRecommendation[] = []
+    
+    const sameCategory = groups.filter(g => g.category === category)
+    
+    if (sameCategory.length < 2) {
+        return recommendations
+    }
+    
+    console.log(`\n[그룹 재검증] 카테고리 "${category}" 내 ${sameCategory.length}개 그룹 비교`)
+    
+    for (let i = 0; i < sameCategory.length; i++) {
+        for (let j = i + 1; j < sameCategory.length; j++) {
+            const group1 = sameCategory[i]
+            const group2 = sameCategory[j]
+            
+            const timeDiff = Math.abs(
+                new Date(group1.createdAt).getTime() - new Date(group2.createdAt).getTime()
+            ) / (1000 * 60 * 60)
+            
+            if (timeDiff > 24) {
+                continue
+            }
+            
+            const keywords1 = extractKeywords(group1.title)
+            const keywords2 = extractKeywords(group2.title)
+            const commonCount = keywords1.filter(k => keywords2.includes(k)).length
+            
+            if (commonCount < 1) {
+                continue
+            }
+            
+            if (hasOppositeWords(group1.title, group2.title)) {
+                console.log(`  ✗ [반대어] "${group1.title}" vs "${group2.title}"`)
+                continue
+            }
+            
+            if (hasSignificantNumberDifference(group1.title, group2.title)) {
+                console.log(`  ✗ [연속 사건] "${group1.title}" vs "${group2.title}"`)
+                continue
+            }
+            
+            console.log(`  ? [AI 검증] "${group1.title}" vs "${group2.title}"`)
+            
+            const aiResult = await compareByAI(group1.title, group2.title)
+            
+            if (aiResult.isDuplicate) {
+                console.log(`    ✓ [병합 추천] 신뢰도 ${aiResult.confidence}% - ${aiResult.reason}`)
+                
+                recommendations.push({
+                    primaryIndex: group1.originalIndex,
+                    secondaryIndex: group2.originalIndex,
+                    primaryTitle: group1.title,
+                    secondaryTitle: group2.title,
+                    confidence: aiResult.confidence,
+                    reason: aiResult.reason,
+                })
+            } else {
+                console.log(`    ✗ [별개 확정] 신뢰도 ${aiResult.confidence}% - ${aiResult.reason}`)
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 3000))
+        }
+    }
+    
+    console.log(`[그룹 재검증 완료] ${recommendations.length}개 병합 추천\n`)
+    
+    return recommendations
 }

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         .select('id, title, status, category, created_at')
         .eq('approval_status', '승인')
         .eq('visibility_status', 'visible')
+        .is('merged_into_id', null)
         .gte('heat_index', MIN_HEAT_TO_REGISTER)
 
     let discussionQuery = admin
