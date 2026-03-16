@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
             id: userId,
             provider: '네이버',
             provider_id: naverId,
-            display_name: name,
+            display_name: null,
         })
     }
 
