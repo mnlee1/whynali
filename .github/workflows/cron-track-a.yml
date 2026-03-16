@@ -1,0 +1,19 @@
+name: Cron - Track A
+
+on:
+    schedule:
+        - cron: '*/30 * * * *'  # 매 30분마다 실행
+    workflow_dispatch:  # 수동 실행 지원
+
+jobs:
+    track-a:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        
+        steps:
+            - name: Call Track A API
+              run: |
+                  curl -X POST \
+                    -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+                    -H "Content-Type: application/json" \
+                    ${{ secrets.NEXT_PUBLIC_SITE_URL }}/api/cron/track-a
