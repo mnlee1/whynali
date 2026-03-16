@@ -58,7 +58,7 @@ async function sendDailyReportSummary(): Promise<void> {
     const commentMap: ReportMap = {}
 
     for (const r of reports) {
-        const comment = r.comments as { id: string; body: string; visibility: string; issue_id: string | null; discussion_topic_id: string | null }
+        const comment = r.comments as unknown as { id: string; body: string; visibility: string; issue_id: string | null; discussion_topic_id: string | null }
         if (!commentMap[r.comment_id]) {
             commentMap[r.comment_id] = {
                 body: comment.body,
