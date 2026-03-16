@@ -1,109 +1,128 @@
-/**
- * app/api/comments/[id]/report/route.ts
- *
- * 댓글/토론 의견 신고 API
- * POST body: { reason: '욕설/혐오' | '스팸' | '허위정보' | '기타' }
- *
- * 신고 정책:
- *   욕설/혐오 1건 → 즉시 Dooray 알림
- *   욕설/혐오 2건 → 자동 임시 숨김(pending_review) + 즉시 Dooray 알림
- *   스팸/광고·허위정보·기타 → 즉시 알림 없음 (매일 12시 배치 알림)
- */
-
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
-import { sendDoorayReportAlert } from '@/lib/dooray-notification'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { supabaseAdmin } from '@/lib/supabase/server'
+import { notifyUrgentReport } from '@/lib/safety-notification'
 
-const VALID_REASONS = ['욕설/혐오', '스팸', '허위정보', '기타'] as const
+export const dynamic = 'force-dynamic'
+
+const VALID_REASONS = ['욕설/혐오', '스팸/광고', '허위정보', '기타'] as const
 type ReportReason = (typeof VALID_REASONS)[number]
 
+/* POST /api/comments/[id]/report — 특정 댓글 신고 */
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { id: commentId } = await params
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+        return NextResponse.json(
+            { error: 'UNAUTHORIZED', message: '로그인이 필요합니다.' },
+            { status: 401 }
+        )
     }
 
-    const body = await request.json()
-    const reason: ReportReason = body.reason
+    const { id: comment_id } = await params
 
-    if (!VALID_REASONS.includes(reason)) {
+    let body: { reason?: string }
+    try {
+        body = await request.json()
+    } catch {
         return NextResponse.json(
-            { error: `reason은 ${VALID_REASONS.join(', ')} 중 하나여야 합니다.` },
+            { error: 'BAD_REQUEST', message: '요청 본문을 파싱할 수 없습니다.' },
             { status: 400 }
         )
     }
 
-    const admin = createSupabaseAdminClient()
+    const { reason } = body
 
-    // 댓글 존재 여부 확인 (삭제된 댓글은 신고 불가)
-    const { data: comment, error: commentError } = await admin
+    if (!reason) {
+        return NextResponse.json(
+            { error: 'BAD_REQUEST', message: 'reason은 필수입니다.' },
+            { status: 400 }
+        )
+    }
+
+    if (!VALID_REASONS.includes(reason as ReportReason)) {
+        return NextResponse.json(
+            { error: 'BAD_REQUEST', message: `reason은 ${VALID_REASONS.join(' | ')} 중 하나여야 합니다.` },
+            { status: 400 }
+        )
+    }
+
+    /* 댓글 존재 여부 확인 (이슈/토론 정보도 함께) */
+    const { data: comment } = await supabaseAdmin
         .from('comments')
-        .select('id, body, issue_id, discussion_topic_id, visibility')
-        .eq('id', commentId)
-        .single()
+        .select('id, body, issue_id, discussion_topic_id')
+        .eq('id', comment_id)
+        .neq('visibility', 'deleted')
+        .maybeSingle()
 
-    if (commentError || !comment) {
-        return NextResponse.json({ error: '댓글을 찾을 수 없습니다.' }, { status: 404 })
+    if (!comment) {
+        return NextResponse.json(
+            { error: 'NOT_FOUND', message: '존재하지 않는 댓글입니다.' },
+            { status: 404 }
+        )
     }
 
-    if (comment.visibility === 'deleted') {
-        return NextResponse.json({ error: '이미 삭제된 댓글입니다.' }, { status: 422 })
-    }
-
-    // 신고 등록 (중복 신고는 UNIQUE 제약으로 차단)
-    const { error: insertError } = await admin
-        .from('comment_reports')
-        .insert({ comment_id: commentId, reporter_id: user.id, reason })
+    /* reports INSERT — UNIQUE(comment_id, reporter_id)로 중복 신고 방지 */
+    const { error: insertError } = await supabaseAdmin
+        .from('reports')
+        .insert({ comment_id, reporter_id: user.id, reason, status: '대기' })
 
     if (insertError) {
         if (insertError.code === '23505') {
-            return NextResponse.json({ error: '이미 신고한 댓글입니다.' }, { status: 409 })
+            return NextResponse.json(
+                { error: 'DUPLICATE', message: '이미 신고한 댓글입니다.' },
+                { status: 409 }
+            )
         }
-        throw insertError
+        console.error('[comments/report] INSERT 실패:', insertError)
+        return NextResponse.json(
+            { error: 'SERVER_ERROR', message: '신고 처리 중 오류가 발생했습니다.' },
+            { status: 500 }
+        )
     }
 
-    // 욕설/혐오 신고 건수 집계 (정책 판단에 사용)
-    const { count: hateCount } = await admin
-        .from('comment_reports')
+    /* 신고 건수 확인 (현재 신고 포함) */
+    const { count: reportCount } = await supabaseAdmin
+        .from('reports')
         .select('id', { count: 'exact', head: true })
-        .eq('comment_id', commentId)
-        .eq('reason', '욕설/혐오')
+        .eq('comment_id', comment_id)
+        .eq('status', '대기')
 
-    const hateReportCount = hateCount ?? 0
-    const isHate = reason === '욕설/혐오'
-    const contextType = comment.discussion_topic_id ? 'discussion' : 'issue'
-    const contextId = (comment.discussion_topic_id ?? comment.issue_id) as string
+    const currentReportCount = reportCount ?? 1
 
-    let autoHidden = false
+    /* 자동 임시 숨김 임계값 체크 */
+    const shouldAutoHide = 
+        (reason === '욕설/혐오' && currentReportCount >= 2) ||
+        (reason === '스팸/광고' && currentReportCount >= 3) ||
+        (reason === '허위정보' && currentReportCount >= 3) ||
+        (reason === '기타' && currentReportCount >= 5)
 
-    if (isHate) {
-        // 욕설/혐오 2건 도달 시 자동 임시 숨김
-        if (hateReportCount >= 2 && comment.visibility === 'public') {
-            await admin
-                .from('comments')
-                .update({ visibility: 'pending_review' })
-                .eq('id', commentId)
-            autoHidden = true
-        }
-
-        // 욕설/혐오는 항상 즉시 Dooray 알림 (1건, 2건 모두)
-        sendDoorayReportAlert({
-            commentId,
-            body: comment.body,
-            reason,
-            hateReportCount,
-            autoHidden,
-            contextType,
-            contextId,
-        }).catch(e => console.error('[신고 알림 실패]', e))
+    if (shouldAutoHide) {
+        await supabaseAdmin
+            .from('comments')
+            .update({ visibility: 'pending_review', updated_at: new Date().toISOString() })
+            .eq('id', comment_id)
     }
-    // 스팸/광고·허위정보·기타는 즉시 알림 없음 → daily batch에서 처리
 
-    return NextResponse.json({ reported: true, hateReportCount, autoHidden })
+    /* 욕설/혐오는 즉시 알림 (비동기, 실패해도 신고는 성공) */
+    if (reason === '욕설/혐오') {
+        void notifyUrgentReport({
+            commentId: comment_id,
+            commentBody: comment.body,
+            reason,
+            reportCount: currentReportCount,
+            issueId: comment.issue_id,
+            discussionTopicId: comment.discussion_topic_id,
+        })
+    }
+
+    return NextResponse.json({ 
+        message: shouldAutoHide 
+            ? '신고가 접수되었습니다. 다수 신고로 인해 해당 댓글이 임시 숨김 처리되었습니다.'
+            : '신고가 접수되었습니다.'
+    }, { status: 201 })
 }
