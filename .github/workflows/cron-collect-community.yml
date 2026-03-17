@@ -9,9 +9,20 @@ jobs:
   collect-community:
     runs-on: ubuntu-latest
     steps:
-      - name: 커뮤니티 수집 API 호출 (Production)
+      - name: 환경별 URL 설정
+        id: env
         run: |
-          curl -X GET https://whynali.vercel.app/api/cron/collect-community \
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Production" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+            echo "env_name=Develop" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 커뮤니티 수집 API 호출 (${{ steps.env.outputs.env_name }})
+        run: |
+          curl -X GET ${{ steps.env.outputs.url }}/api/cron/collect-community \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
             --max-time 60 \
