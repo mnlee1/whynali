@@ -61,24 +61,26 @@ export async function GET() {
         const trackAPercentage = totalIssues > 0 ? Math.round((trackAIssues / totalIssues) * 100) : 0
 
         // 2. 커뮤니티 수집 상태
+        // created_at은 최초 삽입 시간이므로, 수집 cron이 정상 실행돼도 기존 URL 업데이트 시 변하지 않음
+        // → updated_at(upsert 시마다 갱신)을 기준으로 판단
         const { data: communityData } = await supabaseAdmin
             .from('community_data')
-            .select('created_at')
-            .order('created_at', { ascending: false })
+            .select('updated_at')
+            .order('updated_at', { ascending: false })
             .limit(1)
             .single()
 
         const { data: communityLast24h } = await supabaseAdmin
             .from('community_data')
             .select('id', { count: 'exact', head: true })
-            .gte('created_at', last24h)
+            .gte('updated_at', last24h)
 
         const { data: communityLast3h } = await supabaseAdmin
             .from('community_data')
             .select('id', { count: 'exact', head: true })
-            .gte('created_at', last3h)
+            .gte('updated_at', last3h)
 
-        const lastCollected = communityData?.created_at ?? null
+        const lastCollected = communityData?.updated_at ?? null
         const minutesSinceCollection = lastCollected
             ? Math.floor((now.getTime() - new Date(lastCollected).getTime()) / 60000)
             : null
