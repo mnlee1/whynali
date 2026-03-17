@@ -44,12 +44,14 @@ function verifyCronRequest(req: NextRequest): boolean {
  *   ⚪ low:      스팸 1건, 기타 1건
  */
 async function sendDailyReportSummary(): Promise<void> {
-    // 욕설/혐오 외 신고가 있는 댓글과 신고 목록 조회
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    
     const { data: reports } = await supabaseAdmin
         .from('comment_reports')
         .select('comment_id, reason, comments!inner(id, body, visibility, issue_id, discussion_topic_id)')
         .neq('reason', '욕설/혐오')
-        .eq('comments.visibility', 'public')  // 이미 숨겨진 댓글 제외
+        .eq('comments.visibility', 'public')
+        .gte('created_at', yesterday)
 
     if (!reports || reports.length === 0) return
 

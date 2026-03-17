@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { closeVotesOnIssueDeleted } from '@/lib/vote-auto-closer'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export async function POST(
             .from('issues')
             .update({ visibility_status: 'hidden' })
             .eq('id', id)
-            .select()
+            .select('id, title')
             .single()
 
         if (error) throw error
@@ -33,6 +34,8 @@ export async function POST(
         if (count > 0) {
             console.log(`[투표 자동 마감] 이슈 ${id} 숨김 → ${count}개 투표 마감`)
         }
+
+        await writeAdminLog('숨김', 'issue', id, auth.adminEmail, `"${data.title}"${count > 0 ? ` (투표 ${count}개 자동 마감)` : ''}`)
 
         return NextResponse.json({ data })
     } catch (error) {
