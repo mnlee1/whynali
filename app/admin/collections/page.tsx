@@ -889,9 +889,10 @@ export default function AdminCollectionsPage() {
                                         </td>
                                         <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{item.source}</td>
                                         <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                                            <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                                                {item.search_keyword}
-                                            </span>
+                                            {item.search_keyword
+                                                ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{item.search_keyword}</span>
+                                                : <span className="text-gray-300">-</span>
+                                            }
                                         </td>
                                         <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                                             {item.issues ? (

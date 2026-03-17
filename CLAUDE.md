@@ -1,0 +1,109 @@
+# CLAUDE.md
+
+이 파일은 Claude Code(claude.ai/code)가 이 저장소에서 작업할 때 참고하는 가이드입니다.
+
+## 명령어
+
+```bash
+npm run dev          # 개발 서버 시작
+npm run build        # 프로덕션 빌드
+npm run lint         # ESLint 실행
+npm run test:e2e     # Playwright E2E 테스트 실행
+npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
+```
+
+## 아키텍처 개요
+
+**왜난리 (WhyNali)** — 한국 이슈/논란 추적 서비스. 사용자가 트렌딩 이슈를 탐색하고, 반응하고, 투표하고, AI가 생성한 커뮤니티 토론에 참여하는 플랫폼.
+
+### 기술 스택
+
+- **Next.js 15 App Router** + React 19, TypeScript 5, Tailwind CSS
+- **Supabase** (PostgreSQL) — ORM 없이 Supabase JS 클라이언트로 직접 SQL 쿼리
+- **인증**: Supabase Auth + OAuth (Google, Naver, Kakao) + 온보딩 플로우
+- **AI**: 멀티 프로바이더 (기본값 Groq/Llama, Claude, Perplexity) — `/lib/ai/`
+- **배포**: Vercel + Cron Jobs (백그라운드 처리)
+
+### 핵심 도메인 개념
+
+**이슈 상태 라이프사이클**: `대기` → 승인 → `점화` → `논란중` → `종결`
+
+**이슈 등록 파이프라인 ("Track A")**:
+1. Naver News API로 기사 수집
+2. 3시간 내 기사 5건 이상 → 이슈 후보 자동 생성
+3. 관리자 승인/반려; 화력 > 30이면 6시간 후 자동 승인
+4. Cron으로 화력 지수 재계산 (`/api/cron/recalculate-heat`)
+
+**이슈 카테고리 (8개)**: 연예, 스포츠, 정치, 사회, 경제, 기술, 세계, 생활문화
+
+**반응 타입**: 좋아요, 싫어요, 화나요, 팝콘각, 응원, 애도, 사이다
+
+### 데이터베이스
+
+Supabase 클라이언트 2종:
+- `/lib/supabase/client.ts` — 브라우저 클라이언트 (`createBrowserClient`)
+- `/lib/supabase/server.ts` — 서버 어드민 클라이언트 (커넥션 풀링, 포트 6543)
+
+스키마: `/supabase/schema.sql` / 마이그레이션: `/supabase/migrations/`
+
+주요 테이블: `issues`, `news_data`, `users`, `comments`, `reactions`, `votes`, `discussion_topics`, `timeline_points`, `safety_rules`, `admin_logs`
+
+### 인증 플로우
+
+1. OAuth 리다이렉트 → `/auth/callback`에서 코드 교환 후 세션을 쿠키에 저장 (localStorage 아님)
+2. 신규 유저 → `/onboarding`에서 약관 동의 + 익명 닉네임 배정
+3. `middleware.ts`가 쓰기 API 라우트 보호 (`/api/comments`, `/api/reactions`, `/api/votes`, `/api/discussions`)
+4. 어드민 권한은 서버 사이드에서 `ADMIN_EMAILS` 환경변수로 확인
+
+### API 패턴
+
+- 모든 API는 `/app/api/` 하위 (App Router 파일 기반 라우팅)
+- 쿼리 파라미터: `?category=연예&status=점화&sort=heat&limit=20&offset=0`
+- 에러 응답 형식: `{ error: 'CODE', message: '...' }`
+- Cron 엔드포인트는 `CRON_SECRET` 헤더로 인증
+- 어드민 엔드포인트: `/app/api/admin/`
+
+### ISR & 성능
+
+홈 페이지는 15분 주기 ISR 사용. `next.config.js`에서 React, vendor, 대형 라이브러리 webpack 청크 분리 설정.
+
+## 환경 변수
+
+필수:
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_SITE_URL
+```
+
+주요 선택:
+```
+GROQ_API_KEY / ANTHROPIC_API_KEY / PERPLEXITY_API_KEY
+AI_PROVIDER=groq          # groq|claude|perplexity
+ADMIN_EMAILS              # 쉼표 구분 어드민 이메일
+CRON_SECRET               # Vercel cron 인증
+NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
+```
+
+이슈 파이프라인 임계값 (기본값 있음):
+```
+CANDIDATE_ALERT_THRESHOLD=5
+CANDIDATE_AUTO_APPROVE_THRESHOLD=30
+CANDIDATE_MIN_HEAT_TO_REGISTER=15
+CANDIDATE_WINDOW_HOURS=24
+CANDIDATE_NO_RESPONSE_HOURS=6
+```
+
+## Git 워크플로우
+
+브랜치: `main` (프로덕션) → `develop` (통합) → `feature/*`
+전체 전략은 `/docs/99_Git협업.md` 참고.
+
+## 주요 문서
+
+- `/docs/01_AI기획.md` — 전체 제품 기획서
+- `/docs/07_이슈등록_화력_정렬_규격.md` — 화력 지수 계산 규격
+- `/docs/08_이슈상태전환_규격.md` — 이슈 상태 전환 규칙
+- `/docs/97_API규약.md` — API 계약
+- `/types/issue.ts` — 핵심 TypeScript 타입 정의
