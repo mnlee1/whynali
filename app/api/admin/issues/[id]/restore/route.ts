@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +25,12 @@ export async function POST(
                 visibility_status: 'visible',
             })
             .eq('id', id)
-            .select()
+            .select('id, title')
             .single()
 
         if (error) throw error
+
+        await writeAdminLog('복구', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         return NextResponse.json({ data })
     } catch (error) {
