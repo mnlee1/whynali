@@ -40,6 +40,7 @@ interface Vote {
     auto_end_date: string | null
     auto_end_participants: number | null
     created_at: string
+    is_ai_generated?: boolean
     issues: { id: string; title: string } | null
     vote_choices: VoteChoice[]
 }
@@ -94,32 +95,21 @@ export default function AdminVotesPage() {
 
     /* 통합 생성 폼 */
     const [showCreateForm, setShowCreateForm] = useState(false)
-    const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai')
     const [approvedIssues, setApprovedIssues] = useState<Issue[]>([])
     const [loadingIssues, setLoadingIssues] = useState(false)
     const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
     const [voteTitle, setVoteTitle] = useState('')
     const [voteChoices, setVoteChoices] = useState(['', ''])
-    const [aiCount, setAiCount] = useState(2)
     const [submitting, setSubmitting] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
+    const [generating, setGenerating] = useState(false)
+    const [isAiFilled, setIsAiFilled] = useState(false)
 
     /* 자동 종료 옵션 */
     const [autoEndEnabled, setAutoEndEnabled] = useState(false)
     const [autoEndType, setAutoEndType] = useState<'date' | 'participants'>('date')
     const [autoEndDate, setAutoEndDate] = useState('')
     const [autoEndParticipants, setAutoEndParticipants] = useState('')
-
-    /* AI 미리보기 */
-    const [generatedVotes, setGeneratedVotes] = useState<Array<{
-        title: string
-        choices: string[]
-    }>>([])
-    const [showPreview, setShowPreview] = useState(false)
-    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-    const [generating, setGenerating] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [regenerateDisabled, setRegenerateDisabled] = useState(false)
 
     /* 전체 탭 정렬: 대기(0) → 진행중(1) → 반려(2) → 마감(3) */
     const SORT_ORDER = (vote: Vote): number => {
@@ -154,120 +144,39 @@ export default function AdminVotesPage() {
         setSelectedIssue(null)
         setVoteTitle('')
         setVoteChoices(['', ''])
-        setCreateMode('ai')
         setFormError(null)
-        setGeneratedVotes([])
-        setShowPreview(false)
-        setSelectedIndices(new Set())
+        setIsAiFilled(false)
         setAutoEndEnabled(false)
         setAutoEndType('date')
         setAutoEndDate('')
         setAutoEndParticipants('')
     }
 
-    /* AI 생성 (미리보기) */
-    const handleGenerate = async () => {
+    /* AI 생성으로 폼 채우기 */
+    const handleAiFill = async () => {
         if (!selectedIssue || generating) return
-
         setGenerating(true)
         setFormError(null)
-
         try {
             const res = await fetch('/api/admin/votes/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: selectedIssue.id, count: aiCount }),
+                body: JSON.stringify({ issue_id: selectedIssue.id, count: 1 }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-
-            const votes = json.data.map((v: any) => ({
-                title: v.title || '',
-                choices: v.vote_choices?.map((c: any) => c.label) || []
-            }))
-
-            setGeneratedVotes(votes)
-            setSelectedIndices(new Set(votes.map((_: any, idx: number) => idx)))
-            setShowPreview(true)
+            const generated = json.data?.[0]
+            if (generated) {
+                setVoteTitle(generated.title || '')
+                setVoteChoices(
+                    generated.vote_choices?.map((c: any) => c.label).filter(Boolean) || ['', '']
+                )
+                setIsAiFilled(true)
+            }
         } catch (e) {
             setFormError(e instanceof Error ? e.message : 'AI 생성 실패')
         } finally {
             setGenerating(false)
-        }
-    }
-
-    /* 재생성 */
-    const handleRegenerate = async () => {
-        if (regenerateDisabled) return
-        setRegenerateDisabled(true)
-        await handleGenerate()
-        setTimeout(() => setRegenerateDisabled(false), 5000)
-    }
-
-    /* 전체 선택/해제 */
-    const handleTogglePreviewAll = () => {
-        if (selectedIndices.size === generatedVotes.length) {
-            setSelectedIndices(new Set())
-        } else {
-            setSelectedIndices(new Set(generatedVotes.map((_, idx) => idx)))
-        }
-    }
-
-    /* 개별 선택 토글 */
-    const handleTogglePreviewSelect = (idx: number) => {
-        const newSet = new Set(selectedIndices)
-        if (newSet.has(idx)) {
-            newSet.delete(idx)
-        } else {
-            newSet.add(idx)
-        }
-        setSelectedIndices(newSet)
-    }
-
-    /* 선택 항목 등록 */
-    const handleSaveSelected = async () => {
-        if (!selectedIssue || saving || selectedIndices.size === 0) return
-
-        setSaving(true)
-        setFormError(null)
-
-        try {
-            const selectedVotes = generatedVotes.filter((_, idx) => selectedIndices.has(idx))
-
-            // 자동 종료 옵션 준비
-            const autoEndOptions: any = {}
-            if (autoEndEnabled) {
-                if (autoEndType === 'date' && autoEndDate) {
-                    autoEndOptions.auto_end_date = new Date(autoEndDate).toISOString()
-                }
-                if (autoEndType === 'participants' && autoEndParticipants) {
-                    autoEndOptions.auto_end_participants = parseInt(autoEndParticipants, 10)
-                }
-            }
-
-            for (const vote of selectedVotes) {
-                const res = await fetch('/api/admin/votes', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        issue_id: selectedIssue.id,
-                        title: vote.title,
-                        choices: vote.choices,
-                        ...autoEndOptions,
-                    }),
-                })
-                const json = await res.json()
-                if (!res.ok) throw new Error(json.error)
-            }
-
-            handleCloseForm()
-            setFilter('대기')
-            setPage(1)
-            loadVotes('대기', 1)
-        } catch (e) {
-            setFormError(e instanceof Error ? e.message : '저장 실패')
-        } finally {
-            setSaving(false)
         }
     }
 
@@ -299,15 +208,18 @@ export default function AdminVotesPage() {
                 }
             }
 
+            const bodyData: any = {
+                issue_id: selectedIssue.id,
+                title: voteTitle.trim(),
+                choices: validChoices,
+                is_ai_generated: isAiFilled,
+                ...autoEndOptions,
+            }
+            
             const res = await fetch('/api/admin/votes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    issue_id: selectedIssue.id,
-                    title: voteTitle.trim(),
-                    choices: validChoices,
-                    ...autoEndOptions,
-                }),
+                body: JSON.stringify(bodyData),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -364,7 +276,7 @@ export default function AdminVotesPage() {
         loadVotes(filter, 1)
     }, [filter, loadVotes])
 
-    const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료') => {
+    const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료' | '재개') => {
         let confirmMsg = ''
         
         if (action === '승인') {
@@ -375,6 +287,8 @@ export default function AdminVotesPage() {
             confirmMsg = '이 투표를 영구 삭제하시겠습니까? 투표와 선택지가 모두 삭제됩니다.'
         } else if (action === '종료') {
             confirmMsg = '이 투표를 즉시 종료하시겠습니까?'
+        } else if (action === '재개') {
+            confirmMsg = '이 투표를 다시 진행중 상태로 재개하시겠습니까? 자동 마감 조건(날짜/참여자 수)이 초기화됩니다.'
         }
         
         if (!window.confirm(confirmMsg)) return
@@ -392,6 +306,8 @@ export default function AdminVotesPage() {
                 method = 'DELETE'
             } else if (action === '종료') {
                 endpoint = `/api/admin/votes/${id}/close`
+            } else if (action === '재개') {
+                endpoint = `/api/admin/votes/${id}/reopen`
             }
             
             const res = await fetch(endpoint, { method })
@@ -524,34 +440,6 @@ export default function AdminVotesPage() {
 
                     {formError && <p className="text-sm text-red-500">{formError}</p>}
 
-                    {/* AI/직접 선택 토글 */}
-                    <div className="flex gap-2 p-1 bg-blue-100 rounded-lg">
-                        <button
-                            type="button"
-                            onClick={() => setCreateMode('ai')}
-                            className={[
-                                'flex-1 px-3 py-1.5 text-sm rounded transition-colors',
-                                createMode === 'ai'
-                                    ? 'bg-white text-blue-800 font-medium shadow-sm'
-                                    : 'text-blue-600 hover:text-blue-800',
-                            ].join(' ')}
-                        >
-                            AI 생성
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setCreateMode('manual')}
-                            className={[
-                                'flex-1 px-3 py-1.5 text-sm rounded transition-colors',
-                                createMode === 'manual'
-                                    ? 'bg-white text-blue-800 font-medium shadow-sm'
-                                    : 'text-blue-600 hover:text-blue-800',
-                            ].join(' ')}
-                        >
-                            직접 입력
-                        </button>
-                    </div>
-
                     {/* 이슈 선택 */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-gray-600">대상 이슈 (승인된 이슈만)</label>
@@ -576,258 +464,154 @@ export default function AdminVotesPage() {
                         )}
                     </div>
 
-                    {/* AI 생성 옵션 */}
-                    {createMode === 'ai' && !showPreview && (
-                        <div className="space-y-2 p-3 bg-purple-50 border border-purple-200 rounded">
-                            <p className="text-xs text-purple-700">
-                                이슈 메타데이터(제목·카테고리·화력)를 기반으로 AI가 투표 후보를 생성합니다.
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <label className="text-xs font-medium text-gray-600">생성 개수</label>
-                                <select
-                                    value={aiCount}
-                                    onChange={(e) => setAiCount(Number(e.target.value))}
-                                    className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none"
-                                    disabled={generating}
-                                >
-                                    {[1, 2, 3].map((n) => (
-                                        <option key={n} value={n}>{n}개</option>
-                                    ))}
-                                </select>
-                            </div>
+                    {/* 투표 제목 */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-gray-600">투표 제목</label>
+                            <button
+                                type="button"
+                                onClick={handleAiFill}
+                                disabled={!selectedIssue || generating}
+                                className="text-xs px-2.5 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                            >
+                                {generating ? 'AI 생성 중...' : '✨ AI 생성'}
+                            </button>
                         </div>
-                    )}
+                        <input
+                            type="text"
+                            value={voteTitle}
+                            onChange={(e) => {
+                                setVoteTitle(e.target.value)
+                                setIsAiFilled(false)
+                            }}
+                            placeholder="투표 질문을 입력하거나, AI 생성 버튼을 눌러 자동 생성하세요"
+                            maxLength={40}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                        />
+                        <p className="text-xs text-gray-400 text-right">{voteTitle.length}/40</p>
+                    </div>
 
-                    {/* AI 미리보기 */}
-                    {createMode === 'ai' && showPreview && (
-                        <div className="space-y-3 p-3 bg-white border border-gray-200 rounded">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-800">
-                                    생성 결과 ({generatedVotes.length}개)
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={handleTogglePreviewAll}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
-                                >
-                                    {selectedIndices.size === generatedVotes.length ? '전체 해제' : '전체 선택'}
-                                </button>
-                            </div>
-
-                            <div className="space-y-2 max-h-96 overflow-y-auto">
-                                {generatedVotes.map((vote, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={[
-                                            'p-3 border rounded transition-colors',
-                                            selectedIndices.has(idx)
-                                                ? 'border-blue-300 bg-blue-50'
-                                                : 'border-gray-200 bg-white'
-                                        ].join(' ')}
-                                    >
-                                        <label className="flex items-start gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedIndices.has(idx)}
-                                                onChange={() => handleTogglePreviewSelect(idx)}
-                                                className="mt-0.5 w-4 h-4"
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-900 mb-1">
-                                                    {vote.title}
-                                                </p>
-                                                <ul className="space-y-0.5">
-                                                    {vote.choices.map((choice, cidx) => (
-                                                        <li key={cidx} className="text-xs text-gray-600">
-                                                            • {choice}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="flex gap-2 pt-2 border-t">
-                                <button
-                                    type="button"
-                                    onClick={handleRegenerate}
-                                    disabled={regenerateDisabled || generating}
-                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-                                >
-                                    {regenerateDisabled ? '재생성 대기 중...' : '🔄 재생성'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSaveSelected}
-                                    disabled={saving || selectedIndices.size === 0}
-                                    className="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                >
-                                    {saving ? '등록 중...' : `선택 항목 등록 (${selectedIndices.size})`}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 직접 입력 폼 */}
-                    {createMode === 'manual' && selectedIssue && (
-                        <div className="space-y-3 p-3 bg-white border border-gray-200 rounded">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-600">투표 제목</label>
+                    {/* 선택지 */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-600">선택지 (2-6개)</label>
+                        {voteChoices.map((choice, idx) => (
+                            <div key={idx} className="flex gap-2">
                                 <input
                                     type="text"
-                                    value={voteTitle}
-                                    onChange={(e) => setVoteTitle(e.target.value)}
-                                    placeholder="투표 질문을 입력하세요"
-                                    maxLength={40}
-                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                    value={choice}
+                                    onChange={(e) => {
+                                        const newChoices = [...voteChoices]
+                                        newChoices[idx] = e.target.value
+                                        setVoteChoices(newChoices)
+                                        setIsAiFilled(false)
+                                    }}
+                                    placeholder={`선택지 ${idx + 1}`}
+                                    maxLength={20}
+                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
                                 />
-                                <p className="text-xs text-gray-400 text-right">{voteTitle.length}/40</p>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs font-medium text-gray-600">선택지 (2-6개)</label>
-                                {voteChoices.map((choice, idx) => (
-                                    <div key={idx} className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={choice}
-                                            onChange={(e) => {
-                                                const newChoices = [...voteChoices]
-                                                newChoices[idx] = e.target.value
-                                                setVoteChoices(newChoices)
-                                            }}
-                                            placeholder={`선택지 ${idx + 1}`}
-                                            maxLength={20}
-                                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
-                                        />
-                                        {voteChoices.length > 2 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setVoteChoices(voteChoices.filter((_, i) => i !== idx))}
-                                                className="px-2 py-1 text-sm text-red-500 hover:text-red-700"
-                                            >
-                                                삭제
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                                {voteChoices.length < 6 && (
+                                {voteChoices.length > 2 && (
                                     <button
                                         type="button"
-                                        onClick={() => setVoteChoices([...voteChoices, ''])}
-                                        className="text-xs text-blue-600 hover:text-blue-800"
+                                        onClick={() => setVoteChoices(voteChoices.filter((_, i) => i !== idx))}
+                                        className="px-2 py-1 text-sm text-red-500 hover:text-red-700"
                                     >
-                                        + 선택지 추가
+                                        삭제
                                     </button>
                                 )}
                             </div>
+                        ))}
+                        {voteChoices.length < 6 && (
+                            <button
+                                type="button"
+                                onClick={() => setVoteChoices([...voteChoices, ''])}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                                + 선택지 추가
+                            </button>
+                        )}
+                    </div>
 
-                            {/* 자동 종료 옵션 */}
-                            <div className="space-y-2 pt-2 border-t border-gray-200">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        id="autoEndEnabled"
-                                        checked={autoEndEnabled}
-                                        onChange={(e) => setAutoEndEnabled(e.target.checked)}
-                                        className="rounded"
-                                    />
-                                    <label htmlFor="autoEndEnabled" className="text-xs font-medium text-gray-600">
-                                        자동 종료 설정
+                    {/* 자동 종료 설정 */}
+                    <div className="space-y-2 pt-2 border-t border-gray-200">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                id="autoEndEnabled"
+                                checked={autoEndEnabled}
+                                onChange={(e) => setAutoEndEnabled(e.target.checked)}
+                                className="rounded"
+                            />
+                            <label htmlFor="autoEndEnabled" className="text-xs font-medium text-gray-600">
+                                자동 종료 설정
+                            </label>
+                        </div>
+
+                        {autoEndEnabled && (
+                            <div className="pl-6 space-y-2">
+                                <div className="flex gap-2">
+                                    <label className="flex items-center gap-1.5">
+                                        <input
+                                            type="radio"
+                                            name="autoEndType"
+                                            value="date"
+                                            checked={autoEndType === 'date'}
+                                            onChange={(e) => setAutoEndType(e.target.value as 'date')}
+                                        />
+                                        <span className="text-xs text-gray-600">날짜</span>
+                                    </label>
+                                    <label className="flex items-center gap-1.5">
+                                        <input
+                                            type="radio"
+                                            name="autoEndType"
+                                            value="participants"
+                                            checked={autoEndType === 'participants'}
+                                            onChange={(e) => setAutoEndType(e.target.value as 'participants')}
+                                        />
+                                        <span className="text-xs text-gray-600">참여자 수</span>
                                     </label>
                                 </div>
 
-                                {autoEndEnabled && (
-                                    <div className="pl-6 space-y-2">
-                                        <div className="flex gap-2">
-                                            <label className="flex items-center gap-1.5">
-                                                <input
-                                                    type="radio"
-                                                    name="autoEndType"
-                                                    value="date"
-                                                    checked={autoEndType === 'date'}
-                                                    onChange={(e) => setAutoEndType(e.target.value as 'date')}
-                                                />
-                                                <span className="text-xs text-gray-600">날짜</span>
-                                            </label>
-                                            <label className="flex items-center gap-1.5">
-                                                <input
-                                                    type="radio"
-                                                    name="autoEndType"
-                                                    value="participants"
-                                                    checked={autoEndType === 'participants'}
-                                                    onChange={(e) => setAutoEndType(e.target.value as 'participants')}
-                                                />
-                                                <span className="text-xs text-gray-600">참여자 수</span>
-                                            </label>
-                                        </div>
+                                {autoEndType === 'date' && (
+                                    <input
+                                        type="datetime-local"
+                                        value={autoEndDate}
+                                        onChange={(e) => setAutoEndDate(e.target.value)}
+                                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                    />
+                                )}
 
-                                        {autoEndType === 'date' && (
-                                            <input
-                                                type="datetime-local"
-                                                value={autoEndDate}
-                                                onChange={(e) => setAutoEndDate(e.target.value)}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
-                                            />
-                                        )}
-
-                                        {autoEndType === 'participants' && (
-                                            <input
-                                                type="number"
-                                                value={autoEndParticipants}
-                                                onChange={(e) => setAutoEndParticipants(e.target.value)}
-                                                placeholder="목표 참여자 수 입력"
-                                                min="1"
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
-                                            />
-                                        )}
-                                    </div>
+                                {autoEndType === 'participants' && (
+                                    <input
+                                        type="number"
+                                        value={autoEndParticipants}
+                                        onChange={(e) => setAutoEndParticipants(e.target.value)}
+                                        placeholder="목표 참여자 수 입력"
+                                        min="1"
+                                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                    />
                                 )}
                             </div>
+                        )}
+                    </div>
 
-                            {/* 직접 입력 제출 버튼 */}
-                            <div className="flex gap-2 pt-2 border-t">
-                                <button
-                                    type="button"
-                                    onClick={handleCloseForm}
-                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSubmitManual}
-                                    disabled={!voteTitle.trim() || voteChoices.filter(c => c.trim()).length < 2 || submitting}
-                                    className="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                >
-                                    {submitting ? '생성 중...' : '등록'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* AI 생성 제출 버튼 */}
-                    {createMode === 'ai' && !showPreview && (
-                        <div className="flex gap-2 justify-end">
-                            <button
-                                type="button"
-                                onClick={handleCloseForm}
-                                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                            >
-                                취소
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleGenerate}
-                                disabled={!selectedIssue || generating}
-                                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                            >
-                                {generating ? 'AI 생성 중...' : 'AI 생성'}
-                            </button>
-                        </div>
-                    )}
+                    {/* 하단 버튼 */}
+                    <div className="flex gap-2 justify-end">
+                        <button
+                            type="button"
+                            onClick={handleCloseForm}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSubmitManual}
+                            disabled={!selectedIssue || !voteTitle.trim() || voteChoices.filter(c => c.trim()).length < 2 || submitting}
+                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                        >
+                            {submitting ? '생성 중...' : '등록'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -916,6 +700,9 @@ export default function AdminVotesPage() {
                             <th className="w-48 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 선택지
                             </th>
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                생성 유형
+                            </th>
                             <th className="w-64 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 연결 이슈
                             </th>
@@ -934,14 +721,14 @@ export default function AdminVotesPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={7} className="px-4 py-3">
+                                    <td colSpan={8} className="px-4 py-3">
                                         <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : votes.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
+                                <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
                                     해당 상태의 투표가 없습니다.
                                 </td>
                             </tr>
@@ -993,6 +780,17 @@ export default function AdminVotesPage() {
                                                     </li>
                                                 ))}
                                             </ul>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {vote.is_ai_generated ? (
+                                                <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
+                                                    AI 생성
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs px-2 py-0.5 bg-gray-50 text-gray-500 rounded border border-gray-200">
+                                                    직접 생성
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm max-w-xs">
                                             {vote.issues ? (
@@ -1075,6 +873,15 @@ export default function AdminVotesPage() {
                                                         </button>
                                                     )}
                                                 </div>
+                                            )}
+                                            {vote.phase === '마감' && (
+                                                <button
+                                                    onClick={() => handleAction(vote.id, '재개')}
+                                                    disabled={isProcessing}
+                                                    className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                >
+                                                    재개
+                                                </button>
                                             )}
                                             {vote.approval_status === '반려' && vote.phase !== '대기' && (
                                                 <button

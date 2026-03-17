@@ -123,11 +123,20 @@ export const CATEGORIES: CategoryConfig[] = [
             '학교폭력', '직장내괴롭힘', '갑질', '인종차별',
             '교통사고', '산업재해', '식품안전',
             '불법', '점용', '재조사', '하천', '계곡', '시설',
+            // 생활문화 키워드 통합
+            '맛집', '여행', '뷰티', '육아', '교육', '건강', '의료',
+            '병원', '음식', '레시피', '인테리어', '반려동물', '웰빙', '다이어트',
+            '문화', '전시', '공연', '책', '독서',
+            '요리', '카페', '맛', '먹방', '관광', '숙소', '호텔',
+            '화장품', '메이크업', '스킨케어', '성형', '미용',
         ],
         contextRules: [
             { keywords: ['사고', '사망'], boost: 15 },
             { keywords: ['범죄', '체포'], boost: 15 },
             { keywords: ['부동산', '청약'], boost: 12 },
+            { keywords: ['맛집', '추천'], boost: 12 },
+            { keywords: ['여행', '추천'], boost: 10 },
+            { keywords: ['전시', '개최'], boost: 10 },
         ],
     },
     {
@@ -155,8 +164,8 @@ export const CATEGORIES: CategoryConfig[] = [
         ],
     },
     {
-        id: 'IT과학',
-        label: 'IT/과학',
+        id: '기술',
+        label: '기술',
         badgeColors: {
             bg: 'bg-amber-100',
             text: 'text-amber-700',
@@ -201,29 +210,6 @@ export const CATEGORIES: CategoryConfig[] = [
             { keywords: ['온라인쇼핑', '서비스'], boost: 12 },
             { keywords: ['우주', '발사'], boost: 15 },
             { keywords: ['NASA', '발견'], boost: 12 },
-        ],
-    },
-    {
-        id: '생활문화',
-        label: '생활/문화',
-        badgeColors: {
-            bg: 'bg-rose-100',
-            text: 'text-rose-700',
-            border: 'border-rose-200',
-        },
-        gradientColors: 'from-rose-500 via-pink-500 to-purple-500',
-        keywords: [
-            '맛집', '여행', '패션', '뷰티', '육아', '교육', '건강', '의료',
-            '병원', '음식', '레시피', '인테리어', '반려동물', '웰빙', '다이어트',
-            '문화', '전시', '공연', '영화', '드라마', '넷플릭스', '책', '독서',
-            '요리', '카페', '맛', '먹방', '관광', '숙소', '호텔',
-            '화장품', '메이크업', '스킨케어', '성형', '미용',
-        ],
-        contextRules: [
-            { keywords: ['맛집', '추천'], boost: 15 },
-            { keywords: ['여행', '추천'], boost: 12 },
-            { keywords: ['전시', '개최'], boost: 12 },
-            { keywords: ['건강', '정보'], boost: 10 },
         ],
     },
     {

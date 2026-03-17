@@ -1,0 +1,30 @@
+name: Cron - Track A
+
+on:
+    schedule:
+        - cron: '*/30 * * * *'  # 매 30분마다 실행
+    workflow_dispatch:  # 수동 실행 지원
+
+jobs:
+    track-a:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        
+        steps:
+            - name: 환경별 URL 설정
+              id: env
+              run: |
+                  if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                    echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+                    echo "env_name=Production" >> $GITHUB_OUTPUT
+                  else
+                    echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+                    echo "env_name=Develop" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Track A API 호출 (${{ steps.env.outputs.env_name }})
+              run: |
+                  curl -X POST \
+                    -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+                    -H "Content-Type: application/json" \
+                    ${{ steps.env.outputs.url }}/api/cron/track-a

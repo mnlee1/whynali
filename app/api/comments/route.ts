@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
-import { checkAndNotifyWithCooldown } from '@/lib/safety-notification'
 import { toUserMessage } from '@/lib/api-errors'
 import { ensurePublicUser } from '@/lib/ensure-user'
 
@@ -26,16 +25,21 @@ async function getUserLikesMap(
 
 /* GET /api/comments?issue_id=&limit=&offset=&sort=latest|likes|dislikes&best=true */
 /* GET /api/comments?discussion_topic_id=&limit=&offset=&sort=latest|likes|dislikes */
+/* GET /api/comments?issue_id=&parent_id= — 특정 댓글의 답글 목록 */
+/* GET /api/comments?...&includePending=true — 세이프티봇 OFF 시 pending_review 댓글도 포함 */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
     const discussion_topic_id = searchParams.get('discussion_topic_id')
+    const parent_id = searchParams.get('parent_id')
     const limit = Number(searchParams.get('limit') ?? 20)
     const offset = Number(searchParams.get('offset') ?? 0)
     /* sort: latest(기본) | likes(좋아요순) | dislikes(싫어요순) */
     const sort = searchParams.get('sort') ?? 'latest'
     /* best=true: score(좋아요-싫어요) 상위 3개만 반환 (베스트 댓글 영역용) */
     const best = searchParams.get('best') === 'true'
+    /* includePending=true: 세이프티봇 OFF 시 클라이언트 요청으로 pending_review 포함 */
+    const includePending = searchParams.get('includePending') === 'true'
 
     if (!issue_id && !discussion_topic_id) {
         return NextResponse.json(
@@ -54,9 +58,21 @@ export async function GET(request: NextRequest) {
     let query = admin
         .from('comments')
         .select('*, users(display_name)', { count: 'exact' })
-        .eq('visibility', 'public')
-        .is('parent_id', null)
         .order(orderColumn, { ascending: false })
+
+    /* includePending=true이면 public + pending_review 모두 조회, 기본은 public만 */
+    if (includePending) {
+        query = query.in('visibility', ['public', 'pending_review'])
+    } else {
+        query = query.eq('visibility', 'public')
+    }
+
+    /* parent_id가 있으면 해당 댓글의 답글만, 없으면 최상위 댓글만 조회 */
+    if (parent_id) {
+        query = query.eq('parent_id', parent_id)
+    } else {
+        query = query.is('parent_id', null)
+    }
 
     if (issue_id) {
         query = query.eq('issue_id', issue_id)
@@ -95,7 +111,25 @@ export async function GET(request: NextRequest) {
         userLikes = await getUserLikesMap(admin, user.id, baseData.map((c) => c.id))
     }
 
-    const data = baseData.map((c) => ({ ...c, userLikeType: userLikes[c.id] ?? null }))
+    /* 최상위 댓글 조회 시 답글 수 집계 */
+    let replyCountMap: Record<string, number> = {}
+    if (!parent_id && !best && baseData.length > 0) {
+        const ids = baseData.map((c) => c.id)
+        const { data: replyCounts } = await admin
+            .from('comments')
+            .select('parent_id')
+            .in('parent_id', ids)
+            .eq('visibility', 'public')
+        for (const r of replyCounts ?? []) {
+            if (r.parent_id) replyCountMap[r.parent_id] = (replyCountMap[r.parent_id] ?? 0) + 1
+        }
+    }
+
+    const data = baseData.map((c) => ({
+        ...c,
+        userLikeType: userLikes[c.id] ?? null,
+        replyCount: replyCountMap[c.id] ?? 0,
+    }))
 
     return NextResponse.json({ data, total: count ?? 0 })
 }
@@ -173,9 +207,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (pendingReview) {
-        // 비동기로 알림 체크 (응답 속도에 영향 없음)
-        checkAndNotifyWithCooldown().catch(console.error)
-        
         return NextResponse.json({
             data,
             message: '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',

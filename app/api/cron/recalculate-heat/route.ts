@@ -8,13 +8,12 @@
  *
  * 1) approval_status 전환 (대기 이슈만):
  *   - heat_index >= AUTO_APPROVE_THRESHOLD → 승인
- *   - heat_index <  MIN_HEAT_TO_REGISTER  → 반려
+ *   - 자동 반려 없음 (2026-03-16 제거): 화력 하락해도 대기 유지, 관리자가 직접 판단
  *
- * 2) status 전환 (모든 이슈, 08_이슈상태전환_규격.md §3):
+ * 2) status 전환 (승인·대기 이슈, 08_이슈상태전환_규격.md §3):
  *   - 점화 → 논란중: 승인 후 N시간 + heat_index >= M + 커뮤니티 1건
  *   - 점화 → 종결:   승인 후 N시간 + heat_index < K (바이패스)
  *   - 논란중 → 종결: 화력 소진 OR 신규 수집 없음
- *   - approval_status와 독립적으로 동작 (대기/승인/반려 모두 처리)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -23,7 +22,8 @@ import { recalculateHeatForIssue, calculateRecentHeat } from '@/lib/analysis/hea
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
-import type { IssueCategory } from '@/lib/config/categories'
+import { closeDiscussionsOnIssueClosed } from '@/lib/discussion-auto-closer'
+import { type IssueCategory } from '@/lib/config/categories'
 import {
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
@@ -59,30 +59,29 @@ export async function GET(request: NextRequest) {
         // 2) 논란중 상태 이슈 (종결 전환 확인 필요)
         // 3) 최근 업데이트된 대기/승인 이슈
         const [igniteIssues, debateIssues, recentIssues] = await Promise.all([
-            // 점화 상태 이슈 (최대 30개, 반려 이슈 우선)
+            // 점화 상태 이슈 (최대 30개)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '점화')
-                .in('approval_status', ['승인', '대기', '반려'])
-                .order('approval_status', { ascending: false }) // 반려(ㅂ) > 승인(ㅅ) > 대기(ㄷ)
+                .in('approval_status', ['승인', '대기'])
                 .order('approved_at', { ascending: true, nullsFirst: false })
                 .limit(30),
-            
+
             // 논란중 상태 이슈 (최대 15개)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '논란중')
-                .in('approval_status', ['승인', '대기', '반려'])
+                .in('approval_status', ['승인', '대기'])
                 .order('updated_at', { ascending: true })
                 .limit(15),
-            
+
             // 최근 업데이트된 이슈 (최대 15개, 점화/논란중 제외)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
-                .in('approval_status', ['승인', '대기', '반려'])
+                .in('approval_status', ['승인', '대기'])
                 .not('status', 'in', '(점화,논란중)')
                 .order('updated_at', { ascending: false })
                 .limit(15),
@@ -150,9 +149,17 @@ export async function GET(request: NextRequest) {
                          * 자동 승인 조건:
                          * 1. 화력 30점 이상
                          * 2. 카테고리가 사회/기술/스포츠 중 하나
+                         * 
+                         * 자동 반려 유예 기간 (2026-03-13):
+                         * - 이슈 생성 후 10분 이내는 자동 반려 보류
+                         * - Race Condition 방지: 뉴스 연결 완료 대기
                          */
                         if (issue.approval_status === '대기') {
                             const category = issue.category as IssueCategory
+                            
+                            // 생성 후 10분 이내 이슈는 자동 반려 보류 (뉴스 연결 완료 대기)
+                            const ageMinutes = (Date.now() - new Date(issue.created_at).getTime()) / 60000
+                            const isNewIssue = ageMinutes < 10
                             
                             // 자동 승인: 화력 + 카테고리 모두 체크
                             if (shouldAutoApprove(category, heatIndex)) {
@@ -167,21 +174,11 @@ export async function GET(request: NextRequest) {
                                     .eq('id', issue.id)
                                 result.statusChanged = '대기 → 승인 (화력 ' + heatIndex + '점, ' + category + ')'
                                 return { ...result, autoApproved: 1, autoRejected: 0, statusTransitioned: 0 }
-                            } else if (heatIndex < MIN_HEAT_TO_REGISTER) {
-                                // 자동 반려: 화력 미달
-                                await supabaseAdmin
-                                    .from('issues')
-                                    .update({ 
-                                        approval_status: '반려',
-                                        approval_type: 'auto',
-                                        approval_heat_index: heatIndex,
-                                        approved_at: new Date().toISOString()
-                                    })
-                                    .eq('id', issue.id)
-                                result.statusChanged = '대기 → 반려 (화력 ' + heatIndex + '점 미달)'
-                                return { ...result, autoApproved: 0, autoRejected: 1, statusTransitioned: 0 }
                             }
-                            // 그 외: 화력은 15-29점이지만 연예/정치 카테고리 → 대기 유지 (관리자 승인 필요)
+                            // 자동 반려 제거 (2026-03-16):
+                            // - 화력이 15점 미만으로 떨어져도 자동 반려하지 않음
+                            // - 이미 등록된 이슈는 관리자가 직접 판단
+                            // - 화력 15-29점 → 대기 유지 (관리자 승인 필요)
                         }
 
                         /*
@@ -215,11 +212,15 @@ export async function GET(request: NextRequest) {
                                     })
                                     .eq('id', issue.id)
                                 
-                                // 이슈가 '종결' 상태로 전환되면 관련 투표 자동 마감
+                                // 이슈가 '종결' 상태로 전환되면 관련 투표/토론 자동 마감
                                 if (transition.newStatus === '종결') {
-                                    const { count } = await closeVotesOnIssueClosed(issue.id)
-                                    if (count > 0) {
-                                        console.log(`[투표 자동 마감] 이슈 ${issue.id} 종결 → ${count}개 투표 마감`)
+                                    const { count: voteCount } = await closeVotesOnIssueClosed(issue.id)
+                                    if (voteCount > 0) {
+                                        console.log(`[투표 자동 마감] 이슈 ${issue.id} 종결 → ${voteCount}개 투표 마감`)
+                                    }
+                                    const { count: discussionCount } = await closeDiscussionsOnIssueClosed(issue.id)
+                                    if (discussionCount > 0) {
+                                        console.log(`[토론 마감 예약] 이슈 ${issue.id} 종결 → ${discussionCount}개 토론 7일 후 마감`)
                                     }
                                 }
                                 

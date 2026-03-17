@@ -8,6 +8,9 @@
 
 import IssueList from '@/components/issues/IssueList'
 
+// ISR: 15분(900초)마다 페이지 재생성
+export const revalidate = 900
+
 export default function EconomyPage() {
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">
