@@ -9,7 +9,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
-import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-thresholds'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,25 +40,15 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        /*
-         * [화력 15점 미만 자동 반려 제거 (2026-03-16)]
-         * 
-         * 배경:
-         * - 트랙 A는 화력 15점 미만이면 이슈를 등록하지 않음 (즉시 삭제)
-         * - 화력 재계산에서는 자동 반려를 제거함
-         * - 이미 등록된 이슈는 시간 가중치로 화력이 떨어질 수 있지만,
-         *   이슈 자체는 여전히 유효하므로 관리자가 직접 판단
-         * 
-         * 결과:
-         * - 모든 이슈를 목록에 표시
-         * - 관리자가 화력과 내용을 보고 직접 승인/반려 결정
-         */
-
         let query = supabaseAdmin
             .from('issues')
             .select('*', { count: 'exact' })
             .not('approval_status', 'is', null)
             .neq('approval_status', '병합됨')
+            // 자동반려 이슈 제외: NOT (approval_status='반려' AND approval_type='auto')
+            // = approval_status != '반려' OR approval_type IS NULL OR approval_type != 'auto'
+            // 단, filterStatus='반려' 필터 시에는 아래 조건이 덮어씌워짐 (관리자반려는 manual만 조회)
+            .or('approval_status.neq.반려,approval_type.is.null,approval_type.neq.auto')
             .order('heat_index', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false })
 

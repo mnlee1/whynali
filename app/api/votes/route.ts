@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     
     let query = admin
         .from('votes')
-        .select('*, vote_choices(*), issues(id, title)')
+        .select('*, vote_choices(*), issues(id, title, approval_status, visibility_status)')
         .in('phase', ['진행중', '마감'])
         .eq('approval_status', '승인')
         .order('created_at', { ascending: false })
@@ -23,11 +23,29 @@ export async function GET(request: NextRequest) {
         query = query.limit(limit)
     }
 
-    const { data, error } = await query
+    const { data: rawData, error } = await query
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    /* issue_id가 있는 투표는 연결된 이슈가 승인·visible인 경우만 노출
+       issue_id가 없는 투표(직접 생성 등)는 그대로 포함 */
+    const data = (rawData ?? [])
+        .filter((v) => {
+            if (!v.issue_id) return true
+            const iss = v.issues as { approval_status?: string; visibility_status?: string } | null
+            if (!iss) return false
+            return iss.approval_status === '승인' && iss.visibility_status === 'visible'
+        })
+        .map((v) => {
+            /* 내부 필터용 필드를 제거하고 id·title만 남김 */
+            if (v.issues) {
+                const { approval_status: _a, visibility_status: _v, ...rest } = v.issues as Record<string, unknown>
+                return { ...v, issues: rest }
+            }
+            return v
+        })
 
     /* 로그인 사용자의 투표 기록: { vote_id → vote_choice_id } */
     const supabase = await createSupabaseServerClient()

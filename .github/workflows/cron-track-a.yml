@@ -11,9 +11,20 @@ jobs:
         timeout-minutes: 10
         
         steps:
-            - name: Call Track A API
+            - name: 환경별 URL 설정
+              id: env
+              run: |
+                  if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                    echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+                    echo "env_name=Production" >> $GITHUB_OUTPUT
+                  else
+                    echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+                    echo "env_name=Develop" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Track A API 호출 (${{ steps.env.outputs.env_name }})
               run: |
                   curl -X POST \
                     -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
                     -H "Content-Type: application/json" \
-                    ${{ secrets.NEXT_PUBLIC_SITE_URL }}/api/cron/track-a
+                    ${{ steps.env.outputs.url }}/api/cron/track-a
