@@ -99,8 +99,7 @@ export async function collectNaverNews(category: string): Promise<number> {
  * searchNaverNewsByKeyword - 키워드로 네이버 뉴스 즉시 타겟 검색 (트랙 A 전용)
  * 
  * @param keyword AI가 추출한 핵심 키워드
- * @param category 이슈 카테고리
- * @returns 검색된 뉴스 아이템 배열 (DB 저장 완료, search_keyword 포함)
+ * @returns 검색된 뉴스 아이템 배열 (DB 저장 완료)
  */
 export async function searchNaverNewsByKeyword(keyword: string, category: string = '사회'): Promise<Array<{
     id: string
@@ -157,8 +156,7 @@ export async function searchNaverNewsByKeyword(keyword: string, category: string
         link: item.link,
         source: extractSource(item.originallink ?? item.link),
         published_at: new Date(item.pubDate).toISOString(),
-        category: category,
-        search_keyword: keyword,  // 트랙A 검색 키워드 저장
+        category: category,  // 파라미터로 받은 카테고리 사용
     }))
 
     // DB 저장 (중복 방지: 같은 링크는 덮어쓰기)
