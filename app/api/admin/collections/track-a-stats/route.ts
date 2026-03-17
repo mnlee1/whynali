@@ -86,10 +86,13 @@ export async function GET() {
             : null
 
         // 커뮤니티 수집 상태 판단
+        // GitHub Actions 스케줄 지연으로 실제 실행 간격이 30~80분임을 반영
+        // warning: 90분 초과 (지연이 비정상적으로 긴 상태)
+        // stopped: 180분 초과 (명백한 중단)
         let communityStatus: 'active' | 'warning' | 'stopped' = 'active'
         if (minutesSinceCollection !== null) {
-            if (minutesSinceCollection > 10) communityStatus = 'stopped'
-            else if (minutesSinceCollection > 5) communityStatus = 'warning'
+            if (minutesSinceCollection > 180) communityStatus = 'stopped'
+            else if (minutesSinceCollection > 90) communityStatus = 'warning'
         }
 
         // 3. 트랙A 마지막 실행 시간 추정 (최근 생성된 트랙A 이슈)
@@ -122,7 +125,7 @@ export async function GET() {
             warnings.push({
                 type: 'critical',
                 message: `커뮤니티 수집이 ${minutesSinceCollection}분간 중단되었습니다`,
-                details: '3분 주기로 실행되어야 하나 10분 이상 수집이 없습니다',
+                details: 'GitHub Actions 정상 지연(30~80분)을 초과한 3시간 이상 수집 없음',
             })
             
             possibleCauses.push(
@@ -163,7 +166,7 @@ export async function GET() {
             warnings.push({
                 type: 'warning',
                 message: `커뮤니티 수집이 ${minutesSinceCollection}분간 없습니다`,
-                details: '일시적 지연일 수 있습니다',
+                details: 'GitHub Actions 지연이 비정상적으로 긴 상태 (정상: 30~80분)',
             })
             
             possibleCauses.push(
