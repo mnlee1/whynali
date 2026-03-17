@@ -8,13 +8,12 @@
  *
  * 1) approval_status 전환 (대기 이슈만):
  *   - heat_index >= AUTO_APPROVE_THRESHOLD → 승인
- *   - heat_index <  MIN_HEAT_TO_REGISTER  → 반려
+ *   - 자동 반려 없음 (2026-03-16 제거): 화력 하락해도 대기 유지, 관리자가 직접 판단
  *
- * 2) status 전환 (모든 이슈, 08_이슈상태전환_규격.md §3):
+ * 2) status 전환 (승인·대기 이슈, 08_이슈상태전환_규격.md §3):
  *   - 점화 → 논란중: 승인 후 N시간 + heat_index >= M + 커뮤니티 1건
  *   - 점화 → 종결:   승인 후 N시간 + heat_index < K (바이패스)
  *   - 논란중 → 종결: 화력 소진 OR 신규 수집 없음
- *   - approval_status와 독립적으로 동작 (대기/승인/반려 모두 처리)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -60,30 +59,29 @@ export async function GET(request: NextRequest) {
         // 2) 논란중 상태 이슈 (종결 전환 확인 필요)
         // 3) 최근 업데이트된 대기/승인 이슈
         const [igniteIssues, debateIssues, recentIssues] = await Promise.all([
-            // 점화 상태 이슈 (최대 30개, 반려 이슈 우선)
+            // 점화 상태 이슈 (최대 30개)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '점화')
-                .in('approval_status', ['승인', '대기', '반려'])
-                .order('approval_status', { ascending: false }) // 반려(ㅂ) > 승인(ㅅ) > 대기(ㄷ)
+                .in('approval_status', ['승인', '대기'])
                 .order('approved_at', { ascending: true, nullsFirst: false })
                 .limit(30),
-            
+
             // 논란중 상태 이슈 (최대 15개)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '논란중')
-                .in('approval_status', ['승인', '대기', '반려'])
+                .in('approval_status', ['승인', '대기'])
                 .order('updated_at', { ascending: true })
                 .limit(15),
-            
+
             // 최근 업데이트된 이슈 (최대 15개, 점화/논란중 제외)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
-                .in('approval_status', ['승인', '대기', '반려'])
+                .in('approval_status', ['승인', '대기'])
                 .not('status', 'in', '(점화,논란중)')
                 .order('updated_at', { ascending: false })
                 .limit(15),
