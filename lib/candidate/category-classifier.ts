@@ -7,28 +7,70 @@
  * Groq AI를 사용하여 맥락을 이해하고 올바른 카테고리를 판단합니다.
  */
 
-import Groq from 'groq-sdk'
+import { aiClient } from '@/lib/ai/ai-client'
 import type { IssueCategory } from '@/lib/config/categories'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
-
-let groqInstance: Groq | null = null
-
-function getGroqClient(): Groq {
-    if (!groqInstance) {
-        if (!process.env.GROQ_API_KEY) {
-            throw new Error('GROQ_API_KEY가 설정되지 않았습니다')
-        }
-        groqInstance = new Groq({
-            apiKey: process.env.GROQ_API_KEY,
-        })
-    }
-    return groqInstance
-}
 
 interface CategoryClassificationResult {
     category: IssueCategory
     confidence: number
     reason: string
+}
+
+/**
+ * extractJSON - AI 응답에서 JSON 객체만 안전하게 추출
+ * 
+ * AI가 JSON 외에 추가 텍스트를 붙여도 정확히 파싱합니다.
+ * 
+ * @param content - AI 응답 전체 텍스트
+ * @returns JSON 문자열
+ */
+function extractJSON(content: string): string {
+    // 1순위: 마크다운 코드 블록 (```json ... ```)
+    const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+    if (codeBlockMatch) {
+        return codeBlockMatch[1].trim()
+    }
+
+    // 2순위: 중괄호 카운팅으로 완전한 JSON 객체 추출
+    // 이 방법은 중첩된 객체도 정확히 처리하고, JSON 뒤의 추가 텍스트를 무시합니다
+    let depth = 0
+    let start = -1
+    let inString = false
+    let escapeNext = false
+
+    for (let i = 0; i < content.length; i++) {
+        const char = content[i]
+
+        // 문자열 내부 처리 (따옴표 안의 중괄호는 무시)
+        if (char === '"' && !escapeNext) {
+            inString = !inString
+            escapeNext = false
+            continue
+        }
+
+        if (char === '\\' && inString) {
+            escapeNext = !escapeNext
+            continue
+        }
+
+        escapeNext = false
+
+        // 문자열 밖에서만 중괄호 카운팅
+        if (!inString) {
+            if (char === '{') {
+                if (depth === 0) start = i
+                depth++
+            } else if (char === '}') {
+                depth--
+                if (depth === 0 && start !== -1) {
+                    return content.substring(start, i + 1)
+                }
+            }
+        }
+    }
+
+    throw new Error('유효한 JSON 형식을 찾을 수 없습니다')
 }
 
 /**
@@ -57,69 +99,62 @@ export async function classifyCategoryByAI(
 뉴스 제목:
 ${sampleTitles}
 
-카테고리 선택지:
-- 사회: 사건사고, 지역뉴스, 정책, 교육, 환경, 일반 사회 이슈
-- 정치: 정부, 국회, 선거, 외교, 정당 관련
-- 연예: 연예인, 드라마, 영화, 음악, 방송
-- 기술: IT, 과학, 기술혁신, 스타트업
-- 스포츠: 운동경기, 선수, 팀, 스포츠 이벤트
+다음 8개 카테고리 중 하나로만 답하라:
+- 사회: 국내 사건사고, 사회현상, 범죄, 재난
+- 정치: 국회, 정당, 선거, 대통령, 정부 정책
+- 연예: 아이돌, 배우, 가수, 드라마, 영화 (국내 연예인)
+- 스포츠: 야구, 축구, 농구, 골프, 올림픽 등 스포츠 경기
+- 경제: 주식, 부동산, 금리, 무역, 기업 실적, 고용
+- IT과학: IT기업, 앱, AI, 반도체, 우주, 과학 연구
+- 생활문화: 음식, 여행, 패션, 건강, 교육, 문화 공연
+- 세계: 해외 정치, 국제 분쟁, 외교, 해외 사건
 
 주의사항:
-- "스포츠마케팅"처럼 스포츠 관련 단어가 있어도, 주제가 지역 관광이면 "사회"
+- "스포츠마케팅"처럼 스포츠 관련 단어가 있어도, 주제가 지역 관광/마케팅이면 "사회"
+- "스포츠·IP 큐레이션", "스포츠브랜드" 등은 유통/패션 서비스이므로 "IT과학"
+- 무신사, 쿠팡, 네이버쇼핑 등 이커머스 플랫폼의 신규 서비스는 "IT과학"
 - 연예인 관련 가짜뉴스/루머도 내용에 따라 "사회" 또는 "연예"
 - 스포츠 선수의 비리/사건은 "사회"
 - 정치인의 스포츠 활동은 "정치"
+- 실제 경기 결과, 선수 활동, 대회 관련만 "스포츠"
 
-응답 형식 (JSON):
+응답 형식:
+반드시 아래 JSON 형식으로만 응답하세요. 다른 설명이나 추가 텍스트 없이 오직 JSON만 출력해야 합니다.
+
 {
-    "category": "사회" | "정치" | "연예" | "기술" | "스포츠",
+    "category": "사회" | "정치" | "연예" | "스포츠" | "경제" | "IT과학" | "생활문화" | "세계",
     "confidence": 0-100,
     "reason": "판단 이유 1-2문장"
-}
-
-JSON만 출력하세요.`
+}`
 
     try {
-        const groq = getGroqClient()
+        const systemPrompt = '당신은 뉴스 카테고리 분류 전문가입니다. 맥락을 정확히 이해하고 올바른 카테고리를 판단합니다.'
         
-        const completion = await groq.chat.completions.create({
-            model: 'llama-3.1-8b-instant',  // 가벼운 모델로 변경 (토큰 소비 적음)
-            messages: [
-                {
-                    role: 'system',
-                    content: '당신은 뉴스 카테고리 분류 전문가입니다. 맥락을 정확히 이해하고 올바른 카테고리를 판단합니다.',
-                },
-                {
-                    role: 'user',
-                    content: prompt,
-                },
-            ],
+        const completion = await aiClient.complete(prompt, {
+            model: 'llama-3.1-8b-instant',
             temperature: 0.1,
-            max_tokens: 200,
+            maxTokens: 200,
+            systemPrompt,
         })
 
         // API 사용량 추적
         await incrementApiUsage('groq', { calls: 1, successes: 1, failures: 0 })
 
-        const responseText = completion.choices[0]?.message?.content?.trim()
-        if (!responseText) {
+        const content = completion.trim()
+        if (!content) {
             throw new Error('AI 응답이 비어있습니다')
         }
 
-        // JSON 파싱
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) {
-            throw new Error('JSON 형식을 찾을 수 없습니다')
-        }
-
-        const result = JSON.parse(jsonMatch[0]) as {
+        // 안전한 JSON 추출 및 파싱
+        const jsonString = extractJSON(content)
+        const result = JSON.parse(jsonString) as {
             category: string
             confidence: number
             reason: string
         }
 
         // 카테고리 검증
-        const validCategories = ['사회', '정치', '연예', '기술', '스포츠']
+        const validCategories = ['사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계']
         if (!validCategories.includes(result.category)) {
             throw new Error(`유효하지 않은 카테고리: ${result.category}`)
         }

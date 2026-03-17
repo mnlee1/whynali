@@ -4,9 +4,13 @@
  * [기술 카테고리 페이지]
  * 
  * 기술 카테고리에 속한 이슈들만 보여주는 페이지입니다.
+ * IT, 과학, AI, 스타트업 등 기술 관련 이슈를 포함합니다.
  */
 
 import IssueList from '@/components/issues/IssueList'
+
+// ISR: 15분(900초)마다 페이지 재생성
+export const revalidate = 900
 
 export default function TechPage() {
     return (
