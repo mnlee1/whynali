@@ -7,9 +7,10 @@ CREATE TABLE issues (
     title TEXT NOT NULL,
     description TEXT,
     status TEXT CHECK (status IN ('점화', '논란중', '종결')),
-    category TEXT CHECK (category IN ('연예', '스포츠', '정치', '사회', '기술')),
+    category TEXT CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계')),
     heat_index NUMERIC,
     approval_status TEXT CHECK (approval_status IN ('대기', '승인', '반려')),
+    approval_heat_index INTEGER,
     approved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -64,7 +65,14 @@ CREATE TABLE votes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     issue_id UUID REFERENCES issues(id) ON DELETE CASCADE,
     title TEXT,
-    phase TEXT,
+    phase TEXT CHECK (phase IN ('대기', '진행중', '마감')) DEFAULT '대기',
+    approval_status TEXT CHECK (approval_status IN ('대기', '승인', '반려')) DEFAULT '대기',
+    issue_status_snapshot TEXT,
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+    auto_end_date TIMESTAMPTZ,
+    auto_end_participants INTEGER,
+    is_ai_generated BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -104,7 +112,7 @@ CREATE TABLE news_data (
     link TEXT,
     source TEXT,
     published_at TIMESTAMPTZ,
-    category TEXT CHECK (category IN ('연예', '스포츠', '정치', '사회', '기술')),
+    category TEXT CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계')),
     issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -141,6 +149,17 @@ CREATE TABLE admin_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- AI 키 상태 관리
+CREATE TABLE ai_key_status (
+    provider TEXT NOT NULL,
+    key_hash TEXT NOT NULL,
+    is_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+    blocked_until TIMESTAMPTZ,
+    fail_count INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (provider, key_hash)
+);
+
 -- 인덱스
 CREATE INDEX idx_issues_category ON issues(category);
 CREATE INDEX idx_issues_status ON issues(status);
@@ -159,3 +178,22 @@ CREATE INDEX idx_community_data_created_at ON community_data(created_at);
 CREATE INDEX idx_admin_logs_created_at ON admin_logs(created_at);
 CREATE INDEX idx_admin_logs_admin_id ON admin_logs(admin_id);
 CREATE INDEX idx_admin_logs_target_type ON admin_logs(target_type);
+CREATE INDEX idx_ai_key_status_provider ON ai_key_status(provider);
+CREATE INDEX idx_ai_key_status_blocked_until ON ai_key_status(blocked_until);
+
+-- [마이그레이션] 기존 '기술' → 'IT과학' 일괄 변경
+-- Supabase 대시보드 > SQL Editor에서 직접 실행
+-- 
+-- 1. CHECK 제약 조건 먼저 삭제
+-- ALTER TABLE issues DROP CONSTRAINT IF EXISTS issues_category_check;
+-- ALTER TABLE news_data DROP CONSTRAINT IF EXISTS news_data_category_check;
+-- 
+-- 2. 데이터 변경
+-- UPDATE issues SET category = 'IT과학' WHERE category = '기술';
+-- UPDATE news_data SET category = 'IT과학' WHERE category = '기술';
+-- 
+-- 3. CHECK 제약 조건 재설정
+-- ALTER TABLE issues ADD CONSTRAINT issues_category_check 
+--   CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계'));
+-- ALTER TABLE news_data ADD CONSTRAINT news_data_category_check 
+--   CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계'));

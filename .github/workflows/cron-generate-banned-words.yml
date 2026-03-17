@@ -1,0 +1,29 @@
+name: AI 금칙어 자동 생성 Cron
+
+on:
+    schedule:
+        - cron: '0 18 * * 0' # 매주 일요일 03:00 KST (UTC+9) = 18:00 UTC (일요일)
+    workflow_dispatch:
+
+jobs:
+    generate-banned-words:
+        runs-on: ubuntu-latest
+        steps:
+            - name: 환경별 URL 설정
+              id: env
+              run: |
+                  if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                    echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
+                    echo "env_name=Production" >> $GITHUB_OUTPUT
+                  else
+                    echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
+                    echo "env_name=Develop" >> $GITHUB_OUTPUT
+                  fi
+            
+            - name: AI 금칙어 자동 생성 API 호출 (${{ steps.env.outputs.env_name }})
+              run: |
+                  curl -X GET ${{ steps.env.outputs.url }}/api/cron/generate-banned-words \
+                    -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+                    -H "User-Agent: GitHub-Actions" \
+                    --max-time 60 \
+                    --retry 2
