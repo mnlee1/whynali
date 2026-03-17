@@ -558,23 +558,22 @@ export default function AdminIssuesPage() {
                                 <td className="px-4 py-3 text-sm whitespace-nowrap w-40">
                                     {(() => {
                                         const currentHeat = issue.heat_index ?? 0
-                                        const createdHeat = issue.created_heat_index ?? currentHeat
+                                        const createdHeat = issue.created_heat_index
                                         const heatMeta = getHeatMeta(currentHeat)
-                                        
-                                        const diff = currentHeat - createdHeat
+                                        // 등록 시점 화력은 한 번만 저장되며 이후 변동하지 않음. null이면 현재 화력으로 대체하지 않음(대체 시 재계산마다 변동처럼 보이는 버그)
+                                        const diff = createdHeat != null ? currentHeat - createdHeat : 0
                                         const diffIcon = diff > 0 ? '↑' : diff < 0 ? '↓' : ''
                                         const diffColor = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'
-                                        
                                         return (
                                             <div className="flex items-center gap-1">
-                                                <span className={heatMeta.className}>
-                                                    {createdHeat}점
+                                                <span className={createdHeat != null ? heatMeta.className : 'text-gray-400'}>
+                                                    {createdHeat != null ? `${createdHeat}점` : '—'}
                                                 </span>
                                                 <span className="text-gray-400">→</span>
                                                 <span className={heatMeta.className}>
                                                     {currentHeat}점
                                                 </span>
-                                                {diff !== 0 && (
+                                                {createdHeat != null && diff !== 0 && (
                                                     <span className={`text-xs ${diffColor}`}>
                                                         {diffIcon}
                                                     </span>

@@ -102,6 +102,7 @@ export default function VotePreview() {
                     const choices = vote.vote_choices ?? []
                     const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
                     const issueId = vote.issues?.id ?? ''
+                    if (!issueId) return null
 
                     // 득표순 정렬
                     const sortedChoices = [...choices].sort((a, b) => b.count - a.count)

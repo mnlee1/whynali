@@ -19,7 +19,7 @@ jobs:
             echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
             echo "env_name=Develop" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: 커뮤니티 수집 API 호출 (${{ steps.env.outputs.env_name }})
         run: |
           curl -X GET ${{ steps.env.outputs.url }}/api/cron/collect-community \
