@@ -26,6 +26,35 @@ type ContentType = keyof typeof LENGTH_LIMITS
 /* ── 3. DB 금칙어 로드 (공통) ── */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+/* ── 3-1. 세이프티봇 ON/OFF 1분 TTL 캐시 ── */
+const SAFETY_BOT_CACHE_TTL = 60 * 1000
+
+let safetyBotCache: { enabled: boolean; updatedAt: number } | null = null
+
+/**
+ * getSafetyBotEnabled - admin_settings 테이블에서 safety_bot_enabled 값을 1분 TTL 캐시로 조회
+ * 캐시 유효 시 DB 조회 없이 반환, 만료 시 재조회 후 갱신
+ * DB 조회 실패 시 이전 캐시를 사용 (기본값 true)
+ */
+export async function getSafetyBotEnabled(adminClient: SupabaseClient): Promise<boolean> {
+    const now = Date.now()
+    if (safetyBotCache && now - safetyBotCache.updatedAt < SAFETY_BOT_CACHE_TTL) {
+        return safetyBotCache.enabled
+    }
+    try {
+        const { data } = await adminClient
+            .from('admin_settings')
+            .select('value')
+            .eq('key', 'safety_bot_enabled')
+            .maybeSingle()
+        const enabled = data?.value !== 'false'
+        safetyBotCache = { enabled, updatedAt: now }
+        return enabled
+    } catch {
+        return safetyBotCache?.enabled ?? true
+    }
+}
+
 /**
  * loadBannedWords - DB safety_rules 테이블에서 금칙어 목록 로드
  *
@@ -73,11 +102,13 @@ function createWordBoundaryRegex(word: string): RegExp {
    - valid: false + pendingReview 없음 → 즉시 거부 (400)
    - valid: false + pendingReview: true → 금칙어 포함, 검토 대기 저장 가능
    - valid: true → 정상 저장
-   - extraBannedWords: DB safety_rules에서 조회한 추가 금칙어 목록 */
+   - extraBannedWords: DB safety_rules에서 조회한 추가 금칙어 목록
+   - safetyBotEnabled: false면 금칙어 검사 스킵 (즉시 valid: true) */
 export function validateContent(
     text: string,
     type: ContentType,
-    extraBannedWords: string[] = []
+    extraBannedWords: string[] = [],
+    safetyBotEnabled: boolean = true
 ): { valid: boolean; pendingReview?: boolean; reason?: string } {
     const cleaned = sanitizeText(text)
 
@@ -87,6 +118,11 @@ export function validateContent(
 
     if (cleaned.length > LENGTH_LIMITS[type]) {
         return { valid: false, reason: `최대 ${LENGTH_LIMITS[type]}자까지 입력 가능합니다.` }
+    }
+
+    // 세이프티봇 OFF 시 금칙어 검사 스킵
+    if (!safetyBotEnabled) {
+        return { valid: true }
     }
 
     const allBannedWords = [...BANNED_WORDS, ...extraBannedWords]
