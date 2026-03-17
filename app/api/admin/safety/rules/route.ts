@@ -5,18 +5,27 @@ import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
-/* GET /api/admin/safety/rules — 금칙어 목록 */
-export async function GET() {
+const VALID_KINDS = ['banned_word', 'ai_banned_word', 'excluded_word'] as const
+type RuleKind = (typeof VALID_KINDS)[number]
+
+/* GET /api/admin/safety/rules?kind= — 금칙어 목록 (kind 없으면 전체) */
+export async function GET(request: NextRequest) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
+    const kind = request.nextUrl.searchParams.get('kind') as RuleKind | null
+
     try {
-        const { data, error } = await supabaseAdmin
+        let query = supabaseAdmin
             .from('safety_rules')
             .select('id, kind, value, created_at')
-            .eq('kind', 'banned_word')
             .order('created_at', { ascending: false })
 
+        if (kind && VALID_KINDS.includes(kind)) {
+            query = query.eq('kind', kind)
+        }
+
+        const { data, error } = await query
         if (error) throw error
 
         return NextResponse.json({ data: data ?? [] })
@@ -25,7 +34,7 @@ export async function GET() {
     }
 }
 
-/* POST /api/admin/safety/rules — 금칙어 추가 */
+/* POST /api/admin/safety/rules — 금칙어 추가 (kind 기본값: banned_word) */
 export async function POST(request: NextRequest) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
@@ -33,6 +42,7 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
         const word = body.word?.trim()
+        const kind: RuleKind = VALID_KINDS.includes(body.kind) ? body.kind : 'banned_word'
 
         if (!word) {
             return NextResponse.json({ error: '금칙어를 입력해 주세요.' }, { status: 400 })
@@ -41,11 +51,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '금칙어는 50자 이하로 입력해 주세요.' }, { status: 400 })
         }
 
-        /* 중복 확인 */
         const { data: existing } = await supabaseAdmin
             .from('safety_rules')
             .select('id')
-            .eq('kind', 'banned_word')
+            .eq('kind', kind)
             .eq('value', word)
             .maybeSingle()
 
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest) {
 
         const { data, error } = await supabaseAdmin
             .from('safety_rules')
-            .insert({ kind: 'banned_word', value: word })
+            .insert({ kind, value: word })
             .select()
             .single()
 

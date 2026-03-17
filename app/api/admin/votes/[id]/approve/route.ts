@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         })
         .eq('id', id)
         .in('approval_status', ['대기', '반려'])
-        .select('title')
+        .select('id, title')
         .single()
 
     if (error) {
@@ -45,7 +45,6 @@ export async function POST(request: NextRequest, { params }: Params) {
         )
     }
 
-    const details = data.title ? data.title.slice(0, 200) : null
-    await writeAdminLog('투표 승인', 'vote', id, auth.adminEmail, details)
+    await writeAdminLog('투표 승인', 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
     return NextResponse.json({ data }, { status: 200 })
 }

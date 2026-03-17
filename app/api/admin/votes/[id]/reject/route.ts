@@ -57,7 +57,6 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    const details = vote.title ? vote.title.slice(0, 200) : null
-    await writeAdminLog('투표 반려', 'vote', id, auth.adminEmail, details)
+    await writeAdminLog('투표 반려', 'vote', id, auth.adminEmail, `"${vote.title ?? '제목없음'}"`)
     return NextResponse.json({ success: true }, { status: 200 })
 }

@@ -130,3 +130,29 @@ BEGIN
     WHERE id = v_choice_id;
 END;
 $$;
+
+-- 8. news_data: search_keyword 컬럼 추가 (트랙A 검색 키워드 필수화)
+--    미적용 시 수집현황 페이지에서 검색 키워드가 표시되지 않음
+
+-- 8-1. 컬럼 추가 (이미 있으면 건너뜀)
+ALTER TABLE news_data
+    ADD COLUMN IF NOT EXISTS search_keyword TEXT;
+
+-- 8-2. 키워드 없는 미연결 레거시 뉴스 삭제
+--     (이슈에 연결된 뉴스는 보존 → 삭제하면 이슈 뉴스 수가 줄어들 수 있음)
+DELETE FROM news_data
+WHERE search_keyword IS NULL AND issue_id IS NULL;
+
+-- 8-3. 이슈에 연결됐으나 키워드가 없는 뉴스 → 임시값으로 채움
+--     (NOT NULL 제약 추가를 위한 전처리)
+UPDATE news_data
+SET search_keyword = '(레거시)'
+WHERE search_keyword IS NULL;
+
+-- 8-4. NOT NULL 제약 적용
+ALTER TABLE news_data
+    ALTER COLUMN search_keyword SET NOT NULL;
+
+-- 8-5. 인덱스 추가
+CREATE INDEX IF NOT EXISTS idx_news_data_search_keyword
+    ON news_data(search_keyword);
