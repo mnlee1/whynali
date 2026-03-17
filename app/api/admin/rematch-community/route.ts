@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5분
@@ -197,7 +198,9 @@ export async function POST(request: NextRequest) {
         }
         
         console.log('\n=== 재매칭 완료 ===')
-        
+
+        await writeAdminLog('커뮤니티재매칭', 'system', null, auth.adminEmail, `이슈 ${issues.length}개 처리`)
+
         return NextResponse.json({
             success: true,
             processed: issues.length,

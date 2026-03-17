@@ -12,6 +12,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata } from '@/lib/ai/discussion-generator'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,6 +95,8 @@ export async function POST(
             .insert(rows)
 
         if (insertError) throw insertError
+
+        await writeAdminLog('토론주제생성', 'issue', id, auth.adminEmail, `${topics.length}개 생성 (수동)`)
 
         return NextResponse.json({
             generated: topics.length,

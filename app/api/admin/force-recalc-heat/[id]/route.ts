@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { calculateHeatIndex } from '@/lib/analysis/heat'
 import { requireAdmin } from '@/lib/admin'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,9 @@ export async function POST(
         const { id } = await params
         
         const heat = await calculateHeatIndex(id)
-        
+
+        await writeAdminLog('화력재계산', 'issue', id, auth.adminEmail, `heat_index=${heat}`)
+
         return NextResponse.json({
             success: true,
             issue_id: id,
