@@ -29,6 +29,7 @@ import type { IssueCategory } from '@/lib/config/categories'
 import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
 import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
+import { generateAndSaveDiscussionTopics } from '@/lib/ai/discussion-generator'
 
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
@@ -1012,6 +1013,17 @@ async function processTrackA(): Promise<{
                 ? `수동승인 대기 (${category} 카테고리)`
                 : '대기'
         console.log(`  ✅ [이슈 등록 완료] "${finalIssueTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점, 상태: ${statusLabel})`)
+
+        // 자동 승인된 이슈 → 토론 주제 백그라운드 생성
+        if (shouldAutoApprove) {
+            generateAndSaveDiscussionTopics({
+                id: newIssue.id,
+                title: finalIssueTitle,
+                category,
+                status: '점화',
+                heat_index: heatIndex,
+            }).catch((e) => console.error('[track-a] 토론 주제 자동생성 실패:', e))
+        }
 
         // 연예/정치 + 화력 30 이상 → 관리자 즉시 Dooray 알림
         if (requiresManualReview && heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD) {

@@ -55,12 +55,9 @@ export async function POST(
             })
         }
 
-        if (!process.env.PERPLEXITY_API_KEY) {
+        if (!process.env.GROQ_API_KEY) {
             return NextResponse.json(
-                {
-                    error: 'API_KEY_MISSING',
-                    message: 'PERPLEXITY_API_KEY가 설정되지 않았습니다',
-                },
+                { error: 'API_KEY_MISSING', message: 'GROQ_API_KEY가 설정되지 않았습니다' },
                 { status: 500 }
             )
         }

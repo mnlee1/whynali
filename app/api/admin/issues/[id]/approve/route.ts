@@ -10,8 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
-import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
-import type { IssueMetadata } from '@/lib/ai/discussion-generator'
+import { generateAndSaveDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
@@ -41,8 +40,8 @@ export async function POST(
 
         await writeAdminLog('이슈 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
-        if (process.env.PERPLEXITY_API_KEY && data) {
-            generateDiscussionTopicsInBackground(data).catch((e) => {
+        if (process.env.GROQ_API_KEY && data) {
+            generateAndSaveDiscussionTopics(data).catch((e) => {
                 console.error('[approve] AI 토론 주제 자동 생성 실패 (이슈 승인은 정상 완료):', e)
                 writeAdminLog(
                     '토론 주제 자동생성 실패',
@@ -57,10 +56,10 @@ export async function POST(
         return NextResponse.json({
             data,
             aiGeneration: {
-                status: process.env.PERPLEXITY_API_KEY ? 'triggered' : 'skipped',
-                message: process.env.PERPLEXITY_API_KEY
+                status: process.env.GROQ_API_KEY ? 'triggered' : 'skipped',
+                message: process.env.GROQ_API_KEY
                     ? '토론 주제 생성 요청됨 (백그라운드)'
-                    : 'PERPLEXITY_API_KEY 없음 — 토론 주제 자동 생성 스킵',
+                    : 'GROQ_API_KEY 없음 — 토론 주제 자동 생성 스킵',
             },
         })
     } catch (error) {
@@ -72,40 +71,3 @@ export async function POST(
     }
 }
 
-/**
- * generateDiscussionTopicsInBackground - 이슈 승인 후 AI 토론 주제 백그라운드 생성
- *
- * 응답 지연을 막기 위해 fire-and-forget 패턴으로 실행.
- * 생성된 주제는 반드시 '대기' 상태로 저장 — 관리자 승인 전 서비스 미노출.
- */
-async function generateDiscussionTopicsInBackground(issue: {
-    id: string
-    title: string
-    category: string | null
-    status: string | null
-    heat_index: number | null
-}) {
-    const metadata: IssueMetadata = {
-        id: issue.id,
-        title: issue.title,
-        category: issue.category ?? '기타',
-        status: issue.status ?? '점화',
-        heat_index: issue.heat_index ?? undefined,
-    }
-
-    const topics = await generateDiscussionTopics(metadata, 3)
-    if (topics.length === 0) return
-
-    const rows = topics.map((t) => ({
-        issue_id: issue.id,
-        body: t.content,
-        is_ai_generated: true,
-        approval_status: '대기',
-    }))
-
-    const { error } = await supabaseAdmin
-        .from('discussion_topics')
-        .insert(rows)
-
-    if (error) throw error
-}

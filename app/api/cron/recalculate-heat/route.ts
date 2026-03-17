@@ -29,6 +29,7 @@ import {
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
     AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
+import { generateAndSaveDiscussionTopics } from '@/lib/ai/discussion-generator'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -173,6 +174,14 @@ export async function GET(request: NextRequest) {
                                     })
                                     .eq('id', issue.id)
                                 result.statusChanged = '대기 → 승인 (화력 ' + heatIndex + '점, ' + category + ')'
+                                // 자동 승인 후 토론 주제 백그라운드 생성
+                                generateAndSaveDiscussionTopics({
+                                    id: issue.id,
+                                    title: issue.title,
+                                    category: issue.category,
+                                    status: issue.status,
+                                    heat_index: heatIndex,
+                                }).catch((e) => console.error('[recalculate-heat] 토론 주제 자동생성 실패:', e))
                                 return { ...result, autoApproved: 1, autoRejected: 0, statusTransitioned: 0 }
                             }
                             // 자동 반려 제거 (2026-03-16):
