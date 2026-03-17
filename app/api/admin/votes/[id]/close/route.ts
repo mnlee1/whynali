@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: vote, error: voteError } = await supabaseAdmin
         .from('votes')
-        .select('phase')
+        .select('phase, title')
         .eq('id', id)
         .single()
 
@@ -54,6 +54,6 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    await writeAdminLog('투표 수동 종료', 'vote', id, auth.adminEmail)
+    await writeAdminLog('투표 수동 종료', 'vote', id, auth.adminEmail, `"${vote.title ?? '제목없음'}"`)
     return NextResponse.json({ success: true }, { status: 200 })
 }

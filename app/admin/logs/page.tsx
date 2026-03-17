@@ -13,6 +13,7 @@ interface AdminLog {
 }
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
+    issue: '이슈',
     discussion_topic: '토론 주제',
     safety_rule: '금칙어',
     comment: '댓글',
@@ -31,8 +32,9 @@ const ACTION_BADGE: Record<string, string> = {
     '댓글 공개': 'bg-green-100 text-green-700',
     '댓글 삭제': 'bg-red-100 text-red-700',
     '투표 생성': 'bg-blue-100 text-blue-700',
-    '투표 마감': 'bg-gray-200 text-gray-700',
-    '투표 재개': 'bg-green-100 text-green-700',
+    '투표 승인': 'bg-green-100 text-green-700',
+    '투표 반려': 'bg-red-100 text-red-700',
+    '투표 수동 종료': 'bg-gray-200 text-gray-700',
     '투표 삭제': 'bg-red-100 text-red-700',
 }
 
@@ -121,10 +123,12 @@ export default function AdminLogsPage() {
             <div className="flex gap-2 mb-5 flex-wrap">
                 {[
                     { value: '', label: '전체' },
+                    { value: 'issue', label: '이슈' },
+                    { value: 'vote', label: '투표' },
                     { value: 'discussion_topic', label: '토론 주제' },
                     { value: 'safety_rule', label: '금칙어' },
                     { value: 'comment', label: '댓글' },
-                    { value: 'vote', label: '투표' },
+                    
                 ].map(({ value, label }) => (
                     <button
                         key={value}
