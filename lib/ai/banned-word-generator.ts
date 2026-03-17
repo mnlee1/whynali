@@ -53,7 +53,7 @@ function countFrequency(texts: string[]): Map<string, number> {
     for (const text of texts) {
         const keywords = extractKeywords(text)
         for (const word of keywords) {
-            frequencyMap.set(word, (frequencyMap.get(word) ?? 0) + 1
+            frequencyMap.set(word, (frequencyMap.get(word) ?? 0) + 1)
         }
     }
     

@@ -64,23 +64,15 @@ export async function GET(request: NextRequest) {
             countMap[r.comment_id] = (countMap[r.comment_id] ?? 0) + 1
         }
 
-        type Row = (typeof data)[number] & {
-            comments?: {
-                body: string | null
-                issue_id: string | null
-                discussion_topic_id: string | null
-            } | null
-        }
-
-        const result = (data ?? []).map((r: Row) => ({
+        const result = (data ?? []).map((r) => ({
             id: r.id,
             comment_id: r.comment_id,
             reason: r.reason,
             status: r.status,
             created_at: r.created_at,
-            comment_body: r.comments?.body ?? null,
-            issue_id: r.comments?.issue_id ?? null,
-            discussion_topic_id: r.comments?.discussion_topic_id ?? null,
+            comment_body: (r.comments as any)?.body ?? null,
+            issue_id: (r.comments as any)?.issue_id ?? null,
+            discussion_topic_id: (r.comments as any)?.discussion_topic_id ?? null,
             report_count: countMap[r.comment_id],
         }))
 
