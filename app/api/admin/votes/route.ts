@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
             throw choicesError
         }
 
-        await writeAdminLog('투표 생성', 'vote', vote.id, auth.adminEmail)
+        await writeAdminLog('투표 생성', 'vote', vote.id, auth.adminEmail, `"${vote.title ?? '제목없음'}" (선택지 ${sanitizedChoices.length}개)`)
         return NextResponse.json({ data: { ...vote, vote_choices: voteChoices } }, { status: 201 })
     } catch {
         return NextResponse.json({ error: '투표 생성 실패' }, { status: 500 })

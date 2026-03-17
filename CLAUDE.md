@@ -95,6 +95,7 @@ CANDIDATE_WINDOW_HOURS=24
 CANDIDATE_NO_RESPONSE_HOURS=6
 ```
 
+
 ## Git 워크플로우
 
 브랜치: `main` (프로덕션) → `develop` (통합) → `feature/*`
