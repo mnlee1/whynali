@@ -1,176 +1,110 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+이 파일은 Claude Code(claude.ai/code)가 이 저장소에서 작업할 때 참고하는 가이드입니다.
 
-
-## AI Development Rules
-
-When modifying this codebase, follow these rules strictly.
-
-### Architecture Rules
-
-- Business logic must live in `lib/`
-- API route handlers must stay under `app/api`
-- React UI components belong in `components/`
-- Database access must go through Supabase clients in `lib/supabase*.ts`
-- Do not duplicate logic that already exists in `lib/`
-
-### API Design Rules
-
-- All API routes must return JSON
-- Error responses must follow `{ error, message }` shape
-- Use HTTP status codes correctly (4xx for client errors, 5xx for server errors)
-
-### Category System Rules
-
-- Categories must only be defined in `lib/config/categories.ts`
-- Do not hardcode category names elsewhere
-
-### AI Integration Rules
-
-- AI model calls must go through `lib/ai/`
-- Do not call external AI APIs directly from API routes
-
-### Code Style Rules
-
-- Prefer TypeScript strict typing
-- Avoid large files (>500 lines)
-- Extract reusable logic into `lib/`
-
-
-
-## Project Overview
-
-This project is a Korean issue-tracking and discussion platform called "왜난리".
-It automatically collects news and community posts, groups them into issues,
-and allows users to vote, react, and discuss them.
-
-The system relies on automated data collection, AI-assisted discussion generation,
-and a heat-index based lifecycle for issues.
-
-
-
-
-## Commands
+## 명령어
 
 ```bash
-npm run dev          # Start dev server (localhost:3000)
-npm run build        # Production build
-npm run lint         # ESLint via Next.js
-npm run test:e2e     # Run Playwright E2E tests (headless)
-npm run test:e2e:ui  # Run Playwright E2E tests with UI viewer
+npm run dev          # 개발 서버 시작
+npm run build        # 프로덕션 빌드
+npm run lint         # ESLint 실행
+npm run test:e2e     # Playwright E2E 테스트 실행
+npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
 ```
 
-No single-test command is available; Playwright supports `--grep` for filtering:
-```bash
-npx playwright test --grep "test name"
+## 아키텍처 개요
+
+**왜난리 (WhyNali)** — 한국 이슈/논란 추적 서비스. 사용자가 트렌딩 이슈를 탐색하고, 반응하고, 투표하고, AI가 생성한 커뮤니티 토론에 참여하는 플랫폼.
+
+### 기술 스택
+
+- **Next.js 15 App Router** + React 19, TypeScript 5, Tailwind CSS
+- **Supabase** (PostgreSQL) — ORM 없이 Supabase JS 클라이언트로 직접 SQL 쿼리
+- **인증**: Supabase Auth + OAuth (Google, Naver, Kakao) + 온보딩 플로우
+- **AI**: 멀티 프로바이더 (기본값 Groq/Llama, Claude, Perplexity) — `/lib/ai/`
+- **배포**: Vercel + Cron Jobs (백그라운드 처리)
+
+### 핵심 도메인 개념
+
+**이슈 상태 라이프사이클**: `대기` → 승인 → `점화` → `논란중` → `종결`
+
+**이슈 등록 파이프라인 ("Track A")**:
+1. Naver News API로 기사 수집
+2. 3시간 내 기사 5건 이상 → 이슈 후보 자동 생성
+3. 관리자 승인/반려; 화력 > 30이면 6시간 후 자동 승인
+4. Cron으로 화력 지수 재계산 (`/api/cron/recalculate-heat`)
+
+**이슈 카테고리 (8개)**: 연예, 스포츠, 정치, 사회, 경제, 기술, 세계, 생활문화
+
+**반응 타입**: 좋아요, 싫어요, 화나요, 팝콘각, 응원, 애도, 사이다
+
+### 데이터베이스
+
+Supabase 클라이언트 2종:
+- `/lib/supabase/client.ts` — 브라우저 클라이언트 (`createBrowserClient`)
+- `/lib/supabase/server.ts` — 서버 어드민 클라이언트 (커넥션 풀링, 포트 6543)
+
+스키마: `/supabase/schema.sql` / 마이그레이션: `/supabase/migrations/`
+
+주요 테이블: `issues`, `news_data`, `users`, `comments`, `reactions`, `votes`, `discussion_topics`, `timeline_points`, `safety_rules`, `admin_logs`
+
+### 인증 플로우
+
+1. OAuth 리다이렉트 → `/auth/callback`에서 코드 교환 후 세션을 쿠키에 저장 (localStorage 아님)
+2. 신규 유저 → `/onboarding`에서 약관 동의 + 익명 닉네임 배정
+3. `middleware.ts`가 쓰기 API 라우트 보호 (`/api/comments`, `/api/reactions`, `/api/votes`, `/api/discussions`)
+4. 어드민 권한은 서버 사이드에서 `ADMIN_EMAILS` 환경변수로 확인
+
+### API 패턴
+
+- 모든 API는 `/app/api/` 하위 (App Router 파일 기반 라우팅)
+- 쿼리 파라미터: `?category=연예&status=점화&sort=heat&limit=20&offset=0`
+- 에러 응답 형식: `{ error: 'CODE', message: '...' }`
+- Cron 엔드포인트는 `CRON_SECRET` 헤더로 인증
+- 어드민 엔드포인트: `/app/api/admin/`
+
+### ISR & 성능
+
+홈 페이지는 15분 주기 ISR 사용. `next.config.js`에서 React, vendor, 대형 라이브러리 webpack 청크 분리 설정.
+
+## 환경 변수
+
+필수:
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_SITE_URL
 ```
 
-## Tech Stack
-
-- **Next.js 15** (App Router, React Server Components)
-- **React 19**, **TypeScript 5**
-- **Tailwind CSS 3** with Pretendard font (Korean)
-- **Supabase** — PostgreSQL + Auth (Google/Naver/Kakao OAuth) + RLS
-- **Groq** — AI model calls (vote/discussion generation, categorization)
-- **Perplexity API** — AI content generation (discussion topics)
-- **Naver News API** + **Cheerio** — news collection & HTML scraping
-- **Resend** — email delivery
-- **Playwright** — E2E tests
-
-## Project Architecture
-
-This is a Korean issue-tracking & discussion platform ("와이나리"). It automatically collects news and community posts, groups them into issues, and lets users vote, react, and discuss.
-
-### Directory Layout
-
+주요 선택:
 ```
-app/                    # Next.js App Router (pages + API routes)
-  api/                  # All API route handlers
-    admin/              # Admin-only CRUD endpoints (publicly accessible by design)
-    cron/               # Vercel Cron job handlers
-    auth/, issues/, comments/, votes/, reactions/, discussions/, search/
-  admin/                # Admin dashboard UI pages (public, no auth required)
-  issue/[id]/           # Issue detail page
-  [category]/           # Category listing pages (연예/스포츠/정치/사회/기술)
-components/             # React components (layout/, issues/, issue/, admin/, common/)
-lib/                    # All business logic
-  ai/                   # Groq + Perplexity wrappers (vote/discussion generators)
-  analysis/             # Heat index calc, status-transition state machine
-  candidate/            # Burst detection, duplicate checking, issue candidate logic
-  collectors/           # Naver news scraping, community scraping
-  config/categories.ts  # Single source of truth for the 5 categories
-  linker/               # Match collected news/community posts to existing issues
-  supabase.ts           # Browser Supabase client
-  supabase-server.ts    # Server Supabase clients (session-aware + admin/service-role)
-types/                  # Shared TypeScript types
-middleware.ts           # Auth guard
-supabase/schema.sql     # DB schema (apply manually)
-e2e/                    # Playwright tests
-.cursor/rules/          # 60+ project spec & rule docs (reference for feature intent)
+GROQ_API_KEY / ANTHROPIC_API_KEY / PERPLEXITY_API_KEY
+AI_PROVIDER=groq          # groq|claude|perplexity
+ADMIN_EMAILS              # 쉼표 구분 어드민 이메일
+CRON_SECRET               # Vercel cron 인증
+NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
 ```
 
-### Authentication & Authorization
-
-- **Supabase Auth** with cookie-based sessions (`@supabase/ssr`)
-- `createSupabaseServerClient()` → session-aware (respects RLS)
-- `createSupabaseAdminClient()` → service-role key, bypasses RLS (admin ops only)
-- Middleware (`middleware.ts`) guards write endpoints (`POST/PUT/DELETE`) for:
-  `/api/comments`, `/api/reactions`, `/api/votes`, `/api/discussions`, `/api/reports`
-- `/admin/*` and `/api/admin/*` are intentionally **public** (no auth required)
-
-### Issue Lifecycle
-
-Issues follow a state machine: **점화 (Ignited) → 논란중 (Debating) → 종결 (Closed)**
-
-- Auto-transitions driven by heat index, time elapsed, and new data
-- Heat index calculated from comments + reactions + timeline points
-- Minimum heat threshold ~10–15 to appear in listings
-- Auto-close handled by cron jobs and `lib/vote-auto-closer.ts`
-
-### Category System
-
-Five categories defined centrally in `lib/config/categories.ts`:
-`연예` (pink) · `스포츠` (blue) · `정치` (purple) · `사회` (green) · `기술` (amber)
-
-To add a category: update `CATEGORIES` array in that file, then run a DB migration if there's a CHECK constraint.
-
-### Data Pipeline (Cron Jobs)
-
+이슈 파이프라인 임계값 (기본값 있음):
 ```
-Naver News API / Community scraping
-  → lib/collectors/
-  → lib/candidate/ (burst detection, dedup, classification)
-  → Admin approval
-  → Issue created in DB
-  → lib/linker/ (attach news/community sources to issue)
-  → AI generation (discussions, votes) via lib/ai/
+CANDIDATE_ALERT_THRESHOLD=5
+CANDIDATE_AUTO_APPROVE_THRESHOLD=30
+CANDIDATE_MIN_HEAT_TO_REGISTER=15
+CANDIDATE_WINDOW_HOURS=24
+CANDIDATE_NO_RESPONSE_HOURS=6
 ```
 
-Cron routes live under `app/api/cron/` and authenticate via `CRON_SECRET` env var.
 
-### API Conventions
+## Git 워크플로우
 
-REST + JSON. Auth header: `Authorization: Bearer <Supabase JWT>` for user-protected routes.
+브랜치: `main` (프로덕션) → `develop` (통합) → `feature/*`
+전체 전략은 `/docs/99_Git협업.md` 참고.
 
-Error shape: `{ "error": "CODE", "message": "설명" }` with HTTP 4xx/5xx.
+## 주요 문서
 
-Key endpoints:
-- `GET /api/issues` — query params: `category`, `status`, `q`, `sort` (latest|heat), `limit`, `offset`
-- `GET /api/issues/[id]` — with timeline count, comment count, reaction summary
-- `GET /api/issues/[id]/timeline`
-- `GET /api/issues/[id]/sources`
-- `GET /api/discussion-topics` — query: `issue_id`, `q`
-- `GET /api/search?q=&type=all|issues|discussion_topics`
-- `POST /api/issues/[id]/votes/[voteId]` — body `{ "vote_choice_id": "uuid" }`
-
-### Environment Variables
-
-See `.env.example`. Required vars include:
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-`GROQ_API_KEY`, `PERPLEXITY_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`,
-`RESEND_API_KEY`, `CRON_SECRET`
-
-### Path Alias
-
-`@/*` maps to the repository root (configured in `tsconfig.json`).
+- `/docs/01_AI기획.md` — 전체 제품 기획서
+- `/docs/07_이슈등록_화력_정렬_규격.md` — 화력 지수 계산 규격
+- `/docs/08_이슈상태전환_규격.md` — 이슈 상태 전환 규칙
+- `/docs/97_API규약.md` — API 계약
+- `/types/issue.ts` — 핵심 TypeScript 타입 정의

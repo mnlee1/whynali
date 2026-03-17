@@ -34,7 +34,21 @@ function AuthVerifyContent() {
 
         supabase.auth
             .setSession({ access_token: accessToken, refresh_token: refreshToken })
-            .then(() => {
+            .then(async (response: { data: { user: { id: string } | null } }) => {
+                const user = response.data?.user
+                if (user) {
+                    const { data: userData } = await supabase
+                        .from('users')
+                        .select('terms_agreed_at')
+                        .eq('id', user.id)
+                        .single()
+
+                    if (userData && !userData.terms_agreed_at) {
+                        setStatus('ok')
+                        window.location.replace('/onboarding')
+                        return
+                    }
+                }
                 setStatus('ok')
                 window.location.replace(next)
             })

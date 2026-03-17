@@ -12,7 +12,6 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata } from '@/lib/ai/discussion-generator'
-import { clearCandidatesCache } from '@/lib/cache/candidates-cache'
 import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
@@ -40,7 +39,7 @@ export async function POST(
 
         if (error) throw error
 
-        clearCandidatesCache()
+        await writeAdminLog('승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         if (process.env.PERPLEXITY_API_KEY && data) {
             generateDiscussionTopicsInBackground(data).catch((e) => {

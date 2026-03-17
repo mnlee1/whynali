@@ -63,10 +63,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
         const updatePayload =
             action === '진행중'
-                ? { approval_status: '진행중', approved_at: new Date().toISOString() }
+                ? { approval_status: '진행중', approved_at: new Date().toISOString(), auto_end_date: null }
                 : action === '마감'
                 ? { approval_status: '마감' }
-                : { approval_status: '대기', approved_at: null }   // 복구 → 대기
+                : { approval_status: '대기', approved_at: null, auto_end_date: null }   // 복구 → 대기
 
         const { data, error } = await supabaseAdmin
             .from('discussion_topics')
