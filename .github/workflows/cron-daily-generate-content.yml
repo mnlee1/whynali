@@ -14,10 +14,10 @@ jobs:
               id: env
               run: |
                   if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-                    echo "url=${{ secrets.NEXT_PUBLIC_SITE_URL }}" >> $GITHUB_OUTPUT
+                    echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
                     echo "env_name=Production" >> $GITHUB_OUTPUT
                   else
-                    echo "url=${{ secrets.NEXT_PUBLIC_SITE_URL_DEV }}" >> $GITHUB_OUTPUT
+                    echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
                     echo "env_name=Develop" >> $GITHUB_OUTPUT
                   fi
 
