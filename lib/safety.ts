@@ -41,7 +41,7 @@ export async function loadBannedWords(adminClient: SupabaseClient): Promise<stri
         const { data, error } = await adminClient
             .from('safety_rules')
             .select('value')
-            .eq('kind', 'banned_word')
+            .in('kind', ['banned_word', 'ai_banned_word'])
         
         if (error) {
             console.error('금칙어 로드 실패:', error)
