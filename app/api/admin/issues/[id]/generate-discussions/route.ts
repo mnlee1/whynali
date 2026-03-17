@@ -96,7 +96,7 @@ export async function POST(
 
         if (insertError) throw insertError
 
-        await writeAdminLog('토론주제생성', 'issue', id, auth.adminEmail, `${topics.length}개 생성 (수동)`)
+        await writeAdminLog('토론 주제 생성', 'issue', id, auth.adminEmail, `${topics.length}개 생성 (수동)`)
 
         return NextResponse.json({
             generated: topics.length,

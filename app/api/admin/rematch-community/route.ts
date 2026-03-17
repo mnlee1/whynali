@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
         
         console.log('\n=== 재매칭 완료 ===')
 
-        await writeAdminLog('커뮤니티재매칭', 'system', null, auth.adminEmail, `이슈 ${issues.length}개 처리`)
+        await writeAdminLog('커뮤니티 재매칭', 'system', null, auth.adminEmail, `이슈 ${issues.length}개 처리`)
 
         return NextResponse.json({
             success: true,

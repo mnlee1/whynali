@@ -39,13 +39,13 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         if (process.env.PERPLEXITY_API_KEY && data) {
             generateDiscussionTopicsInBackground(data).catch((e) => {
                 console.error('[approve] AI 토론 주제 자동 생성 실패 (이슈 승인은 정상 완료):', e)
                 writeAdminLog(
-                    'AI_DISCUSSION_GENERATION_FAILED',
+                    '토론 주제 자동생성 실패',
                     'issue',
                     data.id,
                     auth.adminEmail,

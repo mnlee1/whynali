@@ -33,7 +33,7 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('반려', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 반려', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         return NextResponse.json({ data })
     } catch (error) {
