@@ -30,6 +30,12 @@ type CommentWithLike = Comment & {
 const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
+const SORT_LABELS: Record<SortOption, string> = {
+    latest: '최신순',
+    likes: '공감순',
+    dislikes: '비공감순',
+}
+
 /* 클릭하면 textarea 앞부분에 삽입되는 질문 스타터 칩 */
 const STARTERS = [
     '제 생각에는...',
@@ -62,9 +68,11 @@ export default function DiscussionComments({
     isClosed = false,
 }: DiscussionCommentsProps) {
     const [userId, setUserId] = useState<string | null>(serverUserId)
+    const [bestComments, setBestComments] = useState<CommentWithLike[]>([])
     const [comments, setComments] = useState<CommentWithLike[]>([])
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
+    const [sort, setSort] = useState<SortOption>('latest')
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -470,94 +478,6 @@ export default function DiscussionComments({
         } catch { /* 신고 실패 시 상태 유지 (UX 단순화) */ }
     }
 
-    /* 답글 폼 토글 */
-    const handleReplyToggle = (commentId: string) => {
-        if (replyToId === commentId) {
-            setReplyToId(null)
-            setReplyDraft('')
-            setReplyError(null)
-        } else {
-            setReplyToId(commentId)
-            setReplyDraft('')
-            setReplyError(null)
-        }
-    }
-
-    /* 답글 제출 */
-    const handleReplySubmit = async (parentId: string) => {
-        if (!replyDraft.trim() || submittingReply) return
-        setSubmittingReply(true)
-        setReplyError(null)
-        try {
-            const res = await fetch('/api/comments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    issue_id: null,
-                    discussion_topic_id: discussionTopicId,
-                    parent_id: parentId,
-                    content: replyDraft.trim(),
-                }),
-            })
-            const json = await res.json()
-            if (res.status === 429) {
-                setReplyError(json.error ?? '잠시 후 다시 시도해 주세요.')
-                startRateLimitCountdown()
-                return
-            }
-            if (!res.ok) { setReplyError(json.error ?? '오류가 발생했습니다.'); return }
-            setReplyDraft('')
-            setReplyToId(null)
-            if (!json.pending && json.data) {
-                const newReply: CommentWithLike = { ...json.data, userLikeType: null, replyCount: 0 }
-                setRepliesMap((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), newReply] }))
-                setExpandedRepliesIds((prev) => new Set([...prev, parentId]))
-                setComments((prev) => prev.map((c) =>
-                    c.id === parentId ? { ...c, replyCount: (c.replyCount ?? 0) + 1 } : c
-                ))
-            }
-        } finally {
-            setSubmittingReply(false)
-        }
-    }
-
-    /* 답글 목록 토글 */
-    const handleToggleReplies = async (commentId: string) => {
-        if (expandedRepliesIds.has(commentId)) {
-            setExpandedRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
-            return
-        }
-        if (!repliesMap[commentId]) {
-            setLoadingRepliesIds((prev) => new Set([...prev, commentId]))
-            try {
-                const res = await fetch(`/api/comments?${contextParam}&parent_id=${commentId}&limit=50&offset=0`)
-                const json = await res.json()
-                if (res.ok) setRepliesMap((prev) => ({ ...prev, [commentId]: json.data ?? [] }))
-            } finally {
-                setLoadingRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
-            }
-        }
-        setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
-    }
-
-    /* 신고 모달 */
-    const handleOpenReportModal = (comment: Comment) => {
-        setReportTargetComment(comment)
-        setReportModalOpen(true)
-    }
-
-    const handleReport = async (commentId: string, reason: string) => {
-        if (reportedIds.has(commentId)) return
-        setReportedIds((prev) => new Set([...prev, commentId]))
-        try {
-            await fetch(`/api/comments/${commentId}/report`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reason }),
-            })
-        } catch { /* 신고 실패 시 상태 유지 */ }
-    }
-
     if (loading) {
         return (
             <div className="space-y-3">
@@ -850,20 +770,6 @@ function DiscussionCommentItem({
     const isReplyFormOpen = replyToId === comment.id
     const hasReplies = replyCount > 0 || ((replies?.length ?? 0) > 0)
     const isReported = reportedIds.has(comment.id)
-
-    const [menuOpen, setMenuOpen] = useState(false)
-    const menuRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        if (!menuOpen) return
-        const handler = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setMenuOpen(false)
-            }
-        }
-        document.addEventListener('mousedown', handler)
-        return () => document.removeEventListener('mousedown', handler)
-    }, [menuOpen])
 
     return (
         <li className={[

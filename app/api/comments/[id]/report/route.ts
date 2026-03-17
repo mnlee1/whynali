@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { notifyUrgentReport } from '@/lib/safety-notification'
+import { sendDoorayReportAlert } from '@/lib/dooray-notification'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,13 +110,14 @@ export async function POST(
 
     /* 욕설/혐오는 즉시 알림 (비동기, 실패해도 신고는 성공) */
     if (reason === '욕설/혐오') {
-        void notifyUrgentReport({
+        void sendDoorayReportAlert({
             commentId: comment_id,
-            commentBody: comment.body,
+            body: comment.body,
             reason,
-            reportCount: currentReportCount,
-            issueId: comment.issue_id,
-            discussionTopicId: comment.discussion_topic_id,
+            hateReportCount: currentReportCount,
+            autoHidden: shouldAutoHide,
+            contextType: comment.discussion_topic_id ? 'discussion' : 'issue',
+            contextId: comment.discussion_topic_id || comment.issue_id || '',
         })
     }
 
