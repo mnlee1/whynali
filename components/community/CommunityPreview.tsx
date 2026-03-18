@@ -13,7 +13,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import type { DiscussionTopic } from '@/types/index'
 import { decodeHtml } from '@/lib/utils/decode-html'
@@ -23,6 +23,7 @@ import { formatDate } from '@/lib/utils/format-date'
 interface TopicWithIssue extends DiscussionTopic {
     issues?: { id: string; title: string } | null
     opinionCount?: number
+    viewCount?: number
 }
 
 const PREVIEW_LIMIT = 5
@@ -32,23 +33,31 @@ export default function CommunityPreview() {
     const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        async function load() {
-            try {
-                const res = await fetch(`/api/discussions?limit=${PREVIEW_LIMIT}&status=진행중`)
-                if (!res.ok) return
+    const load = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/discussions?limit=${PREVIEW_LIMIT}&status=진행중`, { cache: 'no-store' })
+            if (!res.ok) return
 
-                const json = await res.json()
-                setTopics(json.data ?? [])
-                setTotal(json.total ?? 0)
-            } catch {
-                // 실패 시 섹션 미표시
-            } finally {
-                setLoading(false)
-            }
+            const json = await res.json()
+            setTopics(json.data ?? [])
+            setTotal(json.total ?? 0)
+        } catch {
+            // 실패 시 섹션 미표시
+        } finally {
+            setLoading(false)
         }
-        load()
     }, [])
+
+    useEffect(() => {
+        load()
+
+        // Next.js 라우터 캐시에서 복원될 때도 최신 데이터 로드
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') load()
+        }
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [load])
 
     if (loading) {
         return (
@@ -102,13 +111,21 @@ export default function CommunityPreview() {
                                     <p className="text-sm font-medium text-neutral-800 line-clamp-2 leading-snug mb-2">
                                         {decodeHtml(topic.body)}
                                     </p>
-                                    {/* 의견 수 */}
-                                    {topic.opinionCount !== undefined && (
-                                        <div className="flex items-center gap-1 text-xs text-neutral-500">
-                                            <span>💬</span>
-                                            <span>의견 {topic.opinionCount.toLocaleString()}</span>
-                                        </div>
-                                    )}
+                                    {/* 의견 수 · 조회수 */}
+                                    <div className="flex items-center gap-3 text-xs text-neutral-500">
+                                        {topic.opinionCount !== undefined && (
+                                            <span className="flex items-center gap-1">
+                                                <span>💬</span>
+                                                <span>의견 {topic.opinionCount.toLocaleString()}</span>
+                                            </span>
+                                        )}
+                                        {topic.viewCount !== undefined && (
+                                            <span className="flex items-center gap-1">
+                                                <span>👁️</span>
+                                                <span>{topic.viewCount.toLocaleString()}</span>
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <span className="text-xs text-neutral-400 shrink-0 mt-0.5">
                                     {formatDate(topic.created_at)}
