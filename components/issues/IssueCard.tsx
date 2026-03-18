@@ -71,10 +71,12 @@ export default function IssueCard({ issue }: IssueCardProps) {
                 {/* 통계 정보 */}
                 {stats && (
                     <div className="flex items-center gap-4 text-xs text-neutral-500 pt-3 border-t border-neutral-100">
-                        <span className="flex items-center gap-1">
-                            <span>👁️</span>
-                            <span>{stats.viewCount.toLocaleString()}</span>
-                        </span>
+                        {stats.viewCount > 0 && (
+                            <span className="flex items-center gap-1">
+                                <span>👁️</span>
+                                <span>{stats.viewCount.toLocaleString()}</span>
+                            </span>
+                        )}
                         <span className="flex items-center gap-1">
                             <span>💬</span>
                             <span>{stats.commentCount.toLocaleString()}</span>

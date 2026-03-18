@@ -12,6 +12,8 @@ import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/sup
 import DiscussionComments from '@/components/issue/DiscussionComments'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DiscussionTopicPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
@@ -36,6 +38,12 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
             </div>
         )
     }
+
+    // 조회수 서버사이드 증가 (force-dynamic이므로 매 방문마다 실행됨)
+    await admin
+        .from('discussion_topics')
+        .update({ view_count: (topic.view_count ?? 0) + 1 })
+        .eq('id', id)
 
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
