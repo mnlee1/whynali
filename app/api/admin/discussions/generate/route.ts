@@ -15,6 +15,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata } from '@/lib/ai/discussion-generator'
+import { writeAdminLog } from '@/lib/admin-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
         }
 
         // 생성된 주제를 JSON으로 반환 (DB 저장은 프론트엔드에서 선택 후 처리)
+        const details = issue.title ? `이슈: ${issue.title.slice(0, 180)}` : null
+        await writeAdminLog('AI 토론 주제 생성 (미리보기)', 'discussion_topic', issue_id, auth.adminEmail, details)
         return NextResponse.json({ data: topics, generated: topics.length }, { status: 201 })
     } catch (e) {
         const message = e instanceof Error ? e.message : 'AI 토론 주제 생성 실패'

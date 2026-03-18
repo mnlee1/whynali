@@ -20,7 +20,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             .update({ visibility: 'public' })
             .eq('id', id)
             .eq('visibility', 'pending_review')
-            .select()
+            .select('body')
             .single()
 
         if (error) throw error
@@ -31,7 +31,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             )
         }
 
-        await writeAdminLog('댓글 공개', 'comment', id, auth.adminEmail)
+        const details = data.body ? data.body.slice(0, 200) : null
+        await writeAdminLog('댓글 공개', 'comment', id, auth.adminEmail, details)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: '공개 처리 실패' }, { status: 500 })
@@ -46,6 +47,14 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     try {
         const { id } = await params
 
+        const { data: comment, error: selectError } = await supabaseAdmin
+            .from('comments')
+            .select('body')
+            .eq('id', id)
+            .single()
+
+        if (selectError) throw selectError
+
         const { error } = await supabaseAdmin
             .from('comments')
             .update({
@@ -56,7 +65,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
         if (error) throw error
 
-        await writeAdminLog('댓글 삭제', 'comment', id, auth.adminEmail)
+        const details = comment?.body ? comment.body.slice(0, 200) : null
+        await writeAdminLog('댓글 삭제', 'comment', id, auth.adminEmail, details)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '삭제 처리 실패' }, { status: 500 })
