@@ -37,7 +37,7 @@ export async function PATCH(
             return NextResponse.json({ error: '규칙을 찾을 수 없습니다.' }, { status: 404 })
         }
 
-        await writeAdminLog(`금칙어 kind 변경 → ${kind}`, 'safety_rule', id, auth.adminEmail)
+        await writeAdminLog(`금칙어 종류 변경 → ${kind}`, 'safety_rule', id, auth.adminEmail)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: 'kind 변경 실패' }, { status: 500 })

@@ -41,7 +41,7 @@ export async function generateDiscussionTopics(
     issue: IssueMetadata,
     count: number = 3
 ): Promise<GeneratedTopic[]> {
-    const apiKey = process.env.GROQ_API_KEY
+    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) {
         throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다.')
     }

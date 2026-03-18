@@ -10,11 +10,11 @@ import SearchBar from './SearchBar'
 
 /**
  * Header - 공통 상단바
- * 
+ *
  * 네이버 뉴스 스타일 2단 구조:
  * 1. 상단 헤더 (배경색): 로고 + 검색 + 유저 정보
  * 2. GNB 바: 카테고리 네비게이션
- * 
+ *
  * 모바일 (1280px 미만):
  * - 상단 헤더: 로고 + 검색 아이콘 + 유저 아이콘
  * - GNB: 가로 스크롤 가능한 필 버튼 형태
@@ -24,6 +24,7 @@ export default function Header() {
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
     const [mobileUserMenuOpen, setMobileUserMenuOpen] = useState(false)
     const [user, setUser] = useState<User | null>(null)
+    const [displayName, setDisplayName] = useState<string | null>(null)
     const router = useRouter()
     const userMenuRef = useRef<HTMLDivElement>(null)
     const sbRef = useRef(
@@ -46,6 +47,20 @@ export default function Header() {
         return () => subscription.unsubscribe()
     }, [])
 
+    // user가 바뀔 때마다 /api/auth/me로 display_name(닉네임) 조회
+    useEffect(() => {
+        if (!user) {
+            setDisplayName(null)
+            return
+        }
+        fetch('/api/auth/me')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                setDisplayName(data?.displayName ?? null)
+            })
+            .catch(() => setDisplayName(null))
+    }, [user])
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
@@ -60,27 +75,16 @@ export default function Header() {
     const handleLogout = async () => {
         await sbRef.current.auth.signOut()
         setUser(null)
+        setDisplayName(null)
         router.push('/')
         router.refresh()
     }
 
     /**
-     * 소셜 로그인 유저 정보에서 표시 이름을 추출.
-     * 이메일은 개인정보이므로 헤더에 노출하지 않음.
-     * 닉네임 → 전체 이름 → 이메일 로컬 파트 순으로 폴백.
+     * 표시 이름: users.display_name(닉네임) 우선, 없으면 '유저'로 폴백.
+     * OAuth 실명(full_name, name)은 헤더에 노출하지 않음.
      */
-    const getDisplayName = (u: User): string => {
-        const raw =
-            u.user_metadata?.nickname ||
-            u.user_metadata?.full_name ||
-            u.user_metadata?.name ||
-            u.email?.split('@')[0] ||
-            '유저'
-        return String(raw)
-    }
-
-    const getAvatarUrl = (u: User): string | null =>
-        u.user_metadata?.avatar_url || u.user_metadata?.picture || null
+    const getName = (): string => displayName || '유저'
 
     /**
      * 로그인 제공자 뱃지 정보 반환.
@@ -108,7 +112,7 @@ export default function Header() {
             return (
                 <Link
                     href="/login"
-                    className={mobile 
+                    className={mobile
                         ? "p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
                         : "px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
                     }
@@ -125,9 +129,8 @@ export default function Header() {
             )
         }
 
-        const displayName = getDisplayName(user)
-        const avatarUrl = getAvatarUrl(user)
-        const initial = displayName.charAt(0).toUpperCase()
+        const name = getName()
+        const initial = name.charAt(0).toUpperCase()
         const badge = getProviderBadge(user)
 
         if (mobile) {
@@ -139,19 +142,9 @@ export default function Header() {
                         aria-label="사용자 메뉴"
                     >
                         <div className="relative">
-                            {avatarUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={avatarUrl}
-                                    alt={displayName}
-                                    referrerPolicy="no-referrer"
-                                    className="w-8 h-8 rounded-full object-cover"
-                                />
-                            ) : (
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700">
-                                    {initial}
-                                </div>
-                            )}
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700">
+                                {initial}
+                            </div>
                             {badge && (
                                 <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none ${badge.className}`}>
                                     {badge.label}
@@ -164,13 +157,8 @@ export default function Header() {
                         <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-neutral-200 rounded-lg shadow-lg z-50">
                             <div className="p-3 border-b border-neutral-100">
                                 <p className="text-sm font-semibold text-neutral-900 truncate">
-                                    {displayName}
+                                    {name}
                                 </p>
-                                {user.email && (
-                                    <p className="text-xs text-neutral-500 truncate mt-0.5">
-                                        {user.email}
-                                    </p>
-                                )}
                             </div>
                             <div className="p-2">
                                 <button
@@ -193,27 +181,17 @@ export default function Header() {
             <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                     <div className="relative">
-                        {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={avatarUrl}
-                                alt={displayName}
-                                referrerPolicy="no-referrer"
-                                className="w-7 h-7 rounded-full object-cover"
-                            />
-                        ) : (
-                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
-                                {initial}
-                            </div>
-                        )}
+                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
+                            {initial}
+                        </div>
                         {badge && (
                             <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold leading-none ${badge.className}`}>
                                 {badge.label}
                             </div>
                         )}
                     </div>
-                    <span className="hidden xl:inline text-sm font-medium text-neutral-700 max-w-[10ch] truncate">
-                        {displayName}
+                    <span className="hidden xl:inline text-sm font-medium text-neutral-700 max-w-[16ch] truncate">
+                        {name}
                     </span>
                 </div>
                 <button
@@ -319,10 +297,10 @@ export default function Header() {
                 </>
             )}
         </header>
-        
+
         {/* 모바일 검색 오버레이 (헤더 밖에 위치) */}
         {mobileSearchOpen && (
-            <div 
+            <div
                 className="xl:hidden fixed inset-0 bg-black/50 z-30"
                 style={{ top: 'var(--header-height, 0)' }}
                 onClick={() => setMobileSearchOpen(false)}

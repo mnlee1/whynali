@@ -34,7 +34,7 @@ type NaverProfileResponse = {
 
 export async function GET(request: NextRequest) {
     const requestUrl = new URL(request.url)
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin
+    const origin = requestUrl.origin
     const code = requestUrl.searchParams.get('code')
     const state = requestUrl.searchParams.get('state')
 

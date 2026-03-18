@@ -18,6 +18,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { searchNaverNewsByKeyword } from '@/lib/collectors/naver-news'
