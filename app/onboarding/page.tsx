@@ -11,30 +11,32 @@
  */
 
 import { redirect } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { generateUniqueNickname } from '@/lib/random-nickname'
 import OnboardingClient from './OnboardingClient'
 
 export default async function OnboardingPage() {
     const supabase = await createSupabaseServerClient()
-    
+
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
         redirect('/login?next=/onboarding')
     }
 
-    const { data: userData } = await supabase
+    // admin 클라이언트로 RLS 우회 + display_name 포함 조회
+    const adminClient = createSupabaseAdminClient()
+    const { data: userData } = await adminClient
         .from('users')
-        .select('terms_agreed_at')
+        .select('terms_agreed_at, display_name')
         .eq('id', user.id)
         .single()
 
-    if (userData?.terms_agreed_at) {
+    if (userData?.terms_agreed_at && userData?.display_name) {
         redirect('/')
     }
 
-    const initialNickname = await generateUniqueNickname(supabase)
+    const initialNickname = await generateUniqueNickname(adminClient)
 
     return <OnboardingClient initialNickname={initialNickname} />
 }

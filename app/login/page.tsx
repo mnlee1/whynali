@@ -21,9 +21,6 @@ function LoginForm() {
         const options: { redirectTo: string; scopes?: string } = {
             redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         }
-        if (provider === 'kakao') {
-            options.scopes = 'profile_nickname profile_image'
-        }
         const { error: err } = await supabase.auth.signInWithOAuth({
             provider,
             options,

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         )
     }
 
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
+    const origin = new URL(request.url).origin
     const redirectUri = `${origin}/auth/callback/naver`
     const state = crypto.randomUUID()
 
