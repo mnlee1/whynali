@@ -15,7 +15,6 @@
  */
 
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
-import { supabaseAdmin } from '@/lib/supabase/server'
 
 export interface IssueMetadata {
     id: string
@@ -42,7 +41,7 @@ export async function generateDiscussionTopics(
     issue: IssueMetadata,
     count: number = 3
 ): Promise<GeneratedTopic[]> {
-    const apiKey = process.env.GROQ_API_KEY
+    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) {
         throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다.')
     }
@@ -100,44 +99,6 @@ export async function generateDiscussionTopics(
     }).catch(err => console.error('API 사용량 추적 실패:', err))
 
     return parseTopics(raw)
-}
-
-/**
- * generateAndSaveDiscussionTopics - 토론 주제 생성 후 DB 저장
- *
- * 이슈 승인(자동/수동) 직후 호출하는 공유 헬퍼.
- * 생성된 주제는 approval_status='대기'로 저장 — 관리자 승인 전 서비스 미노출.
- * GROQ_API_KEY가 없으면 조용히 스킵.
- */
-export async function generateAndSaveDiscussionTopics(issue: {
-    id: string
-    title: string
-    category: string | null
-    status: string | null
-    heat_index?: number | null
-}): Promise<void> {
-    if (!process.env.GROQ_API_KEY) return
-
-    const metadata: IssueMetadata = {
-        id: issue.id,
-        title: issue.title,
-        category: issue.category ?? '기타',
-        status: issue.status ?? '점화',
-        heat_index: issue.heat_index ?? undefined,
-    }
-
-    const topics = await generateDiscussionTopics(metadata, 3)
-    if (topics.length === 0) return
-
-    const rows = topics.map((t) => ({
-        issue_id: issue.id,
-        body: t.content,
-        is_ai_generated: true,
-        approval_status: '대기',
-    }))
-
-    const { error } = await supabaseAdmin.from('discussion_topics').insert(rows)
-    if (error) throw error
 }
 
 /**
