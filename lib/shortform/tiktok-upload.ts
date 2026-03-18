@@ -101,7 +101,7 @@ export async function uploadToTikTok(
                 'Content-Type': 'video/mp4',
                 'Content-Length': String(videoBuffer.length),
             },
-            body: videoBuffer,
+            body: new Uint8Array(videoBuffer),
         })
 
         if (!uploadResponse.ok) {
