@@ -79,7 +79,8 @@ export async function POST(request: NextRequest) {
         }
 
         // 생성된 투표를 JSON으로 반환 (DB 저장은 프론트엔드에서 선택 후 처리)
-        await writeAdminLog('AI 투표 생성 (미리보기)', 'vote', issue.id, auth.adminEmail)
+        const details = issue.title ? `이슈: ${issue.title.slice(0, 180)}` : null
+        await writeAdminLog('AI 투표 생성 (미리보기)', 'vote', issue.id, auth.adminEmail, details)
         return NextResponse.json(
             { data: votes, generated: votes.length },
             { status: 201 }

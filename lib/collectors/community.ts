@@ -44,12 +44,12 @@ function parseTheqooTime(timeText: string): string {
     if (timeMatch) {
         const d = new Date(now)
         d.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0)
-        
+
         /* 파싱된 시각이 현재보다 미래면 전날 게시글 (자정 넘어서 수집한 경우) */
         if (d > now) {
             d.setDate(d.getDate() - 1)
         }
-        
+
         return d.toISOString()
     }
 
@@ -73,7 +73,7 @@ export async function collectTheqoo(): Promise<CollectResult> {
     try {
         const html = await fetchHtml(listUrl)
         const $ = cheerio.load(html)
-        const posts: CommunityPostRow[] = []
+        const mainPosts: CommunityPostRow[] = []
         const now = new Date().toISOString()
 
         /* 일반 게시글: .bd_lst tbody tr 중 notice/notice_expand 클래스 없는 것 */
@@ -98,111 +98,119 @@ export async function collectTheqoo(): Promise<CollectResult> {
             const timeText = $el.find('td.time').text().trim()
             const written_at = timeText ? parseTheqooTime(timeText) : now
 
-            posts.push({ 
-                title, 
-                url, 
-                view_count, 
-                comment_count, 
-                written_at, 
+            mainPosts.push({
+                title,
+                url,
+                view_count,
+                comment_count,
+                written_at,
                 source_site: '더쿠',
                 updated_at: now
             })
         })
 
-        /* 메인 페이지에 없지만 추가 크롤링이 필요한 게시글 조회 */
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-        
-        // 1) 이슈에 연결된 게시글
-        const { data: linkedPosts } = await supabaseAdmin
-            .from('community_data')
-            .select('url')
-            .eq('source_site', '더쿠')
-            .not('issue_id', 'is', null)
-            .gte('created_at', sevenDaysAgo)
-        
-        // 2) 인기 게시글 (조회수 3만 이상 OR 댓글 50개 이상)
-        const { data: popularPosts } = await supabaseAdmin
-            .from('community_data')
-            .select('url')
-            .eq('source_site', '더쿠')
-            .or('view_count.gte.30000,comment_count.gte.50')
-            .gte('created_at', sevenDaysAgo)
-        
-        console.log(`[더쿠 수집] 이슈 연결: ${linkedPosts?.length || 0}건, 인기글: ${popularPosts?.length || 0}건`)
-        
-        const trackingUrls = new Set([
-            ...(linkedPosts?.map(p => p.url) || []),
-            ...(popularPosts?.map(p => p.url) || [])
-        ])
-        const currentUrls = new Set(posts.map(p => p.url))
+        // 스크래핑 장애 감지
+        const mainWarning = mainPosts.length < COMMUNITY_MIN_EXPECTED_POSTS
+            ? `더쿠 수집 이상: ${mainPosts.length}건 수집 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성 있음.`
+            : undefined
 
-        /* 메인 페이지에 없지만 추적이 필요한 게시글은 직접 크롤링하여 업데이트 */
-        const missingLinkedUrls = Array.from(trackingUrls).filter(url => url && !currentUrls.has(url))
-        
-        for (const url of missingLinkedUrls.slice(0, 15)) { // 최대 15개까지 추가 크롤링 (7일 + 효율화)
-            try {
-                const postHtml = await fetchHtml(url)
-                const $post = cheerio.load(postHtml)
-                
-                const title = $post('.theqoo_document_header .title').text().trim() || 
-                              $post('meta[property="og:title"]').attr('content')?.trim() || ''
-                
-                /* 더쿠 상세 페이지: .count_container 전체 텍스트에서 모든 숫자 추출 */
-                const countText = $post('.count_container').first().text().replace(/\s+/g, ' ').trim()
-                const allNumbers = countText.match(/\d+(?:,\d{3})*/g) || []
-                
-                const view_count = allNumbers[0] ? parseInt(allNumbers[0].replace(/,/g, ''), 10) : 0
-                const comment_count = allNumbers[1] ? parseInt(allNumbers[1].replace(/,/g, ''), 10) : 0
-                
-                const dateText = $post('.btm_area .side.fr span').text().trim()
-                const written_at = dateText ? parseTheqooTime(dateText.replace(/\./g, '.').trim()) : now
-
-                if (title && view_count > 0) {
-                    posts.push({
-                        title,
-                        url,
-                        view_count,
-                        comment_count,
-                        written_at,
-                        source_site: '더쿠',
-                        updated_at: now
-                    })
-                }
-            } catch (err) {
-                console.log(`더쿠 개별 게시글 크롤링 실패: ${url}`, err)
-            }
+        if (mainWarning) {
+            console.error('[스크래핑 경고]', mainWarning, { url: listUrl })
         }
 
-        // 스크래핑 장애 감지: 수집 건수가 최소 기대값보다 적으면 경고
-        if (posts.length < COMMUNITY_MIN_EXPECTED_POSTS) {
-            const warning =
-                `더쿠 수집 이상: ${posts.length}건 수집 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). ` +
-                `HTML 구조 변경 가능성 있음.`
-            console.error('[스크래핑 경고]', warning, { url: listUrl })
-
-            // 수집된 건이 있으면 그대로 INSERT (버리지 않음)
-            // 0건이면 upsert 스킵
-            if (posts.length === 0) {
-                return { count: 0, skipped: 0, warning }
-            }
+        if (mainPosts.length === 0) {
+            return { count: 0, skipped: 0, warning: mainWarning }
         }
 
-        if (posts.length === 0) return { count: 0, skipped: 0 }
-
-        /* url UNIQUE 제약 + onConflict로 중복 URL 감지 시 view_count, comment_count 업데이트
-           (migration: add_unique_constraints_for_collectors.sql) */
-        const { error, data: upserted } = await supabaseAdmin
+        /* ① 메인 페이지 게시글 즉시 upsert (타임아웃 전에 반드시 저장) */
+        const { error: mainError, data: mainUpserted } = await supabaseAdmin
             .from('community_data')
-            .upsert(posts, { onConflict: 'url' })
+            .upsert(mainPosts, { onConflict: 'url' })
             .select('id')
-        if (error) throw error
-        
+        if (mainError) throw mainError
+
+        const mainCount = mainUpserted?.length ?? 0
+
+        /* ② 추가 크롤링: 이슈 연결 게시글 & 인기 게시글 업데이트 (best-effort) */
+        try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+            const { data: linkedPosts } = await supabaseAdmin
+                .from('community_data')
+                .select('url')
+                .eq('source_site', '더쿠')
+                .not('issue_id', 'is', null)
+                .gte('created_at', sevenDaysAgo)
+
+            const { data: popularPosts } = await supabaseAdmin
+                .from('community_data')
+                .select('url')
+                .eq('source_site', '더쿠')
+                .or('view_count.gte.30000,comment_count.gte.50')
+                .gte('created_at', sevenDaysAgo)
+
+            console.log(`[더쿠 수집] 이슈 연결: ${linkedPosts?.length || 0}건, 인기글: ${popularPosts?.length || 0}건`)
+
+            const trackingUrls = new Set([
+                ...(linkedPosts?.map(p => p.url) || []),
+                ...(popularPosts?.map(p => p.url) || [])
+            ])
+            const currentUrls = new Set(mainPosts.map(p => p.url))
+            const missingLinkedUrls = Array.from(trackingUrls).filter(url => url && !currentUrls.has(url))
+
+            if (missingLinkedUrls.length > 0) {
+                const additionalPosts: CommunityPostRow[] = []
+
+                for (const url of missingLinkedUrls.slice(0, 15)) {
+                    try {
+                        const postHtml = await fetchHtml(url)
+                        const $post = cheerio.load(postHtml)
+
+                        const title = $post('.theqoo_document_header .title').text().trim() ||
+                                      $post('meta[property="og:title"]').attr('content')?.trim() || ''
+
+                        const countText = $post('.count_container').first().text().replace(/\s+/g, ' ').trim()
+                        const allNumbers = countText.match(/\d+(?:,\d{3})*/g) || []
+
+                        const view_count = allNumbers[0] ? parseInt(allNumbers[0].replace(/,/g, ''), 10) : 0
+                        const comment_count = allNumbers[1] ? parseInt(allNumbers[1].replace(/,/g, ''), 10) : 0
+
+                        const dateText = $post('.btm_area .side.fr span').text().trim()
+                        const written_at = dateText ? parseTheqooTime(dateText.replace(/\./g, '.').trim()) : now
+
+                        if (title && view_count > 0) {
+                            additionalPosts.push({
+                                title,
+                                url,
+                                view_count,
+                                comment_count,
+                                written_at,
+                                source_site: '더쿠',
+                                updated_at: now
+                            })
+                        }
+                    } catch (err) {
+                        console.log(`더쿠 개별 게시글 크롤링 실패: ${url}`, err)
+                    }
+                }
+
+                if (additionalPosts.length > 0) {
+                    const { error: addError } = await supabaseAdmin
+                        .from('community_data')
+                        .upsert(additionalPosts, { onConflict: 'url' })
+                        .select('id')
+                    if (addError) console.error('[더쿠] 추가 크롤링 upsert 실패:', addError)
+                }
+            }
+        } catch (additionalErr) {
+            // 추가 크롤링 실패해도 메인 수집 결과는 이미 저장됨
+            console.error('[더쿠] 추가 크롤링 중 에러 (무시):', additionalErr)
+        }
+
         return {
-            count: upserted?.length ?? 0,
-            skipped: posts.length - (upserted?.length ?? 0),
-            warning: posts.length < COMMUNITY_MIN_EXPECTED_POSTS
-                ? `수집 건수 ${posts.length}건 — 구조 변경 의심`
-                : undefined,
+            count: mainCount,
+            skipped: mainPosts.length - mainCount,
+            warning: mainWarning,
         }
     } catch (error) {
         console.error('더쿠 수집 에러:', error)
@@ -218,7 +226,7 @@ export async function collectNatePann(): Promise<CollectResult> {
     try {
         const html = await fetchHtml(listUrl)
         const $ = cheerio.load(html)
-        const posts: CommunityPostRow[] = []
+        const mainPosts: CommunityPostRow[] = []
         const now = new Date().toISOString()
 
         /* 기존 데이터 조회 (written_at 유지용) */
@@ -235,7 +243,7 @@ export async function collectNatePann(): Promise<CollectResult> {
             .from('community_data')
             .select('url, written_at')
             .in('url', Array.from(urls))
-        
+
         const existingMap = new Map(existingPosts?.map(p => [p.url, p.written_at]) || [])
 
         /* ul.post_wrap > li 구조 */
@@ -255,110 +263,119 @@ export async function collectNatePann(): Promise<CollectResult> {
             /* 기존 데이터가 있으면 written_at 유지, 없으면 현재 시각 사용 */
             const written_at = existingMap.get(url) || now
 
-            posts.push({ 
-                title, 
-                url, 
-                view_count, 
-                comment_count, 
+            mainPosts.push({
+                title,
+                url,
+                view_count,
+                comment_count,
                 written_at,
                 source_site: '네이트판',
                 updated_at: now
             })
         })
 
-        /* 메인 페이지에 없지만 추가 크롤링이 필요한 게시글 조회 */
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-        
-        // 1) 이슈에 연결된 게시글
-        const { data: linkedPosts } = await supabaseAdmin
-            .from('community_data')
-            .select('url, written_at')
-            .eq('source_site', '네이트판')
-            .not('issue_id', 'is', null)
-            .gte('created_at', sevenDaysAgo)
-        
-        // 2) 인기 게시글 (조회수 3만 이상 OR 댓글 50개 이상)
-        const { data: popularPosts } = await supabaseAdmin
-            .from('community_data')
-            .select('url, written_at')
-            .eq('source_site', '네이트판')
-            .or('view_count.gte.30000,comment_count.gte.50')
-            .gte('created_at', sevenDaysAgo)
-        
-        console.log(`[네이트판 수집] 이슈 연결: ${linkedPosts?.length || 0}건, 인기글: ${popularPosts?.length || 0}건`)
-        
-        const allTrackingPosts = [
-            ...(linkedPosts || []),
-            ...(popularPosts || [])
-        ]
-        const trackingUrls = new Set(allTrackingPosts.map(p => p.url))
-        const currentUrls = new Set(posts.map(p => p.url))
-        
-        // existingMap (메인 페이지)과 trackingPosts의 written_at 합치기
-        const writtenAtMap = new Map<string, string>()
-        existingMap.forEach((value, key) => writtenAtMap.set(key, value))
-        allTrackingPosts.forEach(p => writtenAtMap.set(p.url, p.written_at))
+        // 스크래핑 장애 감지
+        const mainWarning = mainPosts.length < COMMUNITY_MIN_EXPECTED_POSTS
+            ? `네이트판 수집 이상: ${mainPosts.length}건 수집 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성 있음.`
+            : undefined
 
-        /* 메인 페이지에 없지만 추적이 필요한 게시글은 직접 크롤링하여 업데이트 */
-        const missingLinkedUrls = Array.from(trackingUrls).filter(url => url && !currentUrls.has(url))
-        
-        for (const url of missingLinkedUrls.slice(0, 15)) { // 최대 15개까지 추가 크롤링 (7일 + 효율화)
-            try {
-                const postHtml = await fetchHtml(url)
-                const $post = cheerio.load(postHtml)
-                
-                const title = $post('meta[property="og:title"]').attr('content')?.trim() || ''
-                const viewMatch = $post('.info .count').text().match(/(\d+)/)
-                const view_count = viewMatch ? parseInt(viewMatch[1], 10) : 0
-                const comment_count = $post('.cbox_module .u_cbox_count').length || 0
-                const written_at = writtenAtMap.get(url) || now
-
-                if (title) {
-                    posts.push({
-                        title,
-                        url,
-                        view_count,
-                        comment_count,
-                        written_at,
-                        source_site: '네이트판',
-                        updated_at: now
-                    })
-                }
-            } catch (err) {
-                console.log(`네이트판 개별 게시글 크롤링 실패: ${url}`)
-            }
+        if (mainWarning) {
+            console.error('[스크래핑 경고]', mainWarning, { url: listUrl })
         }
 
-        // 스크래핑 장애 감지: 수집 건수가 최소 기대값보다 적으면 경고
-        if (posts.length < COMMUNITY_MIN_EXPECTED_POSTS) {
-            const warning =
-                `네이트판 수집 이상: ${posts.length}건 수집 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). ` +
-                `HTML 구조 변경 가능성 있음.`
-            console.error('[스크래핑 경고]', warning, { url: listUrl })
-
-            // 수집된 건이 있으면 그대로 INSERT (버리지 않음)
-            // 0건이면 upsert 스킵
-            if (posts.length === 0) {
-                return { count: 0, skipped: 0, warning }
-            }
+        if (mainPosts.length === 0) {
+            return { count: 0, skipped: 0, warning: mainWarning }
         }
 
-        if (posts.length === 0) return { count: 0, skipped: 0 }
-
-        /* url UNIQUE 제약 + onConflict로 중복 URL 감지 시 view_count, comment_count 업데이트
-           (migration: add_unique_constraints_for_collectors.sql) */
-        const { error, data: upserted } = await supabaseAdmin
+        /* ① 메인 페이지 게시글 즉시 upsert (타임아웃 전에 반드시 저장) */
+        const { error: mainError, data: mainUpserted } = await supabaseAdmin
             .from('community_data')
-            .upsert(posts, { onConflict: 'url' })
+            .upsert(mainPosts, { onConflict: 'url' })
             .select('id')
-        if (error) throw error
-        
+        if (mainError) throw mainError
+
+        const mainCount = mainUpserted?.length ?? 0
+
+        /* ② 추가 크롤링: 이슈 연결 게시글 & 인기 게시글 업데이트 (best-effort) */
+        try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+            const { data: linkedPosts } = await supabaseAdmin
+                .from('community_data')
+                .select('url, written_at')
+                .eq('source_site', '네이트판')
+                .not('issue_id', 'is', null)
+                .gte('created_at', sevenDaysAgo)
+
+            const { data: popularPosts } = await supabaseAdmin
+                .from('community_data')
+                .select('url, written_at')
+                .eq('source_site', '네이트판')
+                .or('view_count.gte.30000,comment_count.gte.50')
+                .gte('created_at', sevenDaysAgo)
+
+            console.log(`[네이트판 수집] 이슈 연결: ${linkedPosts?.length || 0}건, 인기글: ${popularPosts?.length || 0}건`)
+
+            const allTrackingPosts = [
+                ...(linkedPosts || []),
+                ...(popularPosts || [])
+            ]
+            const trackingUrls = new Set(allTrackingPosts.map(p => p.url))
+            const currentUrls = new Set(mainPosts.map(p => p.url))
+
+            const writtenAtMap = new Map<string, string>()
+            existingMap.forEach((value, key) => writtenAtMap.set(key, value))
+            allTrackingPosts.forEach(p => writtenAtMap.set(p.url, p.written_at))
+
+            const missingLinkedUrls = Array.from(trackingUrls).filter(url => url && !currentUrls.has(url))
+
+            if (missingLinkedUrls.length > 0) {
+                const additionalPosts: CommunityPostRow[] = []
+
+                for (const url of missingLinkedUrls.slice(0, 15)) {
+                    try {
+                        const postHtml = await fetchHtml(url)
+                        const $post = cheerio.load(postHtml)
+
+                        const title = $post('meta[property="og:title"]').attr('content')?.trim() || ''
+                        const viewMatch = $post('.info .count').text().match(/(\d+)/)
+                        const view_count = viewMatch ? parseInt(viewMatch[1], 10) : 0
+                        const comment_count = $post('.cbox_module .u_cbox_count').length || 0
+                        const written_at = writtenAtMap.get(url) || now
+
+                        if (title) {
+                            additionalPosts.push({
+                                title,
+                                url,
+                                view_count,
+                                comment_count,
+                                written_at,
+                                source_site: '네이트판',
+                                updated_at: now
+                            })
+                        }
+                    } catch (err) {
+                        console.log(`네이트판 개별 게시글 크롤링 실패: ${url}`)
+                    }
+                }
+
+                if (additionalPosts.length > 0) {
+                    const { error: addError } = await supabaseAdmin
+                        .from('community_data')
+                        .upsert(additionalPosts, { onConflict: 'url' })
+                        .select('id')
+                    if (addError) console.error('[네이트판] 추가 크롤링 upsert 실패:', addError)
+                }
+            }
+        } catch (additionalErr) {
+            // 추가 크롤링 실패해도 메인 수집 결과는 이미 저장됨
+            console.error('[네이트판] 추가 크롤링 중 에러 (무시):', additionalErr)
+        }
+
         return {
-            count: upserted?.length ?? 0,
-            skipped: posts.length - (upserted?.length ?? 0),
-            warning: posts.length < COMMUNITY_MIN_EXPECTED_POSTS
-                ? `수집 건수 ${posts.length}건 — 구조 변경 의심`
-                : undefined,
+            count: mainCount,
+            skipped: mainPosts.length - mainCount,
+            warning: mainWarning,
         }
     } catch (error) {
         console.error('네이트판 수집 에러:', error)

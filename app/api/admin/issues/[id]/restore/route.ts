@@ -30,7 +30,7 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('복구', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 복구', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         return NextResponse.json({ data })
     } catch (error) {
