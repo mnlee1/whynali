@@ -20,7 +20,8 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-    const adminUser = await requireAdmin()
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
     const { id: jobId } = await params
 
     try {
@@ -116,18 +117,18 @@ export async function POST(
             }
 
             // 5. 어드민 로그
-            await writeAdminLog({
-                adminUserId: adminUser.id,
-                action: 'shortform_youtube_upload',
-                targetType: 'shortform_job',
-                targetId: jobId,
-                details: {
+            await writeAdminLog(
+                'shortform_youtube_upload',
+                'shortform_job',
+                jobId,
+                auth.adminEmail,
+                JSON.stringify({
                     issueId: job.issue_id,
                     issueTitle: job.issue_title,
                     youtubeVideoId: videoId,
                     youtubeUrl,
-                },
-            })
+                })
+            )
 
             return NextResponse.json({
                 success: true,
