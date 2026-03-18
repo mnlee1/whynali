@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { sanitizeText, validateContent, checkRateLimit, loadBannedWords } from '@/lib/safety'
 
+
+export const dynamic = 'force-dynamic'
 /* GET /api/discussions?issue_id=&q=&status=&limit=&offset= */
 /* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색, status 지정 시 특정 상태만 조회 */
 export async function GET(request: NextRequest) {
@@ -53,7 +55,8 @@ export async function GET(request: NextRequest) {
 
             return {
                 ...topic,
-                opinionCount: opinionCount || 0
+                opinionCount: opinionCount || 0,
+                viewCount: topic.view_count ?? 0,
             }
         })
     )

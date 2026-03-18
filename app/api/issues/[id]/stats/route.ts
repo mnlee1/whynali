@@ -35,12 +35,12 @@ export async function GET(
 
         // 3. 진행중인 토론 개수
         const { count: discussionCount } = await supabaseAdmin
-            .from('discussions')
+            .from('discussion_topics')
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', id)
-            .eq('status', '진행중')
+            .eq('approval_status', '진행중')
 
-        // 4. 조회수 가져오기
+        // 4. 실제 조회수
         const { data: issueData } = await supabaseAdmin
             .from('issues')
             .select('view_count')
@@ -51,7 +51,7 @@ export async function GET(
             voteCount: voteCount || 0,
             commentCount: commentCount || 0,
             discussionCount: discussionCount || 0,
-            viewCount: issueData?.view_count || 0
+            viewCount: issueData?.view_count ?? 0,
         })
     } catch (error) {
         console.error('Issue stats fetch error:', error)

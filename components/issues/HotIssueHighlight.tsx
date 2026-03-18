@@ -73,14 +73,14 @@ export default function HotIssueHighlight() {
 
     if (loading) {
         return (
-            <div className="h-[300px] lg:h-full bg-neutral-100 rounded-2xl animate-pulse" />
+            <div className="h-[420px] lg:h-full lg:min-h-[500px] bg-neutral-100 rounded-2xl animate-pulse" />
         )
     }
 
     if (issues.length === 0) return null
 
     return (
-        <section className="relative h-[300px] lg:h-full">
+        <section className="relative h-[420px] lg:h-full lg:min-h-[500px]">
             {/* 왜난리 이슈 뱃지 */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-600 text-white text-xs font-bold shadow-lg">
@@ -146,10 +146,12 @@ export default function HotIssueHighlight() {
                                         {/* 통계 정보 */}
                                         {issue.stats && (
                                             <div className="flex items-center gap-4 text-sm text-white/75">
-                                                <span className="flex items-center gap-1.5">
-                                                    <span>👁️</span>
-                                                    <span>{issue.stats.viewCount.toLocaleString()}</span>
-                                                </span>
+                                                {issue.stats.viewCount > 0 && (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span>👁️</span>
+                                                        <span>{issue.stats.viewCount.toLocaleString()}</span>
+                                                    </span>
+                                                )}
                                                 <span className="flex items-center gap-1.5">
                                                     <span>💬</span>
                                                     <span>{issue.stats.commentCount.toLocaleString()}</span>

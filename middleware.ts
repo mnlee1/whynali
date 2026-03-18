@@ -21,6 +21,8 @@ const PROTECTED_PATHS = [
 ]
 
 function isUserProtectedPath(pathname: string) {
+    // /view 엔드포인트는 비로그인 유저도 조회수 집계 가능해야 함
+    if (pathname.endsWith('/view')) return false
     return PROTECTED_PATHS.some((path) => pathname.startsWith(path))
 }
 
