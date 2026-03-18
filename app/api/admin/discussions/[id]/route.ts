@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 return NextResponse.json({ error: '토론 주제를 찾을 수 없습니다.' }, { status: 404 })
             }
 
-            await writeAdminLog('수정', 'discussion_topic', id, auth.adminEmail, sanitized.slice(0, 200))
+            await writeAdminLog('토론 주제 수정', 'discussion_topic', id, auth.adminEmail, sanitized.slice(0, 200))
             return NextResponse.json({ data })
         }
 
@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         }
 
         const details = data.body ? data.body.slice(0, 200) : null
-        await writeAdminLog(action, 'discussion_topic', id, auth.adminEmail, details)
+        await writeAdminLog(`토론 주제 ${action}`, 'discussion_topic', id, auth.adminEmail, details)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: '처리 실패' }, { status: 500 })
@@ -103,7 +103,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
         if (error) throw error
 
-        await writeAdminLog('삭제', 'discussion_topic', id, auth.adminEmail)
+        await writeAdminLog('토론 주제 삭제', 'discussion_topic', id, auth.adminEmail)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '삭제 실패' }, { status: 500 })

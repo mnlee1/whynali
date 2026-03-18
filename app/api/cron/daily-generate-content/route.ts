@@ -101,12 +101,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const canDiscussion = !!process.env.PERPLEXITY_API_KEY
-    const canVote = !!(process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY)
+    const canDiscussion = !!process.env.GROQ_API_KEY
+    const canVote = !!process.env.GROQ_API_KEY
 
     if (!canDiscussion && !canVote) {
         return NextResponse.json(
-            { error: 'AI API 키 없음 (PERPLEXITY_API_KEY 또는 OPENAI_API_KEY/GROQ_API_KEY 필요)' },
+            { error: 'AI API 키 없음 (GROQ_API_KEY 필요)' },
             { status: 500 }
         )
     }
