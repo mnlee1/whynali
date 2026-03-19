@@ -13,8 +13,7 @@
 
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
 interface OnboardingClientProps {
     initialNickname: string
@@ -77,11 +76,45 @@ const TERMS_PRIVACY = `개인정보 처리방침
 시행일: 2025년 1월 1일`
 
 export default function OnboardingClient({ initialNickname }: OnboardingClientProps) {
-    const router = useRouter()
+
 
     const [nickname, setNickname] = useState(initialNickname)
     const [regenerateCount, setRegenerateCount] = useState(0)
     const [isRegenerating, setIsRegenerating] = useState(false)
+
+    const NICKNAME_REGEX = /^[가-힣a-zA-Z0-9_]+$/
+    const nicknameValid = nickname.length >= 2 && nickname.length <= 16 && NICKNAME_REGEX.test(nickname)
+    const nicknameValidationMsg = (() => {
+        if (nickname.length === 0) return null
+        if (nickname.length < 2) return '2자 이상 입력해주세요.'
+        if (nickname.length > 16) return '16자 이하로 입력해주세요.'
+        if (!NICKNAME_REGEX.test(nickname)) return '한글, 영문, 숫자, _만 사용할 수 있습니다.'
+        return null
+    })()
+
+    const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
+    const [isDuplicate, setIsDuplicate] = useState<boolean | null>(null)
+
+    useEffect(() => {
+        if (!nicknameValid) {
+            setIsDuplicate(null)
+            return
+        }
+        setIsCheckingDuplicate(true)
+        setIsDuplicate(null)
+        const timer = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/users/nickname/check?nickname=${encodeURIComponent(nickname)}`)
+                const data = await res.json()
+                setIsDuplicate(!data.available)
+            } catch {
+                setIsDuplicate(null)
+            } finally {
+                setIsCheckingDuplicate(false)
+            }
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [nickname, nicknameValid])
 
     const [termsService, setTermsService] = useState(false)
     const [termsPrivacy, setTermsPrivacy] = useState(false)
@@ -121,6 +154,10 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
     }
 
     const handleSubmit = async () => {
+        if (!nicknameValid) {
+            setError('닉네임 조건을 확인해주세요.')
+            return
+        }
         if (!termsService || !termsPrivacy || !ageConfirmed) {
             setError('필수 항목을 모두 확인해주세요.')
             return
@@ -154,7 +191,7 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
                 return
             }
 
-            router.push('/')
+            window.location.replace('/')
         } catch (err) {
             console.error('온보딩 제출 오류:', err)
             setError('서버 오류가 발생했습니다.')
@@ -162,7 +199,7 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
         }
     }
 
-    const isFormValid = termsService && termsPrivacy && ageConfirmed
+    const isFormValid = nicknameValid && isDuplicate === false && termsService && termsPrivacy && ageConfirmed
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -172,25 +209,42 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
             </div>
 
             <div className="mb-8 p-6 bg-gray-50 rounded-lg">
-                <h2 className="text-lg font-semibold mb-4">닉네임</h2>
-                <div className="flex items-center gap-3 mb-3">
-                    <div className="flex-1 px-4 py-3 bg-white rounded-lg border border-gray-300 font-medium">
-                        {nickname}
-                    </div>
+                <h2 className="text-lg font-semibold mb-1">닉네임</h2>
+                <p className="text-xs text-gray-400 mb-3">한글·영문·숫자·_ 사용 가능, 2~16자</p>
+                <div className="flex items-center gap-3 mb-2">
+                    <input
+                        type="text"
+                        value={nickname}
+                        onChange={(e) => setNickname(e.target.value)}
+                        maxLength={16}
+                        className={`flex-1 px-4 py-3 bg-white rounded-lg border font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            nicknameValidationMsg ? 'border-red-400' : nicknameValid ? 'border-green-400' : 'border-gray-300'
+                        }`}
+                        placeholder="닉네임 입력"
+                    />
                     <button
                         onClick={handleRegenerate}
                         disabled={regenerateCount >= 5 || isRegenerating}
                         className="px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                     >
-                        {isRegenerating ? '생성 중...' : '다른 닉네임'}
+                        {isRegenerating ? '생성 중...' : '랜덤 생성'}
                     </button>
                 </div>
-                <p className="text-sm text-gray-500">
-                    {regenerateCount >= 3
-                        ? '추천 횟수를 모두 사용했습니다. 마이페이지에서 변경 가능합니다.'
-                        : `닉네임은 마이페이지에서 변경할 수 있어요 (${regenerateCount}/5)`
-                    }
-                </p>
+                {nicknameValidationMsg ? (
+                    <p className="text-xs text-red-500">{nicknameValidationMsg}</p>
+                ) : nicknameValid ? (
+                    isCheckingDuplicate ? (
+                        <p className="text-xs text-gray-400">중복 확인 중...</p>
+                    ) : isDuplicate === true ? (
+                        <p className="text-xs text-red-500">이미 사용 중인 닉네임입니다.</p>
+                    ) : isDuplicate === false ? (
+                        <p className="text-xs text-green-600">사용 가능한 닉네임입니다.</p>
+                    ) : null
+                ) : (
+                    <p className="text-xs text-gray-500">
+                        랜덤 닉네임을 사용하거나 직접 입력할 수 있어요 ({regenerateCount}/5)
+                    </p>
+                )}
             </div>
 
             <div className="mb-8">
@@ -209,6 +263,21 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
                 </div>
 
                 <div className="space-y-4">
+                    <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={ageConfirmed}
+                                onChange={(e) => setAgeConfirmed(e.target.checked)}
+                                className="w-5 h-5"
+                            />
+                            <span className="font-medium">[필수] 본인은 만 14세 이상입니다</span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-2 ml-7">
+                            정보통신망법 제31조에 따라 만 14세 미만은 법정대리인의 동의가 필요합니다.
+                        </p>
+                    </div>
+
                     <div className="border border-gray-300 rounded-lg p-4">
                         <label className="flex items-center gap-2 cursor-pointer mb-2">
                             <input
@@ -273,21 +342,6 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
                                 {TERMS_PRIVACY}
                             </div>
                         )}
-                    </div>
-
-                    <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={ageConfirmed}
-                                onChange={(e) => setAgeConfirmed(e.target.checked)}
-                                className="w-5 h-5"
-                            />
-                            <span className="font-medium">[필수] 본인은 만 14세 이상입니다</span>
-                        </label>
-                        <p className="text-xs text-gray-500 mt-2 ml-7">
-                            정보통신망법 제31조에 따라 만 14세 미만은 법정대리인의 동의가 필요합니다.
-                        </p>
                     </div>
 
                     <div className="border border-gray-300 rounded-lg p-4">

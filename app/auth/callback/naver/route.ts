@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
     })
 
     const perPage = 50
-    let existing: { id: string; user_metadata?: Record<string, unknown> } | null = null
+    let existing: { id: string; app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null = null
     for (let page = 1; ; page++) {
         const { data } = await admin.auth.admin.listUsers({ page, perPage })
         const users = data?.users ?? []
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
             (u) => u.email === email || u.user_metadata?.provider_id === naverId
         )
         if (found) {
-            existing = { id: found.id, user_metadata: found.user_metadata as Record<string, unknown> }
+            existing = { id: found.id, app_metadata: found.app_metadata as Record<string, unknown>, user_metadata: found.user_metadata as Record<string, unknown> }
             break
         }
         if (users.length < perPage) break
@@ -133,9 +133,11 @@ export async function GET(request: NextRequest) {
         userId = existing.id
         const needsUpdate =
             !existing.user_metadata?.provider_id ||
-            existing.user_metadata?.provider !== 'naver'
+            existing.user_metadata?.provider !== 'naver' ||
+            existing.app_metadata?.provider !== 'naver'
         if (needsUpdate) {
             await admin.auth.admin.updateUserById(existing.id, {
+                app_metadata: { provider: 'naver', providers: ['naver'] },
                 user_metadata: {
                     ...existing.user_metadata,
                     provider: 'naver',
@@ -147,6 +149,7 @@ export async function GET(request: NextRequest) {
         const { data: newUser, error: createError } = await admin.auth.admin.createUser({
             email,
             email_confirm: true,
+            app_metadata: { provider: 'naver', providers: ['naver'] },
             user_metadata: { provider: 'naver', provider_id: naverId, name },
         })
         if (createError || !newUser.user) {

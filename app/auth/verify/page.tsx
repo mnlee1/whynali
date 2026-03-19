@@ -62,7 +62,16 @@ function AuthVerifyContent() {
                     const res = await fetch('/api/auth/me')
                     if (res.ok) {
                         const data = await res.json()
-                        if (!data.displayName) {
+                        const needsOnboarding =
+                            !data.termsAgreedAt ||
+                            !data.displayName ||
+                            data.displayNameNeedsReset
+
+                        if (needsOnboarding) {
+                            // OAuth 실명이 display_name에 저장된 경우 초기화 후 온보딩으로
+                            if (data.displayNameNeedsReset) {
+                                await fetch('/api/auth/me', { method: 'PATCH' })
+                            }
                             setStatus('ok')
                             window.location.replace('/onboarding')
                             return

@@ -54,13 +54,35 @@ export async function GET(request: NextRequest) {
         .limit(1)
 
     const userData = userRows?.[0] ?? null
-    const needsOnboarding = !userData || !userData.terms_agreed_at || !userData.display_name
+
+    // 구 트리거(create_users_on_auth_signup)가 OAuth 실명을 display_name에 저장했던 문제 감지.
+    // user_metadata.full_name / name 과 display_name이 일치하면 사용자가 직접 설정한 닉네임이 아님.
+    const oauthName = (user.user_metadata?.full_name ?? user.user_metadata?.name ?? null) as string | null
+    const displayNameIsFromOAuth =
+        oauthName &&
+        userData?.display_name &&
+        userData.display_name === oauthName
+
+    const needsOnboarding =
+        !userData ||
+        !userData.terms_agreed_at ||
+        !userData.display_name ||
+        Boolean(displayNameIsFromOAuth)
+
+    // OAuth 실명이 그대로 남아있는 경우 null로 초기화해 온보딩에서 랜덤 닉네임을 배정받게 함
+    if (needsOnboarding && displayNameIsFromOAuth) {
+        await adminClient
+            .from('users')
+            .update({ display_name: null })
+            .eq('id', user.id)
+    }
 
     console.log('[auth/callback] DB 유저 조회:', {
         userId: user.id,
         userData,
         userError: userError?.message,
         needsOnboarding,
+        displayNameIsFromOAuth,
     })
 
     if (needsOnboarding) {

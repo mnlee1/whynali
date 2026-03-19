@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Comment } from '@/types'
 import ReportModal from '@/components/issue/ReportModal'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
+import NicknameAvatar from '@/components/common/NicknameAvatar'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
@@ -424,8 +425,12 @@ export default function DiscussionComments({
             setReplyDraft('')
             setReplyToId(null)
             if (!json.pending && json.data) {
-                const newReply: CommentWithLike = { ...json.data, userLikeType: null, replyCount: 0 }
-                setRepliesMap((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), newReply] }))
+                // POST 응답에는 display_name이 없으므로 GET으로 다시 조회해 닉네임 표시
+                const repliesRes = await fetch(`/api/comments?${contextParam}&parent_id=${parentId}&limit=50&offset=0`)
+                const repliesJson = await repliesRes.json()
+                if (repliesRes.ok) {
+                    setRepliesMap((prev) => ({ ...prev, [parentId]: repliesJson.data ?? [] }))
+                }
                 setExpandedRepliesIds((prev) => new Set([...prev, parentId]))
                 setComments((prev) => prev.map((c) =>
                     c.id === parentId ? { ...c, replyCount: (c.replyCount ?? 0) + 1 } : c
@@ -778,7 +783,10 @@ function DiscussionCommentItem({
             isReply ? 'py-3' : '',
         ].join(' ')}>
             <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">{authorLabel(comment)}</span>
+                <div className="flex items-center gap-1.5">
+                    <NicknameAvatar name={authorLabel(comment)} />
+                    <span className="text-xs text-gray-500">{authorLabel(comment)}</span>
+                </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
                     {isMine && !isEditing && (
