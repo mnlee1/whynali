@@ -20,6 +20,7 @@ import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
+import ViewCounter from '@/components/issue/ViewCounter'
 import { formatDate } from '@/lib/utils/format-date'
 
 // ISR: 15분(900초)마다 페이지 재생성
@@ -88,6 +89,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
+            {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출) */}
+            <ViewCounter endpoint={`/api/issues/${id}/view`} />
+
             {/* 이슈 헤더 */}
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">

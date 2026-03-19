@@ -3,15 +3,17 @@
  *
  * 경로별 인증/인가 미들웨어
  *
- * - /admin/*         : 관리자 페이지. 인증 없이 누구나 접근 가능 (공개 운영)
- * - /api/admin/*     : 관리자 API. 인증 없이 누구나 접근 가능 (공개 운영)
- * - PROTECTED_PATHS  : 로그인 필요 API (쓰기 전용). 비인증 → 401
+ * - /admin/login       : 누구나 접근 가능 (관리자 로그인 페이지)
+ * - /admin/*           : @nhnad.com 세션 필요. 미인증 → /admin/login 리다이렉트
+ * - /api/admin/*       : @nhnad.com 세션 필요. 미인증 → 401/403
+ * - PROTECTED_PATHS    : 로그인 필요 API (쓰기 전용). 비인증 → 401
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { isAdminEmail } from '@/lib/admin'
 
-/* 로그인이 필요한 API 경로 목록 (GET 제외, 쓰기 전용) */
+/* 로그인이 필요한 일반 사용자 API 경로 (GET 제외, 쓰기 전용) */
 const PROTECTED_PATHS = [
     '/api/comments',
     '/api/reactions',
@@ -21,6 +23,7 @@ const PROTECTED_PATHS = [
 ]
 
 function isUserProtectedPath(pathname: string) {
+    if (pathname.endsWith('/view')) return false
     return PROTECTED_PATHS.some((path) => pathname.startsWith(path))
 }
 
@@ -56,9 +59,36 @@ async function getSessionUser(request: NextRequest) {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
-    /* ── /admin/* 및 /api/admin/* 는 인증 없이 누구나 접근 가능 ── */
-    if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+    /* ── /admin/login 은 인증 없이 접근 가능 ── */
+    if (pathname === '/admin/login') {
         return NextResponse.next()
+    }
+
+    /* ── /admin/* 및 /api/admin/* 은 @nhnad.com 세션 필요 ── */
+    if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+        const { user, supabaseResponse } = await getSessionUser(request)
+
+        if (!user) {
+            if (pathname.startsWith('/api/admin')) {
+                return NextResponse.json(
+                    { error: 'UNAUTHORIZED', message: '관리자 로그인이 필요합니다.' },
+                    { status: 401 }
+                )
+            }
+            return NextResponse.redirect(new URL('/admin/login', request.url))
+        }
+
+        if (!isAdminEmail(user.email)) {
+            if (pathname.startsWith('/api/admin')) {
+                return NextResponse.json(
+                    { error: 'FORBIDDEN', message: '관리자 권한이 없습니다.' },
+                    { status: 403 }
+                )
+            }
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        return supabaseResponse
     }
 
     /* ── 일반 사용자 쓰기 API 경로 보호 ── */

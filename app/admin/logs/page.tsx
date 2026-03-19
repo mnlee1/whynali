@@ -187,11 +187,11 @@ export default function AdminLogsPage() {
                                     <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
                                         {formatDate(log.created_at)}
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-4 py-3 w-28 max-w-[7rem]">
                                         <span className={[
-                                            'text-xs px-2 py-0.5 rounded font-medium',
+                                            'text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap inline-block max-w-full truncate',
                                             ACTION_BADGE[log.action] ?? 'bg-gray-100 text-gray-600',
-                                        ].join(' ')}>
+                                        ].join(' ')} title={log.action}>
                                             {log.action}
                                         </span>
                                     </td>
@@ -208,8 +208,8 @@ export default function AdminLogsPage() {
                                     <td className="px-4 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">
                                         {log.target_id ? `…${log.target_id.slice(-8)}` : '—'}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                                        {log.admin_id ? `…${log.admin_id.slice(-4)}` : '시스템'}
+                                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                                        {log.admin_id ? log.admin_id.split('@')[0] : '시스템'}
                                     </td>
                                 </tr>
                             ))

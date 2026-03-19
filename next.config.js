@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    serverExternalPackages: ['googleapis', 'sharp'],
     webpack: (config, { isServer }) => {
         if (!isServer) {
             config.optimization = {

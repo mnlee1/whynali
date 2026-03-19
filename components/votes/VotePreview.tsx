@@ -131,10 +131,20 @@ export default function VotePreview() {
                                     <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors" />
                                     
                                     <div className="relative space-y-4">
-                                        {/* 투표 제목 */}
-                                        <h3 className="text-base font-bold text-white line-clamp-2 min-h-[3rem]">
-                                            {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
-                                        </h3>
+                                        {/* 투표 제목 + 연결 이슈 */}
+                                        <div className="space-y-1 min-h-[3rem]">
+                                            <h3 className="text-base font-bold text-white line-clamp-2">
+                                                {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
+                                            </h3>
+                                            {vote.issues?.title && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] px-1.5 py-0.5 bg-white/20 rounded text-white/80 font-bold flex-shrink-0">이슈</span>
+                                                    <span className="text-xs text-white/70 truncate font-medium">
+                                                        {vote.issues.title}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
 
                                         {/* 1위 vs 2위 대결 */}
                                         <div className="space-y-3">

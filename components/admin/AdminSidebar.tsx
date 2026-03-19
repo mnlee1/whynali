@@ -11,7 +11,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
 
 const NAV_ITEMS = [
     {
@@ -56,6 +57,15 @@ const NAV_ITEMS = [
         icon: (
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+        ),
+    },
+    {
+        label: '숏폼 관리',
+        href: '/admin/shortform',
+        icon: (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
         ),
     },
@@ -114,6 +124,12 @@ export function AdminMobileNav() {
 /** 데스크톱 전용 왼쪽 사이드바 (md 이상에서 표시) */
 export default function AdminSidebar() {
     const isActive = useIsActive()
+    const router = useRouter()
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut()
+        router.push('/admin/login')
+    }
 
     return (
         <aside className="admin-sidebar hidden md:flex md:flex-col">
@@ -144,6 +160,12 @@ export default function AdminSidebar() {
                     </svg>
                     <span>사이트로 돌아가기</span>
                 </Link>
+                <button onClick={handleLogout} className="admin-sidebar-back w-full text-left text-red-500 hover:text-red-700">
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>로그아웃</span>
+                </button>
             </div>
         </aside>
     )

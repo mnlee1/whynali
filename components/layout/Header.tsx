@@ -10,11 +10,11 @@ import SearchBar from './SearchBar'
 
 /**
  * Header - 공통 상단바
- * 
+ *
  * 네이버 뉴스 스타일 2단 구조:
  * 1. 상단 헤더 (배경색): 로고 + 검색 + 유저 정보
  * 2. GNB 바: 카테고리 네비게이션
- * 
+ *
  * 모바일 (1280px 미만):
  * - 상단 헤더: 로고 + 검색 아이콘 + 유저 아이콘
  * - GNB: 가로 스크롤 가능한 필 버튼 형태
@@ -24,8 +24,12 @@ export default function Header() {
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
     const [mobileUserMenuOpen, setMobileUserMenuOpen] = useState(false)
     const [user, setUser] = useState<User | null>(null)
+    const [displayName, setDisplayName] = useState<string | null>(null)
+    const [termsAgreedAt, setTermsAgreedAt] = useState<string | null>(null)
+    const [userInfoLoading, setUserInfoLoading] = useState(false)
     const router = useRouter()
     const userMenuRef = useRef<HTMLDivElement>(null)
+    const userMenuRefDesktop = useRef<HTMLDivElement>(null)
     const sbRef = useRef(
         createBrowserClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,9 +50,33 @@ export default function Header() {
         return () => subscription.unsubscribe()
     }, [])
 
+    // user가 바뀔 때마다 /api/auth/me로 display_name(닉네임) 조회
+    useEffect(() => {
+        if (!user) {
+            setDisplayName(null)
+            setTermsAgreedAt(null)
+            setUserInfoLoading(false)
+            return
+        }
+        setUserInfoLoading(true)
+        fetch('/api/auth/me')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                setDisplayName(data?.displayName ?? null)
+                setTermsAgreedAt(data?.termsAgreedAt ?? null)
+            })
+            .catch(() => {
+                setDisplayName(null)
+                setTermsAgreedAt(null)
+            })
+            .finally(() => setUserInfoLoading(false))
+    }, [user])
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+            const insideMobile = userMenuRef.current?.contains(event.target as Node)
+            const insideDesktop = userMenuRefDesktop.current?.contains(event.target as Node)
+            if (!insideMobile && !insideDesktop) {
                 setMobileUserMenuOpen(false)
             }
         }
@@ -60,27 +88,30 @@ export default function Header() {
     const handleLogout = async () => {
         await sbRef.current.auth.signOut()
         setUser(null)
+        setDisplayName(null)
         router.push('/')
         router.refresh()
     }
 
-    /**
-     * 소셜 로그인 유저 정보에서 표시 이름을 추출.
-     * 이메일은 개인정보이므로 헤더에 노출하지 않음.
-     * 닉네임 → 전체 이름 → 이메일 로컬 파트 순으로 폴백.
-     */
-    const getDisplayName = (u: User): string => {
-        const raw =
-            u.user_metadata?.nickname ||
-            u.user_metadata?.full_name ||
-            u.user_metadata?.name ||
-            u.email?.split('@')[0] ||
-            '유저'
-        return String(raw)
-    }
+    /** 관리자 여부 (@nhnad.com 도메인) */
+    const isAdmin = !!user && !!user.email?.toLowerCase().endsWith('@nhnad.com')
 
-    const getAvatarUrl = (u: User): string | null =>
-        u.user_metadata?.avatar_url || u.user_metadata?.picture || null
+    /**
+     * 표시 이름: display_name(닉네임) 우선. OAuth 실명은 노출하지 않음.
+     * 관리자 표시명은 AuthButton 내에서 별도 처리.
+     */
+    const getName = (): string => displayName || '유저'
+
+    /** 제공자 표시명 반환 */
+    const getProviderName = (u: User): string => {
+        const provider = (u.user_metadata?.provider ?? u.app_metadata?.provider) as string | undefined
+        switch (provider) {
+            case 'google': return '구글'
+            case 'kakao': return '카카오'
+            case 'naver': return '네이버'
+            default: return ''
+        }
+    }
 
     /**
      * 로그인 제공자 뱃지 정보 반환.
@@ -104,11 +135,16 @@ export default function Header() {
     }
 
     const AuthButton = ({ mobile = false }: { mobile?: boolean }) => {
-        if (!user) {
+        // 유저 정보 로딩 중에는 아무것도 렌더하지 않음 (이름 깜빡임 방지)
+        if (userInfoLoading) return null
+
+        // 온보딩 미완료(terms_agreed_at 없음) 상태에서는 로그인 버튼으로 표시
+        // 관리자는 termsAgreedAt 없어도 통과
+        if (!user || (!termsAgreedAt && !isAdmin)) {
             return (
                 <Link
                     href="/login"
-                    className={mobile 
+                    className={mobile
                         ? "p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
                         : "px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
                     }
@@ -125,103 +161,120 @@ export default function Header() {
             )
         }
 
-        const displayName = getDisplayName(user)
-        const avatarUrl = getAvatarUrl(user)
-        const initial = displayName.charAt(0).toUpperCase()
-        const badge = getProviderBadge(user)
+        // 버튼 영역: 관리자는 이메일 앞부분, 일반 유저는 닉네임
+        const name = isAdmin
+            ? (user.email?.split('@')[0] ?? '운영자')
+            : (displayName || '유저')
+        // 드롭다운 상단: 관리자는 운영자A/B/C, 일반 유저는 닉네임
+        const dropdownName = isAdmin ? (displayName || name) : name
+        // 아바타 이니셜·뱃지는 dropdownName 기준 (운영자A → '운')
+        const initial = dropdownName.charAt(0).toUpperCase()
+        const badge = isAdmin
+            ? { label: dropdownName.charAt(0), className: 'bg-red-500 text-white' }
+            : getProviderBadge(user)
+
+        // 드롭다운 서브텍스트: 관리자는 실제 이메일, 일반 유저는 이메일 또는 제공자명
+        // 가짜 합성 이메일 제외 (네이버 이메일 미제공 시 생성한 내부 식별자)
+        const subtitleEmail = isAdmin
+            ? user.email
+            : (user.email && !user.email.endsWith('@naver.oauth') ? user.email : null)
+        const subtitleText = subtitleEmail ?? getProviderName(user)
+
+        const dropdownMenu = (
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-neutral-200 rounded-lg shadow-lg z-50">
+                <div className="px-4 py-3 border-b border-neutral-100">
+                    <p className="text-sm font-semibold text-neutral-900 truncate">{dropdownName}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                        {badge && (
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0 ${badge.className}`}>
+                                {badge.label}
+                            </div>
+                        )}
+                        <span className="text-xs text-neutral-500 truncate">
+                            {subtitleText}
+                        </span>
+                    </div>
+                </div>
+                <div className="p-2">
+                    {isAdmin ? (
+                        <Link
+                            href="/admin"
+                            onClick={() => setMobileUserMenuOpen(false)}
+                            className="block px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
+                        >
+                            관리자 패널
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/mypage"
+                            onClick={() => setMobileUserMenuOpen(false)}
+                            className="block px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
+                        >
+                            마이페이지
+                        </Link>
+                    )}
+                    <button
+                        onClick={() => { handleLogout(); setMobileUserMenuOpen(false) }}
+                        className="w-full px-3 py-2 text-sm text-left text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
+                    >
+                        로그아웃
+                    </button>
+                </div>
+            </div>
+        )
 
         if (mobile) {
             return (
-                <div ref={userMenuRef} className="relative">
+                <div ref={userMenuRef} className="relative xl:hidden">
                     <button
                         onClick={() => setMobileUserMenuOpen(!mobileUserMenuOpen)}
-                        className="p-1 hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-neutral-100 transition-colors"
                         aria-label="사용자 메뉴"
                     >
                         <div className="relative">
-                            {avatarUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={avatarUrl}
-                                    alt={displayName}
-                                    referrerPolicy="no-referrer"
-                                    className="w-8 h-8 rounded-full object-cover"
-                                />
-                            ) : (
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700">
-                                    {initial}
-                                </div>
-                            )}
+                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700">
+                                {initial}
+                            </div>
                             {badge && (
                                 <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none ${badge.className}`}>
                                     {badge.label}
                                 </div>
                             )}
                         </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
                     </button>
-
-                    {mobileUserMenuOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-neutral-200 rounded-lg shadow-lg z-50">
-                            <div className="p-3 border-b border-neutral-100">
-                                <p className="text-sm font-semibold text-neutral-900 truncate">
-                                    {displayName}
-                                </p>
-                                {user.email && (
-                                    <p className="text-xs text-neutral-500 truncate mt-0.5">
-                                        {user.email}
-                                    </p>
-                                )}
-                            </div>
-                            <div className="p-2">
-                                <button
-                                    onClick={() => {
-                                        handleLogout()
-                                        setMobileUserMenuOpen(false)
-                                    }}
-                                    className="w-full px-3 py-2 text-sm text-left text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
-                                >
-                                    로그아웃
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                    {mobileUserMenuOpen && dropdownMenu}
                 </div>
             )
         }
 
         return (
-            <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
+            <div ref={userMenuRefDesktop} className="relative">
+                <button
+                    onClick={() => setMobileUserMenuOpen(!mobileUserMenuOpen)}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+                    aria-label="사용자 메뉴"
+                >
                     <div className="relative">
-                        {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={avatarUrl}
-                                alt={displayName}
-                                referrerPolicy="no-referrer"
-                                className="w-7 h-7 rounded-full object-cover"
-                            />
-                        ) : (
-                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
-                                {initial}
-                            </div>
-                        )}
+                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
+                            {initial}
+                        </div>
                         {badge && (
-                            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold leading-none ${badge.className}`}>
+                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-bold leading-none ${badge.className}`}>
                                 {badge.label}
                             </div>
                         )}
                     </div>
-                    <span className="hidden xl:inline text-sm font-medium text-neutral-700 max-w-[10ch] truncate">
-                        {displayName}
+                    <span className="hidden xl:inline text-sm font-medium text-neutral-700 max-w-[14ch] truncate">
+                        {name}
                     </span>
-                </div>
-                <button
-                    onClick={handleLogout}
-                    className="px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
-                >
-                    로그아웃
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`hidden xl:block w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
                 </button>
+                {mobileUserMenuOpen && dropdownMenu}
             </div>
         )
     }
@@ -248,7 +301,7 @@ export default function Header() {
                         <SearchBar />
                         <AuthButton />
                         <Link
-                            href="/admin"
+                            href={isAdmin ? '/admin' : '/admin/login'}
                             className="px-3 py-1.5 text-sm font-medium border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-50 transition-colors"
                         >
                             관리자
@@ -319,10 +372,10 @@ export default function Header() {
                 </>
             )}
         </header>
-        
+
         {/* 모바일 검색 오버레이 (헤더 밖에 위치) */}
         {mobileSearchOpen && (
-            <div 
+            <div
                 className="xl:hidden fixed inset-0 bg-black/50 z-30"
                 style={{ top: 'var(--header-height, 0)' }}
                 onClick={() => setMobileSearchOpen(false)}

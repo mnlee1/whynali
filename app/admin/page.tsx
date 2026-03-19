@@ -37,8 +37,6 @@ interface ApiCostsSummary {
     naver: {
         today: number
         monthly: number
-        cost: number
-        limit: number
     }
     groq: {
         today: number

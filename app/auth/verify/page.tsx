@@ -3,8 +3,9 @@
 /**
  * app/auth/verify/page.tsx
  *
- * 매직 링크(네이버 로그인 등) 복귀 시 URL 해시의 access_token·refresh_token으로 세션 설정.
- * Supabase가 redirectTo로 보낸 후 해시에 토큰이 붙어 있음.
+ * 네이버 매직 링크 복귀 시 세션 설정.
+ * - PKCE 플로우: ?code= 쿼리 파라미터로 exchangeCodeForSession
+ * - Implicit 플로우: URL 해시 #access_token, #refresh_token으로 setSession
  */
 
 import { useEffect, useState, Suspense } from 'react'
@@ -17,42 +18,75 @@ function AuthVerifyContent() {
 
     useEffect(() => {
         const next = searchParams.get('next') ?? '/'
-        const hash = typeof window !== 'undefined' ? window.location.hash : ''
-        if (!hash) {
-            setStatus('error')
-            return
-        }
 
-        const params = new URLSearchParams(hash.replace(/^#/, ''))
-        const accessToken = params.get('access_token')
-        const refreshToken = params.get('refresh_token')
+        async function handleAuth() {
+            let userId: string | null = null
 
-        if (!accessToken || !refreshToken) {
-            setStatus('error')
-            return
-        }
-
-        supabase.auth
-            .setSession({ access_token: accessToken, refresh_token: refreshToken })
-            .then(async (response: { data: { user: { id: string } | null } }) => {
-                const user = response.data?.user
-                if (user) {
-                    const { data: userData } = await supabase
-                        .from('users')
-                        .select('terms_agreed_at')
-                        .eq('id', user.id)
-                        .single()
-
-                    if (userData && !userData.terms_agreed_at) {
-                        setStatus('ok')
-                        window.location.replace('/onboarding')
-                        return
-                    }
+            // PKCE 플로우: ?code= 파라미터 처리
+            const code = searchParams.get('code')
+            if (code) {
+                const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+                if (error || !data.user) {
+                    setStatus('error')
+                    return
                 }
-                setStatus('ok')
-                window.location.replace(next)
-            })
-            .catch(() => setStatus('error'))
+                userId = data.user.id
+            } else {
+                // Implicit 플로우: URL 해시에서 토큰 추출
+                const hash = window.location.hash
+                if (!hash) {
+                    setStatus('error')
+                    return
+                }
+                const params = new URLSearchParams(hash.replace(/^#/, ''))
+                const accessToken = params.get('access_token')
+                const refreshToken = params.get('refresh_token')
+                if (!accessToken || !refreshToken) {
+                    setStatus('error')
+                    return
+                }
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                })
+                if (error || !data.user) {
+                    setStatus('error')
+                    return
+                }
+                userId = data.user.id
+            }
+
+            if (userId) {
+                // admin 클라이언트 경유 API로 온보딩 여부 확인 (RLS 우회, display_name 포함)
+                try {
+                    const res = await fetch('/api/auth/me')
+                    if (res.ok) {
+                        const data = await res.json()
+                        const needsOnboarding =
+                            !data.termsAgreedAt ||
+                            !data.displayName ||
+                            data.displayNameNeedsReset
+
+                        if (needsOnboarding) {
+                            // OAuth 실명이 display_name에 저장된 경우 초기화 후 온보딩으로
+                            if (data.displayNameNeedsReset) {
+                                await fetch('/api/auth/me', { method: 'PATCH' })
+                            }
+                            setStatus('ok')
+                            window.location.replace('/onboarding')
+                            return
+                        }
+                    }
+                } catch {
+                    // 조회 실패 시 next로 이동
+                }
+            }
+
+            setStatus('ok')
+            window.location.replace(next)
+        }
+
+        handleAuth()
     }, [searchParams])
 
     if (status === 'error') {

@@ -10,13 +10,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { generateUniqueNickname } from '@/lib/random-nickname'
 
 export async function POST(request: NextRequest) {
     try {
         const supabase = await createSupabaseServerClient()
-        
+        const adminClient = createSupabaseAdminClient()
+
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         
         if (authError || !user) {
@@ -36,7 +37,21 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const { count, error: checkError } = await supabase
+        if (nickname.length < 2 || nickname.length > 16) {
+            return NextResponse.json(
+                { error: '닉네임은 2~16자여야 합니다.' },
+                { status: 400 }
+            )
+        }
+
+        if (!/^[가-힣a-zA-Z0-9_]+$/.test(nickname)) {
+            return NextResponse.json(
+                { error: '닉네임은 한글, 영문, 숫자, _만 사용할 수 있습니다.' },
+                { status: 400 }
+            )
+        }
+
+        const { count, error: checkError } = await adminClient
             .from('users')
             .select('id', { count: 'exact', head: true })
             .eq('display_name', nickname)
@@ -50,14 +65,14 @@ export async function POST(request: NextRequest) {
         }
 
         if (count && count > 0) {
-            const newNickname = await generateUniqueNickname(supabase)
+            const newNickname = await generateUniqueNickname(adminClient)
             return NextResponse.json(
                 { error: '이미 사용 중인 닉네임입니다.', suggestion: newNickname },
                 { status: 409 }
             )
         }
 
-        const { error: updateError } = await supabase
+        const { error: updateError } = await adminClient
             .from('users')
             .update({
                 display_name: nickname,
