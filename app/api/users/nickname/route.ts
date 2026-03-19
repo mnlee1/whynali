@@ -10,10 +10,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 
 const NICKNAME_MIN_LENGTH = 2
-const NICKNAME_MAX_LENGTH = 10
+const NICKNAME_MAX_LENGTH = 16
 const NICKNAME_REGEX = /^[가-힣a-zA-Z0-9_]+$/
 
 export async function PATCH(request: NextRequest) {
@@ -53,7 +53,10 @@ export async function PATCH(request: NextRequest) {
             )
         }
 
-        const { data: existingUsers, error: checkError } = await supabase
+        // RLS 우회: admin client로 중복 확인 및 업데이트
+        const admin = createSupabaseAdminClient()
+
+        const { data: existingUsers, error: checkError } = await admin
             .from('users')
             .select('id')
             .eq('display_name', nickname)
@@ -75,7 +78,7 @@ export async function PATCH(request: NextRequest) {
             )
         }
 
-        const { error: updateError } = await supabase
+        const { error: updateError } = await admin
             .from('users')
             .update({ display_name: nickname })
             .eq('id', user.id)

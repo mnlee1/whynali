@@ -28,14 +28,19 @@ function toDisplayName(user: User): string | null {
 
 /**
  * 현재 Auth 사용자가 public.users에 있도록 보장.
- * upsert로 없으면 삽입, 있으면 갱신해 FK 위반을 막는다.
+ * 관리자(email provider / @nhnad.com)는 수동으로 row가 설정돼 있으므로 스킵.
+ * 일반 유저는 없으면 삽입, 있으면 갱신해 FK 위반을 막는다.
  */
 export async function ensurePublicUser(
     _supabase: SupabaseClient,
     admin: SupabaseClient,
     user: User
 ): Promise<void> {
-    const provider = toProvider(user.app_metadata?.provider ?? user.user_metadata?.provider)
+    // 관리자 계정(email provider)은 row를 수동 관리하므로 건너뜀
+    const rawProvider = user.app_metadata?.provider ?? user.user_metadata?.provider
+    if (rawProvider === 'email' || user.email?.toLowerCase().endsWith('@nhnad.com')) return
+
+    const provider = toProvider(rawProvider)
     const display_name = toDisplayName(user)
 
     const { error } = await admin
