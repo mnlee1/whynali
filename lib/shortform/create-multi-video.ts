@@ -61,6 +61,9 @@ export async function create3SceneVideo(
     const text1Path = join(tmpDir, 'text1.png')
     const text2Path = join(tmpDir, 'text2.png')
     const text3Path = join(tmpDir, 'text3.png')
+    const video1Path = join(tmpDir, 'video1.mp4')
+    const video2Path = join(tmpDir, 'video2.mp4')
+    const video3Path = join(tmpDir, 'video3.mp4')
     const outputPath = join(tmpDir, 'output.mp4')
     
     try {
@@ -78,9 +81,6 @@ export async function create3SceneVideo(
         const fps = 30
         
         // STEP 1: Scene별로 배경 + 텍스트 합성한 개별 비디오 생성
-        const video1Path = join(tmpDir, 'video1.mp4')
-        const video2Path = join(tmpDir, 'video2.mp4')
-        const video3Path = join(tmpDir, 'video3.mp4')
         
         console.log('[FFmpeg] Scene별 비디오 3개 생성 중 (배경+텍스트)...')
         
