@@ -29,7 +29,6 @@ import {
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
     AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
-import { createShortformJobInBackground } from '@/lib/shortform/background-trigger'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -223,15 +222,6 @@ export async function GET(request: NextRequest) {
                                     if (discussionCount > 0) {
                                         console.log(`[토론 마감 예약] 이슈 ${issue.id} 종결 → ${discussionCount}개 토론 7일 후 마감`)
                                     }
-                                }
-                                
-                                // 숏폼 job 생성 (상태 전환 시)
-                                if (process.env.SHORTFORM_ENABLED === 'true') {
-                                    createShortformJobInBackground(
-                                        issue.id,
-                                        'status_changed',
-                                        '[cron/recalculate-heat]'
-                                    ).catch(() => {})
                                 }
                                 
                                 result.statusChanged = (result.statusChanged ? result.statusChanged + ', ' : '')
