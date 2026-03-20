@@ -1,16 +1,17 @@
 /**
  * app/api/admin/shortform/[id]/generate/route.ts
  * 
- * [관리자 - 숏폼 이미지 생성 API]
+ * [관리자 - 숏폼 동영상 생성 API]
  * 
- * 승인된 숏폼 job의 이미지 카드를 생성하고 Supabase Storage에 업로드합니다.
+ * 승인된 숏폼 job의 3-Scene MP4 동영상을 생성하고 Supabase Storage에 업로드합니다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
-import { generateShortformImage, generateImageFilename } from '@/lib/shortform/generate-image'
+import { generate3SceneShortform } from '@/lib/shortform/generate-image'
+import { validateShortformImage } from '@/lib/shortform/ai-validate'
 import type { ShortformJob } from '@/types/shortform'
 
 type Params = { params: Promise<{ id: string }> }
@@ -24,10 +25,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     const { id } = await params
 
     try {
-        // 1. Job 조회
+        // 1. Job 조회 (issues 테이블의 category도 함께)
         const { data: job, error: selectError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('*')
+            .select('*, issues!inner(category)')
             .eq('id', id)
             .single()
 
@@ -38,30 +39,38 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        if (job.approval_status !== 'approved') {
+        if (job.approval_status === 'rejected') {
             return NextResponse.json(
-                { error: 'NOT_APPROVED', message: '승인된 job만 이미지를 생성할 수 있습니다' },
+                { error: 'REJECTED', message: '반려된 job은 동영상을 생성할 수 없습니다' },
                 { status: 422 }
             )
         }
 
         if (job.video_path) {
             return NextResponse.json(
-                { error: 'ALREADY_GENERATED', message: '이미 이미지가 생성되었습니다', path: job.video_path },
+                { error: 'ALREADY_GENERATED', message: '이미 동영상이 생성되었습니다', path: job.video_path },
                 { status: 409 }
             )
         }
 
-        // 2. 이미지 생성
-        const imageBuffer = await generateShortformImage(job as ShortformJob)
-        const filename = generateImageFilename(job.id)
+        // 2. MP4 동영상 생성 (3-Scene)
+        const videoBuffer = await generate3SceneShortform({
+            issueTitle: job.issue_title,
+            issueCategory: (job.issues as any)?.category ?? '사회',
+            issueStatus: job.issue_status,
+            heatGrade: job.heat_grade,
+            newsCount: job.source_count?.news ?? 0,
+            communityCount: job.source_count?.community ?? 0,
+            issueUrl: job.issue_url,
+        })
+        const filename = `shortform-${job.id}-${Date.now()}.mp4`
 
         // 3. Supabase Storage에 업로드
         const { data: uploadData, error: uploadError } = await supabaseAdmin
             .storage
             .from('shortform')
-            .upload(filename, imageBuffer, {
-                contentType: 'image/png',
+            .upload(filename, videoBuffer, {
+                contentType: 'video/mp4',
                 upsert: false,
             })
 
@@ -73,11 +82,34 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        // 4. Job의 video_path 업데이트 (실제로는 이미지지만 필드명 유지)
+        // 4. 공개 URL 생성
         const storagePath = uploadData.path
+        const { data: urlData } = supabaseAdmin
+            .storage
+            .from('shortform')
+            .getPublicUrl(storagePath)
+
+        // 5. AI 자동 검증 실행
+        let aiValidation = null
+        try {
+            if (process.env.GEMINI_API_KEY) {
+                aiValidation = await validateShortformImage(urlData.publicUrl, job.issue_title)
+                console.log('[AI 검증 완료]', aiValidation)
+            } else {
+                console.warn('[AI 검증 스킵] GEMINI_API_KEY 없음')
+            }
+        } catch (aiError) {
+            console.error('[AI 검증 실패]', aiError)
+            // AI 검증 실패해도 동영상 생성은 완료 (검증은 보조 기능)
+        }
+
+        // 6. Job의 video_path + ai_validation 업데이트
         const { error: updateError } = await supabaseAdmin
             .from('shortform_jobs')
-            .update({ video_path: storagePath })
+            .update({ 
+                video_path: storagePath,
+                ai_validation: aiValidation,
+            })
             .eq('id', id)
 
         if (updateError) {
@@ -89,18 +121,13 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        // 5. 공개 URL 생성
-        const { data: urlData } = supabaseAdmin
-            .storage
-            .from('shortform')
-            .getPublicUrl(storagePath)
-
         await writeAdminLog(
-            '숏폼 이미지 생성',
+            '숏폼 동영상 생성',
             'shortform_job',
             id,
             auth.adminEmail,
-            `이슈: "${job.issue_title}" → ${filename}`
+            `이슈: "${job.issue_title}" → ${filename}` + 
+            (aiValidation ? ` (AI: ${aiValidation.status})` : '')
         )
 
         return NextResponse.json({
@@ -108,10 +135,11 @@ export async function POST(request: NextRequest, { params }: Params) {
             path: storagePath,
             publicUrl: urlData.publicUrl,
             filename,
+            aiValidation,
         })
     } catch (error) {
-        console.error('숏폼 이미지 생성 에러:', error)
-        const message = error instanceof Error ? error.message : '이미지 생성 실패'
+        console.error('숏폼 동영상 생성 에러:', error)
+        const message = error instanceof Error ? error.message : '동영상 생성 실패'
         return NextResponse.json(
             { error: 'GENERATE_ERROR', message },
             { status: 500 }

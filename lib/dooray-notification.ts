@@ -7,6 +7,7 @@
  * 1. sendDoorayUrgentAlert      — 연예/정치 + 화력 30 이상 이슈 즉시 알림
  * 2. sendDoorayBatchGenerationAlert — 토론/투표 배치 자동생성 완료 알림 (매일 12시)
  * 3. sendDoorayReportAlert      — 댓글 신고 임계치 도달 알림
+ * 4. sendDoorayShortformBatchAlert — 숏폼 배치 자동생성 완료 알림 (매일 12시)
  */
 
 interface DoorayAttachment {
@@ -302,6 +303,60 @@ export async function sendDoorayDailyReportSummary(summary: DailyReportSummary):
         return true
     } catch (error) {
         console.error('[Dooray] ❌ 신고 배치 알림 전송 실패:', error)
+        return false
+    }
+}
+
+interface ShortformBatchResult {
+    jobsGenerated: number
+    issueCount: number
+}
+
+/**
+ * 숏폼 배치 자동생성 완료 알림 — 매일 12시 cron 완료 후 1회 전송
+ */
+export async function sendDoorayShortformBatchAlert(result: ShortformBatchResult): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (result.jobsGenerated === 0) {
+        console.log('[Dooray] 생성된 숏폼 job이 없어 알림을 건너뜁니다.')
+        return false
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+
+    try {
+        const message: DoorayMessage = {
+            botName: '왜난리 알림봇',
+            text: `🎬 **숏폼 자동생성 완료 — 승인 처리 필요**\n${result.issueCount}개 이슈에 대해 ${result.jobsGenerated}개 숏폼 job이 생성되었습니다.`,
+            attachments: [
+                {
+                    title: `숏폼 job ${result.jobsGenerated}건 생성됨`,
+                    text: `승인 대기 중 → ${siteUrl}/admin/shortform`,
+                    color: 'yellow',
+                },
+            ],
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log('[Dooray] ✅ 숏폼 배치 생성 알림 전송 완료')
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 숏폼 배치 생성 알림 전송 실패:', error)
         return false
     }
 }

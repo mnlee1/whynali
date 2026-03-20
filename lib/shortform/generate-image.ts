@@ -4,11 +4,20 @@
  * 숏폼 이미지 카드 생성 (9:16 세로형)
  * 
  * Sharp 라이브러리를 사용하여 SVG 템플릿을 1080×1920px PNG로 렌더링합니다.
+ * Gemini가 생성한 텍스트를 통합하여 매력적인 카드를 제작합니다.
  * 본문 요약은 사용하지 않으며, 이슈 메타데이터만 사용합니다.
+ * 
+ * 3-Scene 모드: 스톡 이미지 배경 + 3단계 슬라이드쇼
  */
 
 import sharp from 'sharp'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import type { ShortformJob } from '@/types/shortform'
+import { generateShortformText, type ShortformTextInput } from './generate-text'
+import { fetch3StockImages } from './fetch-stock-images'
+import { createScene1, createScene2, createScene3 } from './generate-scenes'
+import { create3SceneVideo } from './create-multi-video'
 
 const WIDTH = 1080
 const HEIGHT = 1920
@@ -66,79 +75,121 @@ function wrapText(text: string, maxLength: number): string[] {
 }
 
 /**
- * SVG 템플릿 생성
+ * 로고 이미지를 Base64로 인코딩
  */
-function generateSvgTemplate(job: ShortformJob): string {
+function getLogoBase64(): string {
+    try {
+        const logoPath = join(process.cwd(), 'public', 'whynali-logo.png')
+        const logoBuffer = readFileSync(logoPath)
+        return `data:image/png;base64,${logoBuffer.toString('base64')}`
+    } catch (error) {
+        console.error('[로고 로드 실패]', error)
+        return ''
+    }
+}
+
+/**
+ * SVG 템플릿 생성 (레거시)
+ * @deprecated generate3SceneShortform 사용 권장
+ */
+function generateSvgTemplate(
+    job: ShortformJob,
+    generatedText: { scene1: string; scene2: string; scene3: string }
+): string {
     const heatColor = HEAT_COLORS[job.heat_grade as keyof typeof HEAT_COLORS]
     const statusColor = STATUS_COLORS[job.issue_status as keyof typeof STATUS_COLORS]
     
     const title = escapeXml(job.issue_title)
     const titleLines = wrapText(title, 20)
     
-    // QR 코드는 나중에 추가할 수 있으므로 일단 텍스트 링크로
     const shortUrl = job.issue_url.replace('https://', '')
+    const logoBase64 = getLogoBase64()
 
     return `
-        <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-            <!-- 배경 -->
+        <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
             <rect width="${WIDTH}" height="${HEIGHT}" fill="#FFFFFF"/>
-            
-            <!-- 상단 헤더 -->
-            <rect x="0" y="0" width="${WIDTH}" height="200" fill="#1F2937"/>
-            <text x="${WIDTH / 2}" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="60" font-weight="bold" fill="#FFFFFF">
-                왜난리
-            </text>
-            <text x="${WIDTH / 2}" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#9CA3AF">
-                지금 이슈는?
-            </text>
-            
-            <!-- 이슈 제목 -->
+            <rect x="0" y="0" width="${WIDTH}" height="160" fill="#1F2937"/>
+            ${logoBase64 ? `<image href="${logoBase64}" x="${WIDTH / 2 - 120}" y="30" width="240" height="100" preserveAspectRatio="xMidYMid meet"/>` : ''}
             ${titleLines.map((line, i) => `
-                <text x="${WIDTH / 2}" y="${400 + i * 100}" text-anchor="middle" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#111827">
+                <text x="${WIDTH / 2}" y="${360 + i * 100}" text-anchor="middle" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#111827">
                     ${escapeXml(line)}
                 </text>
             `).join('')}
-            
-            <!-- 상태 배지 -->
             <rect x="${WIDTH / 2 - 150}" y="800" width="300" height="80" rx="40" fill="${statusColor.bg}"/>
             <text x="${WIDTH / 2}" y="855" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="${statusColor.text}">
                 ${escapeXml(job.issue_status)}
             </text>
-            
-            <!-- 화력 배지 -->
             <rect x="${WIDTH / 2 - 180}" y="920" width="360" height="80" rx="40" fill="${heatColor.bg}"/>
             <text x="${WIDTH / 2}" y="975" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="${heatColor.text}">
                 🔥 화력 ${escapeXml(job.heat_grade)}
             </text>
-            
-            <!-- 출처 정보 -->
-            <text x="${WIDTH / 2}" y="1080" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="#6B7280">
+            <text x="${WIDTH / 2}" y="1080" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#374151">
+                ${escapeXml(generatedText.scene2)}
+            </text>
+            <text x="${WIDTH / 2}" y="1140" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#6B7280">
                 뉴스 ${job.source_count.news}건 • 커뮤니티 ${job.source_count.community}건
             </text>
-            
-            <!-- 하단 CTA -->
             <rect x="0" y="1600" width="${WIDTH}" height="320" fill="#EFF6FF"/>
-            <text x="${WIDTH / 2}" y="1720" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#1E40AF">
-                자세히 보기
+            <rect x="${WIDTH / 2 - 300}" y="1680" width="600" height="110" rx="55" fill="#1E40AF"/>
+            <text x="${WIDTH / 2}" y="1755" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="bold" fill="#FFFFFF">
+                지금 바로 확인하기
             </text>
-            <text x="${WIDTH / 2}" y="1800" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#3B82F6">
+            <text x="${WIDTH / 2}" y="1850" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#6B7280">
+                왜난리에서 실시간 여론·토론·타임라인 확인
+            </text>
+            <text x="${WIDTH / 2}" y="1895" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#93C5FD">
                 ${escapeXml(shortUrl)}
-            </text>
-            <text x="${WIDTH / 2}" y="1870" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#6B7280">
-                왜난리에서 실시간 업데이트 확인
             </text>
         </svg>
     `.trim()
 }
 
+export interface GenerateImageInput {
+    issueTitle: string
+    issueCategory: string
+    issueStatus: string
+    heatGrade: string
+    newsCount: number
+    communityCount: number
+    issueUrl: string
+}
+
 /**
  * 숏폼 이미지 카드 생성
  * 
- * @param job - 숏폼 job 정보
+ * @param job - 숏폼 job 정보 (전체) 또는 간소화된 입력
  * @returns PNG 이미지 버퍼
  */
-export async function generateShortformImage(job: ShortformJob): Promise<Buffer> {
-    const svg = generateSvgTemplate(job)
+export async function generateShortformImage(job: ShortformJob | GenerateImageInput): Promise<Buffer> {
+    const jobData: ShortformJob = 'issue_id' in job ? job : {
+        id: '',
+        issue_id: '',
+        issue_title: job.issueTitle,
+        issue_status: job.issueStatus,
+        heat_grade: job.heatGrade as any,
+        source_count: { news: job.newsCount, community: job.communityCount },
+        issue_url: job.issueUrl,
+        video_path: null,
+        approval_status: 'pending',
+        upload_status: null,
+        ai_validation: null,
+        trigger_type: 'daily_batch',
+        created_at: '',
+        updated_at: '',
+    }
+    
+    const category = 'issue_id' in job ? '' : job.issueCategory
+    
+    const generatedText = await generateShortformText({
+        title: jobData.issue_title,
+        category: category,
+        status: jobData.issue_status,
+        heatGrade: jobData.heat_grade,
+        newsCount: jobData.source_count.news,
+        communityCount: jobData.source_count.community,
+    })
+    
+    const svg = generateSvgTemplate(jobData, generatedText)
     const svgBuffer = Buffer.from(svg)
     
     const image = await sharp(svgBuffer)
@@ -155,4 +206,57 @@ export async function generateShortformImage(job: ShortformJob): Promise<Buffer>
 export function generateImageFilename(jobId: string): string {
     const timestamp = Date.now()
     return `shortform-${jobId}-${timestamp}.png`
+}
+
+/**
+ * 3-Scene 슬라이드쇼 동영상 생성
+ * 
+ * @param input - 이슈 정보
+ * @param duration - 총 길이 (초, 기본값 10)
+ * @returns MP4 Buffer
+ */
+export async function generate3SceneShortform(
+    input: GenerateImageInput,
+    duration: number = 10
+): Promise<Buffer> {
+    // 1. Groq Scene별 자막 생성 (이슈 제목 기반)
+    const generatedText = await generateShortformText({
+        title: input.issueTitle,
+        category: input.issueCategory,
+        status: input.issueStatus,
+        heatGrade: input.heatGrade,
+        newsCount: input.newsCount,
+        communityCount: input.communityCount,
+    })
+    
+    console.log('[생성된 Scene 자막]', generatedText)
+    
+    // 2. 스톡 이미지 3장 가져오기
+    const stockImages = await fetch3StockImages(input.issueCategory)
+    
+    // Fallback: API 실패 시 단색 배경 사용
+    if (stockImages.length === 0) {
+        console.warn('[3-Scene] 스톡 이미지 없음 - 기존 방식 사용')
+        return await generateShortformImage(input)
+    }
+    
+    // 3. 배경 이미지 3개 생성 (텍스트 없이)
+    const { createBackgroundScene, createSceneTextOverlay } = await import('./generate-scenes')
+    const scene1Bg = await createBackgroundScene(stockImages[0])
+    const scene2Bg = await createBackgroundScene(stockImages[1])
+    const scene3Bg = await createBackgroundScene(stockImages[2])
+    
+    // 4. Scene별 텍스트 오버레이 생성 (투명 배경)
+    const text1 = await createSceneTextOverlay(generatedText.scene1, 1, input.issueUrl)
+    const text2 = await createSceneTextOverlay(generatedText.scene2, 2, input.issueUrl)
+    const text3 = await createSceneTextOverlay(generatedText.scene3, 3, input.issueUrl)
+    
+    // 5. 동영상 합성 (Scene별 배경 + 텍스트 페이드 전환)
+    const videoBuffer = await create3SceneVideo(
+        [scene1Bg, scene2Bg, scene3Bg],
+        [text1, text2, text3],
+        duration
+    )
+    
+    return videoBuffer
 }
