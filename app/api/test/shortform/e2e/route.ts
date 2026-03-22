@@ -6,7 +6,7 @@
  * job 생성 → 승인 → MP4 생성 → 결과 검증
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { createShortformJob } from '@/lib/shortform/create-job'
 import { generate3SceneShortform } from '@/lib/shortform/generate-image'
