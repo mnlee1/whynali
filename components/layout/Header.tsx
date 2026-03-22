@@ -161,12 +161,10 @@ export default function Header() {
             )
         }
 
-        // 버튼 영역: 관리자는 이메일 앞부분, 일반 유저는 닉네임
-        const name = isAdmin
-            ? (user.email?.split('@')[0] ?? '운영자')
-            : (displayName || '유저')
-        // 드롭다운 상단: 관리자는 운영자A/B/C, 일반 유저는 닉네임
-        const dropdownName = isAdmin ? (displayName || name) : name
+        // 버튼 영역: displayName(닉네임) 우선, 없으면 관리자는 이메일 앞부분, 일반 유저는 "유저"
+        const name = displayName || (isAdmin ? (user.email?.split('@')[0] ?? '운영자') : '유저')
+        // 드롭다운 상단: 버튼과 동일하게 표시
+        const dropdownName = name
         // 아바타 이니셜·뱃지는 dropdownName 기준 (운영자A → '운')
         const initial = dropdownName.charAt(0).toUpperCase()
         const badge = isAdmin

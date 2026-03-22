@@ -383,8 +383,222 @@ export async function collectNatePann(): Promise<CollectResult> {
     }
 }
 
-/** 더쿠 + 네이트판 통합 수집 (3분 Cron용) */
-export async function collectAllCommunity(): Promise<{ theqoo: CollectResult; natePann: CollectResult }> {
-    const [theqoo, natePann] = await Promise.all([collectTheqoo(), collectNatePann()])
-    return { theqoo, natePann }
+/** 클리앙(clien.net) 사랑방 메타데이터 수집 */
+export async function collectClien(): Promise<CollectResult> {
+    const baseUrl = 'https://www.clien.net'
+    const listUrl = `${baseUrl}/service/board/park`
+
+    try {
+        const html = await fetchHtml(listUrl)
+        const $ = cheerio.load(html)
+        const posts: CommunityPostRow[] = []
+        const now = new Date().toISOString()
+
+        $('.list_row.symph_row').each((_, el) => {
+            const $el = $(el)
+            const titleEl = $el.find('.subject_fixed .list_subject').first()
+            const title = titleEl.text().trim()
+            const href = $el.find('.subject_fixed a').first().attr('href')
+            if (!title || !href) return
+
+            const url = href.startsWith('http') ? href : `${baseUrl}${href}`
+            const viewText = $el.find('.hit').text().replace(/[^0-9]/g, '')
+            const view_count = parseInt(viewText, 10) || 0
+            const replyText = $el.find('.reply_num').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(replyText, 10) || 0
+            const timeText = $el.find('.timestamp').attr('title') || $el.find('.timestamp').text().trim()
+            const written_at = timeText ? new Date(timeText).toISOString() : now
+
+            posts.push({ title, url, view_count, comment_count, written_at, source_site: '클리앙', updated_at: now })
+        })
+
+        const warning = posts.length < COMMUNITY_MIN_EXPECTED_POSTS
+            ? `클리앙 수집 이상: ${posts.length}건 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성.`
+            : undefined
+        if (warning) console.error('[스크래핑 경고]', warning)
+        if (posts.length === 0) return { count: 0, skipped: 0, warning }
+
+        const { error, data: upserted } = await supabaseAdmin
+            .from('community_data')
+            .upsert(posts, { onConflict: 'url' })
+            .select('id')
+        if (error) throw error
+
+        return { count: upserted?.length ?? 0, skipped: posts.length - (upserted?.length ?? 0), warning }
+    } catch (error) {
+        console.error('클리앙 수집 에러:', error)
+        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
+    }
+}
+
+/** 보배드림(bobaedream.co.kr) 자유게시판 메타데이터 수집 */
+export async function collectBobaedream(): Promise<CollectResult> {
+    const baseUrl = 'https://www.bobaedream.co.kr'
+    const listUrl = `${baseUrl}/list?code=freeboard`
+
+    try {
+        const html = await fetchHtml(listUrl)
+        const $ = cheerio.load(html)
+        const posts: CommunityPostRow[] = []
+        const now = new Date().toISOString()
+
+        $('ul.basicList li').each((_, el) => {
+            const $el = $(el)
+            if ($el.hasClass('notice')) return
+
+            const titleEl = $el.find('a.bsubject').first()
+            const title = titleEl.text().trim()
+            const href = titleEl.attr('href')
+            if (!title || !href) return
+
+            const url = href.startsWith('http') ? href : `${baseUrl}${href}`
+            const viewText = $el.find('.hit span').last().text().replace(/[^0-9]/g, '')
+            const view_count = parseInt(viewText, 10) || 0
+            const replyText = $el.find('.replyNum').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(replyText, 10) || 0
+            const timeText = $el.find('.date').text().trim()
+            const written_at = timeText ? new Date(timeText).toISOString() : now
+
+            posts.push({ title, url, view_count, comment_count, written_at, source_site: '보배드림', updated_at: now })
+        })
+
+        const warning = posts.length < COMMUNITY_MIN_EXPECTED_POSTS
+            ? `보배드림 수집 이상: ${posts.length}건 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성.`
+            : undefined
+        if (warning) console.error('[스크래핑 경고]', warning)
+        if (posts.length === 0) return { count: 0, skipped: 0, warning }
+
+        const { error, data: upserted } = await supabaseAdmin
+            .from('community_data')
+            .upsert(posts, { onConflict: 'url' })
+            .select('id')
+        if (error) throw error
+
+        return { count: upserted?.length ?? 0, skipped: posts.length - (upserted?.length ?? 0), warning }
+    } catch (error) {
+        console.error('보배드림 수집 에러:', error)
+        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
+    }
+}
+
+/** 루리웹(ruliweb.com) 이슈&토론 게시판 메타데이터 수집 */
+export async function collectRuliweb(): Promise<CollectResult> {
+    const baseUrl = 'https://bbs.ruliweb.com'
+    const listUrl = `${baseUrl}/community/board/300143`
+
+    try {
+        const html = await fetchHtml(listUrl)
+        const $ = cheerio.load(html)
+        const posts: CommunityPostRow[] = []
+        const now = new Date().toISOString()
+
+        $('tr.table_body').each((_, el) => {
+            const $el = $(el)
+            if ($el.hasClass('notice')) return
+
+            const titleEl = $el.find('td.subject a.deco').first()
+            const title = titleEl.text().trim()
+            const href = titleEl.attr('href')
+            if (!title || !href) return
+
+            const url = href.startsWith('http') ? href : `${baseUrl}${href}`
+            const viewText = $el.find('td.hit').text().replace(/[^0-9]/g, '')
+            const view_count = parseInt(viewText, 10) || 0
+            const replyText = $el.find('td.replynum').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(replyText, 10) || 0
+            const timeText = $el.find('td.time').text().trim()
+            const written_at = timeText ? new Date(timeText).toISOString() : now
+
+            posts.push({ title, url, view_count, comment_count, written_at, source_site: '루리웹', updated_at: now })
+        })
+
+        const warning = posts.length < COMMUNITY_MIN_EXPECTED_POSTS
+            ? `루리웹 수집 이상: ${posts.length}건 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성.`
+            : undefined
+        if (warning) console.error('[스크래핑 경고]', warning)
+        if (posts.length === 0) return { count: 0, skipped: 0, warning }
+
+        const { error, data: upserted } = await supabaseAdmin
+            .from('community_data')
+            .upsert(posts, { onConflict: 'url' })
+            .select('id')
+        if (error) throw error
+
+        return { count: upserted?.length ?? 0, skipped: posts.length - (upserted?.length ?? 0), warning }
+    } catch (error) {
+        console.error('루리웹 수집 에러:', error)
+        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
+    }
+}
+
+/** 뽐뿌(ppomppu.co.kr) 자유게시판 메타데이터 수집 */
+export async function collectPpomppu(): Promise<CollectResult> {
+    const baseUrl = 'https://www.ppomppu.co.kr'
+    const listUrl = `${baseUrl}/zboard/zboard.php?id=freeboard`
+
+    try {
+        const html = await fetchHtml(listUrl)
+        const $ = cheerio.load(html)
+        const posts: CommunityPostRow[] = []
+        const now = new Date().toISOString()
+
+        $('tr').each((_, el) => {
+            const $el = $(el)
+            const id = $el.attr('id') || ''
+            if (!id.startsWith('tr_')) return
+
+            const titleEl = $el.find('td.list_title a, td a.baseList-title').first()
+            const title = titleEl.text().trim()
+            const href = titleEl.attr('href')
+            if (!title || !href) return
+
+            const url = href.startsWith('http') ? href : `${baseUrl}/zboard/${href}`
+            const tds = $el.find('td')
+            const viewText = tds.eq(5).text().replace(/[^0-9]/g, '')
+            const view_count = parseInt(viewText, 10) || 0
+            const replyText = tds.eq(3).find('b').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(replyText, 10) || 0
+            const timeText = tds.eq(6).text().trim()
+            const written_at = timeText ? new Date(timeText).toISOString() : now
+
+            posts.push({ title, url, view_count, comment_count, written_at, source_site: '뽐뿌', updated_at: now })
+        })
+
+        const warning = posts.length < COMMUNITY_MIN_EXPECTED_POSTS
+            ? `뽐뿌 수집 이상: ${posts.length}건 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성.`
+            : undefined
+        if (warning) console.error('[스크래핑 경고]', warning)
+        if (posts.length === 0) return { count: 0, skipped: 0, warning }
+
+        const { error, data: upserted } = await supabaseAdmin
+            .from('community_data')
+            .upsert(posts, { onConflict: 'url' })
+            .select('id')
+        if (error) throw error
+
+        return { count: upserted?.length ?? 0, skipped: posts.length - (upserted?.length ?? 0), warning }
+    } catch (error) {
+        console.error('뽐뿌 수집 에러:', error)
+        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
+    }
+}
+
+/** 전체 커뮤니티 통합 수집 (1분 Cron용) */
+export async function collectAllCommunity(): Promise<{
+    theqoo: CollectResult
+    natePann: CollectResult
+    clien: CollectResult
+    bobaedream: CollectResult
+    ruliweb: CollectResult
+    ppomppu: CollectResult
+}> {
+    const [theqoo, natePann, clien, bobaedream, ruliweb, ppomppu] = await Promise.all([
+        collectTheqoo(),
+        collectNatePann(),
+        collectClien(),
+        collectBobaedream(),
+        collectRuliweb(),
+        collectPpomppu(),
+    ])
+    return { theqoo, natePann, clien, bobaedream, ruliweb, ppomppu }
 }
