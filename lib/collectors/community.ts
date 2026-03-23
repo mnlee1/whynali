@@ -406,19 +406,19 @@ export async function collectClien(): Promise<CollectResult> {
         const posts: CommunityPostRow[] = []
         const now = new Date().toISOString()
 
-        $('.list_row').each((_, el) => {
+        $('div.list_item.symph_row').each((_, el) => {
             const $el = $(el)
-            const titleEl = $el.find('.list_subject, .subject_fixed .list_subject').first()
-            const title = titleEl.text().trim()
-            const href = $el.find('.list_subject a, .subject_fixed a').first().attr('href')
+            const linkEl = $el.find('a.list_subject').first()
+            const title = $el.find('.subject_fixed').first().attr('title')?.trim()
+                       || linkEl.text().trim()
+            const href = linkEl.attr('href')
             if (!title || !href) return
 
             const url = href.startsWith('http') ? href : `${baseUrl}${href}`
-            const viewText = $el.find('.hit').text().replace(/[^0-9]/g, '')
+            const viewText = $el.find('.list_hit .hit').text().replace(/[^0-9]/g, '')
             const view_count = parseInt(viewText, 10) || 0
-            const replyText = $el.find('.reply_num').text().replace(/[^0-9]/g, '')
-            const comment_count = parseInt(replyText, 10) || 0
-            const timeText = $el.find('.timestamp').attr('title') || $el.find('.timestamp').text().trim()
+            const comment_count = parseInt($el.attr('data-comment-count') ?? '0', 10) || 0
+            const timeText = $el.find('.timestamp').text().trim()
             const written_at = timeText ? new Date(timeText).toISOString() : now
 
             posts.push({ title, url, view_count, comment_count, written_at, source_site: '클리앙', updated_at: now })

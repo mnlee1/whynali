@@ -37,10 +37,14 @@ jobs:
           HTML=$(curl -s \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             "https://www.bobaedream.co.kr/list?code=freeboard")
-          echo "=== basicList / bsubject 포함 줄 ==="
-          echo "$HTML" | grep -n "basicList\|bsubject\|replyNum\|\.hit\|\.date" | head -60
-          echo "=== 게시글 목록 영역 ==="
-          echo "$HTML" | sed -n '/basicList/,+100p' | head -150
+          TOTAL=$(echo "$HTML" | wc -l)
+          echo "=== 전체 줄 수: $TOTAL ==="
+          echo "=== class/id 포함 패턴 탐색 ==="
+          echo "$HTML" | grep -n 'class=\|id=' | grep -i "list\|post\|item\|row\|board\|subject\|title\|view\|reply\|comment\|date\|time" | head -80
+          echo ""
+          echo "=== HTML 중반부 100줄 ==="
+          MID=$((TOTAL / 2))
+          echo "$HTML" | sed -n "${MID},$((MID+100))p"
 
       - name: 뽐뿌 HTML 출력
         if: github.event.inputs.site == 'ppomppu'
