@@ -1,0 +1,38 @@
+name: Debug - 커뮤니티 HTML 구조 확인
+
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: '확인할 사이트'
+        required: true
+        type: choice
+        options:
+          - clien
+          - bobaedream
+          - ppomppu
+
+jobs:
+  debug-html:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 클리앙 HTML 출력
+        if: github.event.inputs.site == 'clien'
+        run: |
+          curl -s \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "https://www.clien.net/service/group/board_all" | head -300
+
+      - name: 보배드림 HTML 출력
+        if: github.event.inputs.site == 'bobaedream'
+        run: |
+          curl -s \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "https://www.bobaedream.co.kr/list?code=freeboard" | head -300
+
+      - name: 뽐뿌 HTML 출력
+        if: github.event.inputs.site == 'ppomppu'
+        run: |
+          curl -s \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard" | head -300

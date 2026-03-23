@@ -53,6 +53,7 @@ interface MypageClientProps {
     displayName: string
     joinedAt: string
     marketingAgreed: boolean
+    isAdmin?: boolean
     comments: CommentRow[]
     discussions: DiscussionRow[]
     votes: VoteRow[]
@@ -79,6 +80,7 @@ export default function MypageClient({
     displayName,
     joinedAt,
     marketingAgreed: initialMarketing,
+    isAdmin = false,
     comments,
     discussions,
     votes,
@@ -136,7 +138,9 @@ export default function MypageClient({
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     )
 
-    const providerInfo = PROVIDER_LABEL[provider] ?? { text: provider, badge: '?', badgeClass: 'bg-gray-200 text-gray-600' }
+    const providerInfo = isAdmin
+        ? { text: '관리자', badge: '운', badgeClass: 'bg-red-500 text-white' }
+        : PROVIDER_LABEL[provider] ?? { text: provider, badge: '?', badgeClass: 'bg-gray-200 text-gray-600' }
     const initial = nickname.charAt(0).toUpperCase()
 
     const handleGenerateNickname = async () => {
@@ -282,46 +286,60 @@ export default function MypageClient({
                     {/* 닉네임 변경 */}
                     <section className="p-5 border border-gray-200 rounded-xl">
                         <h2 className="text-sm font-semibold text-gray-700 mb-3">닉네임 변경</h2>
-                        <div className="flex gap-2 mb-2">
-                            <input
-                                type="text"
-                                value={nicknameInput}
-                                onChange={(e) => {
-                                    setNicknameInput(e.target.value)
-                                    setNicknameError(null)
-                                    setNicknameSuccess(false)
-                                    setIsDuplicate(null)
-                                }}
-                                maxLength={16}
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="닉네임 입력"
-                            />
-                            <button
-                                onClick={handleGenerateNickname}
-                                disabled={isGenerating}
-                                className="px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                            >
-                                {isGenerating ? '생성 중...' : '랜덤 생성'}
-                            </button>
-                            <button
-                                onClick={handleSaveNickname}
-                                disabled={isSavingNickname || nicknameInput === nickname || !nicknameInputValid || isDuplicate === true || isCheckingDuplicate}
-                                className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {isSavingNickname ? '저장 중...' : '저장'}
-                            </button>
-                        </div>
-                        <p className="text-xs text-gray-400">한글·영문·숫자·_ 사용 가능, 2~16자</p>
-                        {nicknameError && <p className="mt-1.5 text-xs text-red-600">{nicknameError}</p>}
-                        {nicknameSuccess && <p className="mt-1.5 text-xs text-green-600">닉네임이 변경되었습니다.</p>}
-                        {!nicknameError && !nicknameSuccess && nicknameInput !== nickname && nicknameInputValid && (
-                            isCheckingDuplicate ? (
-                                <p className="mt-1.5 text-xs text-gray-400">중복 확인 중...</p>
-                            ) : isDuplicate === true ? (
-                                <p className="mt-1.5 text-xs text-red-600">이미 사용 중인 닉네임입니다.</p>
-                            ) : isDuplicate === false ? (
-                                <p className="mt-1.5 text-xs text-green-600">사용 가능한 닉네임입니다.</p>
-                            ) : null
+                        {isAdmin ? (
+                            <div>
+                                <input
+                                    type="text"
+                                    value={nicknameInput}
+                                    disabled
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                                />
+                                <p className="mt-2 text-xs text-gray-400">관리자 계정은 닉네임을 변경할 수 없습니다.</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex gap-2 mb-2">
+                                    <input
+                                        type="text"
+                                        value={nicknameInput}
+                                        onChange={(e) => {
+                                            setNicknameInput(e.target.value)
+                                            setNicknameError(null)
+                                            setNicknameSuccess(false)
+                                            setIsDuplicate(null)
+                                        }}
+                                        maxLength={16}
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="닉네임 입력"
+                                    />
+                                    <button
+                                        onClick={handleGenerateNickname}
+                                        disabled={isGenerating}
+                                        className="px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                    >
+                                        {isGenerating ? '생성 중...' : '랜덤 생성'}
+                                    </button>
+                                    <button
+                                        onClick={handleSaveNickname}
+                                        disabled={isSavingNickname || nicknameInput === nickname || !nicknameInputValid || isDuplicate === true || isCheckingDuplicate}
+                                        className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {isSavingNickname ? '저장 중...' : '저장'}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-400">한글·영문·숫자·_ 사용 가능, 2~16자</p>
+                                {nicknameError && <p className="mt-1.5 text-xs text-red-600">{nicknameError}</p>}
+                                {nicknameSuccess && <p className="mt-1.5 text-xs text-green-600">닉네임이 변경되었습니다.</p>}
+                                {!nicknameError && !nicknameSuccess && nicknameInput !== nickname && nicknameInputValid && (
+                                    isCheckingDuplicate ? (
+                                        <p className="mt-1.5 text-xs text-gray-400">중복 확인 중...</p>
+                                    ) : isDuplicate === true ? (
+                                        <p className="mt-1.5 text-xs text-red-600">이미 사용 중인 닉네임입니다.</p>
+                                    ) : isDuplicate === false ? (
+                                        <p className="mt-1.5 text-xs text-green-600">사용 가능한 닉네임입니다.</p>
+                                    ) : null
+                                )}
+                            </>
                         )}
                     </section>
 
