@@ -24,7 +24,9 @@ export default async function MypagePage() {
         .eq('id', user.id)
         .single()
 
-    if (!userData?.display_name) redirect('/onboarding')
+    const isAdmin = (user.email ?? '').endsWith('@nhnad.com')
+
+    if (!userData?.display_name && !isAdmin) redirect('/onboarding')
 
     const [commentsRes, discussionsRes, votesRes] = await Promise.all([
         // 이슈 댓글
@@ -61,11 +63,12 @@ export default async function MypagePage() {
     return (
         <MypageClient
             userId={user.id}
-            provider={userData.provider ?? ''}
+            provider={userData?.provider ?? ''}
             email={displayEmail}
-            displayName={userData.display_name}
-            joinedAt={userData.created_at}
-            marketingAgreed={userData.marketing_agreed ?? false}
+            displayName={userData?.display_name ?? (displayEmail ?? '관리자')}
+            joinedAt={userData?.created_at ?? user.created_at ?? new Date().toISOString()}
+            marketingAgreed={userData?.marketing_agreed ?? false}
+            isAdmin={isAdmin}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             comments={(commentsRes.data ?? []) as any[]}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

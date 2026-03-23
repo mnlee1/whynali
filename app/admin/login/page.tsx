@@ -8,14 +8,25 @@
  * 계정은 Supabase 대시보드에서 직접 생성.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
+
+const SAVED_EMAIL_KEY = 'admin_saved_email'
 
 export default function AdminLoginPage() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [saveEmail, setSaveEmail] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        const saved = localStorage.getItem(SAVED_EMAIL_KEY)
+        if (saved) {
+            setEmail(saved)
+            setSaveEmail(true)
+        }
+    }, [])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -24,6 +35,12 @@ export default function AdminLoginPage() {
         if (!email.trim().toLowerCase().endsWith('@nhnad.com')) {
             setError('@nhnad.com 계정만 로그인이 가능합니다.')
             return
+        }
+
+        if (saveEmail) {
+            localStorage.setItem(SAVED_EMAIL_KEY, email.trim())
+        } else {
+            localStorage.removeItem(SAVED_EMAIL_KEY)
         }
 
         setLoading(true)
@@ -64,6 +81,15 @@ export default function AdminLoginPage() {
                         autoComplete="email"
                         className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <label className="flex items-center gap-2 mt-2 cursor-pointer w-fit">
+                        <input
+                            type="checkbox"
+                            checked={saveEmail}
+                            onChange={(e) => setSaveEmail(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-blue-600"
+                        />
+                        <span className="text-xs text-neutral-500">이메일 저장</span>
+                    </label>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-1">
