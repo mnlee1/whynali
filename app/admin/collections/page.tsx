@@ -130,7 +130,7 @@ type NewsSort = 'created_at' | 'published_at' | 'source'
 type CommunitySort = 'written_at' | 'created_at' | 'updated_at' | 'view_count' | 'comment_count' | 'source_site'
 type SortOrder = 'desc' | 'asc'
 type LinkFilter = 'all' | 'linked' | 'unlinked'
-type SiteFilter = '전체' | '더쿠' | '네이트판' | '클리앙' | '보배드림' | '루리웹' | '뽐뿌'
+type SiteFilter = '전체' | '더쿠' | '네이트판' | '클리앙' | '보배드림' | '뽐뿌'
 
 // ─── 서브 컴포넌트 ────────────────────────────────────────
 
@@ -540,7 +540,6 @@ export default function AdminCollectionsPage() {
         { value: '네이트판', label: '네이트판' },
         { value: '클리앙', label: '클리앙' },
         { value: '보배드림', label: '보배드림' },
-        { value: '루리웹', label: '루리웹' },
         { value: '뽐뿌', label: '뽐뿌' },
     ]
 
@@ -723,7 +722,6 @@ export default function AdminCollectionsPage() {
                                         { key: 'natePann', label: '네이트판' },
                                         { key: 'clien', label: '클리앙' },
                                         { key: 'bobaedream', label: '보배드림' },
-                                        { key: 'ruliweb', label: '루리웹' },
                                         { key: 'ppomppu', label: '뽐뿌' },
                                     ].map(({ key, label }) => {
                                         const r = collectResult[key]
@@ -751,7 +749,6 @@ export default function AdminCollectionsPage() {
                                                 { key: 'natePann', label: '네이트판' },
                                                 { key: 'clien', label: '클리앙' },
                                                 { key: 'bobaedream', label: '보배드림' },
-                                                { key: 'ruliweb', label: '루리웹' },
                                                 { key: 'ppomppu', label: '뽐뿌' },
                                             ].map(({ key, label }) =>
                                                 collectResult[key]?.warning
@@ -884,25 +881,38 @@ export default function AdminCollectionsPage() {
                                 { site: '더쿠', board: '전체 게시판', url: 'https://theqoo.net/total' },
                                 { site: '네이트판', board: '랭킹', url: 'https://pann.nate.com/talk/ranking' },
                                 { site: '클리앙', board: '전체 게시판', url: 'https://www.clien.net/service/group/board_all' },
-                                { site: '보배드림', board: '자유게시판', url: 'https://www.bobaedream.co.kr/list?code=freeboard' },
-                                { site: '루리웹', board: '이슈&토론', url: 'https://bbs.ruliweb.com/community/board/300143' },
-                                { site: '뽐뿌', board: '자유게시판', url: 'https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard' },
-                            ].map(({ site, board, url }) => (
-                                <a
-                                    key={site}
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-900 hover:underline"
-                                >
-                                    <span className="font-medium">{site}</span>
-                                    <span className="text-blue-400">·</span>
-                                    <span>{board}</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-blue-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                        <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                                    </svg>
-                                </a>
+                                { site: '보배드림', board: '자유게시판', url: 'https://www.bobaedream.co.kr/list?code=freeb', noOffice: true },
+                                { site: '루리웹', board: '이슈&토론', url: 'https://bbs.ruliweb.com/community/board/300143', disabled: true },
+                                { site: '뽐뿌', board: '자유게시판', url: 'https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard', noOffice: true },
+                            ].map(({ site, board, url, disabled, noOffice }) => (
+                                disabled ? (
+                                    <span
+                                        key={site}
+                                        className="flex items-center gap-1.5 text-xs text-gray-400 line-through"
+                                    >
+                                        <span className="font-medium">{site}</span>
+                                        <span>·</span>
+                                        <span>{board}</span>
+                                        <span className="no-underline text-xs bg-gray-200 text-gray-500 px-1 rounded">봇차단</span>
+                                    </span>
+                                ) : (
+                                    <a
+                                        key={site}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-900 hover:underline"
+                                    >
+                                        <span className="font-medium">{site}</span>
+                                        <span className="text-blue-400">·</span>
+                                        <span>{board}</span>
+                                        {noOffice && <span className="text-xs bg-orange-100 text-orange-600 px-1 rounded">회사IP 접근 불가</span>}
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-blue-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                        </svg>
+                                    </a>
+                                )
                             ))}
                         </div>
                         <p className="text-xs text-blue-500 mt-2">이슈 연결 게시글 지속 추적 · 인기글(조회 3만+ 또는 댓글 50+) 추가 크롤링</p>
@@ -924,7 +934,7 @@ export default function AdminCollectionsPage() {
                             <p className="text-xl font-bold text-gray-900">
                                 {trackAStats.communityCollection.last24h.toLocaleString()}건
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">3분 주기</p>
+                            <p className="text-xs text-gray-500 mt-1">1분 주기</p>
                         </div>
                         
                         <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
@@ -955,104 +965,11 @@ export default function AdminCollectionsPage() {
             {/* 상세 데이터 (접기/펼치기) */}
             {showDetails && (
                 <div className="space-y-10">
-            {/* ── 트랙A 검색 뉴스 목록 ── */}
-            <section className="mb-10">
-                <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-base font-semibold text-gray-800">트랙A 검색 뉴스</h2>
-                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                        AI 키워드 검색 전용
-                    </span>
-                    {!newsLoading && newsResult && (
-                        <span className="text-xs text-gray-400 ml-auto">
-                            총 {newsResult.total.toLocaleString()}건
-                        </span>
-                    )}
-                </div>
-
-                {/* 연결 상태 탭 */}
-                <div className="mb-3">
-                    <TabBar tabs={LINK_TABS} active={newsLinkFilter} onChange={handleNewsLinkFilter} />
-                </div>
-
-                <div className="bg-white border rounded-lg overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-100">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-full">
-                                    제목
-                                </th>
-                                <Th label="출처" col="source" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
-                                    검색 키워드
-                                </th>
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
-                                    연결 이슈
-                                </th>
-                                <Th label="발행일" col="published_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
-                                <Th label="수집일" col="created_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {newsLoading ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
-                                </tr>
-                            ) : !newsResult || newsResult.data.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 뉴스가 없습니다</td>
-                                </tr>
-                            ) : (
-                                newsResult.data.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-2.5 text-sm max-w-xs">
-                                            {item.link ? (
-                                                <a href={item.link} target="_blank" rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:underline line-clamp-1">
-                                                    {decodeHtml(item.title)}
-                                                </a>
-                                            ) : (
-                                                <span className="line-clamp-1">{decodeHtml(item.title)}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{item.source}</td>
-                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                                            {item.search_keyword
-                                                ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{item.search_keyword}</span>
-                                                : <span className="text-gray-300">-</span>
-                                            }
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                                            {item.issues ? (
-                                                <Link href={`/issue/${item.issues.id}`} target="_blank"
-                                                    className="text-blue-600 hover:underline">
-                                                    {item.issues.title}
-                                                </Link>
-                                            ) : (
-                                                <span className="text-gray-300">미연결</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                                            {item.published_at ? fmt(item.published_at) : '-'}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                                            {fmt(item.created_at)}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                {newsResult && (
-                    <Pagination page={newsPage} totalPages={newsResult.totalPages} onChange={handleNewsPage} />
-                )}
-            </section>
-
             {/* ── 수집 커뮤니티 목록 ── */}
             <section>
                 <div className="flex items-center gap-2 mb-3">
                     <h2 className="text-base font-semibold text-gray-800">수집 커뮤니티</h2>
-                    <CronBadge label="3분 주기" />
+                    <CronBadge label="1분 주기" />
                     <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
                         인기글 선별 수집
                     </span>
@@ -1162,6 +1079,99 @@ export default function AdminCollectionsPage() {
                         totalPages={communityResult.totalPages}
                         onChange={handleCommunityPage}
                     />
+                )}
+            </section>
+
+            {/* ── 트랙A 검색 뉴스 목록 ── */}
+            <section className="mb-10">
+                <div className="flex items-center gap-2 mb-3">
+                    <h2 className="text-base font-semibold text-gray-800">트랙A 검색 뉴스</h2>
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        AI 키워드 검색 전용
+                    </span>
+                    {!newsLoading && newsResult && (
+                        <span className="text-xs text-gray-400 ml-auto">
+                            총 {newsResult.total.toLocaleString()}건
+                        </span>
+                    )}
+                </div>
+
+                {/* 연결 상태 탭 */}
+                <div className="mb-3">
+                    <TabBar tabs={LINK_TABS} active={newsLinkFilter} onChange={handleNewsLinkFilter} />
+                </div>
+
+                <div className="bg-white border rounded-lg overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-100">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-full">
+                                    제목
+                                </th>
+                                <Th label="출처" col="source" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                                    검색 키워드
+                                </th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                                    연결 이슈
+                                </th>
+                                <Th label="발행일" col="published_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
+                                <Th label="수집일" col="created_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {newsLoading ? (
+                                <tr>
+                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
+                                </tr>
+                            ) : !newsResult || newsResult.data.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 뉴스가 없습니다</td>
+                                </tr>
+                            ) : (
+                                newsResult.data.map((item) => (
+                                    <tr key={item.id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-2.5 text-sm max-w-xs">
+                                            {item.link ? (
+                                                <a href={item.link} target="_blank" rel="noopener noreferrer"
+                                                    className="text-blue-600 hover:underline line-clamp-1">
+                                                    {decodeHtml(item.title)}
+                                                </a>
+                                            ) : (
+                                                <span className="line-clamp-1">{decodeHtml(item.title)}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{item.source}</td>
+                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                            {item.search_keyword
+                                                ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{item.search_keyword}</span>
+                                                : <span className="text-gray-300">-</span>
+                                            }
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                            {item.issues ? (
+                                                <Link href={`/issue/${item.issues.id}`} target="_blank"
+                                                    className="text-blue-600 hover:underline">
+                                                    {item.issues.title}
+                                                </Link>
+                                            ) : (
+                                                <span className="text-gray-300">미연결</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                            {item.published_at ? fmt(item.published_at) : '-'}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                            {fmt(item.created_at)}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                {newsResult && (
+                    <Pagination page={newsPage} totalPages={newsResult.totalPages} onChange={handleNewsPage} />
                 )}
             </section>
                 </div>

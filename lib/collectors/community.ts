@@ -21,9 +21,9 @@ interface CommunityPostRow {
     updated_at?: string
 }
 
-async function fetchHtml(url: string): Promise<string> {
+async function fetchHtml(url: string, timeoutMs = 20000): Promise<string> {
     const response = await fetch(url, {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(timeoutMs),
         headers: {
             'User-Agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -520,54 +520,29 @@ export async function collectBobaedream(): Promise<CollectResult> {
     }
 }
 
-/** 루리웹(ruliweb.com) 이슈&토론 게시판 메타데이터 수집 */
+/** 루리웹(ruliweb.com) — 봇 차단으로 인한 TimeoutError 지속 발생으로 비활성화 */
 export async function collectRuliweb(): Promise<CollectResult> {
-    const baseUrl = 'https://bbs.ruliweb.com'
-    const listUrl = `${baseUrl}/community/board/300143`
+    return { count: 0, skipped: 0, warning: '루리웹 수집 비활성화 (봇 차단)' }
+}
 
-    try {
-        const html = await fetchHtml(listUrl)
-        const $ = cheerio.load(html)
-        const posts: CommunityPostRow[] = []
-        const now = new Date().toISOString()
+/** "26.03.23 16:25:27" 형태의 뽐뿌 시간 문자열을 ISO 변환 */
+function parsePpomppuTime(timeText: string): string {
+    const now = new Date()
+    const trimmed = timeText.trim()
 
-        $('tr.table_body').each((_, el) => {
-            const $el = $(el)
-            if ($el.hasClass('notice')) return
-
-            const titleEl = $el.find('td.subject a.deco').first()
-            const title = titleEl.text().trim()
-            const href = titleEl.attr('href')
-            if (!title || !href) return
-
-            const url = href.startsWith('http') ? href : `${baseUrl}${href}`
-            const viewText = $el.find('td.hit').text().replace(/[^0-9]/g, '')
-            const view_count = parseInt(viewText, 10) || 0
-            const replyText = $el.find('td.replynum').text().replace(/[^0-9]/g, '')
-            const comment_count = parseInt(replyText, 10) || 0
-            const timeText = $el.find('td.time').text().trim()
-            const written_at = timeText ? new Date(timeText).toISOString() : now
-
-            posts.push({ title, url, view_count, comment_count, written_at, source_site: '루리웹', updated_at: now })
-        })
-
-        const warning = posts.length < COMMUNITY_MIN_EXPECTED_POSTS
-            ? `루리웹 수집 이상: ${posts.length}건 (최소 ${COMMUNITY_MIN_EXPECTED_POSTS}건 기대). HTML 구조 변경 가능성.`
-            : undefined
-        if (warning) console.error('[스크래핑 경고]', warning)
-        if (posts.length === 0) return { count: 0, skipped: 0, warning }
-
-        const { error, data: upserted } = await supabaseAdmin
-            .from('community_data')
-            .upsert(posts, { onConflict: 'url' })
-            .select('id')
-        if (error) throw error
-
-        return { count: upserted?.length ?? 0, skipped: posts.length - (upserted?.length ?? 0), warning }
-    } catch (error) {
-        console.error('루리웹 수집 에러:', error)
-        return { count: 0, skipped: 0, warning: `수집 실패: ${error}` }
+    // YY.MM.DD HH:MM:SS 형식
+    const fullMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})$/)
+    if (fullMatch) {
+        const year = 2000 + parseInt(fullMatch[1], 10)
+        const month = parseInt(fullMatch[2], 10) - 1
+        const day = parseInt(fullMatch[3], 10)
+        const hours = parseInt(fullMatch[4], 10)
+        const minutes = parseInt(fullMatch[5], 10)
+        const seconds = parseInt(fullMatch[6], 10)
+        return new Date(year, month, day, hours, minutes, seconds).toISOString()
     }
+
+    return now.toISOString()
 }
 
 /** 뽐뿌(ppomppu.co.kr) 자유게시판 메타데이터 수집 */
@@ -581,24 +556,20 @@ export async function collectPpomppu(): Promise<CollectResult> {
         const posts: CommunityPostRow[] = []
         const now = new Date().toISOString()
 
-        $('tr').each((_, el) => {
+        $('tr.baseList').each((_, el) => {
             const $el = $(el)
-            const id = $el.attr('id') || ''
-            if (!id.startsWith('tr_')) return
-
-            const titleEl = $el.find('td.list_title a, td a.baseList-title').first()
-            const title = titleEl.text().trim()
-            const href = titleEl.attr('href')
+            const linkEl = $el.find('a.baseList-title').first()
+            const title = linkEl.find('span').first().text().trim() || linkEl.text().trim()
+            const href = linkEl.attr('href')
             if (!title || !href) return
 
             const url = href.startsWith('http') ? href : `${baseUrl}/zboard/${href}`
-            const tds = $el.find('td')
-            const viewText = tds.eq(5).text().replace(/[^0-9]/g, '')
+            const viewText = $el.find('td.baseList-views').text().replace(/[^0-9]/g, '')
             const view_count = parseInt(viewText, 10) || 0
-            const replyText = tds.eq(3).find('b').text().replace(/[^0-9]/g, '')
-            const comment_count = parseInt(replyText, 10) || 0
-            const timeText = tds.eq(6).text().trim()
-            const written_at = timeText ? new Date(timeText).toISOString() : now
+            const commentText = $el.find('span.baseList-c').text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(commentText, 10) || 0
+            const timeAttr = $el.find('time.baseList-time').attr('title') ?? ''
+            const written_at = timeAttr ? parsePpomppuTime(timeAttr) : now
 
             posts.push({ title, url, view_count, comment_count, written_at, source_site: '뽐뿌', updated_at: now })
         })
