@@ -28,10 +28,4 @@ jobs:
             --max-time 60 \
             --retry 2
 
-      - name: Track A 실행 (수집 직후)
-        run: |
-          curl -X POST ${{ steps.env.outputs.url }}/api/cron/track-a \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            --max-time 60
 

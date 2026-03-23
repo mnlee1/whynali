@@ -161,14 +161,17 @@ export default function Header() {
             )
         }
 
-        // 버튼 영역: displayName(닉네임) 우선, 없으면 관리자는 이메일 앞부분, 일반 유저는 "유저"
-        const name = displayName || (isAdmin ? (user.email?.split('@')[0] ?? '운영자') : '유저')
+        // 관리자는 DB의 display_name(운영자A 등 직접 설정한 이름) 우선,
+        // 없으면 이메일 앞부분 fallback. 일반 유저는 displayName 우선, 없으면 "유저"
+        const name = isAdmin
+            ? (displayName || user.email?.split('@')[0] || '운영자')
+            : (displayName || '유저')
         // 드롭다운 상단: 버튼과 동일하게 표시
         const dropdownName = name
-        // 아바타 이니셜·뱃지는 dropdownName 기준 (운영자A → '운')
-        const initial = dropdownName.charAt(0).toUpperCase()
+        // 관리자는 아바타·뱃지 모두 '운' 고정
+        const initial = isAdmin ? '운' : dropdownName.charAt(0).toUpperCase()
         const badge = isAdmin
-            ? { label: dropdownName.charAt(0), className: 'bg-red-500 text-white' }
+            ? { label: '운', className: 'bg-red-500 text-white' }
             : getProviderBadge(user)
 
         // 드롭다운 서브텍스트: 관리자는 실제 이메일, 일반 유저는 이메일 또는 제공자명

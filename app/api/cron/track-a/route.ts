@@ -39,8 +39,28 @@ const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER
 const AUTO_APPROVE_HEAT_THRESHOLD = parseInt(process.env.AUTO_APPROVE_HEAT_THRESHOLD ?? '30')
 
 // Rate Limit 완화 설정
-const MAX_KEYWORDS_PER_RUN = parseInt(process.env.TRACK_A_MAX_KEYWORDS ?? '1')  // 한 번에 처리할 키워드 수 (기본 1개)
+// 기본 3개: Groq Rate Limit을 고려해 한 번 실행당 최대 3개 키워드 처리
+const MAX_KEYWORDS_PER_RUN = parseInt(process.env.TRACK_A_MAX_KEYWORDS ?? '3')
 const AI_CALL_DELAY_MS = parseInt(process.env.TRACK_A_AI_DELAY_MS ?? '10000')  // AI 호출 간 대기 시간 (기본 10초)
+
+/**
+ * cleanupOrphanedRecords - 이슈 삭제 전 연결된 레코드의 issue_id를 null로 초기화
+ *
+ * community_data, news_data에 issue_id가 남아 있으면 고아 레코드가 되어
+ * 해당 게시글/뉴스가 이후 다른 이슈에 연결되지 않는 문제가 발생합니다.
+ */
+async function cleanupOrphanedRecords(issueId: string): Promise<void> {
+    await Promise.all([
+        supabaseAdmin
+            .from('community_data')
+            .update({ issue_id: null })
+            .eq('issue_id', issueId),
+        supabaseAdmin
+            .from('news_data')
+            .update({ issue_id: null })
+            .eq('issue_id', issueId),
+    ])
+}
 
 // Rate Limit 전체 차단 에러 클래스
 class AllKeysRateLimitedError extends Error {
@@ -775,22 +795,46 @@ async function processTrackA(): Promise<{
     
     let successCount = 0
     let failedCount = 0
-    
+
+    // track_a_logs 헬퍼: 키워드 처리 결과를 DB에 저장
+    async function logTrackA(
+        keyword: string,
+        burstCount: number,
+        result: string,
+        details?: Record<string, unknown>,
+        issueId?: string,
+    ) {
+        await supabaseAdmin.from('track_a_logs').insert({
+            keyword,
+            burst_count: burstCount,
+            result,
+            issue_id: issueId ?? null,
+            details: details ?? null,
+        }).then(({ error }) => {
+            if (error) console.error('[track_a_logs 저장 실패]', error.message)
+        })
+    }
+
     // 4단계: 상위 N개 키워드 처리 (Rate Limit 완화)
     try {
         const keywordsToProcess = burstKeywords.slice(0, MAX_KEYWORDS_PER_RUN)
         console.log(`  • 처리 예정: ${keywordsToProcess.length}개 키워드 (최대: ${MAX_KEYWORDS_PER_RUN}개)`)
-        
+
         for (const burst of keywordsToProcess) {
             console.log(`\n[키워드 검증] "${burst.keyword}" (${burst.count}건)`)
-            
+
             try {
                 // 4-1. AI 이슈 검증 및 검색 키워드 추출 (메타데이터만 사용)
                 const sourceSites = [...new Set(burst.posts.map(p => p.source_site))]
                 const aiResult = await verifyIssueByAI(burst.keyword, burst.count, sourceSites)
-        
+
         if (!aiResult.isIssue) {
             console.log(`  ✗ [AI 검증 실패] 신뢰도 ${aiResult.confidence}% - ${aiResult.reason}`)
+            await logTrackA(burst.keyword, burst.count, 'ai_rejected', {
+                confidence: aiResult.confidence,
+                reason: aiResult.reason,
+                sources: sourceSites,
+            })
             failedCount++
             continue
         }
@@ -808,6 +852,11 @@ async function processTrackA(): Promise<{
         
         if (newsItems.length === 0) {
             console.log(`  ✗ [뉴스 없음] 네이버 뉴스 0건 - 루머 가능성`)
+            await logTrackA(burst.keyword, burst.count, 'no_news', {
+                searchKeyword: aiResult.searchKeyword,
+                category: aiResult.category,
+                aiConfidence: aiResult.confidence,
+            })
             failedCount++
             continue
         }
@@ -819,19 +868,44 @@ async function processTrackA(): Promise<{
         
         if (duplicateCheck.isDuplicate) {
             console.log(`  ✗ [중복 이슈] "${duplicateCheck.existingIssue?.title}"`)
-            
-            // 기존 이슈에 커뮤니티 글 전체 연결 (필터링 없이)
-            const postIds = burst.posts.map(p => p.id)
-            await supabaseAdmin
-                .from('community_data')
-                .update({ issue_id: duplicateCheck.existingIssue!.id })
-                .in('id', postIds)
-            console.log(`  → 기존 이슈에 커뮤니티 ${postIds.length}건 추가 연결`)
-            
+
+            // 기존 이슈에 커뮤니티 글 연결 (AI 필터링 적용 — 오매칭 방지)
+            try {
+                const { relevantCommunityIds: filteredIds } = await filterAndTitleByAI(
+                    burst.keyword,
+                    duplicateCheck.existingIssue!.title,
+                    [],  // 뉴스 필터링 불필요 (이미 이슈 존재)
+                    burst.posts
+                )
+
+                if (filteredIds.length > 0) {
+                    await supabaseAdmin
+                        .from('community_data')
+                        .update({ issue_id: duplicateCheck.existingIssue!.id })
+                        .in('id', filteredIds)
+                    console.log(`  → 기존 이슈에 커뮤니티 ${filteredIds.length}/${burst.posts.length}건 추가 연결`)
+                } else {
+                    console.log(`  → 관련 커뮤니티 글 없음 (필터링 후 0건) — 연결 건너뜀`)
+                }
+            } catch {
+                // AI 실패 시 폴백: 전체 연결
+                const postIds = burst.posts.map(p => p.id)
+                await supabaseAdmin
+                    .from('community_data')
+                    .update({ issue_id: duplicateCheck.existingIssue!.id })
+                    .in('id', postIds)
+                console.log(`  → [폴백] 기존 이슈에 커뮤니티 ${postIds.length}건 추가 연결`)
+            }
+
+            await logTrackA(burst.keyword, burst.count, 'duplicate_linked', {
+                existingIssueId: duplicateCheck.existingIssue?.id,
+                existingIssueTitle: duplicateCheck.existingIssue?.title,
+                newsCount: newsItems.length,
+            })
             failedCount++
             continue
         }
-        
+
         // 4-4. AI 통합 작업: 뉴스 필터링 + 커뮤니티 필터링 + 최종 제목 생성
         const { finalIssueTitle, relevantNewsIds, relevantCommunityIds } = await filterAndTitleByAI(
             burst.keyword,
@@ -843,6 +917,11 @@ async function processTrackA(): Promise<{
         // 커뮤니티 글이 하나도 없으면 이슈 생성 건너뛰기
         if (relevantCommunityIds.length === 0) {
             console.log(`  ✗ [커뮤니티 필터링] 관련 글 없음 - 이슈 생성 건너뛰기`)
+            await logTrackA(burst.keyword, burst.count, 'no_community', {
+                tentativeTitle,
+                newsCount: newsItems.length,
+                communityBeforeFilter: burst.posts.length,
+            })
             failedCount++
             continue
         }
@@ -851,6 +930,10 @@ async function processTrackA(): Promise<{
         const trackAValidation = validateTrackAIssue(relevantCommunityIds.length)
         if (!trackAValidation.isValid) {
             console.error(`  ✗ [트랙A 검증 실패] ${trackAValidation.error}`)
+            await logTrackA(burst.keyword, burst.count, 'validation_failed', {
+                error: trackAValidation.error,
+                communityCount: relevantCommunityIds.length,
+            })
             failedCount++
             continue
         }
@@ -868,6 +951,10 @@ async function processTrackA(): Promise<{
         
         if (!issueValidation.isValid) {
             console.error(`  ✗ [이슈 검증 실패] ${issueValidation.error}`)
+            await logTrackA(burst.keyword, burst.count, 'validation_failed', {
+                error: issueValidation.error,
+                finalIssueTitle,
+            })
             failedCount++
             continue
         }
@@ -908,10 +995,12 @@ async function processTrackA(): Promise<{
         // 연결된 뉴스가 하나도 없으면 이슈 삭제
         if (linkedNewsCount === 0) {
             console.log(`  ❌ [뉴스 연결 실패] 모든 뉴스가 다른 이슈에 이미 연결됨 - 이슈 삭제`)
-            await supabaseAdmin
-                .from('issues')
-                .delete()
-                .eq('id', newIssue.id)
+            await cleanupOrphanedRecords(newIssue.id)
+            await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+            await logTrackA(burst.keyword, burst.count, 'no_news_linked', {
+                finalIssueTitle,
+                newsFiltered: relevantNewsIds.length,
+            })
             failedCount++
             continue
         }
@@ -949,10 +1038,12 @@ async function processTrackA(): Promise<{
         // 타임라인이 없으면 이슈 삭제
         if (timelinePoints.length === 0) {
             console.log(`  ❌ [타임라인 없음] 뉴스 데이터가 부족하여 타임라인 생성 불가 - 이슈 삭제`)
-            await supabaseAdmin
-                .from('issues')
-                .delete()
-                .eq('id', newIssue.id)
+            await cleanupOrphanedRecords(newIssue.id)
+            await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+            await logTrackA(burst.keyword, burst.count, 'no_timeline', {
+                finalIssueTitle,
+                linkedNewsCount,
+            })
             failedCount++
             continue
         }
@@ -965,12 +1056,12 @@ async function processTrackA(): Promise<{
         if (timelineError) {
             console.error(`  ❌ [타임라인 생성 실패] ${timelineError.message}`)
             console.error(`     상세: ${timelineError.details || 'N/A'}`)
-            
-            // 타임라인 생성 실패하면 이슈 삭제
-            await supabaseAdmin
-                .from('issues')
-                .delete()
-                .eq('id', newIssue.id)
+            await cleanupOrphanedRecords(newIssue.id)
+            await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+            await logTrackA(burst.keyword, burst.count, 'no_timeline', {
+                finalIssueTitle,
+                error: timelineError.message,
+            })
             failedCount++
             continue
         }
@@ -983,10 +1074,13 @@ async function processTrackA(): Promise<{
         // 화력 15점 미만이면 이슈 삭제
         if (heatIndex < MIN_HEAT_TO_REGISTER) {
             console.log(`  ❌ [화력 부족] "${finalIssueTitle}" (화력: ${heatIndex}점, 최소: ${MIN_HEAT_TO_REGISTER}점) - 이슈 삭제`)
-            await supabaseAdmin
-                .from('issues')
-                .delete()
-                .eq('id', newIssue.id)
+            await cleanupOrphanedRecords(newIssue.id)
+            await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+            await logTrackA(burst.keyword, burst.count, 'heat_too_low', {
+                finalIssueTitle,
+                heatIndex,
+                minHeat: MIN_HEAT_TO_REGISTER,
+            })
             failedCount++
             continue
         }
@@ -1015,6 +1109,20 @@ async function processTrackA(): Promise<{
                 ? `수동승인 대기 (${category} 카테고리)`
                 : '대기'
         console.log(`  ✅ [이슈 등록 완료] "${finalIssueTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점, 상태: ${statusLabel})`)
+        await logTrackA(
+            burst.keyword,
+            burst.count,
+            shouldAutoApprove ? 'auto_approved' : 'issue_created',
+            {
+                finalIssueTitle,
+                heatIndex,
+                category,
+                approvalStatus,
+                newsLinked: linkedNewsCount,
+                communityLinked: relevantCommunityIds.length,
+            },
+            newIssue.id,
+        )
 
         // 연예/정치 + 화력 30 이상 → 관리자 즉시 Dooray 알림
         if (requiresManualReview && heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD) {
@@ -1037,11 +1145,15 @@ async function processTrackA(): Promise<{
             } catch (error) {
                 // 개별 키워드 처리 중 에러 발생 시
                 if (error instanceof AllKeysRateLimitedError) {
-                    // Rate Limit 전체 차단 시 즉시 중단
+                    await logTrackA(burst.keyword, burst.count, 'rate_limited', {
+                        error: String(error),
+                    })
                     throw error
                 }
-                // 그 외 에러는 로깅하고 다음 키워드 계속 처리
                 console.error(`  ❌ [처리 에러] ${error}`)
+                await logTrackA(burst.keyword, burst.count, 'error', {
+                    error: String(error),
+                })
                 failedCount++
             }
         }

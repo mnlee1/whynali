@@ -23,6 +23,7 @@ interface CommunityPostRow {
 
 async function fetchHtml(url: string): Promise<string> {
     const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
         headers: {
             'User-Agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -34,10 +35,21 @@ async function fetchHtml(url: string): Promise<string> {
     return response.text()
 }
 
-/** "16:44" 또는 "25.02.20" 형태의 더쿠 시간 문자열을 ISO 변환 */
+/** "16:44", "25.02.20", "2026.03.16 20:56" 형태의 더쿠 시간 문자열을 ISO 변환 */
 function parseTheqooTime(timeText: string): string {
     const now = new Date()
     const trimmed = timeText.trim()
+
+    /* YYYY.MM.DD HH:MM 형식 (상세 페이지) */
+    const fullDateTimeMatch = trimmed.match(/^(\d{4})\.(\d{2})\.(\d{2})\s+(\d{1,2}):(\d{2})$/)
+    if (fullDateTimeMatch) {
+        const year = parseInt(fullDateTimeMatch[1], 10)
+        const month = parseInt(fullDateTimeMatch[2], 10) - 1
+        const day = parseInt(fullDateTimeMatch[3], 10)
+        const hours = parseInt(fullDateTimeMatch[4], 10)
+        const minutes = parseInt(fullDateTimeMatch[5], 10)
+        return new Date(year, month, day, hours, minutes, 0, 0).toISOString()
+    }
 
     /* HH:MM 형식 (당일 게시글) */
     const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/)
@@ -65,10 +77,10 @@ function parseTheqooTime(timeText: string): string {
     return now.toISOString()
 }
 
-/** 더쿠(theqoo.net) 스퀘어 게시판 메타데이터 수집 */
+/** 더쿠(theqoo.net) 전체 게시판 메타데이터 수집 */
 export async function collectTheqoo(): Promise<CollectResult> {
     const baseUrl = 'https://theqoo.net'
-    const listUrl = `${baseUrl}/square`
+    const listUrl = `${baseUrl}/total`
 
     try {
         const html = await fetchHtml(listUrl)
@@ -383,10 +395,10 @@ export async function collectNatePann(): Promise<CollectResult> {
     }
 }
 
-/** 클리앙(clien.net) 사랑방 메타데이터 수집 */
+/** 클리앙(clien.net) 전체 게시판 통합 피드 메타데이터 수집 */
 export async function collectClien(): Promise<CollectResult> {
     const baseUrl = 'https://www.clien.net'
-    const listUrl = `${baseUrl}/service/board/park`
+    const listUrl = `${baseUrl}/service/group/board_all`
 
     try {
         const html = await fetchHtml(listUrl)
