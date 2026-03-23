@@ -13,6 +13,7 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { generateUniqueNickname } from '@/lib/random-nickname'
+import { isAdminEmail } from '@/lib/admin'
 import OnboardingClient from './OnboardingClient'
 
 export default async function OnboardingPage() {
@@ -22,6 +23,11 @@ export default async function OnboardingPage() {
 
     if (!user) {
         redirect('/login?next=/onboarding')
+    }
+
+    // 관리자 계정은 온보딩 불필요 — 대시보드로 바로 이동
+    if (isAdminEmail(user.email)) {
+        redirect('/admin')
     }
 
     // admin 클라이언트로 RLS 우회 + display_name 포함 조회

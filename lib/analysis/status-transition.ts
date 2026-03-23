@@ -10,7 +10,7 @@
  *   점화 → 논란중: 승인 후 6시간 경과 + 화력 30점 이상 + 커뮤니티 1건 이상
  *   점화 → 종결: 승인 후 6시간 경과 + 화력 10점 미만 (바이패스)
  *   점화 타임아웃: 24시간 경과 + 화력 30점 미만 → 종결
- *   논란중 → 종결: 화력 10점 미만 OR 최근 48시간 신규 수집 건 없음
+ *   논란중 → 종결: 화력 5점 미만(즉시) OR (화력 10점 미만 AND 최근 48시간 신규 수집 0건)
  *   종결 → 논란중: 재점화 감지 (급증 또는 점진적 화력 상승)
  *
  * 연동 기능:
@@ -26,8 +26,12 @@ const IGNITE_TIMEOUT_HOURS = parseInt(process.env.STATUS_IGNITE_TIMEOUT_HOURS ??
 const DEBATE_MIN_COMMUNITY = parseInt(process.env.STATUS_DEBATE_MIN_COMMUNITY ?? '1')
 const CLOSED_IDLE_HOURS = parseInt(process.env.STATUS_CLOSED_IDLE_HOURS ?? '48')
 const CLOSED_MAX_HEAT = parseInt(process.env.STATUS_CLOSED_MAX_HEAT ?? '10')
+// 화력이 이 값 미만이면 수집 여부와 무관하게 즉시 종결 (주말 조기 종결 방지 예외)
+const CLOSED_EXTREME_LOW_HEAT = parseInt(process.env.STATUS_CLOSED_EXTREME_LOW_HEAT ?? '5')
 const REIGNITE_RATE_PER_MINUTE = parseInt(process.env.STATUS_REIGNITE_RATE_PER_MINUTE ?? '5')
 const REIGNITE_DURATION_MINUTES = parseInt(process.env.STATUS_REIGNITE_DURATION_MINUTES ?? '10')
+// 점진적 재점화 최소 신규 수집 건수 (1건 → 노이즈 위험, 기본 3건)
+const REIGNITE_MIN_RECENT_COUNT = parseInt(process.env.REIGNITE_MIN_RECENT_COUNT ?? '3')
 
 export interface IssueForTransition {
     id: string
@@ -264,30 +268,35 @@ export function evaluateTransition(
     }
 
     if (issue.status === '논란중') {
-        if (heat < CLOSED_MAX_HEAT) {
+        const recentCount = data.recentNewsCount + data.recentCommunityCount
+
+        // 화력 극단 미달 (기본 5점 미만): 수집 여부와 무관하게 즉시 종결
+        if (heat < CLOSED_EXTREME_LOW_HEAT) {
             return {
                 newStatus: '종결',
                 reason: {
                     code: 'HEAT_TOO_LOW',
                     detail: {
                         heat,
-                        threshold: CLOSED_MAX_HEAT,
+                        threshold: CLOSED_EXTREME_LOW_HEAT,
                     },
-                    message: `화력 ${heat}점 (종결 임계값 ${CLOSED_MAX_HEAT} 미만)`,
+                    message: `화력 ${heat}점 (극단 임계값 ${CLOSED_EXTREME_LOW_HEAT} 미만) — 즉시 종결`,
                 },
             }
         }
 
-        const recentCount = data.recentNewsCount + data.recentCommunityCount
-        if (recentCount === 0) {
+        // AND 조건: 화력 미달 + 최근 수집 없음 → 종결 (주말/공휴일 조기 종결 방지)
+        if (heat < CLOSED_MAX_HEAT && recentCount === 0) {
             return {
                 newStatus: '종결',
                 reason: {
                     code: 'NO_RECENT_DATA',
                     detail: {
+                        heat,
+                        threshold: CLOSED_MAX_HEAT,
                         idleHours: CLOSED_IDLE_HOURS,
                     },
-                    message: `최근 ${CLOSED_IDLE_HOURS}시간 신규 수집 건 없음`,
+                    message: `화력 ${heat}점 + 최근 ${CLOSED_IDLE_HOURS}시간 신규 수집 없음 → 종결`,
                 },
             }
         }
@@ -327,7 +336,7 @@ export function evaluateTransition(
 
         const recentCount = data.recentNewsCount + data.recentCommunityCount
         
-        if (recentCount > 0 && heat >= IGNITE_MIN_HEAT) {
+        if (recentCount >= REIGNITE_MIN_RECENT_COUNT && heat >= IGNITE_MIN_HEAT) {
             return {
                 newStatus: '논란중',
                 reason: {
@@ -336,8 +345,9 @@ export function evaluateTransition(
                         recentCount,
                         heat,
                         minHeat: IGNITE_MIN_HEAT,
+                        minRecentCount: REIGNITE_MIN_RECENT_COUNT,
                     },
-                    message: `재점화: 신규 수집 ${recentCount}건, 화력 ${heat}점`,
+                    message: `재점화: 신규 수집 ${recentCount}건 (최소 ${REIGNITE_MIN_RECENT_COUNT}건), 화력 ${heat}점`,
                 },
             }
         }

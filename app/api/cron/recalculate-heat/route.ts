@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { recalculateHeatForIssue, calculateRecentHeat } from '@/lib/analysis/heat'
+import { recalculateHeatForIssue, calculateBothHeats } from '@/lib/analysis/heat'
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
@@ -132,8 +132,8 @@ export async function GET(request: NextRequest) {
             const batchResults = await Promise.all(
                 batch.map(async (issue) => {
                     try {
-                        // UI 표시용 시간 가중 화력 계산
-                        const heatIndex = await recalculateHeatForIssue(issue.id)
+                        // UI 표시용 + 상태 전환용 화력을 DB 조회 1회로 동시 계산
+                        const { heatIndex, recentHeat } = await calculateBothHeats(issue.id)
                         
                         const result: (typeof results)[number] = {
                             issueId: issue.id,
@@ -185,15 +185,13 @@ export async function GET(request: NextRequest) {
                          * status(점화/논란중/종결) 자동 전환.
                          * 08_이슈상태전환_규격.md §3 기준으로 평가.
                          * approval_status와 무관하게 모든 이슈의 status를 전환한다.
-                         * 
-                         * 상태 전환 판단은 최근 7일 화력 기준으로 수행:
+                         *
+                         * calculateBothHeats()로 두 화력을 DB 조회 1회에 동시 계산:
                          *   - UI 표시용 화력(heatIndex): 시간 가중 화력 (실시간성)
                          *   - 상태 전환용 화력(recentHeat): 최근 7일 화력 (안정성)
                          */
                         if (issue.status) {
-                            // 상태 전환용 최근 화력 계산 (최근 7일)
-                            const recentHeat = await calculateRecentHeat(issue.id, 7)
-                            
+                            // calculateBothHeats에서 이미 계산된 recentHeat 재사용
                             const transition = await evaluateStatusTransition({
                                 id: issue.id,
                                 status: issue.status,
