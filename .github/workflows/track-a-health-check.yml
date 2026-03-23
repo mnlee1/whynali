@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -32,8 +32,8 @@ jobs:
           echo "$OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
-          # 실패 여부 체크
-          if echo "$OUTPUT" | grep -q "경고\|❌"; then
+          # 실패 여부 체크 (Node.js deprecated 경고는 제외)
+          if echo "$OUTPUT" | grep -v "deprecated" | grep -q "⚠️\|❌"; then
             echo "has_warning=true" >> $GITHUB_OUTPUT
           else
             echo "has_warning=false" >> $GITHUB_OUTPUT

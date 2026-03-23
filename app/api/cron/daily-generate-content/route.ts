@@ -11,6 +11,11 @@
  * 작업 2: 신고 일일 배치 알림
  *   - 욕설/혐오 외 신고(스팸·허위정보·기타)를 우선순위별로 분류
  *   - Dooray로 일일 현황 발송
+ *
+ * 작업 3: 숏폼 일일 자동생성
+ *   - 승인된 이슈 중 heat_index ≥ 30인 전체 대상
+ *   - 쿨다운(20시간) 체크하여 중복 생성 방지
+ *   - 완료 후 Dooray 알림
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -19,7 +24,12 @@ import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
-import { sendDoorayBatchGenerationAlert, sendDoorayDailyReportSummary } from '@/lib/dooray-notification'
+import { sendDoorayBatchGenerationAlert, sendDoorayDailyReportSummary, sendDoorayShortformBatchAlert } from '@/lib/dooray-notification'
+import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT, SHORTFORM_COOLDOWN_HOURS, SHORTFORM_VIDEO_DURATION, SHORTFORM_VIDEO_EFFECT } from '@/lib/config/shortform-thresholds'
+import type { ShortformSourceCount } from '@/types/shortform'
+import { generateShortformImage } from '@/lib/shortform/generate-image'
+import { validateShortformImage } from '@/lib/shortform/ai-validate'
+import { convertImageToVideo } from '@/lib/shortform/image-to-video'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -94,6 +104,116 @@ async function sendDailyReportSummary(): Promise<void> {
     }
 
     await sendDoorayDailyReportSummary({ priority, normal, low })
+}
+
+/**
+ * 화력 지수를 화력 등급으로 변환
+ */
+function convertHeatGrade(heatIndex: number | null): '높음' | '보통' | '낮음' {
+    if (heatIndex === null) return '낮음'
+    if (heatIndex >= 60) return '높음'
+    if (heatIndex >= 30) return '보통'
+    return '낮음'
+}
+
+/**
+ * 숏폼 일일 배치 — 승인된 이슈 중 heat_index ≥ 30인 전체 대상
+ *
+ * @returns 생성된 job 수
+ */
+async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueCount: number }> {
+    if (!SHORTFORM_ENABLED) {
+        console.log('[숏폼 배치] SHORTFORM_ENABLED=false — 스킵')
+        return { jobsGenerated: 0, issueCount: 0 }
+    }
+
+    const cooldownStart = new Date()
+    cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
+
+    const { data: issues, error: issuesError } = await supabaseAdmin
+        .from('issues')
+        .select('id, title, category, status, heat_index')
+        .eq('approval_status', '승인')
+        .eq('visibility_status', 'visible')
+        .gte('heat_index', SHORTFORM_MIN_HEAT)
+        .order('heat_index', { ascending: false })
+
+    if (issuesError || !issues) {
+        console.error('[숏폼 배치] 이슈 조회 실패:', issuesError)
+        return { jobsGenerated: 0, issueCount: 0 }
+    }
+
+    let jobsGenerated = 0
+
+    for (const issue of issues) {
+        const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
+            .from('shortform_jobs')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', issue.id)
+            .in('approval_status', ['pending', 'approved'])
+            .gte('created_at', cooldownStart.toISOString())
+
+        if (recentJobError) {
+            console.error(`[숏폼 배치] 최근 job 조회 실패 (${issue.id}):`, recentJobError)
+            continue
+        }
+
+        if ((recentJobCount ?? 0) > 0) {
+            continue
+        }
+
+        const { count: newsCount } = await supabaseAdmin
+            .from('news_data')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', issue.id)
+
+        const { count: communityCount } = await supabaseAdmin
+            .from('community_data')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', issue.id)
+
+        const sourceCount: ShortformSourceCount = {
+            news: newsCount ?? 0,
+            community: communityCount ?? 0,
+        }
+
+        const heatGrade = convertHeatGrade(issue.heat_index)
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
+        const issueUrl = `${siteUrl}/issue/${issue.id}`
+
+        const { data: job, error: insertError } = await supabaseAdmin
+            .from('shortform_jobs')
+            .insert({
+                issue_id: issue.id,
+                issue_title: issue.title,
+                issue_status: issue.status,
+                heat_grade: heatGrade,
+                source_count: sourceCount,
+                issue_url: issueUrl,
+                trigger_type: 'daily_batch',
+                approval_status: 'pending',
+            })
+            .select('id')
+            .single()
+
+        if (!insertError && job) {
+            jobsGenerated++
+            console.log(`  ✓ [숏폼] "${issue.title}" — job 생성 (화력: ${issue.heat_index})`)
+
+            // 이미지 자동 생성 + AI 판별
+            try {
+                await autoGenerateAndValidate(job.id, issue)
+            } catch (e) {
+                console.error(`  ✗ [숏폼 이미지/AI 판별 실패] "${issue.title}":`, e)
+                // 실패해도 job은 유지
+            }
+        } else {
+            console.error(`  ✗ [숏폼 생성 실패] "${issue.title}":`, insertError)
+        }
+    }
+
+    console.log(`[숏폼 배치] 완료 — ${jobsGenerated}개 job 생성 (대상 이슈: ${issues.length}개)`)
+    return { jobsGenerated, issueCount: issues.length }
 }
 
 export async function GET(request: NextRequest) {
@@ -230,10 +350,98 @@ export async function GET(request: NextRequest) {
     // 작업 2: 신고 일일 배치 알림 (욕설/혐오 외)
     await sendDailyReportSummary()
 
+    // 작업 3: 숏폼 일일 배치
+    const shortformResult = await generateShortformBatch()
+    if (shortformResult.jobsGenerated > 0) {
+        await sendDoorayShortformBatchAlert(shortformResult)
+    }
+
     return NextResponse.json({
         success: true,
         discussionGenerated,
         voteGenerated,
         issueCount: targets.length,
+        shortformGenerated: shortformResult.jobsGenerated,
+        shortformIssueCount: shortformResult.issueCount,
     })
+}
+
+/**
+ * 숏폼 이미지 생성 → 동영상 변환 → AI 판별
+ * 
+ * @param jobId - 생성된 job ID
+ * @param issue - 이슈 정보 (category 포함)
+ */
+async function autoGenerateAndValidate(
+    jobId: string,
+    issue: { id: string; title: string; category: string | null; heat_index: number | null; status: string }
+): Promise<void> {
+    // 1. job 상세 조회
+    const { data: job } = await supabaseAdmin
+        .from('shortform_jobs')
+        .select('issue_status, heat_grade, source_count, issue_url, issue_title')
+        .eq('id', jobId)
+        .single()
+    
+    if (!job) throw new Error('job 조회 실패')
+
+    // 2. 이미지 생성 (Gemini 텍스트 포함)
+    const imageBuffer = await generateShortformImage({
+        issueTitle: job.issue_title,
+        issueCategory: issue.category ?? '사회',
+        issueStatus: job.issue_status,
+        heatGrade: job.heat_grade,
+        newsCount: (job.source_count as any)?.news ?? 0,
+        communityCount: (job.source_count as any)?.community ?? 0,
+        issueUrl: job.issue_url,
+    })
+
+    // 3. 이미지 → 동영상 변환 (FFmpeg)
+    const videoBuffer = await convertImageToVideo(imageBuffer, {
+        duration: SHORTFORM_VIDEO_DURATION,
+        effect: SHORTFORM_VIDEO_EFFECT,
+    })
+
+    // 4. 동영상을 Supabase Storage에 업로드
+    await supabaseAdmin.storage
+        .from('shortform-assets')
+        .upload(`videos/${jobId}.mp4`, videoBuffer, {
+            contentType: 'video/mp4',
+            upsert: true,
+        })
+
+    const { data: { publicUrl } } = supabaseAdmin.storage
+        .from('shortform-assets')
+        .getPublicUrl(`videos/${jobId}.mp4`)
+
+    // 5. video_path 업데이트
+    await supabaseAdmin
+        .from('shortform_jobs')
+        .update({ video_path: publicUrl })
+        .eq('id', jobId)
+
+    console.log(`  ✓ [동영상 생성] "${job.issue_title}" — ${publicUrl}`)
+
+    // 6. AI 이미지 판별 (GEMINI_API_KEY 없으면 스킵)
+    // 주의: 동영상이 아닌 이미지를 검수합니다 (텍스트 가독성 검증을 위해)
+    if (process.env.GEMINI_API_KEY) {
+        const imagePath = `images/${jobId}.png`
+        await supabaseAdmin.storage
+            .from('shortform-assets')
+            .upload(imagePath, imageBuffer, {
+                contentType: 'image/png',
+                upsert: true,
+            })
+
+        const { data: { publicUrl: imageUrl } } = supabaseAdmin.storage
+            .from('shortform-assets')
+            .getPublicUrl(imagePath)
+
+        const validation = await validateShortformImage(imageUrl, job.issue_title)
+        await supabaseAdmin
+            .from('shortform_jobs')
+            .update({ ai_validation: validation })
+            .eq('id', jobId)
+        console.log(`  ✓ [AI 판별] "${job.issue_title}" — ${validation.status}`)
+    }
 }

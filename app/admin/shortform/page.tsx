@@ -12,6 +12,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
+interface AiValidation {
+    status: 'passed' | 'flagged'
+    reason: string
+    checked_at: string
+}
+
 interface ShortformJob {
     id: string
     issue_id: string
@@ -23,17 +29,18 @@ interface ShortformJob {
     video_path: string | null
     approval_status: 'pending' | 'approved' | 'rejected'
     upload_status: Record<string, string> | null
-    trigger_type: 'issue_created' | 'status_changed'
+    ai_validation: AiValidation | null
+    trigger_type: 'issue_created' | 'status_changed' | 'daily_batch'
     created_at: string
 }
 
 type FilterStatus = '' | 'pending' | 'approved' | 'rejected'
 
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
+    { value: '', label: '전체' },
     { value: 'pending', label: '대기' },
     { value: 'approved', label: '승인' },
     { value: 'rejected', label: '반려' },
-    { value: '', label: '전체' },
 ]
 
 const APPROVAL_STATUS_STYLE: Record<string, string> = {
@@ -51,6 +58,7 @@ const HEAT_GRADE_STYLE: Record<string, string> = {
 const TRIGGER_TYPE_LABEL: Record<string, string> = {
     'issue_created': '이슈 승인',
     'status_changed': '상태 전환',
+    'daily_batch': '일일 배치',
 }
 
 function formatDate(dateString: string): string {
@@ -61,6 +69,11 @@ function formatDate(dateString: string): string {
     const hour = String(date.getHours()).padStart(2, '0')
     const minute = String(date.getMinutes()).padStart(2, '0')
     return `${year}-${month}-${day} ${hour}:${minute}`
+}
+
+function getStoragePublicUrl(path: string): string {
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+    return `${base}/storage/v1/object/public/shortform/${path}`
 }
 
 const PAGE_SIZE = 20
@@ -74,6 +87,7 @@ export default function AdminShortformPage() {
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+    const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
 
     const loadJobs = useCallback(async (status: FilterStatus, targetPage: number = 1) => {
         setLoading(true)
@@ -131,7 +145,7 @@ export default function AdminShortformPage() {
     }
 
     const handleGenerate = async (id: string) => {
-        if (!window.confirm('이 숏폼의 이미지 카드를 생성하시겠습니까?')) return
+        if (!window.confirm('이 숏폼의 동영상을 생성하시겠습니까?')) return
 
         setProcessingId(id)
         try {
@@ -139,10 +153,24 @@ export default function AdminShortformPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            alert('이미지 생성 완료!')
+            alert('동영상 생성 완료!')
             await loadJobs(filter, page)
         } catch (e) {
-            alert(e instanceof Error ? e.message : '이미지 생성 실패')
+            alert(e instanceof Error ? e.message : '동영상 생성 실패')
+        } finally {
+            setProcessingId(null)
+        }
+    }
+
+    const handleAiValidate = async (id: string) => {
+        setProcessingId(id)
+        try {
+            const res = await fetch(`/api/admin/shortform/${id}/ai-validate`, { method: 'POST' })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            await loadJobs(filter, page)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'AI 판별 실패')
         } finally {
             setProcessingId(null)
         }
@@ -298,12 +326,45 @@ export default function AdminShortformPage() {
                                                 }`}>
                                                     {job.issue_status}
                                                 </span>
-                                                {job.video_path && (
-                                                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
-                                                        영상 생성 완료
-                                                    </span>
-                                                )}
                                             </div>
+                                            {job.video_path && (
+                                                <div className="mt-2 flex items-start gap-2">
+                                                    <button
+                                                        onClick={() => setPreviewJob(job)}
+                                                        className="relative w-14 h-24 rounded border border-gray-200 overflow-hidden group flex-shrink-0"
+                                                    >
+                                                        <video
+                                                            src={getStoragePublicUrl(job.video_path)}
+                                                            className="w-full h-full object-cover"
+                                                            preload="metadata"
+                                                            muted
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/50 transition-colors">
+                                                            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                                                            </svg>
+                                                        </div>
+                                                    </button>
+                                                    <div className="flex flex-col gap-1">
+                                                        {job.ai_validation ? (
+                                                            <span
+                                                                title={job.ai_validation.reason}
+                                                                className={`text-xs px-2 py-0.5 rounded cursor-help ${
+                                                                    job.ai_validation.status === 'passed'
+                                                                        ? 'bg-green-100 text-green-700'
+                                                                        : 'bg-red-100 text-red-700'
+                                                                }`}
+                                                            >
+                                                                AI {job.ai_validation.status === 'passed' ? '적합' : '주의'}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-400">
+                                                                AI 판별 전
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <span className={`inline-block px-2 py-1 text-xs rounded mb-1 ${HEAT_GRADE_STYLE[job.heat_grade]}`}>
@@ -343,21 +404,46 @@ export default function AdminShortformPage() {
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {job.approval_status === 'pending' && (
-                                                <div className="flex gap-1.5">
-                                                    <button
-                                                        onClick={() => handleAction(job.id, 'approve')}
-                                                        disabled={isProcessing}
-                                                        className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                                    >
-                                                        승인
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleAction(job.id, 'reject')}
-                                                        disabled={isProcessing}
-                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                                                    >
-                                                        반려
-                                                    </button>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {/* 동영상 생성 — video_path 없을 때 */}
+                                                    {!job.video_path && (
+                                                        <button
+                                                            onClick={() => handleGenerate(job.id)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                                                        >
+                                                            동영상 생성
+                                                        </button>
+                                                    )}
+                                                    {/* 동영상 있으면 승인/반려 */}
+                                                    {job.video_path && (
+                                                        <div className="flex gap-1.5">
+                                                            <button
+                                                                onClick={() => handleAction(job.id, 'approve')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                            >
+                                                                승인
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction(job.id, 'reject')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                            >
+                                                                반려
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    {/* AI 재판별 */}
+                                                    {job.video_path && (
+                                                        <button
+                                                            onClick={() => handleAiValidate(job.id)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                                        >
+                                                            AI 재판별
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                             {job.approval_status === 'approved' && !job.video_path && (
@@ -366,7 +452,7 @@ export default function AdminShortformPage() {
                                                     disabled={isProcessing}
                                                     className="text-xs px-2.5 py-1.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
                                                 >
-                                                    이미지 생성
+                                                    동영상 생성
                                                 </button>
                                             )}
                                             {job.approval_status === 'approved' && job.video_path && (
@@ -398,6 +484,20 @@ export default function AdminShortformPage() {
                                                                         className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
                                                                     >
                                                                         YouTube 업로드
+                                                                    </button>
+                                                                    <button
+                                                                        disabled
+                                                                        title="Instagram 연동 준비 중"
+                                                                        className="text-xs px-2.5 py-1.5 bg-pink-100 text-pink-400 rounded cursor-not-allowed opacity-60"
+                                                                    >
+                                                                        Instagram
+                                                                    </button>
+                                                                    <button
+                                                                        disabled
+                                                                        title="TikTok 연동 준비 중"
+                                                                        className="text-xs px-2.5 py-1.5 bg-gray-100 text-gray-400 rounded cursor-not-allowed opacity-60"
+                                                                    >
+                                                                        TikTok
                                                                     </button>
                                                                 </>
                                                             )}
@@ -465,6 +565,51 @@ export default function AdminShortformPage() {
                         >
                             »
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* 동영상 미리보기 모달 */}
+            {previewJob && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+                    onClick={() => setPreviewJob(null)}
+                >
+                    <div
+                        className="relative bg-black rounded-xl overflow-hidden shadow-2xl"
+                        style={{ width: 360, height: 640 }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setPreviewJob(null)}
+                            className="absolute top-3 right-3 z-10 w-8 h-8 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80"
+                        >
+                            ✕
+                        </button>
+
+                        <video
+                            src={getStoragePublicUrl(previewJob.video_path!)}
+                            className="w-full h-full object-contain"
+                            controls
+                            autoPlay
+                            loop
+                            playsInline
+                        />
+
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-8">
+                            <p className="text-white text-sm font-medium line-clamp-2">
+                                {previewJob.issue_title}
+                            </p>
+                            <a
+                                href={previewJob.issue_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-300 text-xs mt-1 block hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                이슈 상세 보기 →
+                            </a>
+                        </div>
                     </div>
                 </div>
             )}

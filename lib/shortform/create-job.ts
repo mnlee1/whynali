@@ -5,9 +5,15 @@
  * 
  * 이슈 메타데이터를 받아서 shortform_jobs 테이블에 등록한다.
  * 본문 요약은 절대 사용하지 않으며, 이슈 메타데이터(제목, 상태, 화력, 출처 수, URL)만 사용한다.
+ * 
+ * 빈도 제어:
+ * - 하루 최대 개수 제한
+ * - 최소 화력 등급 필터
+ * - 동일 이슈 쿨다운
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { SHORTFORM_DAILY_MAX, SHORTFORM_MIN_HEAT_GRADE, SHORTFORM_COOLDOWN_HOURS } from '@/lib/config/shortform-thresholds'
 import type { ShortformTriggerType, HeatGrade, ShortformSourceCount } from '@/types/shortform'
 
 export interface CreateShortformJobInput {
@@ -29,20 +35,50 @@ function convertHeatGrade(heatIndex: number | null): HeatGrade {
 }
 
 /**
+ * 화력 등급 비교 (등급 A가 등급 B 이상인지)
+ * 
+ * @param gradeA - 비교 대상 등급
+ * @param gradeB - 기준 등급
+ * @returns gradeA가 gradeB 이상이면 true
+ */
+function isHeatGradeAboveOrEqual(gradeA: HeatGrade, gradeB: HeatGrade): boolean {
+    const order: Record<HeatGrade, number> = { '높음': 3, '보통': 2, '낮음': 1 }
+    return order[gradeA] >= order[gradeB]
+}
+
+/**
  * 숏폼 job 생성
  * 
- * 1. issues 테이블에서 id, title, status, heat_index 가져오기
- * 2. news_data / community_data에서 각 count 가져오기
- * 3. shortform_jobs에 INSERT 후 생성된 job id 반환
+ * 1. 빈도 제어 체크 (하루 최대 개수, 화력 등급, 쿨다운)
+ * 2. issues 테이블에서 id, title, status, heat_index 가져오기
+ * 3. news_data / community_data에서 각 count 가져오기
+ * 4. shortform_jobs에 INSERT 후 생성된 job id 반환
  * 
  * @param input - 이슈 ID 및 트리거 타입
- * @returns 생성된 job ID
+ * @returns 생성된 job ID (빈도 제어로 스킵 시 null)
  * @throws 이슈가 존재하지 않거나 DB 에러 발생 시
  */
-export async function createShortformJob(input: CreateShortformJobInput): Promise<string> {
+export async function createShortformJob(input: CreateShortformJobInput): Promise<string | null> {
     const { issueId, triggerType } = input
 
-    // 1. 이슈 정보 조회
+    // 1-1. 하루 최대 개수 체크
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    
+    const { count: todayCount, error: todayCountError } = await supabaseAdmin
+        .from('shortform_jobs')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', todayStart.toISOString())
+
+    if (todayCountError) {
+        throw new Error('오늘 생성된 job 수 조회 실패')
+    }
+
+    if ((todayCount ?? 0) >= SHORTFORM_DAILY_MAX) {
+        return null
+    }
+
+    // 1-2. 이슈 정보 조회
     const { data: issue, error: issueError } = await supabaseAdmin
         .from('issues')
         .select('id, title, status, heat_index')
@@ -51,6 +87,31 @@ export async function createShortformJob(input: CreateShortformJobInput): Promis
 
     if (issueError || !issue) {
         throw new Error(`이슈를 찾을 수 없습니다: ${issueId}`)
+    }
+
+    // 1-3. 화력 등급 필터
+    const heatGrade = convertHeatGrade(issue.heat_index)
+    if (!isHeatGradeAboveOrEqual(heatGrade, SHORTFORM_MIN_HEAT_GRADE)) {
+        return null
+    }
+
+    // 1-4. 동일 이슈 쿨다운 체크
+    const cooldownStart = new Date()
+    cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
+
+    const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
+        .from('shortform_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('issue_id', issueId)
+        .in('approval_status', ['pending', 'approved'])
+        .gte('created_at', cooldownStart.toISOString())
+
+    if (recentJobError) {
+        throw new Error('최근 job 조회 실패')
+    }
+
+    if ((recentJobCount ?? 0) > 0) {
+        return null
     }
 
     // 2. 출처 개수 조회
@@ -73,14 +134,11 @@ export async function createShortformJob(input: CreateShortformJobInput): Promis
         community: communityCount ?? 0,
     }
 
-    // 3. 화력 등급 변환
-    const heatGrade = convertHeatGrade(issue.heat_index)
-
-    // 4. 이슈 URL 생성
+    // 3. 이슈 URL 생성
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
     const issueUrl = `${siteUrl}/issue/${issueId}`
 
-    // 5. shortform_jobs에 INSERT
+    // 4. shortform_jobs에 INSERT
     const { data: job, error: insertError } = await supabaseAdmin
         .from('shortform_jobs')
         .insert({
