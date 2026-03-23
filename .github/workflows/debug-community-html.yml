@@ -42,9 +42,9 @@ jobs:
           echo "=== class/id 포함 패턴 탐색 ==="
           echo "$HTML" | grep -n 'class=\|id=' | grep -i "list\|post\|item\|row\|board\|subject\|title\|view\|reply\|comment\|date\|time" | head -80
           echo ""
-          echo "=== HTML 중반부 100줄 ==="
-          MID=$((TOTAL / 2))
-          echo "$HTML" | sed -n "${MID},$((MID+100))p"
+          echo "=== HTML 하단 300줄 (게시글 목록 위치 추정) ==="
+          START=$((TOTAL - 300))
+          echo "$HTML" | tail -300
 
       - name: 뽐뿌 HTML 출력
         if: github.event.inputs.site == 'ppomppu'
