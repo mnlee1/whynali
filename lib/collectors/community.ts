@@ -16,7 +16,7 @@ interface CommunityPostRow {
     url: string
     view_count: number
     comment_count: number
-    written_at: string
+    written_at: string | null
     source_site: string
     updated_at?: string
 }
@@ -260,8 +260,8 @@ export async function collectNatePann(): Promise<CollectResult> {
             const countText = $el.find('.count').text().replace('조회', '').replace(/[^0-9]/g, '')
             const view_count = parseInt(countText, 10) || 0
 
-            /* 기존 데이터가 있으면 written_at 유지, 없으면 현재 시각 사용 */
-            const written_at = existingMap.get(url) || now
+            /* 네이트판 랭킹 페이지에는 작성 시각 정보 없음 → 항상 null */
+            const written_at = null
 
             mainPosts.push({
                 title,
@@ -341,7 +341,7 @@ export async function collectNatePann(): Promise<CollectResult> {
                         const viewMatch = $post('.info .count').text().match(/(\d+)/)
                         const view_count = viewMatch ? parseInt(viewMatch[1], 10) : 0
                         const comment_count = $post('.cbox_module .u_cbox_count').length || 0
-                        const written_at = writtenAtMap.get(url) || now
+                        const written_at = null
 
                         if (title) {
                             additionalPosts.push({
