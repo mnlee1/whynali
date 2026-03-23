@@ -443,6 +443,35 @@ export async function collectClien(): Promise<CollectResult> {
     }
 }
 
+/** "16:13", "03/18", "2026.03.18" 형태의 보배드림 시간 문자열을 ISO 변환 */
+function parseBobaeTime(dateText: string): string {
+    const now = new Date()
+    const trimmed = dateText.trim()
+
+    // HH:MM 형식 (당일)
+    const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/)
+    if (timeMatch) {
+        const d = new Date(now)
+        d.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0)
+        if (d > now) d.setDate(d.getDate() - 1)
+        return d.toISOString()
+    }
+
+    // MM/DD 형식 (올해)
+    const mdMatch = trimmed.match(/^(\d{1,2})\/(\d{2})$/)
+    if (mdMatch) {
+        return new Date(now.getFullYear(), parseInt(mdMatch[1], 10) - 1, parseInt(mdMatch[2], 10)).toISOString()
+    }
+
+    // YYYY.MM.DD 형식
+    const fullMatch = trimmed.match(/^(\d{4})\.(\d{2})\.(\d{2})$/)
+    if (fullMatch) {
+        return new Date(parseInt(fullMatch[1]), parseInt(fullMatch[2], 10) - 1, parseInt(fullMatch[3], 10)).toISOString()
+    }
+
+    return now.toISOString()
+}
+
 /** 보배드림(bobaedream.co.kr) 자유게시판 메타데이터 수집 */
 export async function collectBobaedream(): Promise<CollectResult> {
     const baseUrl = 'https://www.bobaedream.co.kr'
@@ -454,22 +483,20 @@ export async function collectBobaedream(): Promise<CollectResult> {
         const posts: CommunityPostRow[] = []
         const now = new Date().toISOString()
 
-        $('ul.basicList li').each((_, el) => {
+        $('table#boardlist tbody tr').each((_, el) => {
             const $el = $(el)
-            if ($el.hasClass('notice')) return
-
-            const titleEl = $el.find('a.bsubject').first()
-            const title = titleEl.text().trim()
-            const href = titleEl.attr('href')
+            const linkEl = $el.find('a.bsubject').first()
+            const title = linkEl.attr('title')?.trim() || linkEl.text().trim()
+            const href = linkEl.attr('href')
             if (!title || !href) return
 
             const url = href.startsWith('http') ? href : `${baseUrl}${href}`
-            const viewText = $el.find('.hit span').last().text().replace(/[^0-9]/g, '')
+            const viewText = $el.find('td.count').first().text().replace(/[^0-9]/g, '')
             const view_count = parseInt(viewText, 10) || 0
-            const replyText = $el.find('.replyNum').text().replace(/[^0-9]/g, '')
-            const comment_count = parseInt(replyText, 10) || 0
-            const timeText = $el.find('.date').text().trim()
-            const written_at = timeText ? new Date(timeText).toISOString() : now
+            const commentText = $el.find('strong.totreply').first().text().replace(/[^0-9]/g, '')
+            const comment_count = parseInt(commentText, 10) || 0
+            const dateText = $el.find('td.date').first().text().trim()
+            const written_at = parseBobaeTime(dateText)
 
             posts.push({ title, url, view_count, comment_count, written_at, source_site: '보배드림', updated_at: now })
         })
