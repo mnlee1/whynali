@@ -70,12 +70,12 @@ export async function GET() {
             .limit(1)
             .single()
 
-        const { data: communityLast24h } = await supabaseAdmin
+        const { count: communityLast24h } = await supabaseAdmin
             .from('community_data')
             .select('id', { count: 'exact', head: true })
             .gte('updated_at', last24h)
 
-        const { data: communityLast3h } = await supabaseAdmin
+        const { count: communityLast3h } = await supabaseAdmin
             .from('community_data')
             .select('id', { count: 'exact', head: true })
             .gte('updated_at', last3h)
@@ -222,8 +222,8 @@ export async function GET() {
             },
             communityCollection: {
                 lastCollected,
-                last24h: communityLast24h?.length ?? 0,
-                last3h: communityLast3h?.length ?? 0,
+                last24h: communityLast24h ?? 0,
+                last3h: communityLast3h ?? 0,
                 status: communityStatus,
                 minutesAgo: minutesSinceCollection,
             },
