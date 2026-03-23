@@ -36,15 +36,11 @@ jobs:
         run: |
           HTML=$(curl -s \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            "https://www.bobaedream.co.kr/list?code=freeboard")
+            "https://www.bobaedream.co.kr/list?code=freeb")
           TOTAL=$(echo "$HTML" | wc -l)
           echo "=== 전체 줄 수: $TOTAL ==="
-          echo "=== class/id 포함 패턴 탐색 ==="
-          echo "$HTML" | grep -n 'class=\|id=' | grep -i "list\|post\|item\|row\|board\|subject\|title\|view\|reply\|comment\|date\|time" | head -80
-          echo ""
-          echo "=== HTML 하단 300줄 (게시글 목록 위치 추정) ==="
-          START=$((TOTAL - 300))
-          echo "$HTML" | tail -300
+          echo "=== boardlist tbody 첫 5개 tr 구조 ==="
+          echo "$HTML" | sed -n '/id="boardlist"/,/<!--cList/p' | head -200
 
       - name: 뽐뿌 HTML 출력
         if: github.event.inputs.site == 'ppomppu'
