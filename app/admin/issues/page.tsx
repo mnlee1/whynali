@@ -294,7 +294,7 @@ export default function AdminIssuesPage() {
                     <div className="p-4 bg-white border border-purple-100 rounded">
                         <h3 className="font-semibold text-purple-900 mb-3 text-sm flex items-center gap-2">
                             <span className="text-purple-600">💬</span>
-                            트랙 A: 커뮤니티 급증 감지 (30분 주기)
+                            트랙 A: 커뮤니티 급증 감지 (10분 주기)
                         </h3>
                         <div className="space-y-3 ml-4">
                             <div className="flex items-start gap-2">

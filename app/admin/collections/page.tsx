@@ -856,7 +856,7 @@ export default function AdminCollectionsPage() {
                                     minute: '2-digit',
                                 })}
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">30분 주기</p>
+                            <p className="text-xs text-gray-500 mt-1">10분 주기</p>
                         </div>
                         
                         <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">

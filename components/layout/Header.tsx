@@ -197,23 +197,13 @@ export default function Header() {
                     </div>
                 </div>
                 <div className="p-2">
-                    {isAdmin ? (
-                        <Link
-                            href="/admin"
-                            onClick={() => setMobileUserMenuOpen(false)}
-                            className="block px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
-                        >
-                            관리자 패널
-                        </Link>
-                    ) : (
-                        <Link
-                            href="/mypage"
-                            onClick={() => setMobileUserMenuOpen(false)}
-                            className="block px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
-                        >
-                            마이페이지
-                        </Link>
-                    )}
+                    <Link
+                        href="/mypage"
+                        onClick={() => setMobileUserMenuOpen(false)}
+                        className="block px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
+                    >
+                        마이페이지
+                    </Link>
                     <button
                         onClick={() => { handleLogout(); setMobileUserMenuOpen(false) }}
                         className="w-full px-3 py-2 text-sm text-left text-neutral-700 hover:bg-neutral-50 rounded transition-colors"
