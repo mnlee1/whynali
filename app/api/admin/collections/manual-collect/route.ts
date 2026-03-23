@@ -18,7 +18,7 @@ export async function POST() {
         console.log('[수동 수집] 커뮤니티 수집 시작...')
         const startTime = Date.now()
         
-        const { theqoo, natePann } = await collectAllCommunity()
+        const { theqoo, natePann, clien, bobaedream, ruliweb, ppomppu } = await collectAllCommunity()
         
         const elapsed = Date.now() - startTime
         
@@ -33,6 +33,26 @@ export async function POST() {
                 collected: natePann.count,
                 skipped: natePann.skipped,
                 warning: natePann.warning ?? null,
+            },
+            clien: {
+                collected: clien.count,
+                skipped: clien.skipped,
+                warning: clien.warning ?? null,
+            },
+            bobaedream: {
+                collected: bobaedream.count,
+                skipped: bobaedream.skipped,
+                warning: bobaedream.warning ?? null,
+            },
+            ruliweb: {
+                collected: ruliweb.count,
+                skipped: ruliweb.skipped,
+                warning: ruliweb.warning ?? null,
+            },
+            ppomppu: {
+                collected: ppomppu.count,
+                skipped: ppomppu.skipped,
+                warning: ppomppu.warning ?? null,
             },
             elapsed: `${elapsed}ms`,
             timestamp: new Date().toISOString(),

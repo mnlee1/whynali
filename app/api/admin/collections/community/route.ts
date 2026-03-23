@@ -8,7 +8,7 @@
  *   limit   - 페이지당 건수 (기본 20, 최대 100)
  *   sort    - 정렬 컬럼: written_at | created_at | updated_at | view_count | comment_count | source_site (기본 comment_count)
  *   order   - 정렬 방향: desc | asc (기본 desc)
- *   site    - 사이트 필터: 더쿠 | 네이트판 | 없으면 전체
+ *   site    - 사이트 필터: 더쿠 | 네이트판 | 클리앙 | 보배드림 | 루리웹 | 뽐뿌 | 없으면 전체
  *   linked  - 연결 필터: true(연결된 것만) | false(미연결만) | 없으면 전체
  */
 
@@ -46,7 +46,8 @@ export async function GET(request: NextRequest) {
             )
             .order(sort, { ascending, nullsFirst: false })
 
-        if (site === '더쿠' || site === '네이트판') {
+        const ALLOWED_SITES = ['더쿠', '네이트판', '클리앙', '보배드림', '루리웹', '뽐뿌']
+        if (site && ALLOWED_SITES.includes(site)) {
             query = query.eq('source_site', site)
         }
 

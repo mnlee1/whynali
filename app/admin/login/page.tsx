@@ -9,11 +9,9 @@
  */
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
 export default function AdminLoginPage() {
-    const router = useRouter()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -40,7 +38,10 @@ export default function AdminLoginPage() {
                 return
             }
 
-            router.push('/admin')
+            // router.push 대신 전체 리로드: 미들웨어가 signInWithPassword 후 설정된
+            // 세션 쿠키를 확실히 읽도록 하기 위함. SPA 이동 시 타이밍 이슈로 미들웨어가
+            // 세션 없음으로 판단해 /admin/login 으로 다시 리다이렉트되는 문제 방지.
+            window.location.href = '/admin'
         } finally {
             setLoading(false)
         }
