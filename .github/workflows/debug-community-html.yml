@@ -48,7 +48,10 @@ jobs:
           HTML=$(curl -s \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             "https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard")
-          echo "=== tr_ / list_title / baseList 포함 줄 ==="
-          echo "$HTML" | grep -n 'id="tr_\|list_title\|baseList\|replynum\|list_vspace' | head -60
-          echo "=== 게시글 목록 영역 ==="
-          echo "$HTML" | sed -n '/id="tr_/,+10p' | head -150
+          TOTAL=$(echo "$HTML" | wc -l)
+          echo "=== 전체 줄 수: $TOTAL ==="
+          echo "=== tr/td/a 포함 게시글 관련 줄 ==="
+          echo "$HTML" | grep -n 'title\|subject\|list\|reply\|view\|count\|date\|time\|num\|row\|freeboard' | grep -v 'script\|css\|java\|var \|//\|function\|google\|naver' | head -80
+          echo ""
+          echo "=== HTML 하단 400줄 ==="
+          echo "$HTML" | tail -400
