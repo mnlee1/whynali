@@ -19,20 +19,36 @@ jobs:
       - name: 클리앙 HTML 출력
         if: github.event.inputs.site == 'clien'
         run: |
-          curl -s \
+          HTML=$(curl -s \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            "https://www.clien.net/service/group/board_all" | head -300
+            "https://www.clien.net/service/group/board_all")
+          TOTAL=$(echo "$HTML" | wc -l)
+          echo "=== 전체 HTML 줄 수: $TOTAL ==="
+          echo "=== list_row / list_subject / timestamp 관련 줄 ==="
+          echo "$HTML" | grep -n "list_row\|list_subject\|subject_fixed\|symph_row\|timestamp\|reply_num\|\.hit" | head -80
+          echo ""
+          echo "=== HTML 중반부 (게시글 목록 위치 추정) ==="
+          MID=$((TOTAL / 2))
+          echo "$HTML" | sed -n "${MID},$((MID+100))p"
 
       - name: 보배드림 HTML 출력
         if: github.event.inputs.site == 'bobaedream'
         run: |
-          curl -s \
+          HTML=$(curl -s \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            "https://www.bobaedream.co.kr/list?code=freeboard" | head -300
+            "https://www.bobaedream.co.kr/list?code=freeboard")
+          echo "=== basicList / bsubject 포함 줄 ==="
+          echo "$HTML" | grep -n "basicList\|bsubject\|replyNum\|\.hit\|\.date" | head -60
+          echo "=== 게시글 목록 영역 ==="
+          echo "$HTML" | sed -n '/basicList/,+100p' | head -150
 
       - name: 뽐뿌 HTML 출력
         if: github.event.inputs.site == 'ppomppu'
         run: |
-          curl -s \
+          HTML=$(curl -s \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            "https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard" | head -300
+            "https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard")
+          echo "=== tr_ / list_title / baseList 포함 줄 ==="
+          echo "$HTML" | grep -n 'id="tr_\|list_title\|baseList\|replynum\|list_vspace' | head -60
+          echo "=== 게시글 목록 영역 ==="
+          echo "$HTML" | sed -n '/id="tr_/,+10p' | head -150
