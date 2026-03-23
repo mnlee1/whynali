@@ -406,11 +406,11 @@ export async function collectClien(): Promise<CollectResult> {
         const posts: CommunityPostRow[] = []
         const now = new Date().toISOString()
 
-        $('.list_row.symph_row').each((_, el) => {
+        $('.list_row').each((_, el) => {
             const $el = $(el)
-            const titleEl = $el.find('.subject_fixed .list_subject').first()
+            const titleEl = $el.find('.list_subject, .subject_fixed .list_subject').first()
             const title = titleEl.text().trim()
-            const href = $el.find('.subject_fixed a').first().attr('href')
+            const href = $el.find('.list_subject a, .subject_fixed a').first().attr('href')
             if (!title || !href) return
 
             const url = href.startsWith('http') ? href : `${baseUrl}${href}`
