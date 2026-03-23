@@ -65,9 +65,6 @@ export async function create3SceneVideo(
     const video2Path = join(tmpDir, 'video2.mp4')
     const video3Path = join(tmpDir, 'video3.mp4')
     const outputPath = join(tmpDir, 'output.mp4')
-    const video1Path = join(tmpDir, 'video1.mp4')
-    const video2Path = join(tmpDir, 'video2.mp4')
-    const video3Path = join(tmpDir, 'video3.mp4')
 
     try {
         // 배경 3개 + 텍스트 레이어 3개 저장
