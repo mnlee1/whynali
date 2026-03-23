@@ -446,7 +446,7 @@ export async function collectClien(): Promise<CollectResult> {
 /** 보배드림(bobaedream.co.kr) 자유게시판 메타데이터 수집 */
 export async function collectBobaedream(): Promise<CollectResult> {
     const baseUrl = 'https://www.bobaedream.co.kr'
-    const listUrl = `${baseUrl}/list?code=freeboard`
+    const listUrl = `${baseUrl}/list?code=freeb`
 
     try {
         const html = await fetchHtml(listUrl)
