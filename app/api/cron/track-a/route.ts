@@ -714,9 +714,9 @@ async function processTrackA(): Promise<{
     const { data: recentPosts, error } = await supabaseAdmin
         .from('community_data')
         .select('id, title, created_at, source_site')
-        .gte('created_at', cutoffTime)
+        .gte('updated_at', cutoffTime)
         .is('issue_id', null)
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
     
     if (error || !recentPosts || recentPosts.length === 0) {
         console.log('[트랙 A] 최근 게시글 없음')

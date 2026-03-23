@@ -145,7 +145,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                                             </span>
                                         </div>
                                         <div className="text-xs text-gray-500 flex items-center gap-3">
-                                            <span>{formatDate(item.written_at)}</span>
+                                            {item.written_at && <span>{formatDate(item.written_at)}</span>}
                                             {item.view_count > 0 && (
                                                 <span>조회 {item.view_count.toLocaleString()}</span>
                                             )}

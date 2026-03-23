@@ -1,9 +1,7 @@
 name: Cron - Track A
 
 on:
-    schedule:
-        - cron: '*/10 * * * *'  # 매 10분마다 실행
-    workflow_dispatch:  # 수동 실행 지원
+    workflow_dispatch:  # 수동 실행 전용
 
 jobs:
     track-a:

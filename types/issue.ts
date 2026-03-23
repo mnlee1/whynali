@@ -52,7 +52,7 @@ export interface CommunityData {
     url: string
     view_count: number
     comment_count: number
-    written_at: string
+    written_at: string | null
     source_site: string
     issue_id: string | null
     created_at: string
