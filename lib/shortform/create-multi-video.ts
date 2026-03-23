@@ -62,7 +62,10 @@ export async function create3SceneVideo(
     const text2Path = join(tmpDir, 'text2.png')
     const text3Path = join(tmpDir, 'text3.png')
     const outputPath = join(tmpDir, 'output.mp4')
-    
+    const video1Path = join(tmpDir, 'video1.mp4')
+    const video2Path = join(tmpDir, 'video2.mp4')
+    const video3Path = join(tmpDir, 'video3.mp4')
+
     try {
         // 배경 3개 + 텍스트 레이어 3개 저장
         await writeFile(bg1Path, backgrounds[0])
@@ -71,16 +74,13 @@ export async function create3SceneVideo(
         await writeFile(text1Path, textArray[0])
         await writeFile(text2Path, textArray[1])
         await writeFile(text3Path, textArray[2])
-        
+
         // 각 Scene 길이 계산 (10초 → 각 3.33초)
         const sceneDuration = duration / 3
         const fadeDuration = 0.5
         const fps = 30
-        
+
         // STEP 1: Scene별로 배경 + 텍스트 합성한 개별 비디오 생성
-        const video1Path = join(tmpDir, 'video1.mp4')
-        const video2Path = join(tmpDir, 'video2.mp4')
-        const video3Path = join(tmpDir, 'video3.mp4')
         
         console.log('[FFmpeg] Scene별 비디오 3개 생성 중 (배경+텍스트)...')
         
