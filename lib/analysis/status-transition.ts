@@ -19,13 +19,19 @@
 
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
+import { CANDIDATE_MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-thresholds'
 
 const IGNITE_TO_DEBATE_HOURS = parseInt(process.env.STATUS_IGNITE_TO_DEBATE_HOURS ?? '6')
 const IGNITE_MIN_HEAT = parseInt(process.env.STATUS_IGNITE_MIN_HEAT ?? '30')
 const IGNITE_TIMEOUT_HOURS = parseInt(process.env.STATUS_IGNITE_TIMEOUT_HOURS ?? '24')
 const DEBATE_MIN_COMMUNITY = parseInt(process.env.STATUS_DEBATE_MIN_COMMUNITY ?? '1')
 const CLOSED_IDLE_HOURS = parseInt(process.env.STATUS_CLOSED_IDLE_HOURS ?? '48')
-const CLOSED_MAX_HEAT = parseInt(process.env.STATUS_CLOSED_MAX_HEAT ?? '10')
+// CLOSED_MAX_HEAT는 반드시 CANDIDATE_MIN_HEAT_TO_REGISTER보다 낮아야 한다.
+// 그렇지 않으면 등록 직후 recalculate-heat에서 즉시 종결 처리됨.
+// 환경변수 미설정 시 MIN_HEAT_TO_REGISTER - 2로 자동 파생 (2점 버퍼).
+const CLOSED_MAX_HEAT = parseInt(
+    process.env.STATUS_CLOSED_MAX_HEAT ?? String(CANDIDATE_MIN_HEAT_TO_REGISTER - 2)
+)
 // 화력이 이 값 미만이면 수집 여부와 무관하게 즉시 종결 (주말 조기 종결 방지 예외)
 const CLOSED_EXTREME_LOW_HEAT = parseInt(process.env.STATUS_CLOSED_EXTREME_LOW_HEAT ?? '5')
 const REIGNITE_RATE_PER_MINUTE = parseInt(process.env.STATUS_REIGNITE_RATE_PER_MINUTE ?? '5')
