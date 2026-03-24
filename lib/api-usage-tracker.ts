@@ -183,8 +183,25 @@ export async function getUsageStats(apiName: string, days: number = 7) {
 }
 
 /**
+ * Claude API 예상 비용 계산 (토큰 기반)
+ *
+ * claude-sonnet-4-6 기준 (기본값):
+ * - $3 per 1M input tokens
+ * - $15 per 1M output tokens
+ */
+export function calculateClaudeCost(inputTokens: number, outputTokens: number): number {
+    const inputCostPer1M = 3
+    const outputCostPer1M = 15
+
+    const inputCost = (inputTokens / 1_000_000) * inputCostPer1M
+    const outputCost = (outputTokens / 1_000_000) * outputCostPer1M
+
+    return inputCost + outputCost
+}
+
+/**
  * Perplexity API 예상 비용 계산 (토큰 기반)
- * 
+ *
  * sonar 모델 기준:
  * - $5 per 1M input tokens
  * - $5 per 1M output tokens
@@ -273,10 +290,18 @@ export async function getAllApiCostsSummary() {
         let perplexityCallsToday = 0
         let perplexitySuccesses = 0
         let perplexityFailures = 0
+        let claudeInputTokensMonthly = 0
+        let claudeOutputTokensMonthly = 0
+        let claudeInputTokensToday = 0
+        let claudeOutputTokensToday = 0
+        let claudeCallsMonthly = 0
+        let claudeCallsToday = 0
+        let claudeSuccesses = 0
+        let claudeFailures = 0
 
         for (const row of monthlyData || []) {
             const isToday = row.date === today
-            
+
             if (row.api_name === 'naver_news') {
                 naverCallsMonthly += row.call_count
                 if (isToday) naverCallsToday += row.call_count
@@ -296,6 +321,17 @@ export async function getAllApiCostsSummary() {
                     perplexityOutputTokensToday += row.output_tokens || 0
                     perplexityCallsToday += row.call_count
                 }
+            } else if (row.api_name === 'claude') {
+                claudeInputTokensMonthly += row.input_tokens || 0
+                claudeOutputTokensMonthly += row.output_tokens || 0
+                claudeCallsMonthly += row.call_count
+                claudeSuccesses += row.success_count || 0
+                claudeFailures += row.fail_count || 0
+                if (isToday) {
+                    claudeInputTokensToday += row.input_tokens || 0
+                    claudeOutputTokensToday += row.output_tokens || 0
+                    claudeCallsToday += row.call_count
+                }
             }
         }
 
@@ -306,6 +342,14 @@ export async function getAllApiCostsSummary() {
         const perplexityCostToday = calculatePerplexityCost(
             perplexityInputTokensToday,
             perplexityOutputTokensToday
+        )
+        const claudeCostMonthly = calculateClaudeCost(
+            claudeInputTokensMonthly,
+            claudeOutputTokensMonthly
+        )
+        const claudeCostToday = calculateClaudeCost(
+            claudeInputTokensToday,
+            claudeOutputTokensToday
         )
 
         const result = {
@@ -321,6 +365,29 @@ export async function getAllApiCostsSummary() {
                 successes: groqSuccesses,
                 failures: groqFailures,
             },
+            // 이번 달 호출이 있을 때만 표시
+            claude: claudeCallsMonthly > 0 ? {
+                today: claudeCostToday,
+                monthly: claudeCostMonthly,
+                calls: {
+                    today: claudeCallsToday,
+                    monthly: claudeCallsMonthly,
+                },
+                tokens: {
+                    today: {
+                        input: claudeInputTokensToday,
+                        output: claudeOutputTokensToday,
+                        total: claudeInputTokensToday + claudeOutputTokensToday,
+                    },
+                    monthly: {
+                        input: claudeInputTokensMonthly,
+                        output: claudeOutputTokensMonthly,
+                        total: claudeInputTokensMonthly + claudeOutputTokensMonthly,
+                    },
+                },
+                successes: claudeSuccesses,
+                failures: claudeFailures,
+            } : null,
             // 오늘 호출이 있을 때만 표시 (실제 사용 중일 때만)
             perplexity: perplexityCallsToday > 0 ? {
                 today: perplexityCostToday,
@@ -345,7 +412,7 @@ export async function getAllApiCostsSummary() {
                 failures: perplexityFailures,
             } : null,
             total: {
-                monthly: perplexityCostMonthly, // Groq는 무료
+                monthly: claudeCostMonthly + perplexityCostMonthly, // Groq는 무료
             },
         }
 
