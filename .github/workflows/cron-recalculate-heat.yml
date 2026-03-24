@@ -1,29 +1,17 @@
 name: 화력 재계산 Cron
 
+# Vercel Cron으로 이전됨 (vercel.json 참고)
 on:
-  schedule:
-    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
   recalculate-heat:
     runs-on: ubuntu-latest
     steps:
-      - name: 환경별 URL 설정
-        id: env
+      - name: 화력 재계산 API 호출
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
-            echo "env_name=Production" >> $GITHUB_OUTPUT
-          else
-            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
-            echo "env_name=Develop" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: 화력 재계산 API 호출 (${{ steps.env.outputs.env_name }})
-        run: |
-          curl -X GET ${{ steps.env.outputs.url }}/api/cron/recalculate-heat \
+          response=$(curl -fsS -X GET https://whynali.vercel.app/api/cron/recalculate-heat \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
-            --max-time 60 \
-            --retry 2
+            --max-time 60)
+          echo "$response"

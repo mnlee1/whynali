@@ -1,31 +1,19 @@
 name: 커뮤니티 수집 Cron
 
+# Vercel Cron으로 이전됨 (vercel.json 참고)
+# GitHub Actions는 1분 간격을 지원하지 않으므로 수동 실행만 허용
+
 on:
-  schedule:
-    - cron: '* * * * *'
   workflow_dispatch:
 
 jobs:
   collect-community:
     runs-on: ubuntu-latest
     steps:
-      - name: 환경별 URL 설정
-        id: env
+      - name: 커뮤니티 수집 API 호출 (수동)
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
-            echo "env_name=Production" >> $GITHUB_OUTPUT
-          else
-            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
-            echo "env_name=Develop" >> $GITHUB_OUTPUT
-          fi
-
-      - name: 커뮤니티 수집 API 호출 (${{ steps.env.outputs.env_name }})
-        run: |
-          curl -X GET ${{ steps.env.outputs.url }}/api/cron/collect-community \
+          curl -fsS -X GET https://whynali.vercel.app/api/cron/collect-community \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
-            --max-time 60 \
-            --retry 2
-
-
+            --max-time 60
+          echo "HTTP 상태: $?"
