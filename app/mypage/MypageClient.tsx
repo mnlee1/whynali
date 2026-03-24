@@ -126,6 +126,7 @@ export default function MypageClient({
     // 마케팅 동의
     const [marketing, setMarketing] = useState(initialMarketing)
     const [isSavingMarketing, setIsSavingMarketing] = useState(false)
+    const [marketingError, setMarketingError] = useState<string | null>(null)
 
     // 탈퇴 모달
     const [showWithdrawModal, setShowWithdrawModal] = useState(false)
@@ -185,6 +186,7 @@ export default function MypageClient({
 
     const handleToggleMarketing = async () => {
         setIsSavingMarketing(true)
+        setMarketingError(null)
         const next = !marketing
         try {
             const res = await fetch('/api/users/me', {
@@ -192,9 +194,13 @@ export default function MypageClient({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ marketingAgreed: next }),
             })
-            if (res.ok) setMarketing(next)
+            if (res.ok) {
+                setMarketing(next)
+            } else {
+                setMarketingError('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
+            }
         } catch {
-            // 실패 시 상태 유지
+            setMarketingError('서버 오류가 발생했습니다.')
         } finally {
             setIsSavingMarketing(false)
         }
@@ -347,11 +353,16 @@ export default function MypageClient({
                     <section className="p-5 border border-gray-200 rounded-xl">
                         <h2 className="text-sm font-semibold text-gray-700 mb-3">마케팅 수신 동의</h2>
                         <label className="flex items-center justify-between cursor-pointer">
-                            <span className="text-sm text-gray-600">서비스 업데이트·이벤트 알림 수신</span>
+                            <div>
+                                <span className="text-sm text-gray-600">서비스 업데이트·이벤트 알림 수신</span>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    가입 시 등록한 이메일로 발송됩니다.
+                                </p>
+                            </div>
                             <button
                                 onClick={handleToggleMarketing}
                                 disabled={isSavingMarketing}
-                                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${
+                                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ml-4 ${
                                     marketing ? 'bg-blue-600' : 'bg-gray-300'
                                 } disabled:opacity-50`}
                                 aria-label="마케팅 수신 동의 토글"
@@ -363,6 +374,9 @@ export default function MypageClient({
                                 />
                             </button>
                         </label>
+                        {marketingError && (
+                            <p className="mt-2 text-xs text-red-600">{marketingError}</p>
+                        )}
                     </section>
 
                     {/* 계정 관리 */}

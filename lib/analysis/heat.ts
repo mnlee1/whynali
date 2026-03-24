@@ -43,10 +43,10 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
         const age = Date.now() - new Date(createdAt).getTime()
         const daysSinceCreated = age / (1000 * 60 * 60 * 24)
 
-        // 선형 감소: 7일까지 100%, 30일 후 0% (완전 소멸)
-        if (daysSinceCreated <= 7) return 1.0
+        // 선형 감소: 3일까지 100%, 30일 후 0% (완전 소멸)
+        if (daysSinceCreated <= 3) return 1.0
         if (daysSinceCreated >= 30) return 0
-        return 1.0 - (daysSinceCreated - 7) / 23
+        return 1.0 - (daysSinceCreated - 3) / 27
     }
 
     let communityHeat = 0
@@ -167,9 +167,9 @@ export async function calculateBothHeats(issueId: string): Promise<{
     function getTimeWeight(createdAt: string): number {
         const age = Date.now() - new Date(createdAt).getTime()
         const daysSinceCreated = age / (1000 * 60 * 60 * 24)
-        if (daysSinceCreated <= 7) return 1.0
+        if (daysSinceCreated <= 3) return 1.0
         if (daysSinceCreated >= 30) return 0
-        return 1.0 - (daysSinceCreated - 7) / 23
+        return 1.0 - (daysSinceCreated - 3) / 27
     }
 
     // ── heatIndex 계산 (시간 가중치 적용) ────────────────────────────────────

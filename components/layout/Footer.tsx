@@ -21,9 +21,12 @@ export default function Footer() {
                         <Link href="/community" className="hover:text-neutral-900">
                             커뮤니티
                         </Link>
-                        {/* 이용약관·개인정보처리방침은 페이지 준비 후 href 연결 */}
-                        <span className="text-neutral-400">이용약관</span>
-                        <span className="text-neutral-400">개인정보처리방침</span>
+                        <Link href="/terms" className="hover:text-neutral-900">
+                            이용약관
+                        </Link>
+                        <Link href="/privacy" className="hover:text-neutral-900">
+                            개인정보처리방침
+                        </Link>
                     </nav>
                 </div>
                 <p className="mt-3 text-center sm:text-left text-xs text-neutral-400">

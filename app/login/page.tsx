@@ -104,7 +104,11 @@ function LoginForm() {
             </div>
 
             <p className="text-xs text-gray-400 text-center mt-6">
-                로그인 시 서비스 이용약관에 동의하는 것으로 간주됩니다.
+                로그인 시{' '}
+                <Link href="/terms" className="underline hover:text-gray-600">서비스 이용약관</Link>
+                {' '}및{' '}
+                <Link href="/privacy" className="underline hover:text-gray-600">개인정보처리방침</Link>
+                에 동의하는 것으로 간주됩니다.
             </p>
         </div>
     )
