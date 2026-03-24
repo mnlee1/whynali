@@ -8,8 +8,8 @@
  * 
  * 흐름:
  * 1. 더쿠·네이트판 커뮤니티 급증 감지
- * 2. Groq AI (llama-3.1-8b-instant)로 "진짜 이슈인지" 판단
- * 3. YES이면 → Groq AI가 뽑은 키워드로 네이버 뉴스 API 즉시 타겟 검색
+ * 2. Claude AI (claude-sonnet-4-6)로 "진짜 이슈인지" 판단
+ * 3. YES이면 → Claude AI가 뽑은 키워드로 네이버 뉴스 API 즉시 타겟 검색
  * 4. 뉴스 1건 이상 발견 → 이슈 후보 등록 (approval_status='대기')
  * 5. 뉴스 0건 → 등록 보류 (루머 가능성)
  * 
@@ -248,7 +248,7 @@ ${postTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.1-8b-instant',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.2,
                 max_tokens: 500,
             }
@@ -370,7 +370,7 @@ ${postTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.1-8b-instant',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.1,
                 max_tokens: 300,
             }
@@ -451,7 +451,7 @@ ${newsTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.1-8b-instant',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.1,
                 max_tokens: 300,
             }
@@ -545,7 +545,7 @@ ${newsTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.1-8b-instant',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.2,
                 max_tokens: 200,
             }
@@ -648,7 +648,7 @@ async function verifyIssueByAI(
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.1-8b-instant',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.2,
                 max_tokens: 500,
             }
@@ -1180,7 +1180,7 @@ async function processTrackA(): Promise<{
 /**
  * POST /api/cron/track-a
  */
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
     if (!verifyCronRequest(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
