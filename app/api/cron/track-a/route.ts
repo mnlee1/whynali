@@ -34,7 +34,7 @@ import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSucces
 import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
 
-const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
+const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '3')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
 const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '8')
 const AUTO_APPROVE_HEAT_THRESHOLD = parseInt(process.env.AUTO_APPROVE_HEAT_THRESHOLD ?? '30')
