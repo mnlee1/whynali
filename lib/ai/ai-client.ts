@@ -8,7 +8,8 @@
  *
  * 지원 프로바이더:
  * - groq: Groq AI (무료, Llama 3.1 8B)
- * - claude: Anthropic Claude (유료, Haiku/Sonnet/Opus)
+ * - claude: Anthropic Claude (유료, Sonnet/Haiku/Opus)
+ * - claude-fallback: Claude 우선, 실패 시 Groq 자동 전환 (권장)
  *
  * Lazy initialization을 사용하여 빌드 타임에 환경변수가 필요하지 않도록 합니다.
  *
@@ -22,6 +23,7 @@
 
 import { GroqProvider } from './groq-provider'
 import { ClaudeProvider } from './claude-provider'
+import { FallbackProvider } from './fallback-provider'
 import type { AIProvider } from './ai-provider.interface'
 
 let cachedProvider: AIProvider | null = null
@@ -34,6 +36,8 @@ function createProvider(): AIProvider {
             return new GroqProvider()
         case 'claude':
             return new ClaudeProvider()
+        case 'claude-fallback':
+            return new FallbackProvider(new ClaudeProvider(), new GroqProvider())
         // case 'perplexity':
         //     return new PerplexityProvider()
         default:
