@@ -551,7 +551,17 @@ export async function collectPpomppu(): Promise<CollectResult> {
     const listUrl = `${baseUrl}/zboard/zboard.php?id=freeboard`
 
     try {
-        const html = await fetchHtml(listUrl)
+        // 뽐뿌는 EUC-KR 인코딩이므로 arrayBuffer로 받아서 직접 디코딩
+        const response = await fetch(listUrl, {
+            signal: AbortSignal.timeout(20000),
+            headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${listUrl}`)
+        const buffer = await response.arrayBuffer()
+        const html = new TextDecoder('euc-kr').decode(buffer)
         const $ = cheerio.load(html)
         const posts: CommunityPostRow[] = []
         const now = new Date().toISOString()
