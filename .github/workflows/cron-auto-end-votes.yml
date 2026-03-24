@@ -9,21 +9,10 @@ jobs:
   auto-end-votes:
     runs-on: ubuntu-latest
     steps:
-      - name: 환경별 URL 설정
-        id: env
+      - name: 투표 자동 종료 API 호출
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
-            echo "env_name=Production" >> $GITHUB_OUTPUT
-          else
-            echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
-            echo "env_name=Develop" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: 투표 자동 종료 API 호출 (${{ steps.env.outputs.env_name }})
-        run: |
-          curl -X GET ${{ steps.env.outputs.url }}/api/cron/auto-end-votes \
+          response=$(curl -fsS -X GET https://whynali.vercel.app/api/cron/auto-end-votes \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: GitHub-Actions" \
-            --max-time 60 \
-            --retry 2
+            --max-time 60)
+          echo "$response"
