@@ -1,29 +1,18 @@
 name: Cron - Notify Pending Reports
 
 on:
-    schedule:
-        - cron: '0 3 * * *' # 매일 12:00 KST (UTC+9) = 03:00 UTC
-    workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'  # 매일 12:00 KST = 03:00 UTC
+  workflow_dispatch:
 
 jobs:
-    notify-pending-reports:
-        runs-on: ubuntu-latest
-        steps:
-            - name: 환경별 URL 설정
-              id: env
-              run: |
-                  if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-                    echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
-                    echo "env_name=Production" >> $GITHUB_OUTPUT
-                  else
-                    echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
-                    echo "env_name=Develop" >> $GITHUB_OUTPUT
-                  fi
-            
-            - name: 미처리 신고 알림 전송 (${{ steps.env.outputs.env_name }})
-              run: |
-                  curl -X GET ${{ steps.env.outputs.url }}/api/cron/notify-pending-reports \
-                    -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-                    -H "User-Agent: GitHub-Actions" \
-                    --max-time 60 \
-                    --retry 2
+  notify-pending-reports:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 미처리 신고 알림 전송
+        run: |
+          response=$(curl -fsS -X GET https://whynali.vercel.app/api/cron/notify-pending-reports \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 60)
+          echo "$response"

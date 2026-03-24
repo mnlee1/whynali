@@ -195,7 +195,7 @@ export class ClaudeProvider implements AIProvider {
         // haiku: 빠르고 저렴 (권장)
         // sonnet: 균형잡힌 성능
         // opus: 최고 성능 (비쌈)
-        const model = options?.model ?? 'claude-3-haiku-20240307'
+        const model = options?.model ?? 'claude-sonnet-4-6'
         const temperature = options?.temperature ?? 0.1
         const maxTokens = options?.maxTokens ?? 1024
         const systemPrompt = options?.systemPrompt
@@ -220,19 +220,15 @@ export class ClaudeProvider implements AIProvider {
             try {
                 const client = new Anthropic({ apiKey: keyStatus.apiKey })
 
-                // Claude는 system prompt를 별도로 전달
-                const messageContent = systemPrompt
-                    ? `${systemPrompt}\n\n${userPrompt}`
-                    : userPrompt
-
                 const message = await client.messages.create({
                     model,
                     max_tokens: maxTokens,
                     temperature,
+                    ...(systemPrompt && { system: systemPrompt }),
                     messages: [
                         {
                             role: 'user',
-                            content: messageContent,
+                            content: userPrompt,
                         },
                     ],
                 })

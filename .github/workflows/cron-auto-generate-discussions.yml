@@ -1,29 +1,18 @@
 name: 토론 주제 AI 자동 생성 Cron
 
 on:
-    schedule:
-        - cron: '0 3 * * *' # 매일 12:00 KST (UTC+9) = 03:00 UTC
-    workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'  # 매일 12:00 KST = 03:00 UTC
+  workflow_dispatch:
 
 jobs:
-    auto-generate-discussions:
-        runs-on: ubuntu-latest
-        steps:
-            - name: 환경별 URL 설정
-              id: env
-              run: |
-                  if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-                    echo "url=https://whynali.vercel.app" >> $GITHUB_OUTPUT
-                    echo "env_name=Production" >> $GITHUB_OUTPUT
-                  else
-                    echo "url=https://dev-whynali.vercel.app" >> $GITHUB_OUTPUT
-                    echo "env_name=Develop" >> $GITHUB_OUTPUT
-                  fi
-            
-            - name: 토론 주제 AI 자동 생성 API 호출 (${{ steps.env.outputs.env_name }})
-              run: |
-                  curl -X GET ${{ steps.env.outputs.url }}/api/cron/auto-generate-discussions \
-                    -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-                    -H "User-Agent: GitHub-Actions" \
-                    --max-time 60 \
-                    --retry 2
+  auto-generate-discussions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 토론 주제 AI 자동 생성 API 호출
+        run: |
+          response=$(curl -fsS -X GET https://whynali.vercel.app/api/cron/auto-generate-discussions \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 120)
+          echo "$response"
