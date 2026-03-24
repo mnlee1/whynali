@@ -29,6 +29,7 @@ import { calculateHeatIndex } from '@/lib/analysis/heat'
 import { tokenize } from '@/lib/candidate/tokenizer'
 import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
 import type { IssueCategory } from '@/lib/config/categories'
+import { AUTO_APPROVE_CATEGORIES } from '@/lib/config/candidate-thresholds'
 import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
 import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
@@ -201,12 +202,11 @@ async function filterAndTitleByAI(
         console.log('  ⚠️  [Rate Limit] 모든 키 차단됨, 크론 중단')
         throw new AllKeysRateLimitedError()
     }
-    
-    try {
-        const newsTitlesText = newsItems.slice(0, 20).map((n, i) => `뉴스${i + 1}. ${n.title}`).join('\n')
-        const postTitlesText = communityPosts.slice(0, 20).map((p, i) => `커뮤니티${i + 1}. ${p.title}`).join('\n')
-        
-        const prompt = `키워드와 관련된 뉴스/커뮤니티 글을 선별하고, 최종 이슈 제목을 생성하세요.
+
+    const newsTitlesText = newsItems.slice(0, 20).map((n, i) => `뉴스${i + 1}. ${n.title}`).join('\n')
+    const postTitlesText = communityPosts.slice(0, 20).map((p, i) => `커뮤니티${i + 1}. ${p.title}`).join('\n')
+
+    const prompt = `키워드와 관련된 뉴스/커뮤니티 글을 선별하고, 최종 이슈 제목을 생성하세요.
 
 키워드: "${keyword}"
 임시 제목: "${tentativeTitle}"
@@ -245,70 +245,84 @@ ${postTitlesText}
 
 ※ 뉴스 번호와 커뮤니티 번호는 각각 1부터 시작하는 별도 번호`
 
-        const content = await callGroq(
-            [{ role: 'user', content: prompt }],
-            {
-                model: 'claude-sonnet-4-6',
-                temperature: 0.2,
-                max_tokens: 500,
+    const MAX_ATTEMPTS = 2
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            const content = await callGroq(
+                [{ role: 'user', content: prompt }],
+                {
+                    model: 'claude-sonnet-4-6',
+                    temperature: 0.2,
+                    max_tokens: 500,
+                }
+            )
+
+            recordRateLimitSuccess()
+
+            const result = parseJsonObject<{
+                finalIssueTitle: string
+                relevantNewsNumbers: number[]
+                relevantCommunityNumbers: number[]
+            }>(content)
+
+            if (!result) {
+                // JSON 파싱 실패 → 기술적 실패이므로 재시도
+                console.warn(`  ⚠️ [JSON 파싱 실패] AI 응답: ${content?.substring(0, 200)} (시도 ${attempt}/${MAX_ATTEMPTS})`)
+                if (attempt < MAX_ATTEMPTS) continue
+                // 최종 실패 → 폴백 (커뮤니티 빈 배열로 이슈 생성 건너뜀)
+                return {
+                    finalIssueTitle: tentativeTitle,
+                    relevantNewsIds: newsItems.map(n => n.id),
+                    relevantCommunityIds: [],
+                }
             }
-        )
-        
-        recordRateLimitSuccess()
-        
-        const result = parseJsonObject<{
-            finalIssueTitle: string
-            relevantNewsNumbers: number[]
-            relevantCommunityNumbers: number[]
-        }>(content)
-        
-        if (!result) {
-            console.error('  ✗ [JSON 파싱 실패] AI 응답:', content?.substring(0, 200))
-            // 폴백: 모든 뉴스, 빈 커뮤니티
+
+            // 번호 → ID 변환
+            const relevantNewsIds = (result.relevantNewsNumbers || [])
+                .filter(n => n >= 1 && n <= newsItems.length)
+                .map(n => newsItems[n - 1].id)
+
+            const relevantCommunityIds = (result.relevantCommunityNumbers || [])
+                .filter(n => n >= 1 && n <= communityPosts.length)
+                .map(n => communityPosts[n - 1].id)
+
+            const finalNewsIds = relevantNewsIds.length > 0 ? relevantNewsIds : newsItems.map(n => n.id)
+            const finalTitle = result.finalIssueTitle || tentativeTitle
+
+            console.log(`  ✓ [뉴스 필터링] ${finalNewsIds.length}/${newsItems.length}건 선별`)
+            console.log(`  ✓ [커뮤니티 필터링] ${relevantCommunityIds.length}/${communityPosts.length}건 선별`)
+            console.log(`  ✓ [최종 제목] "${finalTitle}"`)
+
             return {
-                finalIssueTitle: tentativeTitle,
-                relevantNewsIds: newsItems.map(n => n.id),
-                relevantCommunityIds: []
+                finalIssueTitle: finalTitle,
+                relevantNewsIds: finalNewsIds,
+                relevantCommunityIds,
             }
+
+        } catch (error) {
+            const isRateLimit = error instanceof Error && error.message.includes('Rate Limit')
+            if (isRateLimit) recordRateLimitFailure()
+
+            // Rate Limit은 재시도해도 의미 없으므로 즉시 폴백
+            if (isRateLimit || attempt >= MAX_ATTEMPTS) {
+                console.error(`[AI 필터링+제목 생성 에러] (시도 ${attempt}/${MAX_ATTEMPTS})`, error)
+                return {
+                    finalIssueTitle: tentativeTitle,
+                    relevantNewsIds: newsItems.map(n => n.id),
+                    relevantCommunityIds: [],
+                }
+            }
+
+            console.warn(`  ⚠️ [AI 호출 에러] 재시도 ${attempt}/${MAX_ATTEMPTS}...`, error)
         }
-        
-        // 번호 → ID 변환
-        const relevantNewsIds = (result.relevantNewsNumbers || [])
-            .filter(n => n >= 1 && n <= newsItems.length)
-            .map(n => newsItems[n - 1].id)
-        
-        const relevantCommunityIds = (result.relevantCommunityNumbers || [])
-            .filter(n => n >= 1 && n <= communityPosts.length)
-            .map(n => communityPosts[n - 1].id)
-        
-        // 폴백 처리
-        const finalNewsIds = relevantNewsIds.length > 0 ? relevantNewsIds : newsItems.map(n => n.id)
-        const finalCommunityIds = relevantCommunityIds  // 빈 배열이면 이슈 생성 건너뛰기
-        const finalTitle = result.finalIssueTitle || tentativeTitle
-        
-        console.log(`  ✓ [뉴스 필터링] ${finalNewsIds.length}/${newsItems.length}건 선별`)
-        console.log(`  ✓ [커뮤니티 필터링] ${finalCommunityIds.length}/${communityPosts.length}건 선별`)
-        console.log(`  ✓ [최종 제목] "${finalTitle}"`)
-        
-        return {
-            finalIssueTitle: finalTitle,
-            relevantNewsIds: finalNewsIds,
-            relevantCommunityIds: finalCommunityIds
-        }
-        
-    } catch (error) {
-        console.error('[AI 필터링+제목 생성 에러]', error)
-        
-        if (error instanceof Error && error.message.includes('Rate Limit')) {
-            recordRateLimitFailure()
-        }
-        
-        // 에러 시 폴백
-        return {
-            finalIssueTitle: tentativeTitle,
-            relevantNewsIds: newsItems.map(n => n.id),
-            relevantCommunityIds: []
-        }
+    }
+
+    // 루프 정상 종료 불가 경로 (타입 안전을 위한 폴백)
+    return {
+        finalIssueTitle: tentativeTitle,
+        relevantNewsIds: newsItems.map(n => n.id),
+        relevantCommunityIds: [],
     }
 }
 
@@ -1085,10 +1099,9 @@ async function processTrackA(): Promise<{
             continue
         }
         
-        // 화력 기반 자동 승인 판단 (연예/정치는 수동 승인 필수)
-        const MANUAL_REVIEW_CATEGORIES: IssueCategory[] = ['연예', '정치']
-        const requiresManualReview = MANUAL_REVIEW_CATEGORIES.includes(category)
-        const shouldAutoApprove = heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD && !requiresManualReview
+        // 화력 기반 자동 승인 판단 (AUTO_APPROVE_CATEGORIES에 없는 카테고리는 수동 승인 필수)
+        const shouldAutoApprove = heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD && AUTO_APPROVE_CATEGORIES.includes(category)
+        const requiresManualReview = !AUTO_APPROVE_CATEGORIES.includes(category)
         const approvalStatus = shouldAutoApprove ? '승인' : '대기'
         const now = new Date().toISOString()
 

@@ -44,6 +44,28 @@ interface ApiCostsSummary {
         successes: number
         failures: number
     }
+    claude: {
+        today: number
+        monthly: number
+        calls: {
+            today: number
+            monthly: number
+        }
+        tokens: {
+            today: {
+                input: number
+                output: number
+                total: number
+            }
+            monthly: {
+                input: number
+                output: number
+                total: number
+            }
+        }
+        successes: number
+        failures: number
+    } | null
     perplexity: {
         today: number
         monthly: number
@@ -596,6 +618,76 @@ export default function AdminDashboardPage() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Claude AI (이번 달 사용 시에만 표시) */}
+                            {apiCosts.claude && (
+                                <div className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-pulse" />
+                                            <div>
+                                                <p className="text-base font-semibold text-gray-900">Claude AI</p>
+                                                <p className="text-xs text-gray-500 mt-0.5">claude-sonnet-4-6</p>
+                                            </div>
+                                        </div>
+                                        <span className="px-2.5 py-1 text-xs font-semibold bg-orange-500 text-white rounded-full">
+                                            사용 중
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div className="bg-white/60 rounded-lg p-3">
+                                            <p className="text-xs text-gray-500 mb-1">
+                                                오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-900">{apiCosts.claude.calls.today}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                            <p className="text-xs font-semibold text-orange-600 mt-1">
+                                                ${apiCosts.claude.today.toFixed(4)}
+                                            </p>
+                                        </div>
+                                        <div className="bg-white/60 rounded-lg p-3">
+                                            <p className="text-xs text-gray-500 mb-1">
+                                                이번 달 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-900">{apiCosts.claude.calls.monthly}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                            <p className="text-xs font-semibold text-orange-600 mt-1">
+                                                ${apiCosts.claude.monthly.toFixed(4)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/60 rounded-lg p-3 mb-3">
+                                        <p className="text-xs font-medium text-orange-700 mb-2">
+                                            토큰 사용량 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
+                                        </p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div>
+                                                <p className="text-xs text-gray-500">입력</p>
+                                                <p className="text-sm font-bold text-gray-900">{(apiCosts.claude.tokens.monthly.input / 1000).toFixed(1)}K</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500">출력</p>
+                                                <p className="text-sm font-bold text-gray-900">{(apiCosts.claude.tokens.monthly.output / 1000).toFixed(1)}K</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500">전체</p>
+                                                <p className="text-sm font-bold text-orange-600">{(apiCosts.claude.tokens.monthly.total / 1000).toFixed(1)}K</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-3 border-t border-orange-200">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-gray-600">성공률</span>
+                                            <span className="text-lg font-bold text-orange-600">
+                                                {apiCosts.claude.calls.monthly > 0
+                                                    ? Math.round((apiCosts.claude.successes / apiCosts.claude.calls.monthly) * 100)
+                                                    : 100}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Perplexity AI (사용 시에만 표시) */}
                             {apiCosts.perplexity && (
