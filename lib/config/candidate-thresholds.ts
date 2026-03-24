@@ -17,7 +17,7 @@ export const CANDIDATE_AUTO_APPROVE_THRESHOLD = parseInt(
     process.env.CANDIDATE_AUTO_APPROVE_THRESHOLD ?? '30'
 )
 export const CANDIDATE_MIN_HEAT_TO_REGISTER = parseInt(
-    process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15'
+    process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '8'
 )
 export const CANDIDATE_WINDOW_HOURS = parseInt(
     process.env.CANDIDATE_WINDOW_HOURS ?? '24'
