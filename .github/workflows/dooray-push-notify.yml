@@ -1,6 +1,7 @@
 name: Dooray push notification
 on:
     push:
+        branches: [main, develop]
 jobs:
     notify:
         runs-on: ubuntu-latest

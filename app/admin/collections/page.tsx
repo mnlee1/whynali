@@ -93,7 +93,7 @@ interface ListResult<T> {
     totalPages: number
 }
 
-type PageTab = '수집 데이터' | '파이프라인 로그'
+type PageTab = '수집 데이터' | '이슈 자동화 로그'
 
 type TrackAResult =
     | 'issue_created'
@@ -284,13 +284,14 @@ export default function AdminCollectionsPage() {
     const [collecting, setCollecting] = useState(false)
     const [collectResult, setCollectResult] = useState<any>(null)
 
-    // 파이프라인 로그 상태
+    // 이슈 자동화 로그 상태
     const [pipelineLogs, setPipelineLogs] = useState<TrackALogsResponse | null>(null)
     const [pipelineLoading, setPipelineLoading] = useState(false)
     const [pipelineResultFilter, setPipelineResultFilter] = useState<TrackAResult | 'all'>('all')
     const [pipelineDateFilter, setPipelineDateFilter] = useState<string>(
         new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD (스웨덴 로케일이 ISO 형식)
     )
+    const [availableDates, setAvailableDates] = useState<string[]>([])
 
     // 뉴스 목록 상태
     const [newsResult, setNewsResult] = useState<ListResult<NewsItem> | null>(null)
@@ -311,6 +312,18 @@ export default function AdminCollectionsPage() {
 
     // ─── fetch ──────────────────────────────────────────
 
+    const fetchAvailableDates = async () => {
+        try {
+            const res = await fetch('/api/admin/track-a-logs?available_dates=true')
+            if (res.ok) {
+                const { dates } = await res.json()
+                setAvailableDates(dates ?? [])
+            }
+        } catch (error) {
+            console.error('사용 가능한 날짜 조회 실패:', error)
+        }
+    }
+
     const fetchPipelineLogs = async (
         resultFilter: TrackAResult | 'all' = 'all',
         dateFilter: string = '',
@@ -322,7 +335,7 @@ export default function AdminCollectionsPage() {
             const res = await fetch(`/api/admin/track-a-logs?limit=100${resultParam}${dateParam}`)
             if (res.ok) setPipelineLogs(await res.json())
         } catch (error) {
-            console.error('파이프라인 로그 조회 실패:', error)
+            console.error('이슈 자동화 로그 조회 실패:', error)
         } finally {
             setPipelineLoading(false)
         }
@@ -504,8 +517,9 @@ export default function AdminCollectionsPage() {
     }, [])
 
     useEffect(() => {
-        if (pageTab === '파이프라인 로그' && !pipelineLogs) {
-            fetchPipelineLogs()
+        if (pageTab === '이슈 자동화 로그') {
+            if (!pipelineLogs) fetchPipelineLogs()
+            if (availableDates.length === 0) fetchAvailableDates()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pageTab])
@@ -586,7 +600,7 @@ export default function AdminCollectionsPage() {
                     )}
                     <button
                         onClick={() => {
-                            if (pageTab === '파이프라인 로그') {
+                            if (pageTab === '이슈 자동화 로그') {
                                 fetchPipelineLogs(pipelineResultFilter, pipelineDateFilter)
                             } else {
                                 fetchStats()
@@ -605,7 +619,7 @@ export default function AdminCollectionsPage() {
                 <TabBar<PageTab>
                     tabs={[
                         { value: '수집 데이터', label: '수집 데이터' },
-                        { value: '파이프라인 로그', label: '파이프라인 로그' },
+                        { value: '이슈 자동화 로그', label: '이슈 자동화 로그' },
                     ]}
                     active={pageTab}
                     onChange={setPageTab}
@@ -1179,8 +1193,8 @@ export default function AdminCollectionsPage() {
 
             </>)}
 
-            {/* ── 파이프라인 로그 탭 ─────────────────────── */}
-            {pageTab === '파이프라인 로그' && (
+            {/* ── 이슈 자동화 로그 탭 ─────────────────────── */}
+            {pageTab === '이슈 자동화 로그' && (
                 <div>
                     {/* 필터 바 */}
                     <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -1207,25 +1221,25 @@ export default function AdminCollectionsPage() {
                             <option value="rate_limited">Rate Limit</option>
                             <option value="error">에러</option>
                         </select>
-                        <input
-                            type="date"
+                        <select
                             value={pipelineDateFilter}
                             onChange={(e) => {
                                 setPipelineDateFilter(e.target.value)
                                 fetchPipelineLogs(pipelineResultFilter, e.target.value)
                             }}
                             className="text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
-                        />
-                        <button
-                            onClick={() => {
-                                const today = new Date().toLocaleDateString('sv-SE')
-                                setPipelineDateFilter(today)
-                                fetchPipelineLogs(pipelineResultFilter, today)
-                            }}
-                            className="text-xs text-gray-400 hover:text-gray-600"
                         >
-                            오늘
-                        </button>
+                            {availableDates.length === 0 ? (
+                                <option value={pipelineDateFilter}>{pipelineDateFilter}</option>
+                            ) : (
+                                availableDates.map((d) => {
+                                    const label = new Date(d + 'T00:00:00').toLocaleDateString('ko-KR', {
+                                        month: 'long', day: 'numeric', weekday: 'short',
+                                    })
+                                    return <option key={d} value={d}>{label}</option>
+                                })
+                            )}
+                        </select>
                     </div>
 
                     {/* 요약 뱃지 */}
@@ -1292,10 +1306,10 @@ export default function AdminCollectionsPage() {
                                 <thead className="bg-gray-50 border-b border-gray-100">
                                     <tr>
                                         <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-36">실행 시각</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">키워드</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 w-16">버스트</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-36">키워드</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 w-16">감지 건수</th>
                                         <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-28">결과</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">상세</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-48">상세</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -1360,7 +1374,7 @@ export default function AdminCollectionsPage() {
                                                         {RESULT_LABEL[log.result] ?? log.result}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-xs text-gray-500">
+                                                <td className="px-4 py-3 text-xs text-gray-500 w-48">
                                                     {log.issues ? (
                                                         <Link
                                                             href={`/admin/issues/${log.issue_id}`}
