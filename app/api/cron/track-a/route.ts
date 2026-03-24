@@ -34,9 +34,9 @@ import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSucces
 import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
 
-const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '10')
+const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '3')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '15')
+const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '8')
 const AUTO_APPROVE_HEAT_THRESHOLD = parseInt(process.env.AUTO_APPROVE_HEAT_THRESHOLD ?? '30')
 
 // Rate Limit 완화 설정
@@ -116,8 +116,12 @@ function extractCommunityKeywords(title: string): string[] {
         '진짜', '정말', '완전', '너무', '대박', '엄청', '정말로', '매우',
         '같은', '다른', '이런', '저런', '그런', '어떤', '무슨',
         '하면', '하는', '했다', '할', '한', '이렇게', '저렇게', '그렇게',
+        // 접속사
+        '근데', '그런데', '그리고', '그래서', '그러면', '그러나', '하지만',
+        // 구어체 부사
+        '그냥', '좀', '걍', '막',
         // 감탄사
-        '아', '오', '우와', '헐', '와', '어', '음',
+        '아니', '아', '오', '우와', '헐', '와', '어', '음',
         // 지시어
         '이거', '저거', '그거', '요거', '여기', '저기', '거기',
         // 시간 일반어

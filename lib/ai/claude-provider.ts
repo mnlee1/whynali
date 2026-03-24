@@ -30,6 +30,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { incrementApiUsage } from '@/lib/api-usage-tracker'
 import type { AIProvider, AIOptions } from './ai-provider.interface'
 
 interface KeyStatus {
@@ -240,6 +241,16 @@ export class ClaudeProvider implements AIProvider {
                     throw new Error('Claude API 응답이 text 타입이 아닙니다')
                 }
 
+                // 사용량 추적 (fire-and-forget)
+                const inputTokens = message.usage?.input_tokens ?? 0
+                const outputTokens = message.usage?.output_tokens ?? 0
+                incrementApiUsage('claude', {
+                    calls: 1,
+                    successes: 1,
+                    inputTokens,
+                    outputTokens,
+                }).catch(() => {})
+
                 return content.text.trim()
             } catch (error: any) {
                 // Rate Limit 에러 확인
@@ -249,7 +260,8 @@ export class ClaudeProvider implements AIProvider {
                     error.message?.includes('rate limit')
 
                 if (!isRateLimit) {
-                    // Rate Limit이 아닌 다른 에러는 즉시 throw
+                    // 사용량 추적 (실패)
+                    incrementApiUsage('claude', { calls: 1, failures: 1 }).catch(() => {})
                     throw error
                 }
 
