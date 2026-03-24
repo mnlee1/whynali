@@ -1,10 +1,10 @@
 /**
  * app/api/admin/track-a-logs/route.ts
  *
- * [관리자 - Track A 파이프라인 로그 API]
+ * [관리자 - Track A 이슈 자동화 로그 API]
  *
  * track_a_logs 테이블에서 키워드별 처리 결과를 반환합니다.
- * 수집 현황 > 파이프라인 로그 탭에서 사용합니다.
+ * 수집 현황 > 이슈 자동화 로그 탭에서 사용합니다.
  *
  * Query params:
  *   ?limit=50&offset=0&result=ai_rejected&date=2026-03-23
@@ -21,6 +21,25 @@ export async function GET(req: NextRequest) {
     if (auth.error) return auth.error
 
     const { searchParams } = req.nextUrl
+
+    // 로그가 존재하는 날짜 목록 반환 (날짜 선택 UI용)
+    if (searchParams.get('available_dates') === 'true') {
+        const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString() // 최근 60일
+        const { data } = await supabaseAdmin
+            .from('track_a_logs')
+            .select('run_at')
+            .gte('run_at', since)
+            .order('run_at', { ascending: false })
+
+        const datesSet = new Set<string>()
+        data?.forEach(({ run_at }) => {
+            const d = new Date(run_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
+            datesSet.add(d)
+        })
+
+        return NextResponse.json({ dates: Array.from(datesSet).sort().reverse() })
+    }
+
     const limit  = Math.min(parseInt(searchParams.get('limit')  ?? '50'), 200)
     const offset = parseInt(searchParams.get('offset') ?? '0')
     const result = searchParams.get('result') ?? null   // 특정 result 필터

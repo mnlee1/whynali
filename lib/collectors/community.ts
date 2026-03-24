@@ -202,7 +202,17 @@ export async function collectTheqoo(): Promise<CollectResult> {
                             })
                         }
                     } catch (err) {
-                        console.log(`더쿠 개별 게시글 크롤링 실패: ${url}`, err)
+                        const is404 = err instanceof Error && err.message.includes('HTTP 404')
+                        if (is404) {
+                            // 삭제된 게시글은 DB에서 제거 (재시도 방지)
+                            await supabaseAdmin
+                                .from('community_data')
+                                .delete()
+                                .eq('url', url)
+                                .is('issue_id', null)
+                        } else {
+                            console.log(`더쿠 개별 게시글 크롤링 실패: ${url}`, err)
+                        }
                     }
                 }
 
@@ -367,7 +377,17 @@ export async function collectNatePann(): Promise<CollectResult> {
                             })
                         }
                     } catch (err) {
-                        console.log(`네이트판 개별 게시글 크롤링 실패: ${url}`)
+                        const is404 = err instanceof Error && err.message.includes('HTTP 404')
+                        if (is404) {
+                            // 삭제된 게시글은 DB에서 제거 (재시도 방지)
+                            await supabaseAdmin
+                                .from('community_data')
+                                .delete()
+                                .eq('url', url)
+                                .is('issue_id', null)
+                        } else {
+                            console.log(`네이트판 개별 게시글 크롤링 실패: ${url}`, err)
+                        }
                     }
                 }
 
