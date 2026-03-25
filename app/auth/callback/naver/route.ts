@@ -26,7 +26,6 @@ type NaverProfileResponse = {
     response?: {
         id: string
         email?: string
-        name?: string
         nickname?: string
         profile_image?: string
     }
@@ -99,8 +98,6 @@ export async function GET(request: NextRequest) {
     }
 
     const naverId = profileJson.response.id
-    const email = profileJson.response.email ?? `${naverId}@naver.oauth`
-    const name = profileJson.response.name ?? profileJson.response.nickname ?? undefined
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -112,27 +109,28 @@ export async function GET(request: NextRequest) {
         auth: { autoRefreshToken: false, persistSession: false },
     })
 
+    // naverId(네이버 고유 ID)로만 기존 유저를 찾음.
+    // 네이버 프로필 이메일은 다른 계정 이메일과 동일할 수 있으므로 매칭에 사용하지 않음.
     const perPage = 50
-    let existing: { id: string; app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null = null
+    let existing: { id: string; email: string; app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null = null
     for (let page = 1; ; page++) {
         const { data } = await admin.auth.admin.listUsers({ page, perPage })
         const users = data?.users ?? []
-        const found = users.find(
-            (u) => u.email === email || u.user_metadata?.provider_id === naverId
-        )
+        const found = users.find((u) => u.user_metadata?.provider_id === naverId)
         if (found) {
-            existing = { id: found.id, app_metadata: found.app_metadata as Record<string, unknown>, user_metadata: found.user_metadata as Record<string, unknown> }
+            existing = { id: found.id, email: found.email!, app_metadata: found.app_metadata as Record<string, unknown>, user_metadata: found.user_metadata as Record<string, unknown> }
             break
         }
         if (users.length < perPage) break
     }
 
     let userId: string
+    let linkEmail: string  // generateLink에 사용할 이메일 (Supabase에 저장된 값)
 
     if (existing) {
         userId = existing.id
+        linkEmail = existing.email  // 네이버 프로필 이메일이 아닌 Supabase에 저장된 이메일 사용
         const needsUpdate =
-            !existing.user_metadata?.provider_id ||
             existing.user_metadata?.provider !== 'naver' ||
             existing.app_metadata?.provider !== 'naver'
         if (needsUpdate) {
@@ -146,11 +144,14 @@ export async function GET(request: NextRequest) {
             })
         }
     } else {
+        // 신규 유저: 네이버 프로필 이메일 대신 naverId 기반 고유 이메일 사용
+        // (프로필 이메일이 다른 계정과 충돌할 수 있으므로)
+        linkEmail = `${naverId}@naver.oauth`
         const { data: newUser, error: createError } = await admin.auth.admin.createUser({
-            email,
+            email: linkEmail,
             email_confirm: true,
             app_metadata: { provider: 'naver', providers: ['naver'] },
-            user_metadata: { provider: 'naver', provider_id: naverId, name },
+            user_metadata: { provider: 'naver', provider_id: naverId },
         })
         if (createError || !newUser.user) {
             return redirectError(createError?.message ?? '계정 생성에 실패했습니다.')
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
 
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
         type: 'magiclink',
-        email,
+        email: linkEmail,  // Supabase 저장 이메일 사용 (네이버 프로필 이메일 아님)
         options: { redirectTo: `${origin}/auth/verify?next=${encodeURIComponent(next)}` },
     })
 
