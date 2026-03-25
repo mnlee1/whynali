@@ -49,15 +49,15 @@ function verifyCronRequest(req: NextRequest): boolean {
  * 신고 일일 배치 — 욕설/혐오 외 신고를 우선순위별로 분류해 Dooray 전송
  *
  * 우선순위 기준:
- *   🟡 priority: 스팸 3건+, 허위정보 2건+, 기타 3건+
- *   🟢 normal:   스팸 2건, 허위정보 1건, 기타 2건
- *   ⚪ low:      스팸 1건, 기타 1건
+ *   🟡 priority: 스팸/광고 3건+, 허위정보 2건+, 기타 3건+
+ *   🟢 normal:   스팸/광고 2건, 허위정보 1건, 기타 2건
+ *   ⚪ low:      스팸/광고 1건, 기타 1건
  */
 async function sendDailyReportSummary(): Promise<void> {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    
+
     const { data: reports } = await supabaseAdmin
-        .from('comment_reports')
+        .from('reports')
         .select('comment_id, reason, comments!inner(id, body, visibility, issue_id, discussion_topic_id)')
         .neq('reason', '욕설/혐오')
         .eq('comments.visibility', 'public')
@@ -86,11 +86,11 @@ async function sendDailyReportSummary(): Promise<void> {
     const low = []
 
     for (const [commentId, info] of Object.entries(commentMap)) {
-        const spam = info.reasons['스팸'] ?? 0
+        const spam = info.reasons['스팸/광고'] ?? 0
         const false_ = info.reasons['허위정보'] ?? 0
         const etc = info.reasons['기타'] ?? 0
         const totalCount = spam + false_ + etc
-        const dominantReason = spam >= false_ && spam >= etc ? '스팸' : false_ >= etc ? '허위정보' : '기타'
+        const dominantReason = spam >= false_ && spam >= etc ? '스팸/광고' : false_ >= etc ? '허위정보' : '기타'
 
         const item = { commentId, body: info.body, reason: dominantReason, reportCount: totalCount, contextType: info.contextType }
 
@@ -221,12 +221,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const canDiscussion = !!process.env.GROQ_API_KEY
-    const canVote = !!process.env.GROQ_API_KEY
+    const hasGroqKey = !!process.env.GROQ_API_KEY
+    const canDiscussion = hasGroqKey
+    const canVote = hasGroqKey
 
     if (!canDiscussion && !canVote) {
+        console.error('[daily-generate] GROQ_API_KEY 미설정 — 토론/투표 생성 불가. 신고 배치 알림만 처리합니다.')
+        await sendDailyReportSummary()
         return NextResponse.json(
-            { error: 'AI API 키 없음 (GROQ_API_KEY 필요)' },
+            { error: 'AI API 키 없음 (GROQ_API_KEY 필요)', reportNotified: true },
             { status: 500 }
         )
     }
