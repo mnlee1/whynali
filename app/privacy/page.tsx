@@ -5,7 +5,6 @@
  *
  * 카카오·네이버 소셜 로그인 검수 요건을 충족하는 실제 처리방침.
  * 개인정보보호법, 정보통신망법 및 국외이전 조항 포함.
- * [운영자명], [대표자명], [주소], [시행일] 플레이스홀더는 확정 후 교체 필요.
  */
 
 export const metadata = {
@@ -16,19 +15,19 @@ export default function PrivacyPage() {
     return (
         <div className="container mx-auto px-4 py-12 max-w-3xl">
             <h1 className="text-2xl font-bold mb-2">개인정보 처리방침</h1>
-            <p className="text-sm text-gray-500 mb-10">시행일: [시행일] &nbsp;|&nbsp; 운영자: [운영자명]</p>
+            <p className="text-sm text-gray-500 mb-10">시행일: 2026년 4월 16일 &nbsp;|&nbsp; 운영사: NHN AD</p>
 
             <div className="space-y-10 text-gray-700 text-sm leading-relaxed">
 
                 <p>
-                    [운영자명](이하 &quot;운영자&quot;)은 개인정보보호법 및 정보통신망 이용촉진 및 정보보호 등에 관한 법률에 따라
+                    NHN AD(이하 &quot;회사&quot;)는 개인정보보호법 및 정보통신망 이용촉진 및 정보보호 등에 관한 법률에 따라
                     이용자의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리하기 위해 다음과 같이
                     개인정보 처리방침을 수립·공개합니다.
                 </p>
 
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제1조 (수집하는 개인정보 항목 및 수집 방법)</h2>
-                    <p className="mb-3">운영자는 서비스 제공을 위해 다음과 같은 최소한의 개인정보를 수집합니다.</p>
+                    <p className="mb-3">회사는 서비스 제공을 위해 다음과 같은 최소한의 개인정보를 수집합니다.</p>
 
                     <p className="font-medium mb-1">① 소셜 로그인 시 수집 항목</p>
                     <div className="overflow-x-auto">
@@ -44,7 +43,7 @@ export default function PrivacyPage() {
                             <tbody>
                                 <tr>
                                     <td className="border border-gray-200 px-3 py-2" rowSpan={2}>카카오</td>
-                                    <td className="border border-gray-200 px-3 py-2">카카오 고유 식별자, 프로필 닉네임, 프로필 사진</td>
+                                    <td className="border border-gray-200 px-3 py-2">카카오 고유 식별자, 프로필 닉네임</td>
                                     <td className="border border-gray-200 px-3 py-2">필수</td>
                                     <td className="border border-gray-200 px-3 py-2" rowSpan={2}>최초 로그인 시</td>
                                 </tr>
@@ -119,7 +118,7 @@ export default function PrivacyPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제4조 (개인정보의 제3자 제공)</h2>
                     <p>
-                        운영자는 이용자의 개인정보를 제3자에게 제공하지 않습니다.
+                        회사는 이용자의 개인정보를 제3자에게 제공하지 않습니다.
                         단, 다음의 경우는 예외입니다.
                     </p>
                     <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -131,7 +130,7 @@ export default function PrivacyPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제5조 (개인정보 처리 위탁)</h2>
                     <p className="mb-3">
-                        운영자는 원활한 서비스 제공을 위해 아래와 같이 개인정보 처리 업무를 위탁합니다.
+                        회사는 원활한 서비스 제공을 위해 아래와 같이 개인정보 처리 업무를 위탁합니다.
                         위탁계약 체결 시 개인정보보호법에 따라 개인정보가 안전하게 관리되도록 필요한 조항을 규정합니다.
                     </p>
                     <div className="overflow-x-auto">
@@ -164,6 +163,11 @@ export default function PrivacyPage() {
                                     <td className="border border-gray-200 px-3 py-2">AI 콘텐츠 생성 (이슈 메타데이터만 전달, 개인정보 미포함)</td>
                                     <td className="border border-gray-200 px-3 py-2">처리 즉시 파기</td>
                                 </tr>
+                                <tr>
+                                    <td className="border border-gray-200 px-3 py-2">Resend Inc.</td>
+                                    <td className="border border-gray-200 px-3 py-2">이메일 발송 (서비스 알림, 마케팅 수신 동의자에 한함)</td>
+                                    <td className="border border-gray-200 px-3 py-2">발송 후 즉시 파기</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -172,7 +176,7 @@ export default function PrivacyPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제6조 (개인정보의 국외 이전)</h2>
                     <p className="mb-3">
-                        운영자는 서비스 운영을 위해 이용자의 개인정보를 국외로 이전합니다.
+                        회사는 서비스 운영을 위해 이용자의 개인정보를 국외로 이전합니다.
                         이전 내역은 다음과 같습니다.
                     </p>
                     <div className="overflow-x-auto">
@@ -200,6 +204,13 @@ export default function PrivacyPage() {
                                     <td className="border border-gray-200 px-3 py-2">서비스 호스팅</td>
                                     <td className="border border-gray-200 px-3 py-2">접속 IP, 서버 로그</td>
                                     <td className="border border-gray-200 px-3 py-2">3개월</td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-gray-200 px-3 py-2">Resend Inc.</td>
+                                    <td className="border border-gray-200 px-3 py-2">미국</td>
+                                    <td className="border border-gray-200 px-3 py-2">이메일 발송</td>
+                                    <td className="border border-gray-200 px-3 py-2">이메일 주소</td>
+                                    <td className="border border-gray-200 px-3 py-2">발송 후 즉시 파기</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -246,11 +257,12 @@ export default function PrivacyPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제9조 (개인정보 보호책임자)</h2>
                     <p className="mb-2">
-                        운영자는 개인정보 처리에 관한 업무를 총괄하고, 관련 불만 및 피해 구제를 위해 아래와 같이
+                        회사는 개인정보 처리에 관한 업무를 총괄하고, 관련 불만 및 피해 구제를 위해 아래와 같이
                         개인정보 보호책임자를 지정합니다.
                     </p>
                     <ul className="list-none space-y-1">
-                        <li>담당: 왜난리 운영팀</li>
+                        <li>성명: 김경수</li>
+                        <li>소속/직위: NHN AD / 이사</li>
                         <li>이메일: <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a></li>
                     </ul>
                     <p className="mt-3">
@@ -265,10 +277,27 @@ export default function PrivacyPage() {
                 </section>
 
                 <section>
+                    <h2 className="text-base font-semibold text-gray-900 mb-3">제10조 (쿠키 운용)</h2>
+                    <ol className="list-decimal pl-5 space-y-2">
+                        <li>
+                            회사는 이용자에게 개인화된 서비스를 제공하기 위해 쿠키를 사용합니다.
+                            쿠키는 서버가 이용자의 브라우저에 전송하는 소량의 데이터 파일로, 이용자의 기기에 저장됩니다.
+                        </li>
+                        <li>
+                            쿠키 사용 목적: 로그인 상태 유지, 세션 관리
+                        </li>
+                        <li>
+                            이용자는 브라우저 설정을 통해 쿠키 저장을 거부할 수 있으나,
+                            거부 시 로그인이 필요한 서비스 기능(댓글, 투표, 반응 등)을 이용할 수 없습니다.
+                        </li>
+                    </ol>
+                </section>
+
+                <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제11조 (마케팅 정보 수신 동의)</h2>
                     <ol className="list-decimal pl-5 space-y-2">
                         <li>
-                            운영자는 회원의 별도 사전 동의를 받은 경우에 한하여 이메일 등을 통해
+                            회사는 회원의 별도 사전 동의를 받은 경우에 한하여 이메일 등을 통해
                             서비스 업데이트, 이벤트, 혜택 등 마케팅 정보를 발송합니다.
                         </li>
                         <li>
@@ -291,7 +320,7 @@ export default function PrivacyPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제12조 (개인정보의 안전성 확보 조치)</h2>
                     <p className="mb-2">
-                        운영자는 개인정보보호법 제29조에 따라 개인정보가 분실·도난·유출·위조·변조·훼손되지 않도록
+                        회사는 개인정보보호법 제29조에 따라 개인정보가 분실·도난·유출·위조·변조·훼손되지 않도록
                         아래와 같은 안전성 확보 조치를 취합니다.
                     </p>
                     <ul className="list-disc pl-5 space-y-1">
@@ -313,9 +342,7 @@ export default function PrivacyPage() {
 
                 <section className="border-t pt-6">
                     <p className="text-xs text-gray-500">
-                        시행일: [시행일]<br />
-                        운영자: [운영자명] / 대표: [대표자명]<br />
-                        주소: [주소]<br />
+                        시행일: 2026년 4월 16일<br />
                         문의: <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a>
                     </p>
                 </section>
