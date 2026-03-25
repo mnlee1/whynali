@@ -21,7 +21,7 @@ npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
 - **Next.js 15 App Router** + React 19, TypeScript 5, Tailwind CSS
 - **Supabase** (PostgreSQL) — ORM 없이 Supabase JS 클라이언트로 직접 SQL 쿼리
 - **인증**: Supabase Auth + OAuth (Google, Naver, Kakao) + 온보딩 플로우
-- **AI**: 멀티 프로바이더 (기본값 Groq/Llama, Claude, Perplexity) — `/lib/ai/`
+- **AI**: 멀티 프로바이더 (기본값 claude-fallback: Claude 우선 → Groq 폴백) — `/lib/ai/`
 - **배포**: Vercel + Cron Jobs (백그라운드 처리)
 
 ### 핵심 도메인 개념
@@ -79,8 +79,8 @@ NEXT_PUBLIC_SITE_URL
 
 주요 선택:
 ```
-GROQ_API_KEY / ANTHROPIC_API_KEY / PERPLEXITY_API_KEY
-AI_PROVIDER=groq          # groq|claude|perplexity
+GROQ_API_KEY / ANTHROPIC_API_KEY
+AI_PROVIDER=claude-fallback   # groq|claude|claude-fallback
 ADMIN_EMAILS              # 쉼표 구분 어드민 이메일
 CRON_SECRET               # Vercel cron 인증
 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
