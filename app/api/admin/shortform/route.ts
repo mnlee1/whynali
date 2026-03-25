@@ -92,18 +92,17 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // 중복 job 확인 (같은 이슈 + 같은 트리거 타입 + pending/approved 상태)
+        // 중복 job 확인 (같은 이슈 + pending/approved 상태 — trigger_type 무관)
         const { data: existingJobs } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('id')
+            .select('id, trigger_type')
             .eq('issue_id', issueId)
-            .eq('trigger_type', triggerType)
             .in('approval_status', ['pending', 'approved'])
             .limit(1)
 
         if (existingJobs && existingJobs.length > 0) {
             return NextResponse.json(
-                { error: 'DUPLICATE_JOB', message: '이미 생성된 숏폼 job이 있습니다' },
+                { error: 'DUPLICATE_JOB', message: '이미 대기 또는 승인된 숏폼 job이 있습니다' },
                 { status: 409 }
             )
         }

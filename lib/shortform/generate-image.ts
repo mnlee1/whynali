@@ -17,7 +17,7 @@ import type { ShortformJob } from '@/types/shortform'
 import { generateShortformText, type ShortformTextInput } from './generate-text'
 import { fetch3StockImages } from './fetch-stock-images'
 import { createScene1, createScene2, createScene3 } from './generate-scenes'
-import { create3SceneVideo } from './create-multi-video'
+import { create3SceneVideo, type SceneContent } from './create-multi-video'
 
 const WIDTH = 1080
 const HEIGHT = 1920
@@ -231,8 +231,8 @@ export async function generate3SceneShortform(
     
     console.log('[생성된 Scene 자막]', generatedText)
     
-    // 2. 스톡 이미지 3장 가져오기
-    const stockImages = await fetch3StockImages(input.issueCategory)
+    // 2. 스톡 이미지 3장 가져오기 (제목 키워드 우선, 카테고리 폴백)
+    const stockImages = await fetch3StockImages(input.issueCategory, input.issueTitle)
     
     // Fallback: API 실패 시 단색 배경 사용
     if (stockImages.length === 0) {
@@ -246,16 +246,23 @@ export async function generate3SceneShortform(
     const scene2Bg = await createBackgroundScene(stockImages[1])
     const scene3Bg = await createBackgroundScene(stockImages[2])
     
-    // 4. Scene별 텍스트 오버레이 생성 (투명 배경)
-    const text1 = await createSceneTextOverlay(generatedText.scene1, 1, input.issueUrl)
-    const text2 = await createSceneTextOverlay(generatedText.scene2, 2, input.issueUrl)
-    const text3 = await createSceneTextOverlay(generatedText.scene3, 3, input.issueUrl)
-    
-    // 5. 동영상 합성 (Scene별 배경 + 텍스트 페이드 전환)
+    // 4. Scene별 구조 레이어 생성 (로고 + CTA 버튼 rect) — title/desc로 수직 중앙 위치 계산
+    const text1 = await createSceneTextOverlay(1, generatedText.scene1Title, generatedText.scene1Desc)
+    const text2 = await createSceneTextOverlay(2, generatedText.scene2Title, generatedText.scene2Desc)
+    const text3 = await createSceneTextOverlay(3, generatedText.scene3Title, generatedText.scene3Desc)
+
+    // 5. 동영상 합성 (씬 슬라이드 전환 + FFmpeg drawtext로 Pretendard 텍스트 렌더링)
+    const sceneContents: [SceneContent, SceneContent, SceneContent] = [
+        { title: generatedText.scene1Title, desc: generatedText.scene1Desc },
+        { title: generatedText.scene2Title, desc: generatedText.scene2Desc },
+        { title: generatedText.scene3Title, desc: generatedText.scene3Desc },
+    ]
     const videoBuffer = await create3SceneVideo(
         [scene1Bg, scene2Bg, scene3Bg],
         [text1, text2, text3],
-        duration
+        duration,
+        undefined,
+        sceneContents
     )
     
     return videoBuffer

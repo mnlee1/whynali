@@ -15,12 +15,13 @@ import { uploadToYouTube, getYoutubeShortsUrl } from '@/lib/shortform/youtube-up
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const TEST_ISSUE_ID = '12f35c66-da31-4f6e-8e98-357a72eeeac8'
+const DEFAULT_TEST_ISSUE_ID = '12f35c66-da31-4f6e-8e98-357a72eeeac8'
 
 export async function GET(request: NextRequest) {
     const logs: string[] = []
     const searchParams = request.nextUrl.searchParams
     const includeYoutube = searchParams.get('youtube') === 'true'
+    const TEST_ISSUE_ID = searchParams.get('issueId') ?? DEFAULT_TEST_ISSUE_ID
     
     try {
         logs.push('=== 숏폼 E2E 테스트 시작 ===')

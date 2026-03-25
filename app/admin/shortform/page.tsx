@@ -36,6 +36,13 @@ interface ShortformJob {
 
 type FilterStatus = '' | 'pending' | 'approved' | 'rejected'
 
+interface ManualCreateModal {
+    open: boolean
+    issueId: string
+    loading: boolean
+    error: string | null
+}
+
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
     { value: '', label: '전체' },
     { value: 'pending', label: '대기' },
@@ -88,6 +95,12 @@ export default function AdminShortformPage() {
     const [processingId, setProcessingId] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
+    const [manualCreate, setManualCreate] = useState<ManualCreateModal>({
+        open: false,
+        issueId: '',
+        loading: false,
+        error: null,
+    })
 
     const loadJobs = useCallback(async (status: FilterStatus, targetPage: number = 1) => {
         setLoading(true)
@@ -176,25 +189,32 @@ export default function AdminShortformPage() {
         }
     }
 
-    const handleVideoUpload = async (id: string, file: File) => {
-        setProcessingId(id)
-        try {
-            const formData = new FormData()
-            formData.append('video', file)
+    const handleManualCreate = async () => {
+        const { issueId } = manualCreate
+        if (!issueId.trim()) {
+            setManualCreate((prev) => ({ ...prev, error: 'Issue ID를 입력해 주세요' }))
+            return
+        }
 
-            const res = await fetch(`/api/admin/shortform/${id}/upload-video`, {
+        setManualCreate((prev) => ({ ...prev, loading: true, error: null }))
+        try {
+            const res = await fetch('/api/admin/shortform', {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ issueId: issueId.trim(), triggerType: 'issue_created' }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            alert('동영상 업로드 완료!')
-            await loadJobs(filter, page)
+            setManualCreate({ open: false, issueId: '', loading: false, error: null })
+            setFilter('pending')
+            await loadJobs('pending', 1)
         } catch (e) {
-            alert(e instanceof Error ? e.message : '동영상 업로드 실패')
-        } finally {
-            setProcessingId(null)
+            setManualCreate((prev) => ({
+                ...prev,
+                loading: false,
+                error: e instanceof Error ? e.message : 'Job 생성 실패',
+            }))
         }
     }
 
@@ -232,6 +252,12 @@ export default function AdminShortformPage() {
                             마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
+                    <button
+                        onClick={() => setManualCreate({ open: true, issueId: '', loading: false, error: null })}
+                        className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                        수동 생성
+                    </button>
                     <button
                         onClick={() => loadJobs(filter, page)}
                         className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
@@ -465,19 +491,6 @@ export default function AdminShortformPage() {
                                                         <div className="flex flex-col gap-1.5">
                                                             {!isYoutubeUploaded && (
                                                                 <>
-                                                                    <label className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer disabled:opacity-50 text-center">
-                                                                        <input
-                                                                            type="file"
-                                                                            accept="video/mp4"
-                                                                            className="hidden"
-                                                                            disabled={isProcessing}
-                                                                            onChange={(e) => {
-                                                                                const file = e.target.files?.[0]
-                                                                                if (file) handleVideoUpload(job.id, file)
-                                                                            }}
-                                                                        />
-                                                                        동영상 업로드
-                                                                    </label>
                                                                     <button
                                                                         onClick={() => handleYoutubeUpload(job.id)}
                                                                         disabled={isProcessing}
@@ -565,6 +578,55 @@ export default function AdminShortformPage() {
                         >
                             »
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* 수동 job 생성 모달 */}
+            {manualCreate.open && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                    onClick={() => !manualCreate.loading && setManualCreate({ open: false, issueId: '', loading: false, error: null })}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 className="text-lg font-bold mb-1">수동 숏폼 Job 생성</h2>
+                        <p className="text-sm text-gray-500 mb-4">
+                            이슈 ID를 입력하면 화력 필터·쿨다운 없이 job을 생성합니다.
+                        </p>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Issue ID
+                        </label>
+                        <input
+                            type="text"
+                            value={manualCreate.issueId}
+                            onChange={(e) => setManualCreate((prev) => ({ ...prev, issueId: e.target.value, error: null }))}
+                            onKeyDown={(e) => e.key === 'Enter' && handleManualCreate()}
+                            placeholder="예: 550e8400-e29b-41d4-a716-446655440000"
+                            disabled={manualCreate.loading}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+                        />
+                        {manualCreate.error && (
+                            <p className="mt-2 text-sm text-red-600">{manualCreate.error}</p>
+                        )}
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setManualCreate({ open: false, issueId: '', loading: false, error: null })}
+                                disabled={manualCreate.loading}
+                                className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleManualCreate}
+                                disabled={manualCreate.loading || !manualCreate.issueId.trim()}
+                                className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                            >
+                                {manualCreate.loading ? '생성 중...' : 'Job 생성'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
