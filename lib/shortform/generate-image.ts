@@ -189,7 +189,11 @@ export async function generateShortformImage(job: ShortformJob | GenerateImageIn
         communityCount: jobData.source_count.community,
     })
     
-    const svg = generateSvgTemplate(jobData, generatedText)
+    const svg = generateSvgTemplate(jobData, {
+        scene1: generatedText.scene1Title,
+        scene2: generatedText.scene2Title,
+        scene3: generatedText.scene3Title,
+    })
     const svgBuffer = Buffer.from(svg)
     
     const image = await sharp(svgBuffer)
