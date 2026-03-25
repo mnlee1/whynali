@@ -84,9 +84,6 @@ function LoginForm() {
                         </svg>
                         {loading === 'kakao' ? '연결 중...' : 'Kakao로 로그인'}
                     </button>
-                    <p className="text-xs text-gray-500 mt-1.5 px-1">
-                        카카오 앱 검수 진행 중으로 일시적으로 로그인이 제한됩니다.
-                    </p>
                 </div>
 
                 <div>
@@ -97,9 +94,6 @@ function LoginForm() {
                         <span className="w-5 h-5 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
                         네이버로 로그인
                     </Link>
-                    <p className="text-xs text-gray-500 mt-1.5 px-1">
-                        테스트 단계로 테스터 ID를 등록해야 로그인이 가능합니다.
-                    </p>
                 </div>
             </div>
 
