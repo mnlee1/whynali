@@ -1,7 +1,10 @@
 /**
  * lib/shortform/generate-scenes.ts
- * 
- * 3개 Scene 이미지 생성 (레퍼런스 스타일)
+ *
+ * 3개 Scene 이미지 생성 (구조 레이어 + drawtext 필터)
+ * - Sharp: 로고 이미지 + CTA 버튼 rect (scene 3만)
+ * - FFmpeg drawtext: 타이틀·설명 (word-by-word 타이핑 효과)
+ * - computeLayout: 로고/텍스트/버튼을 수직 중앙 그룹으로 배치
  */
 
 import sharp from 'sharp'
@@ -12,56 +15,171 @@ import { downloadImage } from './fetch-stock-images'
 const WIDTH = 1080
 const HEIGHT = 1920
 
-const HEAT_COLORS = {
-    '높음': { bg: '#FEE2E2', text: '#991B1B' },
-    '보통': { bg: '#FEF3C7', text: '#92400E' },
-    '낮음': { bg: '#F3F4F6', text: '#374151' },
+// ── 레이아웃 단위 ──────────────────────────────────────────────
+const LOGO_W = 240
+const LOGO_H = 95
+const LOGO_TEXT_GAP = 55     // 로고 bottom → 타이틀 top
+const TITLE_FONTSIZE = 92
+const TITLE_LINE_HEIGHT = 100  // 타이틀 줄 간격
+const TEXT_GAP = 48          // 타이틀 bottom → 설명 top
+const DESC_FONTSIZE = 54
+const DESC_LINE_HEIGHT = 64
+const BUTTON_GAP = 80        // 설명 bottom → 버튼 top (scene 3만)
+const BUTTON_H = 130
+const BUTTON_W = 660
+// ─────────────────────────────────────────────────────────────
+
+interface SceneLayout {
+    logoY: number
+    titleStartY: number
+    descStartY: number
+    buttonY: number   // -1 if scene 1 or 2
 }
 
-const STATUS_COLORS = {
-    '점화': { bg: '#FED7AA', text: '#9A3412' },
-    '논란중': { bg: '#FCA5A5', text: '#991B1B' },
-    '종결': { bg: '#E5E7EB', text: '#374151' },
+/** 단어 경계 기준 줄바꿈 */
+function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
+    const words = text.split(' ').filter(w => w.length > 0)
+    if (words.length === 0) return ['']
+    const lines: string[] = []
+    let current = ''
+    for (const word of words) {
+        const test = current ? `${current} ${word}` : word
+        if (test.length <= maxCharsPerLine) {
+            current = test
+        } else {
+            if (current) lines.push(current)
+            current = word
+        }
+    }
+    if (current) lines.push(current)
+    return lines
 }
 
-function escapeXml(text: string): string {
+/**
+ * 로고·타이틀·설명·버튼을 하나의 그룹으로 수직 중앙 정렬.
+ * scene 3에만 버튼 포함.
+ */
+function computeLayout(title: string, desc: string, sceneNumber: number): SceneLayout {
+    const titleLineCount = Math.max(1, wordWrapLines(title, 13).length)
+    const descLineCount = Math.max(1, wordWrapLines(desc, 16).length)
+
+    const titleHeight = (titleLineCount - 1) * TITLE_LINE_HEIGHT + TITLE_FONTSIZE
+    const descHeight = (descLineCount - 1) * DESC_LINE_HEIGHT + DESC_FONTSIZE
+
+    let totalHeight = LOGO_H + LOGO_TEXT_GAP + titleHeight + TEXT_GAP + descHeight
+    if (sceneNumber === 3) totalHeight += BUTTON_GAP + BUTTON_H
+
+    const startY = Math.floor((HEIGHT - totalHeight) / 2)
+
+    const logoY = startY
+    const titleStartY = startY + LOGO_H + LOGO_TEXT_GAP
+    const descStartY = titleStartY + titleHeight + TEXT_GAP
+    const buttonY = sceneNumber === 3 ? descStartY + descHeight + BUTTON_GAP : -1
+
+    return { logoY, titleStartY, descStartY, buttonY }
+}
+
+function escapeDrawtext(text: string): string {
     return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/:/g, '\\:')
 }
 
 function getLogoBase64(): string {
     try {
         const logoPath = join(process.cwd(), 'public', 'whynali-logo.png')
-        const logoBuffer = readFileSync(logoPath)
-        return `data:image/png;base64,${logoBuffer.toString('base64')}`
+        return `data:image/png;base64,${readFileSync(logoPath).toString('base64')}`
     } catch {
         return ''
     }
 }
 
 /**
+ * 단어 단위 타이핑 효과 drawtext 필터 배열 생성.
+ */
+function buildTypingFilters(
+    text: string,
+    maxCharsPerLine: number,
+    startY: number,
+    lineHeight: number,
+    fontSize: number,
+    fontColor: string,
+    borderWidth: number,
+    ffmpegFont: string,
+    timeOffset: number,
+    wordDelay: number
+): { filters: string[], duration: number } {
+    const words = text.split(' ').filter(w => w.length > 0)
+    if (words.length === 0) return { filters: [], duration: 0 }
+
+    // 최종 줄 배치 기준으로 각 단어의 줄 번호 미리 계산
+    const wordLineIdx: number[] = []
+    let lineIdx = 0
+    let lineLen = 0
+    for (const word of words) {
+        if (!lineLen) {
+            lineLen = word.length
+        } else if (lineLen + 1 + word.length <= maxCharsPerLine) {
+            lineLen += 1 + word.length
+        } else {
+            lineIdx++
+            lineLen = word.length
+        }
+        wordLineIdx.push(lineIdx)
+    }
+
+    const filters: string[] = []
+    const borderPart = borderWidth > 0 ? `borderw=${borderWidth}:bordercolor=black:` : ''
+
+    for (let n = 1; n <= words.length; n++) {
+        const stateStart = timeOffset + (n - 1) * wordDelay
+        const stateEnd = n < words.length ? timeOffset + n * wordDelay : null
+        const enableExpr = stateEnd !== null
+            ? `between(t,${stateStart.toFixed(3)},${stateEnd.toFixed(3)})`
+            : `gte(t,${stateStart.toFixed(3)})`
+
+        const lineWords = new Map<number, string[]>()
+        for (let i = 0; i < n; i++) {
+            const li = wordLineIdx[i]
+            if (!lineWords.has(li)) lineWords.set(li, [])
+            lineWords.get(li)!.push(words[i])
+        }
+
+        for (const [li, lw] of lineWords) {
+            filters.push(
+                `drawtext=${ffmpegFont}` +
+                `text='${escapeDrawtext(lw.join(' '))}':` +
+                `x=(w-tw)/2:y=${startY + li * lineHeight}:` +
+                `fontsize=${fontSize}:fontcolor=${fontColor}:` +
+                `${borderPart}` +
+                `enable='${enableExpr}'`
+            )
+        }
+    }
+
+    return { filters, duration: words.length * wordDelay }
+}
+
+// ─────────────────────────────────────────────────────────────
+
+/**
  * 배경 이미지만 생성 (텍스트 없이)
  */
 export async function createBackgroundScene(backgroundUrl: string): Promise<Buffer> {
     const bgBuffer = await downloadImage(backgroundUrl)
-    
-    // 배경 이미지 처리 (밝게 조정)
+
     const background = await sharp(bgBuffer)
         .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'center' })
         .modulate({ brightness: 0.65 })
         .toBuffer()
-    
-    // 약한 오버레이
+
     const svg = `
         <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
             <rect width="${WIDTH}" height="${HEIGHT}" fill="black" opacity="0.35"/>
         </svg>
     `
-    
+
     return await sharp(background)
         .composite([{ input: Buffer.from(svg), blend: 'over' }])
         .png()
@@ -69,88 +187,30 @@ export async function createBackgroundScene(backgroundUrl: string): Promise<Buff
 }
 
 /**
- * Scene별 텍스트 레이어 생성 (투명 배경)
- * 
- * @param text - Scene에 표시할 자막 텍스트
- * @param sceneNumber - Scene 번호 (1, 2, 3)
- * @param issueUrl - 이슈 URL (Scene 3에서 표시)
+ * Scene 구조 레이어 생성 (투명 배경).
+ * 로고 + CTA 버튼 rect (scene 3만) — 위치는 computeLayout 기준.
+ *
+ * @param sceneNumber - 씬 번호
+ * @param title - 타이틀 (레이아웃 계산용)
+ * @param desc - 설명 (레이아웃 계산용)
  */
-export async function createSceneTextOverlay(text: string, sceneNumber: number, issueUrl?: string): Promise<Buffer> {
+export async function createSceneTextOverlay(
+    sceneNumber: number,
+    title: string = '',
+    desc: string = ''
+): Promise<Buffer> {
+    const layout = computeLayout(title, desc, sceneNumber)
     const logoBase64 = getLogoBase64()
-    
-    // 텍스트 줄바꿈 처리 (15자 기준)
-    const lines = text.length > 15 ? [
-        text.slice(0, 15),
-        text.slice(15, 30),
-    ] : [text]
-    
-    // Scene별 다른 레이아웃
-    let svgContent = ''
-    
-    if (sceneNumber === 1) {
-        // Scene 1: 로고 + 훅 텍스트 (상단)
-        svgContent = `
-            ${logoBase64 ? `<image href="${logoBase64}" x="${WIDTH / 2 - 150}" y="300" width="300" height="120" preserveAspectRatio="xMidYMid meet"/>` : ''}
-            ${lines.map((line, i) => `
-                <text x="${WIDTH / 2}" y="${550 + i * 90}" text-anchor="middle" 
-                      font-family="Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif" 
-                      font-size="80" font-weight="900" fill="#FFFFFF"
-                      stroke="#000000" stroke-width="4">
-                    ${escapeXml(line)}
-                </text>
-            `).join('')}
-        `
-    } else if (sceneNumber === 2) {
-        // Scene 2: 중앙 강조 텍스트
-        svgContent = `
-            ${lines.map((line, i) => `
-                <text x="${WIDTH / 2}" y="${860 + i * 90}" text-anchor="middle" 
-                      font-family="Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif" 
-                      font-size="76" font-weight="900" fill="#FFFFFF"
-                      stroke="#000000" stroke-width="3">
-                    ${escapeXml(line)}
-                </text>
-            `).join('')}
-        `
-    } else {
-        // Scene 3: CTA 버튼 스타일 + URL
-        const shortUrl = issueUrl ? issueUrl.replace('https://', '') : ''
-        svgContent = `
-            ${lines.map((line, i) => `
-                <text x="${WIDTH / 2}" y="${720 + i * 90}" text-anchor="middle" 
-                      font-family="Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif" 
-                      font-size="76" font-weight="900" fill="#FFFFFF"
-                      stroke="#000000" stroke-width="3">
-                    ${escapeXml(line)}
-                </text>
-            `).join('')}
-            <rect x="${WIDTH / 2 - 350}" y="1000" width="700" height="140" rx="70" fill="#1E40AF"/>
-            <text x="${WIDTH / 2}" y="1095" text-anchor="middle" 
-                  font-family="Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif" 
-                  font-size="56" font-weight="700" fill="#FFFFFF">
-                지금 바로 확인하기
-            </text>
-            ${shortUrl ? `
-            <text x="${WIDTH / 2}" y="1180" text-anchor="middle" 
-                  font-family="Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif" 
-                  font-size="32" font-weight="500" fill="#E5E7EB">
-                왜난리에서 실시간 여론·토론·타임라인 확인
-            </text>
-            <text x="${WIDTH / 2}" y="1230" text-anchor="middle" 
-                  font-family="Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif" 
-                  font-size="28" font-weight="500" fill="#93C5FD">
-                ${escapeXml(shortUrl)}
-            </text>
-            ` : ''}
-        `
-    }
-    
+    const logoX = Math.floor(WIDTH / 2 - LOGO_W / 2)
+    const ctaX = Math.floor(WIDTH / 2 - BUTTON_W / 2)
+
     const svg = `
         <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-            ${svgContent}
+            ${logoBase64 ? `<image href="${logoBase64}" x="${logoX}" y="${layout.logoY}" width="${LOGO_W}" height="${LOGO_H}" preserveAspectRatio="xMidYMid meet"/>` : ''}
+            ${sceneNumber === 3 && layout.buttonY > 0 ? `<rect x="${ctaX}" y="${layout.buttonY}" width="${BUTTON_W}" height="${BUTTON_H}" rx="${Math.floor(BUTTON_H / 2)}" fill="#1E40AF"/>` : ''}
         </svg>
     `
-    
+
     return await sharp({
         create: {
             width: WIDTH,
@@ -165,21 +225,134 @@ export async function createSceneTextOverlay(text: string, sceneNumber: number, 
 }
 
 /**
- * 텍스트 레이어 생성 (투명 배경) - 레거시
- * @deprecated createSceneTextOverlay 사용 권장
+ * Scene 텍스트를 FFmpeg drawtext 필터 배열로 반환.
+ * computeLayout 기준으로 타이틀·설명 위치 결정.
+ * CTA 버튼 텍스트는 scene 3에서 정적으로 표시 (타이핑 없음).
  */
-export async function createTextOverlay(title: string): Promise<Buffer> {
-    return createSceneTextOverlay(title, 1)
+export function getSceneTextDrawtextFilters(
+    title: string,
+    desc: string,
+    sceneNumber: number,
+    fontPath: string,
+    typing: boolean = true,
+    sceneDuration: number = 3.67
+): string[] {
+    const filters: string[] = []
+    const layout = computeLayout(title, desc, sceneNumber)
+
+    const ffmpegFont = fontPath
+        ? `fontfile='${fontPath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1\\:')}':`
+        : ''
+
+    const titleWords = title.split(' ').filter(w => w.length > 0)
+    const descWords = desc.split(' ').filter(w => w.length > 0)
+    const totalWords = titleWords.length + descWords.length
+    const wordDelay = totalWords > 0
+        ? Math.min(0.4, (sceneDuration * 0.78) / totalWords)
+        : 0.35
+
+    if (typing) {
+        // 타이틀 word-by-word
+        const titleResult = buildTypingFilters(
+            title, 13,
+            layout.titleStartY, TITLE_LINE_HEIGHT, TITLE_FONTSIZE,
+            'white', 5, ffmpegFont,
+            0, wordDelay
+        )
+        filters.push(...titleResult.filters)
+
+        // 설명 word-by-word (타이틀 완료 후 시작)
+        const descResult = buildTypingFilters(
+            desc, 16,
+            layout.descStartY, DESC_LINE_HEIGHT, DESC_FONTSIZE,
+            '0xE5E7EB', 3, ffmpegFont,
+            titleResult.duration, wordDelay
+        )
+        filters.push(...descResult.filters)
+    } else {
+        wordWrapLines(title, 13).forEach((line, i) => {
+            filters.push(
+                `drawtext=${ffmpegFont}` +
+                `text='${escapeDrawtext(line)}':` +
+                `x=(w-tw)/2:y=${layout.titleStartY + i * TITLE_LINE_HEIGHT}:` +
+                `fontsize=${TITLE_FONTSIZE}:fontcolor=white:borderw=5:bordercolor=black`
+            )
+        })
+        wordWrapLines(desc, 16).forEach((line, i) => {
+            filters.push(
+                `drawtext=${ffmpegFont}` +
+                `text='${escapeDrawtext(line)}':` +
+                `x=(w-tw)/2:y=${layout.descStartY + i * DESC_LINE_HEIGHT}:` +
+                `fontsize=${DESC_FONTSIZE}:fontcolor=0xE5E7EB:borderw=3:bordercolor=black`
+            )
+        })
+    }
+
+    // CTA 버튼 텍스트: scene 3만, 정적 (타이핑 없음, t=0부터 표시)
+    if (sceneNumber === 3 && layout.buttonY > 0) {
+        const btnCenterY = layout.buttonY + Math.floor(BUTTON_H / 2)
+        filters.push(
+            `drawtext=${ffmpegFont}` +
+            `text='지금 바로 확인하기':` +
+            `x=(w-tw)/2:y=${btnCenterY}-th/2:` +
+            `fontsize=58:fontcolor=white`
+        )
+    }
+
+    return filters
 }
 
 /**
- * Scene 1, 2, 3: 배경 이미지만 반환
+ * FFmpeg drawtext 타이핑 효과 (단어 단위 누적 — 레거시).
+ * @deprecated getSceneTextDrawtextFilters(typing=true) 사용 권장
  */
-export async function createScene1(backgroundUrl: string, catchphrase: string): Promise<Buffer> {
+export function getTypingDrawtextFilters(
+    text: string,
+    sceneNumber: number,
+    sceneStartOffset: number,
+    sceneDuration: number,
+    fontPath: string
+): string[] {
+    const words = text.split(' ').filter(w => w.length > 0)
+    if (words.length === 0) return []
+
+    const wordDuration = sceneDuration / words.length
+    const yMap: Record<number, number> = { 1: 550, 2: 860, 3: 720 }
+    const y = yMap[sceneNumber] ?? 860
+
+    const fontfileParam = fontPath
+        ? `fontfile='${fontPath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1\\:')}':`
+        : ''
+
+    return words.map((_, i) => {
+        const cumulativeText = words.slice(0, i + 1).join(' ')
+        const startTime = sceneStartOffset + i * wordDuration
+        const isLast = i === words.length - 1
+        const endTime = isLast ? null : sceneStartOffset + (i + 1) * wordDuration
+        const enableExpr = endTime !== null
+            ? `between(t,${startTime.toFixed(3)},${endTime.toFixed(3)})`
+            : `gte(t,${startTime.toFixed(3)})`
+        const escapedText = cumulativeText
+            .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')
+
+        return (
+            `drawtext=${fontfileParam}` +
+            `text='${escapedText}':x=(w-tw)/2:y=${y}:` +
+            `fontsize=80:fontcolor=white:borderw=4:bordercolor=black:enable='${enableExpr}'`
+        )
+    })
+}
+
+/** @deprecated */
+export async function createTextOverlay(_title: string): Promise<Buffer> {
+    return createSceneTextOverlay(1)
+}
+
+export async function createScene1(backgroundUrl: string, _c: string): Promise<Buffer> {
     return createBackgroundScene(backgroundUrl)
 }
 
-export async function createScene2(backgroundUrl: string, title: string, status: string, heatGrade: string): Promise<Buffer> {
+export async function createScene2(backgroundUrl: string, _t: string, _s: string, _h: string): Promise<Buffer> {
     return createBackgroundScene(backgroundUrl)
 }
 
