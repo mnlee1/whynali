@@ -110,7 +110,7 @@ export async function POST(
 
     /* 욕설/혐오는 즉시 알림 (비동기, 실패해도 신고는 성공) */
     if (reason === '욕설/혐오') {
-        void sendDoorayReportAlert({
+        sendDoorayReportAlert({
             commentId: comment_id,
             body: comment.body,
             reason,
@@ -118,7 +118,7 @@ export async function POST(
             autoHidden: shouldAutoHide,
             contextType: comment.discussion_topic_id ? 'discussion' : 'issue',
             contextId: comment.discussion_topic_id || comment.issue_id || '',
-        })
+        }).catch(e => console.error('[Dooray 신고 알림 실패]', e))
     }
 
     return NextResponse.json({ 
