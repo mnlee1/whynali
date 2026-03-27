@@ -20,6 +20,7 @@ function LoginForm() {
         const next = searchParams.get('next') ?? '/'
         const options: { redirectTo: string; scopes?: string } = {
             redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+            scopes: provider === 'kakao' ? 'account_email' : undefined,
         }
         const { error: err } = await supabase.auth.signInWithOAuth({
             provider,

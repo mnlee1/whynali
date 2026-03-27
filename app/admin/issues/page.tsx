@@ -393,7 +393,7 @@ export default function AdminIssuesPage() {
                             <li>• <span className="font-semibold">타임라인 필수</span>: 모든 이슈가 타임라인 포함 (생성 실패 시 이슈 삭제)</li>
                             <li>• <span className="font-semibold">법적 안전</span>: 커뮤니티 게시글 내용 사용 안 함 (메타데이터만 사용)</li>
                             <li>• <span className="font-semibold">중복 방지 (4단계)</span>: 제목 일치 → 키워드 필터 → 반대어/숫자 감지 → AI 정밀 비교 (신뢰도 80%)</li>
-                            <li>• <span className="font-semibold">품질 관리</span>: 화력 15점 미만, 뉴스 0건, 커뮤니티 0건, 타임라인 생성 실패 시 이슈 자동 삭제</li>
+                            <li>• <span className="font-semibold">품질 관리</span>: 화력 8점 미만, 뉴스 0건, 커뮤니티 0건, 타임라인 생성 실패 시 이슈 자동 삭제</li>
                         </ul>
                     </div>
 
@@ -405,7 +405,7 @@ export default function AdminIssuesPage() {
                             <li>• <span className="font-semibold">연결된 커뮤니티</span>: AI 필터링으로 관련 글만 연결 (무관한 글 제거됨)</li>
                             <li>• <span className="font-semibold">타임라인</span>: 연결된 뉴스 기준으로 발단/전개 자동 생성 (최대 5개, 없으면 이슈 삭제됨)</li>
                             <li>• <span className="font-semibold">중복 체크</span>: AI가 4단계 검증했지만 최종 확인 권장</li>
-                            <li>• <span className="font-semibold">화력 추이</span>: 등록 시점과 현재 화력 비교 (15점 미만 이슈는 등록 단계에서 자동 삭제)</li>
+                            <li>• <span className="font-semibold">화력 추이</span>: 등록 시점과 현재 화력 비교 (8점 미만 이슈는 등록 단계에서 자동 삭제)</li>
                         </ul>
                     </div>
 

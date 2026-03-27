@@ -4,7 +4,6 @@
  * 서비스 이용약관 페이지
  *
  * 카카오·네이버 소셜 로그인 검수 요건 및 정보통신망법 OSP 면책 요건 충족.
- * [운영자명], [대표자명], [주소], [시행일] 플레이스홀더는 확정 후 교체 필요.
  */
 
 export const metadata = {
@@ -22,9 +21,9 @@ export default function TermsPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제1조 (목적)</h2>
                     <p>
-                        본 약관은 [운영자명](이하 &quot;운영자&quot;)이 운영하는 왜난리 서비스(이하 &quot;서비스&quot;,{' '}
+                        본 약관은 NHN AD(이하 &quot;회사&quot;)가 운영하는 왜난리 서비스(이하 &quot;서비스&quot;,{' '}
                         <a href="https://whynali.com" className="text-blue-600 underline">https://whynali.com</a>)의
-                        이용 조건 및 절차, 이용자와 운영자의 권리·의무·책임을 규정함을 목적으로 합니다.
+                        이용 조건 및 절차, 이용자와 회사의 권리·의무·책임을 규정함을 목적으로 합니다.
                     </p>
                 </section>
 
@@ -35,16 +34,16 @@ export default function TermsPage() {
                         <li><strong>회원</strong>: 소셜 로그인(Google, 네이버, 카카오)을 통해 가입하고 서비스를 이용하는 자.</li>
                         <li><strong>비회원</strong>: 로그인 없이 서비스를 열람하는 자.</li>
                         <li><strong>게시물</strong>: 회원이 서비스 내에 작성한 댓글, 투표 참여 기록, 토론 의견 등 일체.</li>
-                        <li><strong>운영자</strong>: [운영자명] (대표: [대표자명]).</li>
+                        <li><strong>회사</strong>: NHN AD.</li>
                     </ul>
                 </section>
 
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제3조 (서비스 내용)</h2>
-                    <p>운영자가 제공하는 서비스의 주요 내용은 다음과 같습니다.</p>
+                    <p>회사가 제공하는 서비스의 주요 내용은 다음과 같습니다.</p>
                     <ul className="list-disc pl-5 mt-2 space-y-1">
                         <li>국내 이슈 화력 분석 및 타임라인 정보 제공</li>
-                        <li>네이버 뉴스 API 및 커뮤니티 메타데이터 기반 이슈 정보 표시</li>
+                        <li>네이버 뉴스 API 기반 이슈 정보 표시</li>
                         <li>이슈에 대한 감정 표현(좋아요·싫어요·화나요·팝콘각·응원·애도·사이다)</li>
                         <li>댓글 및 대댓글 작성</li>
                         <li>여론 투표 참여</li>
@@ -81,7 +80,7 @@ export default function TermsPage() {
                             현재 제공하는 모든 서비스는 무료입니다.
                         </li>
                         <li>
-                            운영자는 추후 유료 서비스를 도입하거나 이용 요금을 변경할 수 있습니다.
+                            회사는 추후 유료 서비스를 도입하거나 이용 요금을 변경할 수 있습니다.
                             이 경우 시행 30일 전에 서비스 내 공지 또는 이메일을 통해 사전 고지합니다.
                         </li>
                         <li>
@@ -95,7 +94,7 @@ export default function TermsPage() {
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제6조 (마케팅 정보 수신)</h2>
                     <ol className="list-decimal pl-5 space-y-2">
                         <li>
-                            운영자는 회원의 <strong>별도 사전 동의</strong>를 받은 경우에 한하여 이메일 등을 통해
+                            회사는 회원의 <strong>별도 사전 동의</strong>를 받은 경우에 한하여 이메일 등을 통해
                             서비스 업데이트, 이벤트, 혜택 등 마케팅 정보를 발송할 수 있습니다.
                         </li>
                         <li>
@@ -136,7 +135,7 @@ export default function TermsPage() {
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제8조 (이용 제한 및 계정 정지)</h2>
                     <ol className="list-decimal pl-5 space-y-2">
                         <li>
-                            운영자는 제6조 금지 행위 위반 시 아래 단계에 따라 조치를 취할 수 있습니다.
+                            회사는 제7조 금지 행위 위반 시 아래 단계에 따라 조치를 취할 수 있습니다.
                             <ul className="list-disc pl-5 mt-1 space-y-1">
                                 <li><strong>1단계 (경고)</strong>: 위반 게시물 삭제 및 이메일 경고</li>
                                 <li><strong>2단계 (일시 정지)</strong>: 반복 위반 시 7일~30일 서비스 이용 정지</li>
@@ -150,7 +149,7 @@ export default function TermsPage() {
                         <li>
                             이용 제한에 이의가 있는 경우{' '}
                             <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a>으로
-                            이의를 제기할 수 있으며, 운영자는 영업일 7일 이내에 검토 결과를 회신합니다.
+                            이의를 제기할 수 있으며, 회사는 영업일 7일 이내에 검토 결과를 회신합니다.
                         </li>
                     </ol>
                 </section>
@@ -160,7 +159,7 @@ export default function TermsPage() {
                     <ol className="list-decimal pl-5 space-y-2">
                         <li>
                             회원이 작성한 게시물의 저작권은 해당 작성자에게 귀속됩니다.
-                            단, 회원은 서비스 운영·개선·홍보 목적에 한하여 운영자에게 게시물을 사용·복제·편집·배포할 수 있는
+                            단, 회원은 서비스 운영·개선·홍보 목적에 한하여 회사에게 게시물을 사용·복제·편집·배포할 수 있는
                             비독점적·무상 권리를 허락합니다.
                         </li>
                         <li>
@@ -168,7 +167,7 @@ export default function TermsPage() {
                             필터에 걸린 게시물은 자동으로 검토 대기 상태로 전환됩니다.
                         </li>
                         <li>
-                            운영자는 아래 기준에 해당하는 게시물을 사전 고지 없이 삭제하거나 비공개 처리할 수 있습니다.
+                            회사는 아래 기준에 해당하는 게시물을 사전 고지 없이 삭제하거나 비공개 처리할 수 있습니다.
                             <ul className="list-disc pl-5 mt-1 space-y-1">
                                 <li>욕설·비방·혐오·불법 정보 포함</li>
                                 <li>타인의 저작권 또는 초상권 침해</li>
@@ -179,7 +178,7 @@ export default function TermsPage() {
                         <li>
                             저작권 침해 등 권리 침해 신고는{' '}
                             <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a>으로
-                            접수합니다. 운영자는 신고 접수 후 <strong>48시간 이내 임시 차단 조치</strong>를 취하고,
+                            접수합니다. 회사는 신고 접수 후 <strong>48시간 이내 임시 차단 조치</strong>를 취하고,
                             게시자에게 소명 기회(7일)를 부여한 후 최종 처리합니다.
                         </li>
                     </ol>
@@ -189,12 +188,12 @@ export default function TermsPage() {
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제10조 (서비스 지식재산권)</h2>
                     <ol className="list-decimal pl-5 space-y-2">
                         <li>
-                            서비스 내 운영자가 제공하는 콘텐츠(왜난리 브랜드·로고, 화력 지수 알고리즘, UI 디자인,
-                            AI 생성 토론 주제·투표 등)의 저작권 및 지식재산권은 운영자에게 귀속됩니다.
+                            서비스 내 회사가 제공하는 콘텐츠(왜난리 브랜드·로고, 화력 지수 알고리즘, UI 디자인,
+                            AI 생성 토론 주제·투표 등)의 저작권 및 지식재산권은 회사에게 귀속됩니다.
                         </li>
                         <li>
                             이용자는 서비스를 개인적·비상업적 목적으로만 이용할 수 있으며,
-                            운영자의 사전 동의 없이 서비스 콘텐츠를 복제·배포·수정·2차 저작물 작성 등으로 활용할 수 없습니다.
+                            회사의 사전 동의 없이 서비스 콘텐츠를 복제·배포·수정·2차 저작물 작성 등으로 활용할 수 없습니다.
                         </li>
                         <li>
                             서비스에서 제공하는 뉴스 출처 링크 및 커뮤니티 출처 링크의 원저작권은 각 원저작자에게 있으며,
@@ -206,7 +205,7 @@ export default function TermsPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제11조 (서비스 변경 및 중단)</h2>
                     <p>
-                        운영자는 운영상·기술상 필요에 따라 서비스 내용을 변경하거나 중단할 수 있습니다.
+                        회사는 운영상·기술상 필요에 따라 서비스 내용을 변경하거나 중단할 수 있습니다.
                         이 경우 서비스 내 공지 또는 이메일을 통해 사전 고지합니다.
                         단, 긴급한 시스템 장애·보안 사고 등 불가피한 경우에는 사후 고지할 수 있습니다.
                     </p>
@@ -216,7 +215,7 @@ export default function TermsPage() {
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제12조 (면책 조항)</h2>
                     <ol className="list-decimal pl-5 space-y-2">
                         <li>
-                            서비스에서 제공하는 이슈 정보는 네이버 뉴스 API 및 커뮤니티 메타데이터를 기반으로 하며,
+                            서비스에서 제공하는 이슈 정보는 네이버 뉴스 API를 기반으로 하며,
                             정보의 정확성·완전성을 보장하지 않습니다.
                         </li>
                         <li>
@@ -224,10 +223,10 @@ export default function TermsPage() {
                             AI 생성 콘텐츠에는 서비스 내 &quot;AI 생성&quot; 표시가 부여됩니다.
                         </li>
                         <li>
-                            운영자는 천재지변, 서비스 장애, 이용자 귀책 사유로 발생한 손해에 대해 책임을 지지 않습니다.
+                            회사는 천재지변, 서비스 장애, 이용자 귀책 사유로 발생한 손해에 대해 책임을 지지 않습니다.
                         </li>
                         <li>
-                            이용자가 서비스를 통해 다른 이용자 또는 제3자와 발생한 분쟁에 대해 운영자는 개입하지 않으며,
+                            이용자가 서비스를 통해 다른 이용자 또는 제3자와 발생한 분쟁에 대해 회사는 개입하지 않으며,
                             이로 인한 손해에 대해 책임지지 않습니다.
                         </li>
                     </ol>
@@ -236,7 +235,7 @@ export default function TermsPage() {
                 <section>
                     <h2 className="text-base font-semibold text-gray-900 mb-3">제13조 (약관의 변경)</h2>
                     <p>
-                        운영자는 관련 법령 또는 서비스 정책 변경에 따라 약관을 개정할 수 있습니다.
+                        회사는 관련 법령 또는 서비스 정책 변경에 따라 약관을 개정할 수 있습니다.
                         약관을 변경하는 경우 시행 7일 전에 서비스 내 공지 또는 가입 이메일을 통해 고지하며,
                         이용자가 변경 약관에 동의하지 않을 경우 서비스 이용을 중단하고 탈퇴할 수 있습니다.
                         변경 고지 후 계속 이용 시 변경된 약관에 동의한 것으로 간주합니다.
@@ -244,18 +243,15 @@ export default function TermsPage() {
                 </section>
 
                 <section>
-                    <h2 className="text-base font-semibold text-gray-900 mb-3">제14조 (준거법 및 관할 법원)</h2>
+                    <h2 className="text-base font-semibold text-gray-900 mb-3">제14조 (준거법)</h2>
                     <p>
                         본 약관은 대한민국 법률에 따라 해석되고 적용됩니다.
-                        서비스 이용과 관련하여 분쟁이 발생한 경우 운영자 소재지를 관할하는 법원을 전속 관할 법원으로 합니다.
                     </p>
                 </section>
 
                 <section className="border-t pt-6">
                     <p className="text-xs text-gray-500">
-                        시행일: [시행일]<br />
-                        운영자: [운영자명] / 대표: [대표자명]<br />
-                        주소: [주소]<br />
+                        시행일: 2026년 4월 16일<br />
                         문의: <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a>
                     </p>
                 </section>

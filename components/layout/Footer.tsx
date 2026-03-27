@@ -27,10 +27,16 @@ export default function Footer() {
                         <Link href="/privacy" className="hover:text-content-primary transition-colors">
                             개인정보처리방침
                         </Link>
+                        <a href="mailto:dl_deflow@nhnad.com" className="hover:text-neutral-900">
+                            메일문의
+                        </a>
                     </nav>
                 </div>
                 <p className="mt-3 text-center sm:text-left text-xs text-content-muted">
                     한국 이슈를 한눈에 파악하고 여론을 확인하세요
+                </p>
+                <p className="mt-1 text-center sm:text-left text-xs text-neutral-400">
+                    © NHN AD. All rights reserved.
                 </p>
             </div>
         </footer>
