@@ -241,44 +241,38 @@ export default function MypageClient({
     return (
         <div className="container mx-auto px-4 py-8 max-w-2xl">
             {/* 프로필 카드 */}
-            <div className="flex items-center gap-4 mb-8 p-5 bg-gray-50 rounded-xl">
+            <div className="flex items-center gap-4 mb-8 p-5 bg-primary-light/35 border border-primary-muted rounded-xl">
                 <div className="relative shrink-0">
-                    <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-2xl font-bold text-blue-700">
+                    <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted">
                         {initial}
                     </div>
                     <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${providerInfo.badgeClass}`}>
                         {providerInfo.badge}
                     </div>
                 </div>
-                <div>
-                    <p className="text-lg font-bold text-gray-900">{nickname}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0 ${providerInfo.badgeClass}`}>
-                            {providerInfo.badge}
-                        </div>
-                        <span className="text-sm text-gray-500 truncate">
-                            {email ?? providerInfo.text}
-                        </span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">가입일 {formatDate(joinedAt)}</p>
+                <div className="min-w-0">
+                    <p className="text-lg font-bold text-content-primary">{nickname}</p>
+                    <p className="text-sm text-content-secondary mt-0.5 truncate">{email ?? providerInfo.text}</p>
+                    <p className="text-xs text-content-muted mt-1">가입일 {formatDate(joinedAt)}</p>
                 </div>
             </div>
 
             {/* 탭 */}
-            <div className="flex border-b border-gray-200 mb-6">
+            <div className="flex flex-wrap gap-1.5 mb-6">
                 {tabs.map(({ key, label, count }) => (
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                        className={[
+                            'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
                             tab === key
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                        ].join(' ')}
                     >
                         {label}
                         {count !== undefined && count > 0 && (
-                            <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 rounded-full text-gray-600">
+                            <span className={`px-1.5 py-0.5 text-xs rounded-full font-medium ${tab === key ? 'bg-white/25 text-white' : 'bg-primary-light text-primary'}`}>
                                 {count}
                             </span>
                         )}
@@ -290,17 +284,17 @@ export default function MypageClient({
             {tab === 'profile' && (
                 <div className="space-y-6">
                     {/* 닉네임 변경 */}
-                    <section className="p-5 border border-gray-200 rounded-xl">
-                        <h2 className="text-sm font-semibold text-gray-700 mb-3">닉네임 변경</h2>
+                    <section className="card p-5">
+                        <h2 className="text-sm font-semibold text-content-secondary mb-3">닉네임 변경</h2>
                         {isAdmin ? (
                             <div>
                                 <input
                                     type="text"
                                     value={nicknameInput}
                                     disabled
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-surface-subtle text-content-disabled cursor-not-allowed"
                                 />
-                                <p className="mt-2 text-xs text-gray-400">관리자 계정은 닉네임을 변경할 수 없습니다.</p>
+                                <p className="mt-2 text-xs text-content-muted">관리자 계정은 닉네임을 변경할 수 없습니다.</p>
                             </div>
                         ) : (
                             <>
@@ -315,30 +309,30 @@ export default function MypageClient({
                                             setIsDuplicate(null)
                                         }}
                                         maxLength={16}
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="flex-1 px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                                         placeholder="닉네임 입력"
                                     />
                                     <button
                                         onClick={handleGenerateNickname}
                                         disabled={isGenerating}
-                                        className="px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                        className="btn-neutral btn-sm whitespace-nowrap"
                                     >
                                         {isGenerating ? '생성 중...' : '랜덤 생성'}
                                     </button>
                                     <button
                                         onClick={handleSaveNickname}
                                         disabled={isSavingNickname || nicknameInput === nickname || !nicknameInputValid || isDuplicate === true || isCheckingDuplicate}
-                                        className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                        className="btn-primary btn-sm"
                                     >
                                         {isSavingNickname ? '저장 중...' : '저장'}
                                     </button>
                                 </div>
-                                <p className="text-xs text-gray-400">한글·영문·숫자·_ 사용 가능, 2~16자</p>
+                                <p className="text-xs text-content-muted">한글·영문·숫자·_ 사용 가능, 2~16자</p>
                                 {nicknameError && <p className="mt-1.5 text-xs text-red-600">{nicknameError}</p>}
                                 {nicknameSuccess && <p className="mt-1.5 text-xs text-green-600">닉네임이 변경되었습니다.</p>}
                                 {!nicknameError && !nicknameSuccess && nicknameInput !== nickname && nicknameInputValid && (
                                     isCheckingDuplicate ? (
-                                        <p className="mt-1.5 text-xs text-gray-400">중복 확인 중...</p>
+                                        <p className="mt-1.5 text-xs text-content-muted">중복 확인 중...</p>
                                     ) : isDuplicate === true ? (
                                         <p className="mt-1.5 text-xs text-red-600">이미 사용 중인 닉네임입니다.</p>
                                     ) : isDuplicate === false ? (
@@ -350,26 +344,26 @@ export default function MypageClient({
                     </section>
 
                     {/* 마케팅 수신 동의 */}
-                    <section className="p-5 border border-gray-200 rounded-xl">
-                        <h2 className="text-sm font-semibold text-gray-700 mb-3">마케팅 수신 동의</h2>
+                    <section className="card p-5">
+                        <h2 className="text-sm font-semibold text-content-secondary mb-3">마케팅 수신 동의</h2>
                         <label className="flex items-center justify-between cursor-pointer">
                             <div>
-                                <span className="text-sm text-gray-600">서비스 업데이트·이벤트 알림 수신</span>
-                                <p className="text-xs text-gray-400 mt-0.5">
+                                <span className="text-sm text-content-secondary">서비스 업데이트·이벤트 알림 수신</span>
+                                <p className="text-xs text-content-muted mt-0.5">
                                     가입 시 등록한 이메일로 발송됩니다.
                                 </p>
                             </div>
                             <button
                                 onClick={handleToggleMarketing}
                                 disabled={isSavingMarketing}
-                                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ml-4 ${
-                                    marketing ? 'bg-blue-600' : 'bg-gray-300'
+                                className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ml-4 ${
+                                    marketing ? 'bg-primary' : 'bg-content-disabled'
                                 } disabled:opacity-50`}
                                 aria-label="마케팅 수신 동의 토글"
                             >
                                 <span
-                                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        marketing ? 'translate-x-5' : 'translate-x-0'
+                                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+                                        marketing ? 'translate-x-4' : 'translate-x-0'
                                     }`}
                                 />
                             </button>
@@ -380,18 +374,18 @@ export default function MypageClient({
                     </section>
 
                     {/* 계정 관리 */}
-                    <section className="p-5 border border-gray-200 rounded-xl">
-                        <h2 className="text-sm font-semibold text-gray-700 mb-3">계정 관리</h2>
-                        <div className="flex flex-col gap-2">
-                            <button
-                                onClick={handleLogout}
-                                className="w-full py-2.5 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                                로그아웃
-                            </button>
+                    <section className="card p-5">
+                        <h2 className="text-sm font-semibold text-content-secondary mb-3">계정 관리</h2>
+                        <button
+                            onClick={handleLogout}
+                            className="btn-neutral btn-md w-full"
+                        >
+                            로그아웃
+                        </button>
+                        <div className="mt-4 text-center">
                             <button
                                 onClick={() => setShowWithdrawModal(true)}
-                                className="w-full py-2.5 text-sm font-medium border border-red-200 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                                className="text-xs text-red-400 hover:text-red-600 underline underline-offset-2 transition-colors"
                             >
                                 회원 탈퇴
                             </button>
@@ -404,20 +398,20 @@ export default function MypageClient({
             {tab === 'comments' && (
                 <div className="space-y-3">
                     {comments.length === 0 ? (
-                        <p className="text-center text-gray-400 py-12 text-sm">작성한 댓글이 없습니다.</p>
+                        <p className="text-center text-content-muted py-12 text-sm">작성한 댓글이 없습니다.</p>
                     ) : (
                         comments.map((c) => (
-                            <div key={c.id} className="p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                            <div key={c.id} className="card-hover p-4">
                                 {c.issues && (
                                     <Link
                                         href={`/issue/${c.issues.id}`}
-                                        className="text-xs font-medium text-blue-600 hover:underline mb-1.5 block truncate"
+                                        className="text-xs font-medium text-primary hover:underline mb-1.5 block truncate"
                                     >
                                         {c.issues.title}
                                     </Link>
                                 )}
-                                <p className="text-sm text-gray-800 line-clamp-2">{c.body}</p>
-                                <p className="text-xs text-gray-400 mt-1.5">{formatDate(c.created_at)}</p>
+                                <p className="text-sm text-content-primary line-clamp-2">{c.body}</p>
+                                <p className="text-xs text-content-muted mt-1.5">{formatDate(c.created_at)}</p>
                             </div>
                         ))
                     )}
@@ -428,25 +422,25 @@ export default function MypageClient({
             {tab === 'discussions' && (
                 <div className="space-y-3">
                     {discussions.length === 0 ? (
-                        <p className="text-center text-gray-400 py-12 text-sm">참여한 토론이 없습니다.</p>
+                        <p className="text-center text-content-muted py-12 text-sm">참여한 토론이 없습니다.</p>
                     ) : (
                         discussions.map((d) => (
-                            <div key={d.id} className="p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                            <div key={d.id} className="card-hover p-4">
                                 {d.discussion_topics?.issues && (
                                     <Link
                                         href={`/issue/${d.discussion_topics.issues.id}`}
-                                        className="text-xs font-medium text-blue-600 hover:underline mb-1 block truncate"
+                                        className="text-xs font-medium text-primary hover:underline mb-1 block truncate"
                                     >
                                         {d.discussion_topics.issues.title}
                                     </Link>
                                 )}
                                 {d.discussion_topics && (
-                                    <p className="text-xs text-gray-500 mb-1.5 line-clamp-1">
+                                    <p className="text-xs text-content-secondary mb-1.5 line-clamp-1">
                                         토론 주제: {d.discussion_topics.body}
                                     </p>
                                 )}
-                                <p className="text-sm text-gray-800 line-clamp-2">{d.body}</p>
-                                <p className="text-xs text-gray-400 mt-1.5">{formatDate(d.created_at)}</p>
+                                <p className="text-sm text-content-primary line-clamp-2">{d.body}</p>
+                                <p className="text-xs text-content-muted mt-1.5">{formatDate(d.created_at)}</p>
                             </div>
                         ))
                     )}
@@ -457,24 +451,24 @@ export default function MypageClient({
             {tab === 'votes' && (
                 <div className="space-y-3">
                     {votes.length === 0 ? (
-                        <p className="text-center text-gray-400 py-12 text-sm">참여한 투표가 없습니다.</p>
+                        <p className="text-center text-content-muted py-12 text-sm">참여한 투표가 없습니다.</p>
                     ) : (
                         votes.map((v) => (
-                            <div key={v.id} className="p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                            <div key={v.id} className="card-hover p-4">
                                 {v.votes?.issues && (
                                     <Link
                                         href={`/issue/${v.votes.issues.id}`}
-                                        className="text-xs font-medium text-blue-600 hover:underline mb-1 block truncate"
+                                        className="text-xs font-medium text-primary hover:underline mb-1 block truncate"
                                     >
                                         {v.votes.issues.title}
                                     </Link>
                                 )}
                                 {v.votes?.title && (
-                                    <p className="text-sm font-medium text-gray-800 mb-1">{v.votes.title}</p>
+                                    <p className="text-sm font-medium text-content-primary mb-1">{v.votes.title}</p>
                                 )}
                                 <div className="flex items-center gap-2">
                                     {v.vote_choices && (
-                                        <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">
+                                        <span className="text-xs px-2 py-0.5 bg-primary-light text-primary rounded-full font-medium">
                                             {v.vote_choices.label} 선택
                                         </span>
                                     )}
@@ -482,13 +476,13 @@ export default function MypageClient({
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                             v.votes.phase === '진행중'
                                                 ? 'bg-green-50 text-green-700'
-                                                : 'bg-gray-100 text-gray-500'
+                                                : 'bg-surface-subtle text-content-muted'
                                         }`}>
                                             {v.votes.phase}
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1.5">{formatDate(v.created_at)}</p>
+                                <p className="text-xs text-content-muted mt-1.5">{formatDate(v.created_at)}</p>
                             </div>
                         ))
                     )}
@@ -498,9 +492,9 @@ export default function MypageClient({
             {/* 탈퇴 확인 모달 */}
             {showWithdrawModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">정말 탈퇴하시겠습니까?</h3>
-                        <p className="text-sm text-gray-500 mb-4">
+                    <div className="bg-surface rounded-2xl p-6 w-full max-w-sm shadow-xl">
+                        <h3 className="text-lg font-bold text-content-primary mb-2">정말 탈퇴하시겠습니까?</h3>
+                        <p className="text-sm text-content-secondary mb-4">
                             탈퇴 시 모든 댓글, 반응, 투표 기록이 삭제되며 복구할 수 없습니다.
                             <br />
                             확인하려면 아래에 <strong>탈퇴합니다</strong>를 입력하세요.
@@ -513,7 +507,7 @@ export default function MypageClient({
                                 setWithdrawError(null)
                             }}
                             placeholder="탈퇴합니다"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+                            className="w-full px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
                         />
                         {withdrawError && <p className="text-xs text-red-600 mb-3">{withdrawError}</p>}
                         <div className="flex gap-2">
@@ -523,14 +517,14 @@ export default function MypageClient({
                                     setWithdrawConfirm('')
                                     setWithdrawError(null)
                                 }}
-                                className="flex-1 py-2.5 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                                className="btn-neutral btn-md flex-1"
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleWithdraw}
                                 disabled={withdrawConfirm !== '탈퇴합니다' || isWithdrawing}
-                                className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                className="btn-danger btn-md flex-1"
                             >
                                 {isWithdrawing ? '처리 중...' : '탈퇴하기'}
                             </button>

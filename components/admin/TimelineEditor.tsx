@@ -81,7 +81,7 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
         <div className="space-y-4">
             {/* 에러 메시지 */}
             {error && (
-                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
                     {error}
                 </div>
             )}
@@ -90,11 +90,11 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
             {loading ? (
                 <div className="space-y-3">
                     {[1, 2].map((i) => (
-                        <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />
+                        <div key={i} className="h-14 bg-surface-muted rounded-xl animate-pulse" />
                     ))}
                 </div>
             ) : points.length === 0 ? (
-                <div className="text-sm text-gray-400 text-center py-6 space-y-1">
+                <div className="text-sm text-content-muted text-center py-6 space-y-1">
                     <p>등록된 타임라인 포인트가 없습니다.</p>
                     <p className="text-xs">타임라인은 자동 생성 Cron을 통해서만 추가됩니다.</p>
                 </div>
@@ -116,18 +116,18 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
 
                                 {/* 카드 */}
                                 <div className="flex-1 pb-3">
-                                    <div className="flex items-start justify-between gap-2 p-3 border border-gray-200 rounded-xl bg-white">
+                                    <div className="flex items-start justify-between gap-2 p-3 border border-border rounded-xl card">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>
+                                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${style.badge}`}>
                                                     {point.stage}
                                                 </span>
-                                                <span className="text-xs text-gray-400">
+                                                <span className="text-xs text-content-muted">
                                                     {formatDateTime(point.occurred_at)}
                                                 </span>
                                             </div>
                                             {point.title && (
-                                                <p className="text-sm text-gray-700 font-medium truncate">
+                                                <p className="text-sm text-content-primary font-medium truncate">
                                                     {point.title}
                                                 </p>
                                             )}
@@ -136,7 +136,7 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
                                                     href={point.source_url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-xs text-blue-500 hover:underline truncate block"
+                                                    className="text-xs text-primary hover:underline truncate block"
                                                 >
                                                     {point.source_url}
                                                 </a>
@@ -145,7 +145,7 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
                                         <button
                                             onClick={() => handleDelete(point.id)}
                                             disabled={deletingId === point.id}
-                                            className="shrink-0 text-xs px-2 py-1 text-red-500 border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                                            className="shrink-0 text-xs px-2 py-1 text-red-500 border border-red-200 rounded-full hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
                                         >
                                             {deletingId === point.id ? '삭제중' : '삭제'}
                                         </button>
@@ -158,7 +158,7 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
             )}
 
             {/* 안내 메시지 */}
-            <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100">
+            <div className="text-xs text-content-muted text-center py-2 border-t border-border-muted">
                 타임라인 포인트는 자동 생성 Cron을 통해서만 추가됩니다. (중립성 유지)
             </div>
         </div>

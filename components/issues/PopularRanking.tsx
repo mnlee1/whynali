@@ -18,6 +18,7 @@ import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatDate } from '@/lib/utils/format-date'
+import Tooltip from '@/components/common/Tooltip'
 
 export default function PopularRanking() {
     const [issues, setIssues] = useState<Issue[]>([])
@@ -46,56 +47,44 @@ export default function PopularRanking() {
             {/* 헤더 */}
             <div className="mb-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-neutral-900">지금 뜨는 이슈</h2>
-                    <span className="text-xs text-neutral-400">
-                        최근 7일 화력순
-                    </span>
+                    <h2 className="text-base font-bold text-content-primary">지금 뜨는 이슈</h2>
+                    <Tooltip label="화력순" text="최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬합니다." />
                 </div>
             </div>
 
             {/* 랭킹 목록 */}
             {loading ? (
-                <div className="space-y-3">
+                <div className="flex flex-col flex-1 gap-2">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-14 bg-neutral-100 rounded-xl animate-pulse" />
+                        <div key={i} className="flex-1 bg-border-muted rounded-xl animate-pulse" />
                     ))}
                 </div>
             ) : (
-                <ol className="space-y-1">
-                    {issues.map((issue, idx) => {
-                        return (
-                            <li key={issue.id}>
-                                <Link href={`/issue/${issue.id}`} className="block">
-                                    <article className="flex items-center gap-3 p-3 rounded-xl hover:bg-neutral-50 transition-colors group">
-                                        {/* 순위 번호 */}
-                                        <span className={`shrink-0 text-sm font-bold w-5 text-center ${
-                                            idx === 0 ? 'text-violet-600' :
-                                            idx === 1 ? 'text-neutral-600' :
-                                            idx === 2 ? 'text-amber-600' :
-                                            'text-neutral-400'
-                                        }`}>
-                                            {idx + 1}
-                                        </span>
+                <ol className="flex flex-col flex-1 gap-2">
+                    {issues.map((issue, idx) => (
+                        <li key={issue.id} className="flex-1">
+                            <Link href={`/issue/${issue.id}`} className="block h-full">
+                                <article className="h-full bg-surface border border-border shadow-card rounded-xl hover:shadow-card-hover transition-shadow flex items-center gap-3 p-3 group">
+                                    {/* 순위 번호 */}
+                                    <span className="shrink-0 text-sm font-bold w-5 text-center text-primary">
+                                        {idx + 1}
+                                    </span>
 
-                                        {/* 텍스트 영역 */}
-                                        <div className="flex-1 min-w-0">
-                                            {/* 제목 */}
-                                            <p className="text-sm font-semibold text-neutral-800 line-clamp-1 group-hover:text-neutral-900 mb-0.5">
-                                                {decodeHtml(issue.title)}
-                                            </p>
-
-                                            {/* 카테고리 · 시간 */}
-                                            <div className="flex items-center gap-2 text-xs text-neutral-400">
-                                                <span>{issue.category}</span>
-                                                <span>·</span>
-                                                <span>{formatDate(issue.created_at)}</span>
-                                            </div>
+                                    {/* 텍스트 영역 */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-content-primary line-clamp-1 group-hover:text-primary mb-0.5 transition-colors">
+                                            {decodeHtml(issue.title)}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-content-muted">
+                                            <span>{issue.category}</span>
+                                            <span>·</span>
+                                            <span>{formatDate(issue.created_at)}</span>
                                         </div>
-                                    </article>
-                                </Link>
-                            </li>
-                        )
-                    })}
+                                    </div>
+                                </article>
+                            </Link>
+                        </li>
+                    ))}
                 </ol>
             )}
         </section>

@@ -176,7 +176,7 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
                     <button
                         onClick={handleRegenerate}
                         disabled={regenerateCount >= 5 || isRegenerating}
-                        className="px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                        className="btn-primary btn-md whitespace-nowrap"
                     >
                         {isRegenerating ? '생성 중...' : '랜덤 생성'}
                     </button>
@@ -298,7 +298,7 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
             <button
                 onClick={handleSubmit}
                 disabled={!isFormValid || isSubmitting}
-                className="w-full py-4 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                className="btn-primary btn-lg w-full"
             >
                 {isSubmitting ? '처리 중...' : '시작하기'}
             </button>

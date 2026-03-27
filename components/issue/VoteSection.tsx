@@ -132,16 +132,16 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
     if (loading) {
         return (
-            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">투표</p>
+            <div className="card overflow-hidden mb-6">
+                <div className="px-4 py-3 border-b border-border-muted">
+                    <h2 className="text-sm font-bold text-content-primary">투표</h2>
                 </div>
                 <div className="p-4 space-y-4">
                     {[1, 2].map((i) => (
-                        <div key={i} className="p-4 border border-gray-200 rounded-xl space-y-3">
-                            <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
-                            <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
-                            <div className="h-8 w-full bg-gray-100 rounded animate-pulse" />
+                        <div key={i} className="card p-4 space-y-3">
+                            <div className="h-4 w-40 bg-border-muted rounded-full animate-pulse" />
+                            <div className="h-8 w-full bg-border-muted rounded-xl animate-pulse" />
+                            <div className="h-8 w-full bg-border-muted rounded-xl animate-pulse" />
                         </div>
                     ))}
                 </div>
@@ -164,28 +164,28 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     }
 
     return (
-        <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-            <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                <p className="text-sm font-semibold text-neutral-800">투표</p>
+        <div className="card overflow-hidden mb-6">
+            <div className="px-4 py-3 border-b border-border-muted">
+                <h2 className="text-sm font-bold text-content-primary">투표</h2>
             </div>
             <div className="p-4 space-y-4">
                 {/* 참여 유도 메시지 강화 */}
                 {!userId && activeVotes.length > 0 && (
-                    <div className="p-4 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl">
+                    <div className="p-4 bg-primary-light border border-primary-muted rounded-xl">
                         <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 w-10 h-10 bg-violet-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                            <div className="flex-shrink-0 w-10 h-10 bg-gradient-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
                                 ?
                             </div>
                             <div className="flex-1">
-                                <p className="text-sm font-semibold text-violet-900 mb-1">
+                                <p className="text-sm font-semibold text-primary mb-1">
                                     지금 투표에 참여하세요!
                                 </p>
-                                <p className="text-xs text-violet-700 mb-2">
+                                <p className="text-xs text-primary/80 mb-2">
                                     {totalCount.toLocaleString()}명이 이미 의견을 남겼습니다. 당신의 생각은 어떤가요?
                                 </p>
                                 <a
                                     href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
-                                    className="inline-block px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+                                    className="btn-primary btn-sm inline-flex"
                                 >
                                     로그인하고 투표하기 →
                                 </a>
@@ -196,8 +196,8 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
                 {/* 로그인 사용자용 간단 안내 */}
                 {userId && activeVotes.length > 0 && (
-                    <div className="p-3 bg-violet-50 border border-violet-200 rounded-lg">
-                        <p className="text-xs text-violet-700">
+                    <div className="p-3 bg-primary-light border border-primary-muted rounded-xl">
+                        <p className="text-xs text-primary">
                             💡 선택지를 클릭하여 투표하세요. 다시 클릭하면 취소할 수 있습니다.
                         </p>
                     </div>
@@ -225,7 +225,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                     <div>
                         <button
                             onClick={() => setShowPast((p) => !p)}
-                            className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1.5 transition-colors"
+                            className="text-sm text-content-muted hover:text-content-secondary flex items-center gap-1.5 transition-colors"
                         >
                             <span>{showPast ? '▲' : '▼'}</span>
                             <span>이전 투표 {pastVotes.length}개 {showPast ? '접기' : '보기'}</span>
@@ -237,7 +237,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                                     if (statusVotes.length === 0) return null
                                     return (
                                         <div key={status} className="opacity-80">
-                                            <h4 className="text-xs font-semibold text-gray-500 mb-2">
+                                            <h4 className="text-xs font-semibold text-content-muted mb-2">
                                                 {status} 시기 투표
                                             </h4>
                                             <div className="space-y-3">
@@ -304,8 +304,8 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
         <div className={[
             'p-4 border rounded-xl transition-all',
             highlight && !isClosed
-                ? 'border-violet-300 bg-violet-50/30 shadow-sm'
-                : 'border-gray-200 bg-white',
+                ? 'border-primary-muted bg-primary-light/30 shadow-sm'
+                : 'border-border bg-surface',
             isEndingSoon && !isClosed ? 'ring-2 ring-orange-200' : '',
         ].join(' ')}>
             {/* 제목 + 상태 배지 */}
@@ -314,10 +314,10 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
                     <div className="flex items-center gap-2 mb-1">
                         {vote.phase && (
                             <span className={[
-                                'inline-block text-xs px-2 py-0.5 rounded border font-medium shrink-0',
+                                'inline-block text-xs px-2 py-0.5 rounded-full border font-medium shrink-0',
                                 isClosed
-                                    ? 'bg-gray-50 text-gray-500 border-gray-200'
-                                    : 'bg-purple-100 text-purple-700 border-purple-300',
+                                    ? 'bg-surface-muted text-content-muted border-border'
+                                    : 'bg-primary-light text-primary border-primary-muted',
                             ].join(' ')}>
                                 {isClosed ? '종료됨' : '진행중'}
                             </span>
@@ -333,7 +333,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
                     )}
                 </div>
                 {totalCount > 0 && (
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-content-muted shrink-0">
                         {totalCount.toLocaleString()}표
                     </span>
                 )}
@@ -341,19 +341,19 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
 
             {/* 자동 종료 안내 */}
             {!isClosed && (autoEndDate || autoEndParticipants) && (
-                <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                <div className="mb-3 p-2 bg-surface-subtle border border-border rounded-xl text-xs text-content-secondary">
                     {autoEndDate && !isEndingSoon && (
                         <p>📅 {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료</p>
                     )}
                     {autoEndParticipants && (
                         <div className="mt-1">
                             <div className="flex items-center justify-between mb-1">
-                                <span>🎯 목표 {autoEndParticipants.toLocaleString()}명</span>
+                                <span>목표 {autoEndParticipants.toLocaleString()}명</span>
                                 <span className="font-semibold">{participantProgress}%</span>
                             </div>
-                            <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                                    className="h-full bg-primary rounded-full transition-all duration-500"
                                     style={{ width: `${participantProgress}%` }}
                                 />
                             </div>
@@ -363,7 +363,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
             )}
 
             {isClosed && (
-                <p className="text-xs text-gray-400 mb-3">이 투표는 종료되었습니다.</p>
+                <p className="text-xs text-content-muted mb-3">이 투표는 종료되었습니다.</p>
             )}
 
             {/* 선택지 */}
@@ -381,26 +381,26 @@ function VoteCard({ vote, myChoiceId, isProcessing, userId, onVote, highlight }:
                             onClick={() => onVote(vote.id, choice.id)}
                             disabled={disabled}
                             className={[
-                                'w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors overflow-hidden relative',
+                                'w-full text-left px-3 py-2 rounded-xl border text-sm transition-colors overflow-hidden relative',
                                 isSelected
-                                    ? 'border-violet-400 bg-violet-50 text-violet-800 font-medium'
-                                    : 'border-gray-200 bg-white text-gray-700',
+                                    ? 'border-primary-muted bg-primary-light text-primary font-medium'
+                                    : 'border-border bg-surface text-content-primary',
                                 disabled
                                     ? 'cursor-not-allowed opacity-60'
-                                    : 'hover:border-gray-300 cursor-pointer',
+                                    : 'hover:border-border-strong cursor-pointer',
                             ].join(' ')}
                         >
                             <span
                                 className={[
-                                    'vote-bar absolute inset-y-0 left-0 rounded transition-all',
-                                    isSelected ? 'bg-violet-100' : 'bg-gray-100',
+                                    'vote-bar absolute inset-y-0 left-0 rounded-xl transition-all',
+                                    isSelected ? 'bg-primary-light' : 'bg-border-muted',
                                 ].join(' ')}
                                 style={{ '--vote-pct': `${pct}%` } as CSSProperties}
                             />
                             <span className="relative flex justify-between">
                                 <span>{choice.label}</span>
                                 {totalCount > 0 && (
-                                    <span className="text-xs text-gray-500 ml-2">
+                                    <span className="text-xs text-content-secondary ml-2">
                                         {pct}%
                                     </span>
                                 )}

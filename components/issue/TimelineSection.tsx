@@ -20,30 +20,42 @@ interface TimelineSectionProps {
     issueId: string
 }
 
-const STAGE_STYLES: Record<string, { card: string; dot: string; line: string; badge: string }> = {
+const STAGE_STYLES: Record<string, { card: string; dot: string; line: string; badge: string; header: string; headerText: string; headerLine: string }> = {
     '발단': {
         card: 'bg-blue-50 border-blue-200',
         dot:  'bg-blue-500',
         line: 'bg-blue-200',
-        badge: 'bg-blue-500 text-white border-blue-600',
+        badge: 'bg-blue-500 text-white',
+        header: 'bg-blue-500',
+        headerText: 'text-blue-600',
+        headerLine: 'bg-blue-100',
     },
     '전개': {
         card: 'bg-green-50 border-green-200',
         dot:  'bg-green-500',
         line: 'bg-green-200',
-        badge: 'bg-green-500 text-white border-green-600',
+        badge: 'bg-green-500 text-white',
+        header: 'bg-green-500',
+        headerText: 'text-green-600',
+        headerLine: 'bg-green-100',
     },
     '파생': {
         card: 'bg-yellow-50 border-yellow-200',
         dot:  'bg-yellow-500',
         line: 'bg-yellow-200',
-        badge: 'bg-yellow-500 text-white border-yellow-600',
+        badge: 'bg-yellow-500 text-white',
+        header: 'bg-yellow-500',
+        headerText: 'text-yellow-600',
+        headerLine: 'bg-yellow-100',
     },
     '진정': {
         card: 'bg-gray-50 border-gray-200',
         dot:  'bg-gray-400',
         line: 'bg-gray-200',
-        badge: 'bg-gray-500 text-white border-gray-600',
+        badge: 'bg-gray-500 text-white',
+        header: 'bg-gray-400',
+        headerText: 'text-gray-500',
+        headerLine: 'bg-gray-100',
     },
 }
 
@@ -84,13 +96,13 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
                 {[1, 2, 3].map((i) => (
                     <div key={i} className="flex gap-4">
                         <div className="flex flex-col items-center">
-                            <div className="w-3 h-3 rounded-full bg-gray-200 animate-pulse" />
-                            <div className="w-0.5 flex-1 bg-gray-100 mt-2" />
+                            <div className="w-3 h-3 rounded-full bg-border animate-pulse" />
+                            <div className="w-0.5 flex-1 bg-border-muted mt-2" />
                         </div>
                         <div className="flex-1 pb-6">
-                            <div className="p-4 border border-gray-100 rounded-xl space-y-2">
-                                <div className="h-3 w-16 bg-gray-100 rounded animate-pulse" />
-                                <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+                            <div className="p-4 border border-border-muted rounded-xl space-y-2">
+                                <div className="h-3 w-16 bg-border-muted rounded-full animate-pulse" />
+                                <div className="h-4 w-3/4 bg-border-muted rounded-full animate-pulse" />
                             </div>
                         </div>
                     </div>
@@ -101,7 +113,7 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
 
     if (error) {
         return (
-            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
                 {error}
             </div>
         )
@@ -111,10 +123,10 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
         return (
             <div className="text-center py-8 space-y-3">
                 <div className="text-4xl">⏳</div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-content-secondary">
                     타임라인을 생성 중입니다
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-content-muted">
                     뉴스가 수집되면 자동으로 타임라인이 생성됩니다
                 </p>
             </div>
@@ -125,56 +137,66 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
         <div className="space-y-0">
             {timeline.map((point, index) => {
                 const style = STAGE_STYLES[point.stage] ?? STAGE_STYLES['진정']
-                const textColor = STAGE_TEXT_COLOR[point.stage] ?? 'text-gray-600'
+                const textColor = STAGE_TEXT_COLOR[point.stage] ?? 'text-content-secondary'
                 const isLast = index === timeline.length - 1
+                const prevStage = index > 0 ? timeline[index - 1].stage : null
+                const isNewStage = point.stage !== prevStage
 
                 return (
-                    <div key={point.id} className="flex gap-4">
-                        {/* 왼쪽 타임라인 라인 */}
-                        <div className="flex flex-col items-center">
-                            <div className={`w-3 h-3 rounded-full shrink-0 mt-4 ${style.dot}`} />
-                            {!isLast && (
-                                <div className={`w-0.5 flex-1 mt-1 ${style.line}`} />
-                            )}
-                        </div>
+                    <div key={point.id}>
+                        {/* 단계 헤더 — stage가 바뀌는 시점에만 표시 */}
+                        {isNewStage && (
+                            <div className={`flex items-center gap-2 mb-3 ${index > 0 ? 'mt-5' : ''}`}>
+                                <div className={`w-[3px] h-[0.8rem] rounded-full shrink-0 ${style.header}`} />
+                                <span className={`text-sm font-semibold ${style.headerText}`}>
+                                    {point.stage}
+                                </span>
+                                <div className={`flex-1 h-px ${style.headerLine}`} />
+                            </div>
+                        )}
 
-                        {/* 카드 */}
-                        <div className="flex-1 pb-4">
-                            <div className={`p-4 border rounded-xl ${style.card}`}>
-                                {/* 단계 + 날짜 및 시간 */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border shadow-sm ${style.badge}`}>
-                                        {point.stage}
-                                    </span>
-                                    <span className={`text-xs ${textColor} opacity-80`}>
+                        <div className="flex gap-3">
+                            {/* 왼쪽 dot + 세로선 */}
+                            <div className="flex flex-col items-center">
+                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 ${style.dot}`} />
+                                {!isLast && (
+                                    <div className={`w-px flex-1 mt-1 ${style.line}`} />
+                                )}
+                            </div>
+
+                            {/* 카드 */}
+                            <div className="flex-1 pb-3">
+                                <div className={`p-3 border rounded-xl ${style.card}`}>
+                                    {/* 날짜 */}
+                                    <span className={`text-xs ${textColor} opacity-70 block mb-1`}>
                                         {formatDateWithTime(point.occurred_at)}
                                     </span>
+
+                                    {/* 이벤트 요약 텍스트 */}
+                                    {point.title && (
+                                        <p className={`text-sm font-medium mb-2 leading-snug ${textColor}`}>
+                                            {point.title}
+                                        </p>
+                                    )}
+
+                                    {/* 출처 링크 */}
+                                    {point.source_url ? (
+                                        <a
+                                            href={point.source_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className={`inline-flex items-center gap-1 text-xs underline underline-offset-2 hover:opacity-70 transition-opacity ${textColor}`}
+                                        >
+                                            <span>출처</span>
+                                            <span className="opacity-60">
+                                                ({new URL(point.source_url).hostname.replace('www.', '')})
+                                            </span>
+                                            <span>→</span>
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs text-content-muted">출처 없음</span>
+                                    )}
                                 </div>
-
-                                {/* 이벤트 요약 텍스트 (title 컬럼 있을 때) */}
-                                {point.title && (
-                                    <p className={`text-sm font-medium mb-2 ${textColor}`}>
-                                        {point.title}
-                                    </p>
-                                )}
-
-                                {/* 출처 링크 */}
-                                {point.source_url ? (
-                                    <a
-                                        href={point.source_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`inline-flex items-center gap-1 text-xs underline underline-offset-2 hover:opacity-70 transition-opacity ${textColor}`}
-                                    >
-                                        <span>출처</span>
-                                        <span className="opacity-60">
-                                            ({new URL(point.source_url).hostname.replace('www.', '')})
-                                        </span>
-                                        <span>→</span>
-                                    </a>
-                                ) : (
-                                    <span className="text-xs text-gray-400">출처 없음</span>
-                                )}
                             </div>
                         </div>
                     </div>

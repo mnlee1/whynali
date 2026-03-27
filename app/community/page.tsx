@@ -106,14 +106,14 @@ function CommunityContent() {
         <div className="container mx-auto px-4 py-6 md:py-8">
             {issueIdFilter && issueTitle ? (
                 <div className="mb-4">
-                    <p className="text-xs text-purple-600 mb-1">이슈 연결 토론</p>
-                    <h1 className="text-2xl md:text-3xl font-bold">{issueTitle}</h1>
-                    <Link href="/community" className="text-sm text-gray-400 hover:text-gray-600 mt-1 inline-block">
+                    <p className="text-xs text-primary mb-1">이슈 연결 토론</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-content-primary">{issueTitle}</h1>
+                    <Link href="/community" className="text-sm text-content-muted hover:text-content-secondary mt-1 inline-block">
                         전체 커뮤니티 보기
                     </Link>
                 </div>
             ) : (
-                <h1 className="text-2xl md:text-3xl font-bold mb-6">커뮤니티</h1>
+                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
             )}
 
             {/* 검색 */}
@@ -127,16 +127,16 @@ function CommunityContent() {
             </div>
 
             {/* 상태 필터 탭 */}
-            <div className="flex gap-2 mb-6">
+            <div className="flex flex-wrap gap-1.5 mb-6">
                 {FILTER_LABELS.map(({ value, label }) => (
                     <button
                         key={value}
                         onClick={() => setStatusFilter(value)}
                         className={[
-                            'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                            'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
                             statusFilter === value
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50',
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
                         ].join(' ')}
                     >
                         {label}
@@ -145,7 +145,7 @@ function CommunityContent() {
             </div>
 
             {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm mb-4">
                     {error}
                 </div>
             )}
@@ -154,29 +154,29 @@ function CommunityContent() {
             {loading ? (
                 <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-20 bg-neutral-100 rounded-xl animate-pulse" />
+                        <div key={i} className="h-20 bg-surface-subtle rounded-xl animate-pulse" />
                     ))}
                 </div>
             ) : topics.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-12">
+                <p className="text-sm text-content-muted text-center py-12">
                     {searchQuery ? `"${searchQuery}"에 대한 토론 주제가 없습니다.` : '등록된 토론 주제가 없습니다.'}
                 </p>
             ) : (
                 <>
-                    <p className="text-sm text-gray-500 mb-4">총 {total.toLocaleString()}개</p>
+                    <p className="text-sm text-content-secondary mb-4">총 {total.toLocaleString()}개</p>
                     <div className="space-y-3">
                         {topics.map((topic) => (
                             <Link key={topic.id} href={`/community/${topic.id}`} className="block">
-                                <article className="p-4 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
+                                <article className="card-hover p-4">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                             {/* 상태 뱃지 */}
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className={[
-                                                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                                                    'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
                                                     topic.approval_status === '진행중'
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-gray-100 text-gray-600'
+                                                        ? 'bg-green-50 text-green-700 border-green-200'
+                                                        : 'bg-surface-subtle text-content-muted border-border'
                                                 ].join(' ')}>
                                                     {topic.approval_status}
                                                 </span>
@@ -184,23 +184,23 @@ function CommunityContent() {
                                             
                                             {/* 연결된 이슈명 */}
                                             {topic.issues?.title && (
-                                                <p className="text-xs text-neutral-400 mb-1 line-clamp-1">
+                                                <p className="text-xs text-content-muted mb-1 line-clamp-1">
                                                     {decodeHtml(topic.issues.title)}
                                                 </p>
                                             )}
                                             {/* 토론 주제 본문 */}
-                                            <p className="text-sm font-medium text-neutral-800 line-clamp-2 leading-snug mb-2">
+                                            <p className="text-sm font-medium text-content-primary line-clamp-2 leading-snug mb-2">
                                                 {decodeHtml(topic.body)}
                                             </p>
                                             {/* 의견 수 */}
                                             {topic.opinionCount !== undefined && (
-                                                <div className="flex items-center gap-1 text-xs text-neutral-500">
+                                                <div className="flex items-center gap-1 text-xs text-content-secondary">
                                                     <span>💬</span>
                                                     <span>의견 {topic.opinionCount.toLocaleString()}</span>
                                                 </div>
                                             )}
                                         </div>
-                                        <span className="text-xs text-neutral-400 shrink-0 mt-0.5">
+                                        <span className="text-xs text-content-muted shrink-0 mt-0.5">
                                             {formatDate(topic.created_at)}
                                         </span>
                                     </div>
@@ -215,7 +215,7 @@ function CommunityContent() {
                             <button
                                 onClick={handleLoadMore}
                                 disabled={loadingMore}
-                                className="px-5 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="btn-neutral btn-md"
                             >
                                 {loadingMore ? '로딩 중...' : '더 보기'}
                             </button>
@@ -231,10 +231,10 @@ export default function CommunityPage() {
     return (
         <Suspense fallback={
             <div className="container mx-auto px-4 py-6 md:py-8">
-                <h1 className="text-2xl md:text-3xl font-bold mb-6">커뮤니티</h1>
+                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
                 <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-20 bg-neutral-100 rounded-xl animate-pulse" />
+                        <div key={i} className="h-20 bg-surface-subtle rounded-xl animate-pulse" />
                     ))}
                 </div>
             </div>

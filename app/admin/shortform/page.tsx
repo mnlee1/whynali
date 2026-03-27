@@ -241,26 +241,26 @@ export default function AdminShortformPage() {
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">숏폼 관리</h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h1 className="text-2xl font-bold text-content-primary">숏폼 관리</h1>
+                    <p className="text-sm text-content-secondary mt-1">
                         이슈 승인/상태 전환 시 자동 생성된 숏폼 job 목록
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                             마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
                     <button
                         onClick={() => setManualCreate({ open: true, issueId: '', loading: false, error: null })}
-                        className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        className="btn-primary btn-md"
                     >
                         수동 생성
                     </button>
                     <button
                         onClick={() => loadJobs(filter, page)}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        className="btn-neutral btn-md"
                     >
                         새로고침
                     </button>
@@ -274,10 +274,10 @@ export default function AdminShortformPage() {
                         key={value}
                         onClick={() => setFilter(value)}
                         className={[
-                            'px-4 py-1.5 text-sm rounded',
+                            'px-4 py-1.5 text-sm rounded-full border transition-colors',
                             filter === value
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
                         ].join(' ')}
                     >
                         {label}
@@ -286,48 +286,48 @@ export default function AdminShortformPage() {
             </div>
 
             {error && (
-                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
                     {error}
                 </div>
             )}
 
             {/* Job 목록 */}
-            <div className="border rounded-lg overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+            <div className="card overflow-x-auto">
+                <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-surface-subtle">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 이슈 정보
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 화력/출처
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 트리거
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 상태
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 생성일
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-48 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 액션
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-surface divide-y divide-border">
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
                                     <td colSpan={6} className="px-4 py-3">
-                                        <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
+                                        <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : jobs.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">
+                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 숏폼 job이 없습니다.
                                 </td>
                             </tr>
@@ -335,20 +335,20 @@ export default function AdminShortformPage() {
                             jobs.map((job) => {
                                 const isProcessing = processingId === job.id
                                 return (
-                                    <tr key={job.id} className="hover:bg-gray-50">
+                                    <tr key={job.id} className="hover:bg-surface-subtle">
                                         <td className="px-4 py-3 text-sm">
                                             <Link
                                                 href={`/issue/${job.issue_id}`}
                                                 target="_blank"
-                                                className="text-blue-600 hover:underline font-medium block mb-1"
+                                                className="text-primary hover:underline font-medium block mb-1"
                                             >
                                                 {job.issue_title}
                                             </Link>
                                             <div className="flex items-center gap-2">
-                                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                                <span className={`text-xs px-2 py-0.5 rounded-full ${
                                                     job.issue_status === '점화' ? 'bg-orange-100 text-orange-700' :
                                                     job.issue_status === '논란중' ? 'bg-red-100 text-red-700' :
-                                                    'bg-gray-100 text-gray-600'
+                                                    'bg-surface-muted text-content-secondary'
                                                 }`}>
                                                     {job.issue_status}
                                                 </span>
@@ -357,7 +357,7 @@ export default function AdminShortformPage() {
                                                 <div className="mt-2 flex items-start gap-2">
                                                     <button
                                                         onClick={() => setPreviewJob(job)}
-                                                        className="relative w-14 h-24 rounded border border-gray-200 overflow-hidden group flex-shrink-0"
+                                                        className="relative w-14 h-24 rounded-xl border border-border overflow-hidden group flex-shrink-0"
                                                     >
                                                         <video
                                                             src={getStoragePublicUrl(job.video_path)}
@@ -375,7 +375,7 @@ export default function AdminShortformPage() {
                                                         {job.ai_validation ? (
                                                             <span
                                                                 title={job.ai_validation.reason}
-                                                                className={`text-xs px-2 py-0.5 rounded cursor-help ${
+                                                                className={`text-xs px-2 py-0.5 rounded-full cursor-help ${
                                                                     job.ai_validation.status === 'passed'
                                                                         ? 'bg-green-100 text-green-700'
                                                                         : 'bg-red-100 text-red-700'
@@ -384,7 +384,7 @@ export default function AdminShortformPage() {
                                                                 AI {job.ai_validation.status === 'passed' ? '적합' : '주의'}
                                                             </span>
                                                         ) : (
-                                                            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-400">
+                                                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface-muted text-content-muted">
                                                                 AI 판별 전
                                                             </span>
                                                         )}
@@ -393,25 +393,25 @@ export default function AdminShortformPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            <span className={`inline-block px-2 py-1 text-xs rounded mb-1 ${HEAT_GRADE_STYLE[job.heat_grade]}`}>
+                                            <span className={`inline-block px-2 py-1 text-xs rounded-full mb-1 ${HEAT_GRADE_STYLE[job.heat_grade]}`}>
                                                 화력 {job.heat_grade}
                                             </span>
-                                            <div className="text-xs text-gray-500">
+                                            <div className="text-xs text-content-secondary">
                                                 뉴스 {job.source_count.news}건 / 커뮤니티 {job.source_count.community}건
                                             </div>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200">
+                                            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-200">
                                                 {TRIGGER_TYPE_LABEL[job.trigger_type]}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`inline-block px-2 py-1 text-xs rounded ${APPROVAL_STATUS_STYLE[job.approval_status]}`}>
+                                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${APPROVAL_STATUS_STYLE[job.approval_status]}`}>
                                                 {job.approval_status === 'pending' ? '대기' :
                                                  job.approval_status === 'approved' ? '승인' : '반려'}
                                             </span>
                                             {job.upload_status && (
-                                                <div className="mt-1 text-xs text-gray-500">
+                                                <div className="mt-1 text-xs text-content-secondary">
                                                     {Object.entries(job.upload_status).map(([platform, statusObj]) => {
                                                         const status = typeof statusObj === 'object' && statusObj !== null
                                                             ? (statusObj as any).status || 'unknown'
@@ -425,47 +425,44 @@ export default function AdminShortformPage() {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-500">
+                                        <td className="px-4 py-3 text-sm text-content-secondary">
                                             {formatDate(job.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {job.approval_status === 'pending' && (
-                                                <div className="flex flex-col gap-1.5">
-                                                    {/* 동영상 생성 — video_path 없을 때 */}
+                                                <div className="flex flex-col gap-1.5 min-w-max">
                                                     {!job.video_path && (
                                                         <button
                                                             onClick={() => handleGenerate(job.id)}
                                                             disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                                                            className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50 whitespace-nowrap"
                                                         >
                                                             동영상 생성
                                                         </button>
                                                     )}
-                                                    {/* 동영상 있으면 승인/반려 */}
                                                     {job.video_path && (
-                                                        <div className="flex gap-1.5">
+                                                        <div className="flex flex-nowrap gap-1.5">
                                                             <button
                                                                 onClick={() => handleAction(job.id, 'approve')}
                                                                 disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:opacity-50 whitespace-nowrap"
                                                             >
                                                                 승인
                                                             </button>
                                                             <button
                                                                 onClick={() => handleAction(job.id, 'reject')}
                                                                 disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                                className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
                                                             >
                                                                 반려
                                                             </button>
                                                         </div>
                                                     )}
-                                                    {/* AI 재판별 */}
                                                     {job.video_path && (
                                                         <button
                                                             onClick={() => handleAiValidate(job.id)}
                                                             disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                                            className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded-full hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
                                                         >
                                                             AI 재판별
                                                         </button>
@@ -476,7 +473,7 @@ export default function AdminShortformPage() {
                                                 <button
                                                     onClick={() => handleGenerate(job.id)}
                                                     disabled={isProcessing}
-                                                    className="text-xs px-2.5 py-1.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                                                    className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50 whitespace-nowrap"
                                                 >
                                                     동영상 생성
                                                 </button>
@@ -488,27 +485,27 @@ export default function AdminShortformPage() {
                                                     const isYoutubeUploaded = youtubeStatus === 'success'
 
                                                     return (
-                                                        <div className="flex flex-col gap-1.5">
+                                                        <div className="flex flex-col gap-1.5 min-w-max">
                                                             {!isYoutubeUploaded && (
                                                                 <>
                                                                     <button
                                                                         onClick={() => handleYoutubeUpload(job.id)}
                                                                         disabled={isProcessing}
-                                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
                                                                     >
                                                                         YouTube 업로드
                                                                     </button>
                                                                     <button
                                                                         disabled
                                                                         title="Instagram 연동 준비 중"
-                                                                        className="text-xs px-2.5 py-1.5 bg-pink-100 text-pink-400 rounded cursor-not-allowed opacity-60"
+                                                                        className="text-xs px-2.5 py-1.5 bg-pink-100 text-pink-400 rounded-full cursor-not-allowed opacity-60 whitespace-nowrap"
                                                                     >
                                                                         Instagram
                                                                     </button>
                                                                     <button
                                                                         disabled
                                                                         title="TikTok 연동 준비 중"
-                                                                        className="text-xs px-2.5 py-1.5 bg-gray-100 text-gray-400 rounded cursor-not-allowed opacity-60"
+                                                                        className="text-xs px-2.5 py-1.5 bg-surface-muted text-content-muted rounded-full cursor-not-allowed opacity-60 whitespace-nowrap"
                                                                     >
                                                                         TikTok
                                                                     </button>
@@ -519,7 +516,7 @@ export default function AdminShortformPage() {
                                                                     href={youtubeUrl}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
-                                                                    className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 text-center"
+                                                                    className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
                                                                 >
                                                                     YouTube 완료
                                                                 </a>
@@ -529,7 +526,7 @@ export default function AdminShortformPage() {
                                                 })()
                                             )}
                                             {job.approval_status === 'rejected' && (
-                                                <span className="text-xs text-gray-400">-</span>
+                                                <span className="text-xs text-content-muted">-</span>
                                             )}
                                         </td>
                                     </tr>
@@ -543,38 +540,38 @@ export default function AdminShortformPage() {
             {/* 페이지네이션 */}
             {total > 0 && (
                 <div className="flex items-center justify-between mt-4">
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-content-secondary">
                         {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / 총 {total}개
                     </span>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={() => { setPage(1); loadJobs(filter, 1) }}
                             disabled={page === 1 || loading}
-                            className="px-2 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                            className="px-2 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
                         >
                             «
                         </button>
                         <button
                             onClick={() => { setPage(page - 1); loadJobs(filter, page - 1) }}
                             disabled={page === 1 || loading}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                            className="px-3 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
                         >
                             이전
                         </button>
-                        <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
+                        <span className="px-3 py-1.5 text-sm font-medium text-content-primary">
                             {page} / {Math.ceil(total / PAGE_SIZE)}
                         </span>
                         <button
                             onClick={() => { setPage(page + 1); loadJobs(filter, page + 1) }}
                             disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                            className="px-3 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
                         >
                             다음
                         </button>
                         <button
                             onClick={() => { const last = Math.ceil(total / PAGE_SIZE); setPage(last); loadJobs(filter, last) }}
                             disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
-                            className="px-2 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+                            className="px-2 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
                         >
                             »
                         </button>
@@ -589,14 +586,14 @@ export default function AdminShortformPage() {
                     onClick={() => !manualCreate.loading && setManualCreate({ open: false, issueId: '', loading: false, error: null })}
                 >
                     <div
-                        className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6"
+                        className="bg-surface rounded-xl shadow-2xl w-full max-w-md p-6"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h2 className="text-lg font-bold mb-1">수동 숏폼 Job 생성</h2>
-                        <p className="text-sm text-gray-500 mb-4">
+                        <h2 className="text-lg font-bold text-content-primary mb-1">수동 숏폼 Job 생성</h2>
+                        <p className="text-sm text-content-secondary mb-4">
                             이슈 ID를 입력하면 화력 필터·쿨다운 없이 job을 생성합니다.
                         </p>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-content-secondary mb-1">
                             Issue ID
                         </label>
                         <input
@@ -606,7 +603,7 @@ export default function AdminShortformPage() {
                             onKeyDown={(e) => e.key === 'Enter' && handleManualCreate()}
                             placeholder="예: 550e8400-e29b-41d4-a716-446655440000"
                             disabled={manualCreate.loading}
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+                            className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-muted"
                         />
                         {manualCreate.error && (
                             <p className="mt-2 text-sm text-red-600">{manualCreate.error}</p>
@@ -615,14 +612,14 @@ export default function AdminShortformPage() {
                             <button
                                 onClick={() => setManualCreate({ open: false, issueId: '', loading: false, error: null })}
                                 disabled={manualCreate.loading}
-                                className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                className="btn-neutral btn-md"
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleManualCreate}
                                 disabled={manualCreate.loading || !manualCreate.issueId.trim()}
-                                className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                className="btn-primary btn-md"
                             >
                                 {manualCreate.loading ? '생성 중...' : 'Job 생성'}
                             </button>
@@ -666,7 +663,7 @@ export default function AdminShortformPage() {
                                 href={previewJob.issue_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-300 text-xs mt-1 block hover:underline"
+                                className="text-primary text-xs mt-1 block hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 이슈 상세 보기 →

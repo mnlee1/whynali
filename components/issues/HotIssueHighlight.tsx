@@ -73,7 +73,7 @@ export default function HotIssueHighlight() {
 
     if (loading) {
         return (
-            <div className="h-[420px] lg:h-full lg:min-h-[500px] bg-neutral-100 rounded-2xl animate-pulse" />
+            <div className="h-[420px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl animate-pulse" />
         )
     }
 
@@ -83,11 +83,11 @@ export default function HotIssueHighlight() {
         <section className="relative h-[420px] lg:h-full lg:min-h-[500px]">
             {/* 왜난리 이슈 뱃지 */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-600 text-white text-xs font-bold shadow-lg">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-primary text-white text-xs font-bold shadow-lg">
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                     왜난리 이슈
                 </span>
-                <span className="px-2 py-1 rounded-full bg-black/20 backdrop-blur-sm text-white text-xs font-medium">
+                <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">
                     실시간 화력 상위 5개
                 </span>
             </div>
@@ -99,7 +99,7 @@ export default function HotIssueHighlight() {
                 autoplay={{ delay: 5000, disableOnInteraction: false }}
                 pagination={{ clickable: true }}
                 loop={issues.length > 1}
-                className="h-full rounded-2xl"
+                className="h-full rounded-2xl transition-shadow duration-300 hover:shadow-2xl"
             >
             {issues.map((issue, index) => {
                 // 슬라이드 순서에 따른 고유 배경 그라디언트 (5가지 색상)
@@ -115,9 +115,9 @@ export default function HotIssueHighlight() {
                 return (
                     <SwiperSlide key={issue.id}>
                         <Link href={`/issue/${issue.id}`}>
-                            <article className={`relative h-full bg-gradient-to-br ${gradient} cursor-pointer group`}>
+                            <article className={`relative h-full bg-gradient-to-br ${gradient} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all`}>
                                 {/* 오버레이 */}
-                                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors" />
+                                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors" />
 
                                 {/* 콘텐츠 */}
                                 <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-14">

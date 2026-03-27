@@ -1,4 +1,4 @@
-// 닉네임 첫 글자 기반 원형 아바타 — 헤더 프로필 아이콘과 동일한 스타일(bg-blue-100 / text-blue-700)
+// 닉네임 첫 글자 기반 원형 아바타
 
 interface NicknameAvatarProps {
     name: string   // 표시 닉네임 (첫 글자만 사용)
@@ -11,7 +11,7 @@ export default function NicknameAvatar({ name, size = 'sm' }: NicknameAvatarProp
 
     return (
         <span
-            className={`inline-flex items-center justify-center rounded-full font-semibold bg-blue-100 text-blue-700 shrink-0 ${dim}`}
+            className={`inline-flex items-center justify-center rounded-full font-semibold bg-primary-light text-primary shrink-0 ${dim}`}
             aria-hidden="true"
         >
             {initial}

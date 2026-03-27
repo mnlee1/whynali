@@ -28,7 +28,7 @@ export default function CategoryBadge({ category, size = 'md' }: CategoryBadgePr
         : 'bg-gray-100 text-gray-700 border-gray-200'
 
     return (
-        <span className={`inline-flex items-center font-medium border rounded-md ${sizeClass} ${styleClass}`}>
+        <span className={`inline-flex items-center font-medium border rounded-full ${sizeClass} ${styleClass}`}>
             {category}
         </span>
     )

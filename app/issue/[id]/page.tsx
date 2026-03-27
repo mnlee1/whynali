@@ -43,7 +43,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     if (issueError || !issue) {
         return (
             <div className="container mx-auto px-4 py-6 md:py-8">
-                <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
                     이슈를 불러올 수 없습니다.
                 </div>
             </div>
@@ -59,7 +59,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     if (issue.approval_status !== '승인' || issue.visibility_status !== 'visible') {
         return (
             <div className="container mx-auto px-4 py-6 md:py-8">
-                <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
                     이슈를 불러올 수 없습니다.
                 </div>
             </div>
@@ -97,25 +97,25 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <div className="flex items-center gap-2 mb-3">
                     <StatusBadge status={issue.status} size="md" />
                 </div>
-                <h1 className="text-2xl md:text-3xl font-bold mb-3">
+                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-3">
                     {decodeHtml(issue.title)}
                 </h1>
-                <div className="flex items-center gap-2 text-xs text-neutral-400 mb-2">
+                <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
                     <span>{issue.category}</span>
                     <span>·</span>
                     <span>{formatDate(issue.created_at)}</span>
                 </div>
                 {issue.description && (
-                    <p className="text-gray-600 leading-relaxed">
+                    <p className="text-content-secondary leading-relaxed">
                         {decodeHtml(issue.description)}
                     </p>
                 )}
             </div>
 
             {/* 타임라인 */}
-            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">타임라인</p>
+            <div className="card overflow-hidden mb-6">
+                <div className="px-4 py-3 border-b border-border-muted">
+                    <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
                 </div>
                 <div className="p-4">
                     <TimelineSection issueId={id} />
@@ -132,40 +132,36 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 관련 토론 주제 */}
             {discussionTopics && discussionTopics.length > 0 && (
-                <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                    <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
+                <div className="card overflow-hidden mb-6">
+                    <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <span className="text-lg">💬</span>
-                            <p className="text-sm font-bold text-purple-800">관련 토론 주제 ({discussionTopics.length})</p>
+                            <h2 className="text-sm font-bold text-content-primary">관련 토론 주제 ({discussionTopics.length})</h2>
                         </div>
                         <Link
                             href={`/community?issue_id=${id}`}
-                            className="text-xs text-purple-600 hover:text-purple-800 font-semibold"
+                            className="text-xs text-content-secondary hover:text-content-primary font-semibold"
                         >
                             전체보기 →
                         </Link>
                     </div>
-                    <div className="divide-y divide-neutral-100 bg-white">
+                    <div className="divide-y divide-border-muted bg-surface">
                         {discussionTopics.map((topic, index) => (
                             <Link
                                 key={topic.id}
                                 href={`/community/${topic.id}`}
-                                className="block p-4 hover:bg-purple-50 transition-colors group"
+                                className="block p-4 hover:bg-surface-subtle transition-colors group"
                             >
                                 <div className="flex items-start gap-3">
-                                    <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600 text-xs font-bold group-hover:bg-purple-200">
+                                    <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-surface-subtle text-content-secondary text-xs font-bold group-hover:bg-border">
                                         {index + 1}
                                     </span>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-900 leading-relaxed line-clamp-2 group-hover:text-purple-700">
+                                        <p className="text-sm font-medium text-content-primary leading-relaxed line-clamp-2 group-hover:text-primary">
                                             {topic.body}
                                         </p>
-                                        <p className="text-xs text-gray-400 mt-1.5">
-                                            {new Date(topic.created_at).toLocaleDateString('ko-KR', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric'
-                                            })}
+                                        <p className="text-xs text-content-muted mt-1.5">
+                                            {formatDate(topic.created_at)}
                                         </p>
                                     </div>
                                 </div>
@@ -177,14 +173,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
             {(!discussionTopics || discussionTopics.length === 0) && (
-                <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center justify-between">
+                <div className="card mb-6 p-4 flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-semibold text-purple-800 mb-0.5">이 이슈의 커뮤니티</p>
-                        <p className="text-xs text-purple-600">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+                        <p className="text-sm font-semibold text-content-primary mb-0.5">이 이슈의 커뮤니티</p>
+                        <p className="text-xs text-content-secondary">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
                     </div>
                     <Link
                         href={`/community?issue_id=${id}`}
-                        className="shrink-0 text-sm px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                        className="shrink-0 btn-primary btn-sm"
                     >
                         토론 보기
                     </Link>
@@ -192,9 +188,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             )}
 
             {/* 감정 표현 */}
-            <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">감정 표현</p>
+            <div className="card overflow-hidden mb-6">
+                <div className="px-4 py-3 border-b border-border-muted">
+                    <h2 className="text-sm font-bold text-content-primary">감정 표현</h2>
                 </div>
                 <div className="p-4">
                     <ReactionsSection issueId={id} userId={userId} />
@@ -202,9 +198,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 댓글 */}
-            <div className="border border-neutral-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                    <p className="text-sm font-semibold text-neutral-800">댓글</p>
+            <div className="card overflow-hidden">
+                <div className="px-4 py-3 border-b border-border-muted">
+                    <h2 className="text-sm font-bold text-content-primary">댓글</h2>
                 </div>
                 <div className="p-4">
                     <CommentsSection issueId={id} userId={userId} />

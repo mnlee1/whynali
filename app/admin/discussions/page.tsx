@@ -370,23 +370,23 @@ export default function AdminDiscussionsPage() {
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">토론 주제 관리</h1>
+                    <h1 className="text-2xl font-bold text-content-primary">토론 주제 관리</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                             마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
                     <button
                         onClick={() => loadTopics(filter)}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        className="btn-neutral btn-md"
                     >
                         새로고침
                     </button>
                     <button
                         onClick={handleOpenForm}
-                        className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        className="btn-primary btn-md"
                     >
                         + 토론 주제 생성
                     </button>
@@ -395,12 +395,12 @@ export default function AdminDiscussionsPage() {
 
             {/* 통합 생성 폼 */}
             {showCreateForm && (
-                <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg space-y-4">
+                <div className="mb-6 p-4 border border-primary-muted bg-primary-light/20 rounded-xl space-y-4">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-semibold text-blue-800">토론 주제 생성</h2>
+                        <h2 className="text-sm font-semibold text-primary-dark">토론 주제 생성</h2>
                         <button
                             onClick={handleCloseForm}
-                            className="text-blue-400 hover:text-blue-600 text-lg leading-none"
+                            className="text-content-muted hover:text-content-secondary text-lg leading-none"
                         >
                             ×
                         </button>
@@ -412,9 +412,9 @@ export default function AdminDiscussionsPage() {
 
                     {/* 이슈 선택 */}
                     <div className="space-y-1">
-                        <label className="text-xs font-medium text-gray-600">대상 이슈 (승인된 이슈만)</label>
+                        <label className="text-xs font-medium text-content-secondary">대상 이슈 (승인된 이슈만)</label>
                         {loadingIssues ? (
-                            <p className="text-xs text-gray-400">이슈 목록 로딩 중...</p>
+                            <p className="text-xs text-content-muted">이슈 목록 로딩 중...</p>
                         ) : (
                             <select
                                 value={selectedIssue?.id ?? ''}
@@ -422,7 +422,7 @@ export default function AdminDiscussionsPage() {
                                     const issue = approvedIssues.find((i) => i.id === e.target.value)
                                     setSelectedIssue(issue ?? null)
                                 }}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400"
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
                             >
                                 <option value="">이슈를 선택하세요</option>
                                 {approvedIssues.map((issue) => (
@@ -437,12 +437,12 @@ export default function AdminDiscussionsPage() {
                     {/* 토론 주제 내용 */}
                     <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                            <label className="text-xs font-medium text-gray-600">토론 주제 내용</label>
+                            <label className="text-xs font-medium text-content-secondary">토론 주제 내용</label>
                             <button
                                 type="button"
                                 onClick={handleAiFill}
                                 disabled={!selectedIssue || generating}
-                                className="text-xs px-2.5 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                                className="text-xs px-2.5 py-1 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50"
                             >
                                 {generating ? 'AI 생성 중...' : '✨ AI 생성'}
                             </button>
@@ -456,9 +456,9 @@ export default function AdminDiscussionsPage() {
                             placeholder="토론 주제 내용을 직접 입력하거나, AI 생성 버튼을 눌러 자동 생성하세요"
                             rows={3}
                             maxLength={500}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400 resize-none"
+                            className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary resize-none bg-surface"
                         />
-                        <p className="text-xs text-gray-400 text-right">{newContent.length}/500</p>
+                        <p className="text-xs text-content-muted text-right">{newContent.length}/500</p>
                     </div>
 
                     {/* 하단 버튼 */}
@@ -466,7 +466,7 @@ export default function AdminDiscussionsPage() {
                         <button
                             type="button"
                             onClick={handleCloseForm}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                            className="btn-neutral btn-sm"
                         >
                             취소
                         </button>
@@ -474,7 +474,7 @@ export default function AdminDiscussionsPage() {
                             type="button"
                             onClick={handleSubmitManual}
                             disabled={!selectedIssue || !newContent.trim() || submitting}
-                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                            className="btn-primary btn-sm disabled:opacity-50"
                         >
                             {submitting ? '생성 중...' : '생성'}
                         </button>
@@ -490,16 +490,16 @@ export default function AdminDiscussionsPage() {
                             key={value}
                             onClick={() => setFilter(value)}
                             className={[
-                                'px-4 py-1.5 text-sm rounded',
+                                'px-4 py-1.5 text-sm rounded-full border transition-colors',
                                 filter === value
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                    ? 'bg-primary text-white border-primary'
+                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
                             ].join(' ')}
                         >
                             {label}
                         </button>
                     ))}
-                    <span className="ml-auto text-sm text-gray-500 self-center">
+                    <span className="ml-auto text-sm text-content-secondary self-center">
                         총 {total}개
                     </span>
                 </div>
@@ -507,14 +507,14 @@ export default function AdminDiscussionsPage() {
                 {/* 일괄 처리 버튼 */}
                 {selectedTopicIds.size > 0 && (
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-content-secondary">
                             {selectedTopicIds.size}개 선택
                         </span>
                         {filter === '대기' && (
                             <button
                                 onClick={() => handleBulkAction('진행중')}
                                 disabled={bulkProcessing}
-                                className="px-3 py-1.5 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                className="px-3 py-1.5 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 disabled:opacity-50 whitespace-nowrap"
                             >
                                 일괄 승인
                             </button>
@@ -523,23 +523,23 @@ export default function AdminDiscussionsPage() {
                             <button
                                 onClick={() => handleBulkAction('마감')}
                                 disabled={bulkProcessing}
-                                className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
                             >
-                                일괄 종료
+                                일괄 마감
                             </button>
                         )}
                         {filter === '대기' && (
                             <button
                                 onClick={() => handleBulkAction('삭제')}
                                 disabled={bulkProcessing}
-                                className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                                className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
                             >
                                 일괄 삭제
                             </button>
                         )}
                         <button
                             onClick={() => setSelectedTopicIds(new Set())}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                            className="btn-neutral btn-sm"
                         >
                             선택 해제
                         </button>
@@ -549,56 +549,56 @@ export default function AdminDiscussionsPage() {
 
             {/* 에러 */}
             {error && (
-                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
                     {error}
                 </div>
             )}
 
             {/* 토론 주제 목록 */}
-            <div className="border rounded-lg overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+            <div className="card overflow-x-auto">
+                <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-surface-subtle">
                         <tr>
                             <th className="w-12 px-4 py-3 text-left">
                                 <input
                                     type="checkbox"
                                     checked={topics.length > 0 && selectedTopicIds.size === topics.length}
                                     onChange={handleToggleTopicAll}
-                                    className="w-4 h-4"
+                                    className="w-4 h-4 accent-primary"
                                 />
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 토론 내용
                             </th>
-                            <th className="w-64 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-64 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 연결 이슈
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 생성 유형
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 승인 상태
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 생성일
                             </th>
-                            <th className="w-56 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            <th className="w-56 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 액션
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-surface divide-y divide-border">
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
                                     <td colSpan={7} className="px-4 py-3">
-                                        <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
+                                        <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : topics.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
+                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 토론 주제가 없습니다.
                                 </td>
                             </tr>
@@ -608,16 +608,16 @@ export default function AdminDiscussionsPage() {
                                 const isEditing = editingId === topic.id
                                 const isSelected = selectedTopicIds.has(topic.id)
                                 return (
-                                    <tr key={topic.id} className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}>
+                                    <tr key={topic.id} className={isSelected ? 'bg-primary-light/20' : 'hover:bg-surface-subtle'}>
                                         <td className="px-4 py-3">
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
                                                 onChange={() => handleToggleTopicSelect(topic.id)}
-                                                className="w-4 h-4"
+                                                className="w-4 h-4 accent-primary"
                                             />
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-800 max-w-xs">
+                                        <td className="px-4 py-3 text-sm text-content-primary max-w-xs">
                                             {isEditing ? (
                                                 <div className="space-y-1">
                                                     <textarea
@@ -625,21 +625,21 @@ export default function AdminDiscussionsPage() {
                                                         onChange={(e) => setEditDraft(e.target.value)}
                                                         rows={3}
                                                         maxLength={500}
-                                                        className="w-full px-2 py-1 text-sm border border-blue-400 rounded resize-none focus:outline-none"
+                                                        className="w-full px-2 py-1 text-sm border border-primary rounded-xl resize-none focus:outline-none bg-surface"
                                                     />
                                                     <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-gray-400 flex-1">{editDraft.length}/500</span>
+                                                        <span className="text-xs text-content-muted flex-1">{editDraft.length}/500</span>
                                                         <button
                                                             onClick={() => handleEditSave(topic.id)}
                                                             disabled={!editDraft.trim() || submittingEdit}
-                                                            className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                            className="btn-primary btn-sm text-xs disabled:opacity-50"
                                                         >
                                                             {submittingEdit ? '저장 중...' : '저장'}
                                                         </button>
                                                         <button
                                                             onClick={handleEditCancel}
                                                             disabled={submittingEdit}
-                                                            className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                                            className="btn-neutral btn-sm text-xs disabled:opacity-50"
                                                         >
                                                             취소
                                                         </button>
@@ -657,46 +657,46 @@ export default function AdminDiscussionsPage() {
                                                 <Link
                                                     href={`/issue/${topic.issues.id}`}
                                                     target="_blank"
-                                                    className="text-blue-600 hover:underline line-clamp-2 break-words"
+                                                    className="text-primary hover:underline line-clamp-2 break-words"
                                                 >
                                                     {decodeHtml(topic.issues.title)}
                                                 </Link>
                                             ) : (
-                                                <span className="text-gray-400">연결 없음</span>
+                                                <span className="text-content-muted">연결 없음</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
                                             {topic.is_ai_generated ? (
-                                                <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">
+                                                <span className="text-xs px-2 py-0.5 bg-primary-light text-primary-dark rounded-full border border-primary-muted">
                                                     AI 생성
                                                 </span>
                                             ) : (
-                                                <span className="text-xs px-2 py-0.5 bg-gray-50 text-gray-500 rounded border border-gray-200">
+                                                <span className="text-xs px-2 py-0.5 bg-surface-muted text-content-secondary rounded-full border border-border">
                                                     직접 생성
                                                 </span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`px-2 py-1 text-xs rounded ${STATUS_STYLE[topic.approval_status]}`}>
+                                            <span className={`px-2 py-1 text-xs rounded-full ${STATUS_STYLE[topic.approval_status]}`}>
                                                 {topic.approval_status}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-500">
+                                        <td className="px-4 py-3 text-sm text-content-secondary">
                                             <div>{formatDate(topic.created_at)}</div>
                                             {topic.updated_at && (
-                                                <div className="text-xs text-blue-500 mt-0.5">
+                                                <div className="text-xs text-primary mt-0.5">
                                                     {formatRelativeTime(topic.updated_at)} 수정됨
                                                 </div>
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {!isEditing && (
-                                                <div className="flex flex-wrap gap-1.5">
+                                                <div className="flex flex-nowrap gap-1.5 min-w-max">
                                                     {/* 수정 버튼: 모든 상태에서 노출 */}
                                                     <button
                                                         onClick={() => handleEditStart(topic)}
                                                         disabled={isProcessing}
-                                                        className="text-xs px-2.5 py-1.5 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 disabled:opacity-50"
+                                                        className="btn-neutral btn-sm text-xs disabled:opacity-50"
                                                     >
                                                         수정
                                                     </button>
@@ -705,14 +705,14 @@ export default function AdminDiscussionsPage() {
                                                             <button
                                                                 onClick={() => handleAction(topic.id, '진행중')}
                                                                 disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:opacity-50 whitespace-nowrap"
                                                             >
                                                                 승인
                                                             </button>
                                                             <button
                                                                 onClick={() => handleAction(topic.id, '마감')}
                                                                 disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50"
+                                                                className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
                                                             >
                                                                 마감
                                                             </button>
@@ -722,16 +722,16 @@ export default function AdminDiscussionsPage() {
                                                         <button
                                                             onClick={() => handleAction(topic.id, '마감')}
                                                             disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
+                                                            className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
                                                         >
-                                                            종료
+                                                            마감
                                                         </button>
                                                     )}
                                                     {topic.approval_status === '마감' && (
                                                         <button
                                                             onClick={() => handleAction(topic.id, '진행중')}
                                                             disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                            className="btn-primary btn-sm text-xs disabled:opacity-50 whitespace-nowrap"
                                                         >
                                                             재개
                                                         </button>
@@ -740,7 +740,7 @@ export default function AdminDiscussionsPage() {
                                                         <button
                                                             onClick={() => handleDelete(topic.id)}
                                                             disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                                                            className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
                                                         >
                                                             삭제
                                                         </button>

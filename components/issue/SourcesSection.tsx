@@ -21,7 +21,7 @@ import type { NewsData, CommunityData } from '@/types/issue'
 const INITIAL_SHOW_COUNT = 5
 const SHOW_STEP = 5
 
-const SITE_BADGE_CLASS: Record<string, string> = {
+const SITE_BADGE_COLOR: Record<string, string> = {
     '더쿠': 'bg-pink-50 text-pink-700 border-pink-200',
     '네이트판': 'bg-orange-50 text-orange-700 border-orange-200',
 }
@@ -58,12 +58,12 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
     const getCredibilityBadge = (credibility?: number) => {
         if (!credibility) return null
         if (credibility >= 0.8) {
-            return <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded border border-green-200 font-medium">높음</span>
+            return <span className="badge bg-green-50 text-green-700 border-green-200">높음</span>
         }
         if (credibility >= 0.5) {
-            return <span className="text-xs px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded border border-yellow-200 font-medium">중간</span>
+            return <span className="badge bg-yellow-50 text-yellow-700 border-yellow-200">중간</span>
         }
-        return <span className="text-xs px-2 py-0.5 bg-gray-50 text-gray-600 rounded border border-gray-200 font-medium">낮음</span>
+        return <span className="badge bg-surface-muted text-content-secondary border-border">낮음</span>
     }
 
     if (loading) return null
@@ -78,33 +78,33 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
     const visibleCommunity = community.slice(0, showCommunityCount)
 
     return (
-        <div className="border border-neutral-200 rounded-xl overflow-hidden mb-6">
-            <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                <p className="text-sm font-semibold text-neutral-800">출처</p>
+        <div className="card overflow-hidden mb-6">
+            <div className="px-4 py-3 border-b border-border-muted">
+                <h2 className="text-sm font-bold text-content-primary">출처</h2>
             </div>
             <div className="p-4">
                 <div className="space-y-6">
                     {/* 뉴스 출처 */}
                     {hasNews && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-3">
+                            <h3 className="text-sm font-semibold text-content-primary mb-2">
                                 뉴스
-                                <span className="ml-2 text-sm font-normal text-gray-400">{news.length}건</span>
+                                <span className="ml-1.5 text-xs font-normal text-content-muted">{news.length}건</span>
                             </h3>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 {visibleNews.map((item) => (
-                                    <div key={item.id} className="p-4 border border-gray-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
-                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                    <div key={item.id} className="card p-3">
+                                        <div className="flex items-start justify-between gap-2 mb-1.5">
                                             <a
                                                 href={item.link}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-base font-medium hover:text-neutral-600 underline flex-1"
+                                                className="text-sm font-medium text-content-primary hover:text-primary underline underline-offset-2 flex-1 transition-colors"
                                             >
                                                 {item.title}
                                             </a>
                                         </div>
-                                        <div className="text-xs text-gray-500">
+                                        <div className="text-xs text-content-secondary">
                                             {item.source} · {formatDate(item.published_at)}
                                         </div>
                                     </div>
@@ -113,7 +113,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             {showNewsCount < news.length && (
                                 <button
                                     onClick={() => setShowNewsCount((prev) => Math.min(prev + SHOW_STEP, news.length))}
-                                    className="mt-3 w-full py-2 text-sm text-neutral-600 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-colors"
+                                    className="btn-neutral btn-md mt-3 w-full"
                                 >
                                     {`${Math.min(SHOW_STEP, news.length - showNewsCount)}건 더 보기 (${news.length - showNewsCount}건 남음)`}
                                 </button>
@@ -124,27 +124,27 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                     {/* 커뮤니티 출처 */}
                     {hasCommunity && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-3">
+                            <h3 className="text-sm font-semibold text-content-primary mb-2">
                                 커뮤니티
-                                <span className="ml-2 text-sm font-normal text-gray-400">{community.length}건</span>
+                                <span className="ml-1.5 text-xs font-normal text-content-muted">{community.length}건</span>
                             </h3>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 {visibleCommunity.map((item) => (
-                                    <div key={item.id} className="p-4 border border-gray-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
-                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                    <div key={item.id} className="card p-3">
+                                        <div className="flex items-start justify-between gap-2 mb-1.5">
                                             <a
                                                 href={item.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-base font-medium hover:text-neutral-600 underline flex-1"
+                                                className="text-sm font-medium text-content-primary hover:text-primary underline underline-offset-2 flex-1 transition-colors"
                                             >
                                                 {item.title}
                                             </a>
-                                            <span className={`text-xs px-2 py-0.5 rounded border font-medium ${SITE_BADGE_CLASS[item.source_site] ?? 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                                            <span className={`badge ${SITE_BADGE_COLOR[item.source_site] ?? 'bg-primary-light text-primary border-primary-muted'}`}>
                                                 {item.source_site}
                                             </span>
                                         </div>
-                                        <div className="text-xs text-gray-500 flex items-center gap-3">
+                                        <div className="text-xs text-content-secondary flex items-center gap-3">
                                             {item.written_at && <span>{formatDate(item.written_at)}</span>}
                                             {item.view_count > 0 && (
                                                 <span>조회 {item.view_count.toLocaleString()}</span>
@@ -159,7 +159,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             {showCommunityCount < community.length && (
                                 <button
                                     onClick={() => setShowCommunityCount((prev) => Math.min(prev + SHOW_STEP, community.length))}
-                                    className="mt-3 w-full py-2 text-sm text-neutral-600 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-colors"
+                                    className="btn-neutral btn-md mt-3 w-full"
                                 >
                                     {`${Math.min(SHOW_STEP, community.length - showCommunityCount)}건 더 보기 (${community.length - showCommunityCount}건 남음)`}
                                 </button>
