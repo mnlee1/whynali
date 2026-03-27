@@ -15,18 +15,7 @@ import Link from 'next/link'
 import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
-
-// 상태별 칩 스타일
-function getStatusChipClass(status: string): string {
-    switch (status) {
-        case '점화':
-            return 'text-red-600 bg-red-50 border-red-200'
-        case '논란중':
-            return 'text-orange-600 bg-orange-50 border-orange-200'
-        default:
-            return 'text-neutral-500 bg-neutral-50 border-neutral-200'
-    }
-}
+import StatusBadge from '@/components/common/StatusBadge'
 
 // 날짜 포맷
 function formatDate(dateString: string): string {
@@ -78,7 +67,7 @@ export default function ActiveIssueStrip() {
         return (
             <div className="grid grid-cols-2 gap-3">
                 {[0, 1].map((i) => (
-                    <div key={i} className="h-32 bg-neutral-100 rounded-xl animate-pulse" />
+                    <div key={i} className="h-32 bg-border-muted rounded-xl animate-pulse" />
                 ))}
             </div>
         )
@@ -89,28 +78,26 @@ export default function ActiveIssueStrip() {
     return (
         <section>
             <div className="mb-3">
-                <h2 className="text-sm font-bold text-neutral-700">최근 이슈</h2>
+                <h2 className="text-sm font-bold text-content-secondary">최근 이슈</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
                 {issues.map((issue) => (
                     <Link key={issue.id} href={`/issue/${issue.id}`}>
-                        <article className="h-full p-4 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
+                        <article className="card-hover h-full p-4 transition-all">
                             {/* 카테고리 + 상태 */}
                             <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs text-neutral-400">{issue.category}</span>
-                                <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${getStatusChipClass(issue.status)}`}>
-                                    {issue.status}
-                                </span>
+                                <span className="text-xs text-content-muted">{issue.category}</span>
+                                <StatusBadge status={issue.status} size="sm" />
                             </div>
 
                             {/* 제목 */}
-                            <p className="text-sm font-semibold text-neutral-900 line-clamp-2 leading-snug mb-3">
+                            <p className="text-sm font-semibold text-content-primary line-clamp-2 leading-snug mb-3">
                                 {decodeHtml(issue.title)}
                             </p>
 
                             {/* 화력 + 시간 */}
-                            <div className="flex items-center justify-between text-xs text-neutral-400">
+                            <div className="flex items-center justify-between text-xs text-content-muted">
                                 <span>화력 {issue.heat_index ?? 0}</span>
                                 <span>{formatDate(issue.created_at)}</span>
                             </div>

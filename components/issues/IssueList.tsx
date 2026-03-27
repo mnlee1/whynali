@@ -19,6 +19,7 @@ import { useState, useEffect, useRef } from 'react'
 import { getIssues } from '@/lib/api/issues'
 import IssueCard from './IssueCard'
 import SearchBar from '@/components/common/SearchBar'
+import Tooltip from '@/components/common/Tooltip'
 import type { Issue } from '@/types/issue'
 
 interface IssueListProps {
@@ -140,47 +141,46 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             )}
 
             {/* 상태 탭 */}
-            <div className="flex items-center justify-between border-b border-neutral-200">
-                {/* 상태 탭: 전체 / 점화 / 논란중 / 종결 */}
-                <div className="flex overflow-x-auto scrollbar-hide flex-1">
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1.5 flex-1">
                     {STATUS_TABS.map((tab) => (
                         <button
                             key={tab.value}
                             onClick={() => setStatusFilter(tab.value)}
                             className={[
-                                'flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                                'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
                                 statusFilter === tab.value
-                                    ? 'border-neutral-900 text-neutral-900'
-                                    : 'border-transparent text-neutral-500 hover:text-neutral-700',
+                                    ? 'bg-primary text-white border-primary'
+                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
                             ].join(' ')}
                         >
-                            {tab.icon && <span className="text-base">{tab.icon}</span>}
+                            {tab.icon && <span className="leading-none">{tab.icon}</span>}
                             <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
                         </button>
                     ))}
                 </div>
-                <span className="hidden sm:block text-xs text-neutral-400 pr-2 shrink-0">
-                    최신순으로 정렬 됩니다.
-                </span>
+                <div className="hidden sm:flex shrink-0">
+                    <Tooltip label="최신순" text="최신 등록순으로 정렬됩니다." />
+                </div>
             </div>
 
             {/* 에러 */}
             {error && (
-                <div className="p-4 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
                     {error}
                 </div>
             )}
 
             {/* 첫 로딩 */}
             {loading && issues.length === 0 && (
-                <div className="text-center py-12 text-neutral-500 text-sm">
+                <div className="text-center py-12 text-content-secondary text-sm">
                     로딩 중...
                 </div>
             )}
 
             {/* 빈 목록 */}
             {!loading && issues.length === 0 && (
-                <div className="text-center py-12 text-neutral-500 text-sm">
+                <div className="text-center py-12 text-content-secondary text-sm">
                     이슈가 없습니다.
                 </div>
             )}
@@ -200,7 +200,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                     <button
                         onClick={fetchMore}
                         disabled={loadingMore}
-                        className="px-5 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="btn-neutral btn-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loadingMore ? '로딩 중...' : '더 보기'}
                     </button>
@@ -209,7 +209,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
             {/* 결과 개수 */}
             {issues.length > 0 && (
-                <div className="text-center pt-2 text-xs text-neutral-400">
+                <div className="text-center pt-2 text-xs text-content-muted">
                     {issues.length} / {total}
                 </div>
             )}

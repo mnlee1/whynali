@@ -137,16 +137,16 @@ type SiteFilter = '전체' | '더쿠' | '네이트판' | '클리앙' | '보배�
 function StatCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
     return (
         <div className="text-center">
-            <p className="text-xs text-gray-500 mb-1">{label}</p>
-            <p className="text-2xl font-bold text-gray-900">{value.toLocaleString()}</p>
-            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+            <p className="text-xs text-content-secondary mb-1">{label}</p>
+            <p className="text-2xl font-bold text-content-primary">{value.toLocaleString()}</p>
+            {sub && <p className="text-xs text-content-muted mt-0.5">{sub}</p>}
         </div>
     )
 }
 
 function CronBadge({ label }: { label: string }) {
     return (
-        <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 ml-2">
+        <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-surface-muted text-content-secondary ml-2">
             {label}
         </span>
     )
@@ -169,8 +169,8 @@ function TabBar<T extends string>({
                     onClick={() => onChange(value)}
                     className={`px-3 py-1 text-sm rounded-full border transition-colors ${
                         active === value
-                            ? 'bg-gray-900 text-white border-gray-900'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-surface text-content-secondary border-border hover:border-border-strong'
                     }`}
                 >
                     {label}
@@ -200,10 +200,10 @@ function Th({
     return (
         <th
             onClick={() => onSort(col)}
-            className={`px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap cursor-pointer select-none hover:text-gray-800 ${className ?? 'text-left'}`}
+            className={`px-4 py-2.5 text-xs font-medium text-content-muted whitespace-nowrap cursor-pointer select-none hover:text-content-primary ${className ?? 'text-left'}`}
         >
             {label}
-            <span className="ml-1 inline-block w-3 text-gray-300">
+            <span className="ml-1 inline-block w-3 text-content-muted">
                 {active ? (activeOrder === 'desc' ? '↓' : '↑') : ''}
             </span>
         </th>
@@ -239,19 +239,19 @@ function Pagination({
             <button
                 onClick={() => onChange(page - 1)}
                 disabled={page === 1}
-                className="px-2 py-1 text-sm border rounded disabled:opacity-30 hover:bg-gray-50"
+                className="px-2 py-1 text-sm border border-border rounded-xl disabled:opacity-30 hover:bg-surface-muted"
             >
                 ←
             </button>
             {range.map((p, i) =>
                 p === '…' ? (
-                    <span key={`el-${i}`} className="px-2 text-gray-400 text-sm">…</span>
+                    <span key={`el-${i}`} className="px-2 text-content-muted text-sm">…</span>
                 ) : (
                     <button
                         key={p}
                         onClick={() => onChange(p as number)}
-                        className={`px-3 py-1 text-sm border rounded ${
-                            page === p ? 'bg-gray-900 text-white border-gray-900' : 'hover:bg-gray-50'
+                        className={`px-3 py-1 text-sm border rounded-xl ${
+                            page === p ? 'bg-primary text-white border-primary' : 'border-border hover:bg-surface-muted'
                         }`}
                     >
                         {p}
@@ -261,7 +261,7 @@ function Pagination({
             <button
                 onClick={() => onChange(page + 1)}
                 disabled={page === totalPages}
-                className="px-2 py-1 text-sm border rounded disabled:opacity-30 hover:bg-gray-50"
+                className="px-2 py-1 text-sm border border-border rounded-xl disabled:opacity-30 hover:bg-surface-muted"
             >
                 →
             </button>
@@ -589,12 +589,12 @@ export default function AdminCollectionsPage() {
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <div>
-                    <h1 className="text-2xl font-bold">수집 현황</h1>
-                    <p className="text-sm text-gray-500 mt-1">트랙A 프로세스 및 수집 시스템 상태</p>
+                    <h1 className="text-2xl font-bold text-content-primary">수집 현황</h1>
+                    <p className="text-sm text-content-secondary mt-1">트랙A 프로세스 및 수집 시스템 상태</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                             갱신 {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
@@ -607,7 +607,7 @@ export default function AdminCollectionsPage() {
                             }
                         }}
                         disabled={statsLoading || pipelineLoading}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                        className="btn-neutral btn-md disabled:opacity-50"
                     >
                         {statsLoading || pipelineLoading ? '로딩 중…' : '새로고침'}
                     </button>
@@ -635,7 +635,7 @@ export default function AdminCollectionsPage() {
                     {trackAStats.warnings.map((warning, index) => (
                         <div
                             key={index}
-                            className={`p-4 rounded-lg border ${
+                            className={`p-4 rounded-xl border ${
                                 warning.type === 'critical'
                                     ? 'bg-red-50 border-red-200'
                                     : warning.type === 'warning'
@@ -658,7 +658,7 @@ export default function AdminCollectionsPage() {
                                         {warning.message}
                                     </p>
                                     {warning.details && (
-                                        <p className="text-xs text-gray-600 mt-1">{warning.details}</p>
+                                        <p className="text-xs text-content-secondary mt-1">{warning.details}</p>
                                     )}
                                 </div>
                             </div>
@@ -667,11 +667,11 @@ export default function AdminCollectionsPage() {
                     
                     {/* 진단 정보 */}
                     {trackAStats.diagnostics.possibleCauses.length > 0 && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <h3 className="text-sm font-semibold text-gray-700 mb-2">🔍 가능한 원인</h3>
+                        <div className="bg-surface-subtle border border-border rounded-xl p-4">
+                            <h3 className="text-sm font-semibold text-content-primary mb-2">🔍 가능한 원인</h3>
                             <ul className="space-y-1">
                                 {trackAStats.diagnostics.possibleCauses.map((cause, idx) => (
-                                    <li key={idx} className="text-xs text-gray-600 pl-2">
+                                    <li key={idx} className="text-xs text-content-secondary pl-2">
                                         {cause}
                                     </li>
                                 ))}
@@ -679,10 +679,10 @@ export default function AdminCollectionsPage() {
                             
                             {trackAStats.diagnostics.recommendations.length > 0 && (
                                 <>
-                                    <h3 className="text-sm font-semibold text-gray-700 mt-4 mb-2">💡 해결 방법</h3>
+                                    <h3 className="text-sm font-semibold text-content-primary mt-4 mb-2">💡 해결 방법</h3>
                                     <ul className="space-y-1">
                                         {trackAStats.diagnostics.recommendations.map((rec, idx) => (
-                                            <li key={idx} className="text-xs text-gray-600 pl-2">
+                                            <li key={idx} className="text-xs text-content-secondary pl-2">
                                                 {rec}
                                             </li>
                                         ))}
@@ -691,18 +691,18 @@ export default function AdminCollectionsPage() {
                             )}
                             
                             {/* 진단 버튼 */}
-                            <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                            <div className="mt-4 pt-4 border-t border-border flex gap-2">
                                 <button
                                     onClick={runDiagnosis}
                                     disabled={diagnosing}
-                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
                                 >
                                     {diagnosing ? '진단 중...' : '🔍 상세 진단 실행'}
                                 </button>
                                 <button
                                     onClick={runManualCollect}
                                     disabled={collecting}
-                                    className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                                    className="px-4 py-2 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 disabled:opacity-50 whitespace-nowrap"
                                 >
                                     {collecting ? '수집 중...' : '▶️ 수동 수집 실행'}
                                 </button>
@@ -712,18 +712,18 @@ export default function AdminCollectionsPage() {
                     
                     {/* 수동 수집 결과 */}
                     {collectResult && (
-                        <div className={`border rounded-lg p-4 mt-3 ${
+                        <div className={`border rounded-xl p-4 mt-3 ${
                             collectResult.success 
                                 ? 'bg-green-50 border-green-200' 
                                 : 'bg-red-50 border-red-200'
                         }`}>
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-semibold text-gray-700">
+                                <h3 className="text-sm font-semibold text-content-primary">
                                     {collectResult.success ? '✅ 수집 성공' : '❌ 수집 실패'}
                                 </h3>
                                 <button
                                     onClick={() => setCollectResult(null)}
-                                    className="text-xs text-gray-400 hover:text-gray-600"
+                                    className="text-xs text-content-muted hover:text-content-secondary"
                                 >
                                     닫기
                                 </button>
@@ -742,7 +742,7 @@ export default function AdminCollectionsPage() {
                                         if (!r) return null
                                         return (
                                             <div key={key} className="flex items-center justify-between">
-                                                <span className="text-gray-700">{label}:</span>
+                                                <span className="text-content-primary">{label}:</span>
                                                 <span className="font-medium text-green-700">
                                                     {r.collected}건 수집
                                                     {r.skipped > 0 && ` (${r.skipped}건 스킵)`}
@@ -750,14 +750,14 @@ export default function AdminCollectionsPage() {
                                             </div>
                                         )
                                     })}
-                                    <div className="flex items-center justify-between text-xs text-gray-500">
+                                    <div className="flex items-center justify-between text-xs text-content-secondary">
                                         <span>소요 시간:</span>
                                         <span>{collectResult.elapsed}</span>
                                     </div>
                                     {['theqoo', 'natePann', 'clien', 'bobaedream', 'ruliweb', 'ppomppu'].some(
                                         k => collectResult[k]?.warning
                                     ) && (
-                                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700 space-y-1">
+                                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-700 space-y-1">
                                             {[
                                                 { key: 'theqoo', label: '더쿠' },
                                                 { key: 'natePann', label: '네이트판' },
@@ -779,7 +779,7 @@ export default function AdminCollectionsPage() {
                                 <div className="text-sm">
                                     <p className="text-red-700 font-medium">{collectResult.message}</p>
                                     {collectResult.details && (
-                                        <pre className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded overflow-x-auto">
+                                        <pre className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded-xl overflow-x-auto">
                                             {collectResult.details}
                                         </pre>
                                     )}
@@ -790,26 +790,26 @@ export default function AdminCollectionsPage() {
                     
                     {/* 진단 결과 */}
                     {diagnosis && (
-                        <div className="bg-white border border-gray-300 rounded-lg p-4 mt-3">
+                        <div className="card p-4 mt-3">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-semibold text-gray-700">📊 진단 결과</h3>
+                                <h3 className="text-sm font-semibold text-content-primary">📊 진단 결과</h3>
                                 <button
                                     onClick={() => setDiagnosis(null)}
-                                    className="text-xs text-gray-400 hover:text-gray-600"
+                                    className="text-xs text-content-muted hover:text-content-secondary"
                                 >
                                     닫기
                                 </button>
                             </div>
                             
                             {diagnosis.criticalIssue && (
-                                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
+                                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl">
                                     <p className="text-sm font-bold text-red-700">🚨 핵심 문제</p>
                                     <p className="text-sm text-red-600 mt-1">{diagnosis.criticalIssue}</p>
                                 </div>
                             )}
                             
                             {diagnosis.currentBranch && (
-                                <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-xl">
                                     <p className="text-xs text-yellow-700">
                                         현재 브랜치: <code className="font-mono font-bold">{diagnosis.currentBranch}</code>
                                     </p>
@@ -819,7 +819,7 @@ export default function AdminCollectionsPage() {
                                 </div>
                             )}
                             
-                            <p className="text-sm font-medium text-gray-800 mb-3">{diagnosis.conclusion}</p>
+                            <p className="text-sm font-medium text-content-primary mb-3">{diagnosis.conclusion}</p>
                             
                             <div className="space-y-2">
                                 {diagnosis.checks.map((check: any, idx: number) => (
@@ -829,9 +829,9 @@ export default function AdminCollectionsPage() {
                                         </span>
                                         <div className="flex-1">
                                             <span className="font-medium">{check.name}:</span>{' '}
-                                            <span className="text-gray-600">{check.message}</span>
+                                            <span className="text-content-secondary">{check.message}</span>
                                             {check.details && (
-                                                <pre className="mt-1 text-xs text-gray-500 bg-gray-50 p-2 rounded overflow-x-auto">
+                                                <pre className="mt-1 text-xs text-content-secondary bg-surface-muted p-2 rounded-xl overflow-x-auto">
                                                     {JSON.stringify(check.details, null, 2)}
                                                 </pre>
                                             )}
@@ -846,12 +846,12 @@ export default function AdminCollectionsPage() {
 
             {/* 트랙A 프로세스 상태 */}
             {trackAStats && (
-                <div className="bg-white border rounded-lg p-6 mb-6">
-                    <h2 className="text-lg font-semibold mb-4">트랙A 프로세스 상태</h2>
+                <div className="card p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-content-primary mb-4">트랙A 프로세스 상태</h2>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className={`p-4 rounded-lg border ${getStatusColor(trackAStats.lastRun.status)}`}>
-                            <p className="text-xs text-gray-500 mb-1">마지막 이슈 생성</p>
+                        <div className={`p-4 rounded-xl border ${getStatusColor(trackAStats.lastRun.status)}`}>
+                            <p className="text-xs text-content-secondary mb-1">마지막 이슈 생성</p>
                             <p className="text-xl font-bold">
                                 {trackAStats.lastRun.minutesAgo !== null
                                     ? formatTimeAgo(trackAStats.lastRun.minutesAgo)
@@ -859,23 +859,23 @@ export default function AdminCollectionsPage() {
                             </p>
                         </div>
                         
-                        <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
-                            <p className="text-xs text-gray-500 mb-1">다음 실행 예정</p>
+                        <div className="p-4 rounded-xl border bg-blue-50 border-blue-200">
+                            <p className="text-xs text-content-secondary mb-1">다음 실행 예정</p>
                             <p className="text-xl font-bold text-blue-600">
                                 {new Date(trackAStats.lastRun.nextRun).toLocaleTimeString('ko-KR', {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                 })}
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">10분 주기</p>
+                            <p className="text-xs text-content-secondary mt-1">10분 주기</p>
                         </div>
                         
-                        <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
-                            <p className="text-xs text-gray-500 mb-1">24시간 이슈 생성</p>
-                            <p className="text-xl font-bold text-gray-900">
+                        <div className="p-4 rounded-xl border bg-surface-subtle border-border">
+                            <p className="text-xs text-content-secondary mb-1">24시간 이슈 생성</p>
+                            <p className="text-xl font-bold text-content-primary">
                                 {trackAStats.last24h.issuesCreated}건
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-content-secondary mt-1">
                                 트랙A {trackAStats.last24h.trackAIssues}건 ({trackAStats.last24h.trackAPercentage}%)
                             </p>
                         </div>
@@ -885,10 +885,10 @@ export default function AdminCollectionsPage() {
 
             {/* 커뮤니티 수집 상태 */}
             {trackAStats && (
-                <div className="bg-white border rounded-lg p-6 mb-6">
-                    <h2 className="text-lg font-semibold mb-4">커뮤니티 수집 상태</h2>
+                <div className="card p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-content-primary mb-4">커뮤니티 수집 상태</h2>
                     
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
                         <p className="font-medium mb-2">수집 채널 및 게시판</p>
                         <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
                             {[
@@ -902,12 +902,12 @@ export default function AdminCollectionsPage() {
                                 disabled ? (
                                     <span
                                         key={site}
-                                        className="flex items-center gap-1.5 text-xs text-gray-400 line-through"
+                                        className="flex items-center gap-1.5 text-xs text-content-muted line-through"
                                     >
                                         <span className="font-medium">{site}</span>
                                         <span>·</span>
                                         <span>{board}</span>
-                                        <span className="no-underline text-xs bg-gray-200 text-gray-500 px-1 rounded">봇차단</span>
+                                        <span className="no-underline text-xs bg-surface-muted text-content-muted px-1 rounded-full">봇차단</span>
                                     </span>
                                 ) : (
                                     <a
@@ -933,27 +933,27 @@ export default function AdminCollectionsPage() {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-lg border ${getStatusColor(trackAStats.communityCollection.status)}`}>
-                            <p className="text-xs text-gray-500 mb-1">마지막 수집</p>
+                        <div className={`p-4 rounded-xl border ${getStatusColor(trackAStats.communityCollection.status)}`}>
+                            <p className="text-xs text-content-secondary mb-1">마지막 수집</p>
                             <p className="text-xl font-bold">
                                 {formatTimeAgo(trackAStats.communityCollection.minutesAgo)}
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-content-secondary mt-1">
                                 상태: {trackAStats.communityCollection.status === 'active' ? '정상' : '경고'}
                             </p>
                         </div>
                         
-                        <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
-                            <p className="text-xs text-gray-500 mb-1">24시간 수집</p>
-                            <p className="text-xl font-bold text-gray-900">
+                        <div className="p-4 rounded-xl border bg-surface-subtle border-border">
+                            <p className="text-xs text-content-secondary mb-1">24시간 수집</p>
+                            <p className="text-xl font-bold text-content-primary">
                                 {trackAStats.communityCollection.last24h.toLocaleString()}건
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">1분 주기</p>
+                            <p className="text-xs text-content-secondary mt-1">1분 주기</p>
                         </div>
                         
-                        <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
-                            <p className="text-xs text-gray-500 mb-1">최근 3시간</p>
-                            <p className="text-xl font-bold text-gray-900">
+                        <div className="p-4 rounded-xl border bg-surface-subtle border-border">
+                            <p className="text-xs text-content-secondary mb-1">최근 3시간</p>
+                            <p className="text-xl font-bold text-content-primary">
                                 {trackAStats.communityCollection.last3h.toLocaleString()}건
                             </p>
                         </div>
@@ -965,12 +965,12 @@ export default function AdminCollectionsPage() {
             <div className="mb-6">
                 <button
                     onClick={() => setShowDetails(!showDetails)}
-                    className="w-full p-4 text-left bg-white border rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-between"
+                    className="w-full p-4 text-left card hover:bg-surface-subtle transition-colors flex items-center justify-between"
                 >
-                    <span className="font-medium text-gray-700">
+                    <span className="font-medium text-content-primary">
                         {showDetails ? '▼' : '▶'} 상세 수집 데이터 {showDetails ? '접기' : '펼치기'}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-content-secondary">
                         트랙A 검색 뉴스 및 커뮤니티 수집 목록
                     </span>
                 </button>
@@ -982,13 +982,13 @@ export default function AdminCollectionsPage() {
             {/* ── 수집 커뮤니티 목록 ── */}
             <section>
                 <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-base font-semibold text-gray-800">수집 커뮤니티</h2>
+                    <h2 className="text-base font-semibold text-content-primary">수집 커뮤니티</h2>
                     <CronBadge label="1분 주기" />
-                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-primary-light text-primary-dark">
                         인기글 선별 수집
                     </span>
                     {!communityLoading && communityResult && (
-                        <span className="text-xs text-gray-400 ml-auto">
+                        <span className="text-xs text-content-muted ml-auto">
                             총 {communityResult.total.toLocaleString()}건
                         </span>
                     )}
@@ -997,15 +997,15 @@ export default function AdminCollectionsPage() {
                 {/* 사이트 탭 + 연결 상태 탭 */}
                 <div className="flex flex-wrap items-center gap-3 mb-3">
                     <TabBar tabs={SITE_TABS} active={communitySiteFilter} onChange={handleCommunitySite} />
-                    <div className="w-px h-5 bg-gray-200" />
+                    <div className="w-px h-5 bg-border" />
                     <TabBar tabs={LINK_TABS} active={communityLinkFilter} onChange={handleCommunityLinkFilter} />
                 </div>
 
-                <div className="bg-white border rounded-lg overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-100">
-                        <thead className="bg-gray-50">
+                <div className="card overflow-x-auto">
+                    <table className="min-w-full divide-y divide-border-muted">
+                        <thead className="bg-surface-subtle">
                             <tr>
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">제목</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted">제목</th>
                                 <Th label="사이트" col="source_site" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
                                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap w-48">연결 이슈</th>
                                 <Th label="조회" col="view_count" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} className="text-right" />
@@ -1015,22 +1015,22 @@ export default function AdminCollectionsPage() {
                                 <Th label="갱신일" col="updated_at" activeCol={communitySort} activeOrder={communityOrder} onSort={handleCommunitySort} />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-border-muted">
                             {communityLoading ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
+                                    <td colSpan={8} className="px-4 py-6 text-sm text-content-muted text-center">로딩 중…</td>
                                 </tr>
                             ) : !communityResult || communityResult.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 게시글이 없습니다</td>
+                                    <td colSpan={8} className="px-4 py-6 text-sm text-content-muted text-center">수집된 게시글이 없습니다</td>
                                 </tr>
                             ) : (
                                 communityResult.data.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50">
+                                    <tr key={item.id} className="hover:bg-surface-subtle">
                                         <td className="px-4 py-2.5 text-sm">
                                             {item.url ? (
                                                 <a href={item.url} target="_blank" rel="noopener noreferrer"
-                                                    className="text-gray-900 hover:text-blue-600 hover:underline line-clamp-1">
+                                                    className="text-content-primary hover:text-primary hover:underline line-clamp-1">
                                                     {item.title}
                                                 </a>
                                             ) : (
@@ -1038,7 +1038,7 @@ export default function AdminCollectionsPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-2.5">
-                                            <span className={`inline-block text-xs font-medium px-1.5 py-0.5 rounded ${
+                                            <span className={`inline-block text-xs font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${
                                                 item.source_site === '더쿠'
                                                     ? 'bg-orange-100 text-orange-700'
                                                     : item.source_site === '네이트판'
@@ -1059,26 +1059,26 @@ export default function AdminCollectionsPage() {
                                         <td className="px-4 py-2.5 text-xs whitespace-nowrap max-w-[12rem]">
                                             {item.issues ? (
                                                 <Link href={`/issue/${item.issues.id}`}
-                                                    className="text-blue-600 hover:underline line-clamp-1 block">
+                                                    className="text-primary hover:underline line-clamp-1 block">
                                                     {item.issues.title}
                                                 </Link>
                                             ) : (
-                                                <span className="text-gray-300">미연결</span>
+                                                <span className="text-border-strong">미연결</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-500 text-right whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs text-content-secondary text-right whitespace-nowrap">
                                             {item.view_count.toLocaleString()}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-500 text-right whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs text-content-secondary text-right whitespace-nowrap">
                                             {item.comment_count.toLocaleString()}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                                            {item.written_at ? fmt(item.written_at) : <span className="text-gray-300">-</span>}
+                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
+                                            {item.written_at ? fmt(item.written_at) : <span className="text-border-strong">-</span>}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
                                             {fmt(item.created_at)}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
                                             {fmt(item.updated_at)}
                                         </td>
                                     </tr>
@@ -1096,86 +1096,75 @@ export default function AdminCollectionsPage() {
                 )}
             </section>
 
-            {/* ── 트랙A 검색 뉴스 목록 ── */}
-            <section className="mb-10">
+            {/* ── 트랙 A 검색 뉴스 목록 ── */}
+            <section>
                 <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-base font-semibold text-gray-800">트랙A 검색 뉴스</h2>
+                    <h2 className="text-base font-semibold text-content-primary">트랙 A 검색 뉴스</h2>
                     <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                        AI 키워드 검색 전용
+                        수시 검색
                     </span>
                     {!newsLoading && newsResult && (
-                        <span className="text-xs text-gray-400 ml-auto">
+                        <span className="text-xs text-content-muted ml-auto">
                             총 {newsResult.total.toLocaleString()}건
                         </span>
                     )}
                 </div>
 
-                {/* 연결 상태 탭 */}
-                <div className="mb-3">
-                    <TabBar tabs={LINK_TABS} active={newsLinkFilter} onChange={handleNewsLinkFilter} />
-                </div>
-
-                <div className="bg-white border rounded-lg overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-100">
-                        <thead className="bg-gray-50">
+                <div className="card overflow-x-auto">
+                    <table className="min-w-full divide-y divide-border-muted">
+                        <thead className="bg-surface-subtle">
                             <tr>
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-full">
-                                    제목
-                                </th>
-                                <Th label="출처" col="source" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
-                                    검색 키워드
-                                </th>
-                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
-                                    연결 이슈
-                                </th>
-                                <Th label="발행일" col="published_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
-                                <Th label="수집일" col="created_at" activeCol={newsSort} activeOrder={newsOrder} onSort={handleNewsSort} />
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted">제목</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted">언론사</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted whitespace-nowrap">검색 키워드</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted whitespace-nowrap w-48">연결 이슈</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted whitespace-nowrap">발행일</th>
+                                <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted whitespace-nowrap">수집일</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-border-muted">
                             {newsLoading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">로딩 중…</td>
+                                    <td colSpan={6} className="px-4 py-6 text-sm text-content-muted text-center">로딩 중…</td>
                                 </tr>
                             ) : !newsResult || newsResult.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-sm text-gray-400 text-center">수집된 뉴스가 없습니다</td>
+                                    <td colSpan={6} className="px-4 py-6 text-sm text-content-muted text-center">수집된 뉴스가 없습니다</td>
                                 </tr>
                             ) : (
                                 newsResult.data.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50">
+                                    <tr key={item.id} className="hover:bg-surface-subtle">
                                         <td className="px-4 py-2.5 text-sm max-w-xs">
                                             {item.link ? (
                                                 <a href={item.link} target="_blank" rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:underline line-clamp-1">
+                                                    className="text-primary hover:underline line-clamp-1">
                                                     {decodeHtml(item.title)}
                                                 </a>
                                             ) : (
                                                 <span className="line-clamp-1">{decodeHtml(item.title)}</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{item.source}</td>
+                                        <td className="px-4 py-2.5 text-xs text-content-secondary whitespace-nowrap">{item.source}</td>
                                         <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                                             {item.search_keyword
                                                 ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{item.search_keyword}</span>
-                                                : <span className="text-gray-300">-</span>
+                                                : <span className="text-border-strong">-</span>
                                             }
                                         </td>
                                         <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                                             {item.issues ? (
                                                 <Link href={`/issue/${item.issues.id}`} target="_blank"
-                                                    className="text-blue-600 hover:underline">
+                                                    className="text-primary hover:underline">
                                                     {item.issues.title}
                                                 </Link>
                                             ) : (
-                                                <span className="text-gray-300">미연결</span>
+                                                <span className="text-border-strong">미연결</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
                                             {item.published_at ? fmt(item.published_at) : '-'}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
                                             {fmt(item.created_at)}
                                         </td>
                                     </tr>
@@ -1188,7 +1177,7 @@ export default function AdminCollectionsPage() {
                     <Pagination page={newsPage} totalPages={newsResult.totalPages} onChange={handleNewsPage} />
                 )}
             </section>
-                </div>
+            </div>
             )}
 
             </>)}
@@ -1205,7 +1194,7 @@ export default function AdminCollectionsPage() {
                                 setPipelineResultFilter(v)
                                 fetchPipelineLogs(v, pipelineDateFilter)
                             }}
-                            className="text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
+                            className="text-sm border border-border rounded-xl px-2 py-1.5 bg-surface"
                         >
                             <option value="all">전체 결과</option>
                             <option value="issue_created">이슈 생성</option>
@@ -1227,7 +1216,7 @@ export default function AdminCollectionsPage() {
                                 setPipelineDateFilter(e.target.value)
                                 fetchPipelineLogs(pipelineResultFilter, e.target.value)
                             }}
-                            className="text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
+                            className="text-sm border border-border rounded-xl px-2 py-1.5 bg-surface"
                         >
                             {availableDates.length === 0 ? (
                                 <option value={pipelineDateFilter}>{pipelineDateFilter}</option>
@@ -1292,27 +1281,27 @@ export default function AdminCollectionsPage() {
                     {pipelineLoading ? (
                         <div className="space-y-2">
                             {[1, 2, 3, 4, 5].map((i) => (
-                                <div key={i} className="h-14 bg-gray-100 rounded animate-pulse" />
+                                <div key={i} className="h-14 bg-surface-muted rounded-xl animate-pulse" />
                             ))}
                         </div>
                     ) : !pipelineLogs || pipelineLogs.data.length === 0 ? (
-                        <div className="bg-white border rounded-lg p-10 text-center text-sm text-gray-400">
+                        <div className="card p-10 text-center text-sm text-content-muted">
                             로그가 없습니다.{' '}
                             {pipelineLogs === null && 'track_a_logs 테이블 마이그레이션 후 Track A가 실행되면 기록됩니다.'}
                         </div>
                     ) : (
-                        <div className="bg-white border rounded-lg overflow-hidden">
+                        <div className="card overflow-hidden">
                             <table className="w-full text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-100">
+                                <thead className="bg-surface-subtle border-b border-border-muted">
                                     <tr>
-                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-36">실행 시각</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-36">키워드</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 w-16">감지 건수</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-28">결과</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-48">상세</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-36">실행 시각</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-36">키워드</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-medium text-content-muted w-16">감지 건수</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-28">결과</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-48">상세</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-border-muted">
                                     {pipelineLogs.data.map((log) => {
                                         const RESULT_LABEL: Record<string, string> = {
                                             issue_created: '이슈 생성',
@@ -1356,29 +1345,29 @@ export default function AdminCollectionsPage() {
                                             ].filter(Boolean).join(' · ')
                                             : ''
                                         return (
-                                            <tr key={log.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                                            <tr key={log.id} className="hover:bg-surface-subtle">
+                                                <td className="px-4 py-3 text-xs text-content-muted whitespace-nowrap">
                                                     {new Date(log.run_at).toLocaleString('ko-KR', {
                                                         month: '2-digit', day: '2-digit',
                                                         hour: '2-digit', minute: '2-digit',
                                                     })}
                                                 </td>
-                                                <td className="px-4 py-3 font-medium text-gray-900">
+                                                <td className="px-4 py-3 font-medium text-content-primary">
                                                     {log.keyword}
                                                 </td>
-                                                <td className="px-4 py-3 text-center text-gray-500">
+                                                <td className="px-4 py-3 text-center text-content-secondary">
                                                     {log.burst_count}건
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded ${RESULT_COLOR[log.result] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${RESULT_COLOR[log.result] ?? 'bg-surface-muted text-content-secondary'}`}>
                                                         {RESULT_LABEL[log.result] ?? log.result}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-xs text-gray-500 w-48">
+                                                <td className="px-4 py-3 text-xs text-content-secondary w-48">
                                                     {log.issues ? (
                                                         <Link
                                                             href={`/admin/issues/${log.issue_id}`}
-                                                            className="text-blue-600 hover:underline"
+                                                            className="text-primary hover:underline"
                                                         >
                                                             {log.issues.title}
                                                         </Link>

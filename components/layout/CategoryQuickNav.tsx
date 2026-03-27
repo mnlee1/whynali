@@ -24,19 +24,19 @@ const CATEGORIES = [
 export default function CategoryQuickNav() {
     return (
         <section>
-            <h2 className="text-base font-bold text-neutral-900 mb-3">카테고리</h2>
+            <h2 className="text-base font-bold text-content-primary mb-3">카테고리</h2>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                 {CATEGORIES.map((cat) => (
                     <Link key={cat.href} href={cat.href}>
-                        <div className="flex flex-col items-center justify-center gap-1.5 p-3 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:bg-neutral-50 transition-all text-center group">
-                            <span className="text-lg text-neutral-400 group-hover:text-neutral-600 transition-colors">
+                        <div className="card-hover flex flex-col items-center justify-center gap-1.5 p-3 transition-all text-center group">
+                            <span className="text-lg text-content-muted group-hover:text-primary transition-colors">
                                 {cat.icon}
                             </span>
-                            <span className="text-sm font-semibold text-neutral-700">
+                            <span className="text-sm font-semibold text-content-primary">
                                 {cat.label}
                             </span>
-                            <span className="hidden md:block text-xs text-neutral-400">
+                            <span className="hidden md:block text-xs text-content-muted">
                                 {cat.desc}
                             </span>
                         </div>

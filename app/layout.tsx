@@ -23,9 +23,9 @@ export default function RootLayout({
 }) {
     return (
         <html lang="ko">
-            <body className="min-h-screen bg-white text-neutral-900 antialiased font-pretendard">
+            <body className="min-h-screen bg-surface-muted text-content-primary antialiased font-pretendard">
                 <Header />
-                <main className="min-h-screen flex flex-col">
+                <main className="min-h-screen flex flex-col pb-8 md:pb-14 xl:pb-24">
                     {children}
                 </main>
                 <Footer />

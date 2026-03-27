@@ -241,12 +241,12 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
                     onFocus={() => setShowSuggestions(true)}
                     onKeyDown={handleKeyDown}
                     placeholder="지금 이슈 검색"
-                    className="w-full md:w-64 pl-3 pr-10 py-1.5 text-sm border border-neutral-200 rounded-md bg-neutral-50 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-neutral-400 focus:bg-white"
+                    className="w-full md:w-64 pl-3 pr-10 py-1.5 text-sm border border-border rounded-lg bg-white text-content-primary placeholder:text-content-muted focus:outline-none focus:border-primary transition-colors"
                 />
                 <button
                     type="button"
                     onClick={handleSearch}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-content-muted hover:text-content-secondary transition-colors"
                     aria-label="검색"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -257,18 +257,18 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
 
             {/* 인기 검색어 드롭다운 */}
             {showSuggestions && popularKeywords.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-lg z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-xl shadow-card z-50">
                     <div className="p-2">
-                        <p className="text-xs text-neutral-500 px-2 py-1 font-medium">인기 검색어</p>
+                        <p className="text-xs text-content-muted px-2 py-1 font-medium">인기 검색어</p>
                         <ul className="space-y-0.5">
                             {popularKeywords.map((item) => (
                                 <li key={item.rank}>
                                     <button
                                         onClick={() => handleKeywordClick(item.keyword, item.issueId)}
-                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-left hover:bg-neutral-50 rounded transition-colors"
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-left hover:bg-surface-muted rounded-lg transition-colors"
                                     >
-                                        <span className="text-xs font-bold text-violet-600 w-4 shrink-0">{item.rank}</span>
-                                        <span className="text-neutral-700 line-clamp-1 flex-1">{item.keyword}</span>
+                                        <span className="text-xs font-bold text-primary w-4 shrink-0">{item.rank}</span>
+                                        <span className="text-content-secondary line-clamp-1 flex-1">{item.keyword}</span>
                                     </button>
                                 </li>
                             ))}

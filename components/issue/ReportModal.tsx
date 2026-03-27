@@ -62,13 +62,13 @@ export default function ReportModal({ isOpen, onClose, comment, onReport }: Repo
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 {/* 헤더 */}
-                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">신고하기</h2>
+                <div className="sticky top-0 bg-surface border-b border-border px-6 py-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-content-primary">신고하기</h2>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                        className="text-content-muted hover:text-content-secondary text-2xl leading-none"
                         aria-label="닫기"
                     >
                         ×
@@ -76,28 +76,28 @@ export default function ReportModal({ isOpen, onClose, comment, onReport }: Repo
                 </div>
 
                 {/* 신고 대상 정보 */}
-                <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 space-y-2">
+                <div className="px-6 py-4 bg-surface-subtle border-b border-border-muted space-y-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-gray-500 w-10 shrink-0">작성자</span>
-                        <span className="text-sm text-gray-700">{maskNickname(comment.authorNickname)}</span>
+                        <span className="text-xs text-content-muted w-10 shrink-0">작성자</span>
+                        <span className="text-sm text-content-secondary">{maskNickname(comment.authorNickname)}</span>
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-gray-500 w-10 shrink-0">내용</span>
-                        <span className="text-sm text-gray-700 truncate">{truncateText(comment.body, 50)}</span>
+                        <span className="text-xs text-content-muted w-10 shrink-0">내용</span>
+                        <span className="text-sm text-content-secondary truncate">{truncateText(comment.body, 50)}</span>
                     </div>
                 </div>
 
                 {/* 사유 선택 */}
                 <div className="px-6 py-4">
-                    <p className="text-sm font-semibold text-gray-800 mb-3">사유선택</p>
+                    <p className="text-sm font-semibold text-content-primary mb-3">사유선택</p>
                     <div className="space-y-2">
                         {REPORT_OPTIONS.map((option) => (
                             <div
                                 key={option.id}
-                                className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
+                                className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-surface-subtle transition-colors ${
                                     selectedOption === option.id
-                                        ? 'border-green-500'
-                                        : 'border-gray-200'
+                                        ? 'border-primary bg-primary-light/30'
+                                        : 'border-border'
                                 }`}
                                 onClick={() => setSelectedOption(option.id)}
                             >
@@ -108,9 +108,9 @@ export default function ReportModal({ isOpen, onClose, comment, onReport }: Repo
                                     value={option.id}
                                     checked={selectedOption === option.id}
                                     onChange={() => setSelectedOption(option.id)}
-                                    className="w-4 h-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                    className="w-4 h-4 accent-primary cursor-pointer"
                                 />
-                                <label htmlFor={`report-${option.id}`} className="flex-1 text-sm text-gray-700 cursor-pointer">
+                                <label htmlFor={`report-${option.id}`} className="flex-1 text-sm text-content-secondary cursor-pointer">
                                     {option.label}
                                 </label>
                             </div>
@@ -119,11 +119,11 @@ export default function ReportModal({ isOpen, onClose, comment, onReport }: Repo
                 </div>
 
                 {/* 하단 버튼 */}
-                <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+                <div className="sticky bottom-0 bg-surface border-t border-border px-6 py-4">
                     <button
                         onClick={handleSubmit}
                         disabled={!selectedOption}
-                        className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600 transition-colors"
+                        className="btn-danger btn-md w-full"
                     >
                         신고하기
                     </button>

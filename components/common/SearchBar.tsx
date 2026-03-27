@@ -34,7 +34,7 @@ export default function SearchBar({ value, onChange, onSearch, placeholder = 'ì
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="w-full pl-3 pr-10 py-2 text-sm border border-neutral-200 rounded-md bg-white focus:outline-none focus:border-neutral-400"
+                className="w-full pl-3 pr-10 py-2 text-sm border border-border rounded-lg bg-white text-content-primary placeholder:text-content-muted focus:outline-none focus:border-primary transition-colors"
             />
             <button
                 type="button"

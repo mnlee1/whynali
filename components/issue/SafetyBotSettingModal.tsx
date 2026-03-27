@@ -17,10 +17,10 @@ export default function SafetyBotSettingModal({ onClose, onConfirm }: SafetyBotS
         setEnabled(stored !== 'false')
     }, [])
 
-    const title = enabled ? '세이프티봇 활성화 중' : '세이프티봇 비활성화 중'
+    const title = '세이프티봇 설정'
     const description = enabled
-        ? '욕설, 비하, 혐오 표현이 포함된 댓글을 자동으로 필터링해 쾌적한 댓글 환경을 유지해드려요.'
-        : '세이프티봇이 꺼져 있어요. 필터링 없이 모든 댓글이 그대로 표시되며, 불쾌한 표현이 포함될 수 있어요.'
+        ? '불쾌한 댓글을 자동으로 걸러드리고 있어요. 더 편안하게 댓글을 둘러보세요.'
+        : '세이프티봇이 꺼져 있어요. 모든 댓글이 표시되니 주의해 주세요.'
 
     const handleConfirm = () => {
         const current = localStorage.getItem(STORAGE_KEY) !== 'false'
@@ -92,7 +92,7 @@ export default function SafetyBotSettingModal({ onClose, onConfirm }: SafetyBotS
                 <div className="flex justify-end px-5 py-4 border-t border-gray-100 bg-gray-50">
                     <button
                         onClick={handleConfirm}
-                        className="text-sm px-5 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 transition-colors font-medium"
+                        className="btn-primary btn-md"
                     >
                         확인
                     </button>

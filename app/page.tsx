@@ -35,7 +35,7 @@ export default function HomePage() {
                 </div>
 
                 {/* 오른쪽: 인기 랭킹 */}
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-1 h-full">
                     <PopularRanking />
                 </div>
             </div>

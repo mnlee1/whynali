@@ -4,10 +4,146 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── 전역 기본 스타일 ────────────────────────────── */
+
+@layer base {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select {
+        @apply rounded-lg bg-white;
+    }
+}
+
+/* ── 디자인 토큰 ─────────────────────────────────── */
+
+:root {
+    --color-primary-from: #a202e3;
+    --color-primary-to:   #7700b9;
+    --gradient-primary:   linear-gradient(to right, var(--color-primary-from), var(--color-primary-to));
+
+    --color-border:       #e4e4e7;
+    --color-border-muted: #f1f1f3;
+    --color-surface:      #ffffff;
+    --color-surface-muted:#fafafa;
+}
+
+/* ── 버튼 컴포넌트 ───────────────────────────────── */
+
+@layer components {
+    /* Primary: 메인 그라데이션 */
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 rounded-btn select-none whitespace-nowrap;
+    }
+
+    .btn-sm   { @apply btn px-3.5 py-1.5 text-xs; }
+    .btn-md   { @apply btn px-5 py-2.5 text-sm; }
+    .btn-lg   { @apply btn px-6 py-3 text-base; }
+
+    /* Primary — 그라데이션 */
+    .btn-primary {
+        background: var(--gradient-primary);
+        @apply text-white shadow-sm hover:opacity-90 active:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed;
+    }
+
+    /* Secondary — 연보라 틴트 */
+    .btn-secondary {
+        @apply bg-primary-light text-primary border border-primary-muted hover:bg-primary-muted active:bg-primary-muted/70 disabled:opacity-40 disabled:cursor-not-allowed;
+    }
+
+    /* Ghost — 테두리형 */
+    .btn-ghost {
+        @apply bg-transparent text-primary border border-primary hover:bg-primary-light active:bg-primary-muted/50 disabled:opacity-40 disabled:cursor-not-allowed;
+    }
+
+    /* Neutral — 무채색 */
+    .btn-neutral {
+        @apply bg-white text-content-secondary border border-border hover:bg-surface-subtle hover:text-content-primary active:bg-border active:text-content-primary disabled:opacity-40 disabled:cursor-not-allowed;
+    }
+
+    /* Danger — 파괴적 액션 */
+    .btn-danger {
+        @apply bg-red-500 text-white hover:bg-red-600 active:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed;
+    }
+
+    /* ── 인풋 필드 ────────────────────────────────── */
+
+    .input-field {
+        @apply w-full px-4 py-2.5 text-sm border border-border rounded-lg bg-white text-content-primary placeholder:text-content-muted focus:outline-none focus:border-primary focus:ring-1 transition-colors;
+        --tw-ring-color: rgb(162 2 227 / 0.15);
+    }
+
+    .input-field-sm {
+        @apply input-field px-3 py-1.5 text-xs;
+    }
+
+    /* ── 뱃지 ─────────────────────────────────────── */
+
+    .badge {
+        @apply inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-medium rounded-full border;
+    }
+
+    /* ── 카드/컨텐츠 영역 ─────────────────────────── */
+
+    .card {
+        @apply bg-surface rounded-xl border border-border shadow-card;
+    }
+
+    .card-hover {
+        @apply card hover:shadow-card-hover transition-shadow duration-150;
+    }
+
+    /* ── 테이블 ───────────────────────────────────── */
+
+    .table-wrap {
+        @apply rounded-xl border border-border overflow-hidden;
+    }
+
+    .table-head {
+        @apply bg-surface-muted border-b border-border text-xs text-content-muted font-medium;
+    }
+
+    .table-row {
+        @apply border-b border-border-muted last:border-0 hover:bg-surface-muted transition-colors;
+    }
+}
+
 /* 투표 선택지 비율 바: --vote-pct CSS 변수로 너비 제어 */
 .vote-bar {
     width: var(--vote-pct, 0%);
 }
+
+/* ── Swiper 페이지네이션 닷 ──────────────────────── */
+
+.swiper-pagination-bullet {
+    background: rgba(255, 255, 255, 0.5) !important;
+    opacity: 1 !important;
+}
+
+.swiper-pagination-bullet-active {
+    background: #ffffff !important;
+}
+
+/* ── 카드 시차 등장 애니메이션 ──────────────────────── */
+
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-slide {
+    animation: fadeInSlide 0.35s ease-out both;
+}
+
+@keyframes borderDraw {
+    from { transform: scaleY(0); opacity: 0; }
+    to   { transform: scaleY(1); opacity: 1; }
+}
+
+.border-draw {
+    transform-origin: bottom;
+    animation: borderDraw 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
 
 /* 가로 스크롤 영역 스크롤바 숨김 (ActiveIssueStrip 등) */
 .scrollbar-hide {
@@ -22,7 +158,7 @@
 /* ── 관리자 레이아웃 ──────────────────────────────── */
 
 .admin-layout {
-    @apply min-h-screen bg-gray-50;
+    @apply min-h-screen bg-surface-muted;
 }
 
 /* 모바일: 탭 네비 아래 패딩, 데스크톱: 상하 여백 */
@@ -33,7 +169,7 @@
 /* ── 모바일 탭 네비 ─────────────────────────────── */
 
 .admin-mobile-nav {
-    @apply sticky top-0 z-40 bg-white border-b border-gray-200;
+    @apply sticky top-0 z-40 bg-surface border-b border-border;
 }
 
 .admin-mobile-nav-inner {
@@ -52,31 +188,31 @@
 }
 
 .admin-mobile-nav-item {
-    @apply flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 rounded-full border border-gray-200 whitespace-nowrap hover:border-gray-400 hover:text-gray-900 transition-colors shrink-0;
+    @apply flex items-center gap-1.5 px-3 py-1.5 text-xs text-content-secondary rounded-full border border-border whitespace-nowrap hover:border-border-strong hover:text-content-primary transition-colors shrink-0;
 }
 
 .admin-mobile-nav-item--active {
-    @apply bg-gray-900 text-white border-gray-900;
+    @apply bg-primary text-white border-primary;
 }
 
 .admin-sidebar {
     /* flex / hidden 제어는 HTML 클래스(hidden md:flex)에서만 담당 */
-    @apply w-52 shrink-0 bg-white border border-gray-200 rounded-xl flex-col self-start;
+    @apply w-52 shrink-0 bg-surface border border-border rounded-xl flex-col self-start;
     position: sticky;
     top: 24px;
     max-height: calc(100vh - 48px);
 }
 
 .admin-sidebar-header {
-    @apply px-4 py-4 border-b border-gray-100;
+    @apply px-4 py-4 border-b border-border-muted;
 }
 
 .admin-sidebar-logo {
-    @apply flex items-center gap-2.5 text-gray-900 hover:text-gray-700 transition-colors;
+    @apply flex items-center gap-2.5 text-content-primary hover:text-content-secondary transition-colors;
 }
 
 .admin-sidebar-logo-badge {
-    @apply w-7 h-7 bg-gray-900 text-white text-xs font-bold rounded flex items-center justify-center shrink-0;
+    @apply w-7 h-7 bg-primary text-white text-xs font-bold rounded flex items-center justify-center shrink-0;
 }
 
 .admin-sidebar-logo-text {
@@ -88,19 +224,19 @@
 }
 
 .admin-sidebar-item {
-    @apply flex items-center gap-2.5 px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900 transition-colors;
+    @apply flex items-center gap-2.5 px-3 py-2 text-sm text-content-secondary rounded-xl hover:bg-surface-muted hover:text-content-primary transition-colors;
 }
 
 .admin-sidebar-item--active {
-    @apply bg-gray-100 text-gray-900 font-medium;
+    @apply bg-surface-muted text-content-primary font-medium;
 }
 
 .admin-sidebar-footer {
-    @apply px-3 py-4 border-t border-gray-100;
+    @apply px-3 py-4 border-t border-border-muted;
 }
 
 .admin-sidebar-back {
-    @apply flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-600 transition-colors;
+    @apply flex items-center gap-2.5 px-3 py-2 text-xs text-content-muted rounded-xl hover:bg-surface-subtle hover:text-content-secondary transition-colors;
 }
 
 .admin-main {
