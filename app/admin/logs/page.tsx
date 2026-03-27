@@ -102,17 +102,17 @@ export default function AdminLogsPage() {
         <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">운영 로그</h1>
+                    <h1 className="text-2xl font-bold text-content-primary">운영 로그</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                             마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
                     <button
                         onClick={handleRefresh}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        className="btn-neutral btn-md"
                     >
                         새로고침
                     </button>
@@ -134,81 +134,81 @@ export default function AdminLogsPage() {
                         key={value}
                         onClick={() => setFilterType(value)}
                         className={[
-                            'px-3 py-1.5 text-sm rounded',
+                            'px-3 py-1.5 text-sm rounded-full border transition-colors',
                             filterType === value
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
                         ].join(' ')}
                     >
                         {label}
                     </button>
                 ))}
-                <span className="ml-auto text-sm text-gray-500 self-center">
+                <span className="ml-auto text-sm text-content-secondary self-center">
                     총 {total.toLocaleString()}건
                 </span>
             </div>
 
             {error && (
-                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
                     {error}
                 </div>
             )}
 
-            <div className="border rounded-lg overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+            <div className="card overflow-x-auto">
+                <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-surface-subtle">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">시간</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">액션</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">대상 유형</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">내용</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">대상 ID</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">관리자</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">시간</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">액션</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">대상 유형</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">내용</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">대상 ID</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">관리자</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-surface divide-y divide-border">
                         {loading ? (
                             [1, 2, 3, 4, 5].map((i) => (
                                 <tr key={i}>
                                     <td colSpan={6} className="px-4 py-3">
-                                        <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
+                                        <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : logs.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
+                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-content-muted">
                                     기록된 로그가 없습니다.
                                 </td>
                             </tr>
                         ) : (
                             logs.map((log) => (
-                                <tr key={log.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                                <tr key={log.id} className="hover:bg-surface-subtle">
+                                    <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                         {formatDate(log.created_at)}
                                     </td>
                                     <td className="px-4 py-3 w-28 max-w-[7rem]">
                                         <span className={[
-                                            'text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap inline-block max-w-full truncate',
-                                            ACTION_BADGE[log.action] ?? 'bg-gray-100 text-gray-600',
+                                            'text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap inline-block max-w-full truncate',
+                                            ACTION_BADGE[log.action] ?? 'bg-surface-muted text-content-secondary',
                                         ].join(' ')} title={log.action}>
                                             {log.action}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                                    <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                         {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-700 max-w-xs">
+                                    <td className="px-4 py-3 text-sm text-content-primary max-w-xs">
                                         {log.details ? (
                                             <span className="line-clamp-2">{log.details}</span>
                                         ) : (
-                                            <span className="text-gray-300">—</span>
+                                            <span className="text-border-strong">—</span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">
+                                    <td className="px-4 py-3 text-xs text-content-muted font-mono whitespace-nowrap">
                                         {log.target_id ? `…${log.target_id.slice(-8)}` : '—'}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                                    <td className="px-4 py-3 text-xs text-content-secondary whitespace-nowrap">
                                         {log.admin_id ? log.admin_id.split('@')[0] : '시스템'}
                                     </td>
                                 </tr>
@@ -223,7 +223,7 @@ export default function AdminLogsPage() {
                     <button
                         onClick={handleLoadMore}
                         disabled={loadingMore}
-                        className="text-sm px-5 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        className="btn-neutral btn-md"
                     >
                         {loadingMore ? '불러오는 중...' : `더보기 (${total - logs.length}건 남음)`}
                     </button>

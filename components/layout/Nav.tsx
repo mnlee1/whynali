@@ -32,10 +32,10 @@ export default function Nav({ mobile = false }: NavProps) {
                         <Link
                             key={cat.href}
                             href={cat.href}
-                            className={`px-3.5 py-1.5 text-sm rounded-full whitespace-nowrap border transition-colors ${
-                                isActive 
-                                    ? 'bg-violet-700 text-white border-violet-700 font-semibold' 
-                                    : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-300 font-medium'
+                            className={`pt-2 pb-2.5 text-sm whitespace-nowrap transition-colors border-b-2 ${
+                                isActive
+                                    ? 'text-content-primary font-bold border-primary'
+                                    : 'text-content-secondary font-normal border-transparent hover:text-content-primary'
                             }`}
                         >
                             {cat.name}
@@ -53,14 +53,14 @@ export default function Nav({ mobile = false }: NavProps) {
                 return (
                     <Fragment key={cat.href}>
                         {cat.name === '커뮤니티' && (
-                            <span className="w-px h-4 bg-neutral-300" />
+                            <span className="w-px h-4 bg-border" />
                         )}
                         <Link
                             href={cat.href}
                             className={`text-sm whitespace-nowrap transition-colors ${
-                                isActive 
-                                    ? 'text-neutral-900 font-bold' 
-                                    : 'text-neutral-600 font-normal hover:text-neutral-900'
+                                isActive
+                                    ? 'text-primary font-bold'
+                                    : 'text-content-secondary font-normal hover:text-content-primary'
                             }`}
                         >
                             {cat.name}

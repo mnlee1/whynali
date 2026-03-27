@@ -87,9 +87,9 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
 
     if (loading) {
         return (
-            <div className="grid grid-cols-7 gap-1">
+            <div className="flex flex-wrap justify-center gap-1 sm:flex-nowrap">
                 {REACTIONS.map((t) => (
-                    <div key={t} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+                    <div key={t} className="h-16 rounded-xl bg-border-muted animate-pulse w-[calc(25%-3px)] min-[480px]:flex-1" />
                 ))}
             </div>
         )
@@ -98,7 +98,8 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
     return (
         <div>
             {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
-            <div className="grid grid-cols-7 gap-1">
+            {/* 480px 미만: 4+3 두 줄 / 480px 이상: 7개 한 줄 */}
+            <div className="flex flex-wrap justify-center gap-1 min-[480px]:flex-nowrap">
                 {REACTION_META.map(({ type, emoji, label }) => {
                     const count = counts[type] ?? 0
                     const selected = userReaction === type
@@ -109,25 +110,26 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                             disabled={submitting}
                             title={label}
                             className={[
-                                'flex flex-col items-center px-2 py-2 rounded-xl border transition-colors',
+                                'flex flex-col items-center px-2 py-2 rounded-xl border transition-all',
+                                'w-[calc(25%-3px)] min-[480px]:flex-1',
                                 selected
-                                    ? 'border-violet-400 bg-violet-50 scale-105'
-                                    : 'border-gray-200 bg-white',
+                                    ? 'border-primary-muted scale-105'
+                                    : 'border-border bg-surface',
                                 submitting
                                     ? 'opacity-60 cursor-not-allowed'
-                                    : 'hover:border-gray-300 hover:scale-105 cursor-pointer',
+                                    : 'hover:border-border-strong hover:scale-105 cursor-pointer',
                             ].join(' ')}
                         >
                             <span className="text-xl leading-none">{emoji}</span>
                             <span className={[
                                 'text-xs mt-1',
-                                selected ? 'text-violet-700 font-semibold' : 'text-gray-500',
+                                selected ? 'text-primary font-semibold' : 'text-content-secondary',
                             ].join(' ')}>
                                 {label}
                             </span>
                             <span className={[
                                 'text-xs tabular-nums',
-                                selected ? 'text-violet-600 font-medium' : 'text-gray-400',
+                                selected ? 'text-primary font-medium' : 'text-content-muted',
                             ].join(' ')}>
                                 {count.toLocaleString()}
                             </span>

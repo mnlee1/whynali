@@ -235,17 +235,17 @@ export default function AdminSafetyPage() {
             <button
                 onClick={() => onClick(value)}
                 className={[
-                    'px-3 py-1.5 text-sm rounded transition-colors',
+                    'px-3 py-1.5 text-sm rounded-full border transition-colors',
                     active
-                        ? 'bg-gray-800 text-white font-medium'
-                        : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100',
+                        ? 'bg-primary text-white border-primary font-medium'
+                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
                 ].join(' ')}
             >
                 {label}
                 {badge !== undefined && badge > 0 && (
                     <span className={[
                         'ml-1.5 text-xs px-1.5 py-0.5 rounded-full',
-                        active ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600',
+                        active ? 'bg-white/20 text-white' : 'bg-surface-muted text-content-secondary',
                     ].join(' ')}>
                         {badge}
                     </span>
@@ -258,7 +258,7 @@ export default function AdminSafetyPage() {
         return (
             <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
+                    <div key={i} className="h-8 bg-surface-muted rounded-xl animate-pulse" />
                 ))}
             </div>
         )
@@ -268,16 +268,16 @@ export default function AdminSafetyPage() {
         <div>
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-                <h1 className="text-2xl font-bold">세이프티</h1>
+                <h1 className="text-2xl font-bold text-content-primary">세이프티</h1>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                             마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
                     <button
                         onClick={handleRefresh}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                        className="btn-neutral btn-md"
                     >
                         새로고침
                     </button>
@@ -288,10 +288,10 @@ export default function AdminSafetyPage() {
 
                 {/* ── 좌측: AI 금칙어 관리 패널 ── */}
                 <div>
-                    <h2 className="text-lg font-semibold mb-3">금칙어 관리</h2>
+                    <h2 className="text-lg font-semibold text-content-primary mb-3">금칙어 관리</h2>
 
                     {/* 좌측 탭 */}
-                    <div className="flex gap-1 mb-4 border-b border-gray-200 pb-2">
+                    <div className="flex gap-1 mb-4 border-b border-border pb-2">
                         {LEFT_TABS.map(({ key, label }) => (
                             <TabBtn
                                 key={key}
@@ -309,14 +309,14 @@ export default function AdminSafetyPage() {
                         <div>
                             {aiError && <p className="text-sm text-red-500 mb-3">{aiError}</p>}
                             {aiLoading ? <RuleListSkeleton /> : aiRules.length === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-8">AI가 생성한 금칙어가 없습니다.</p>
+                                <p className="text-sm text-content-muted text-center py-8">AI가 생성한 금칙어가 없습니다.</p>
                             ) : (
                                 <ul className="space-y-2 max-h-80 overflow-y-auto">
                                     {aiRules.map((rule) => (
-                                        <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded bg-white">
-                                            <span className="text-sm font-medium text-gray-800">{rule.value}</span>
+                                        <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-border rounded-xl card">
+                                            <span className="text-sm font-medium text-content-primary">{rule.value}</span>
                                             <div className="flex items-center gap-3">
-                                                <span className="text-xs text-gray-400">{formatDate(rule.created_at)}</span>
+                                                <span className="text-xs text-content-muted">{formatDate(rule.created_at)}</span>
                                                 <button
                                                     onClick={() => handleChangeKind(rule.id, 'excluded_word', 'ai_banned_word')}
                                                     disabled={changingKindId === rule.id}
@@ -337,18 +337,18 @@ export default function AdminSafetyPage() {
                         <div>
                             {excludedError && <p className="text-sm text-red-500 mb-3">{excludedError}</p>}
                             {excludedLoading ? <RuleListSkeleton /> : excludedRules.length === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-8">제외 처리된 단어가 없습니다.</p>
+                                <p className="text-sm text-content-muted text-center py-8">제외 처리된 단어가 없습니다.</p>
                             ) : (
                                 <ul className="space-y-2 max-h-80 overflow-y-auto">
                                     {excludedRules.map((rule) => (
-                                        <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded bg-white">
-                                            <span className="text-sm font-medium text-gray-500 line-through">{rule.value}</span>
+                                        <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-border rounded-xl card">
+                                            <span className="text-sm font-medium text-content-secondary line-through">{rule.value}</span>
                                             <div className="flex items-center gap-3">
-                                                <span className="text-xs text-gray-400">{formatDate(rule.created_at)}</span>
+                                                <span className="text-xs text-content-muted">{formatDate(rule.created_at)}</span>
                                                 <button
                                                     onClick={() => handleChangeKind(rule.id, 'ai_banned_word', 'excluded_word')}
                                                     disabled={changingKindId === rule.id}
-                                                    className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50"
+                                                    className="text-xs text-primary hover:text-primary-dark disabled:opacity-50"
                                                 >
                                                     {changingKindId === rule.id ? '처리 중...' : '복원'}
                                                 </button>
@@ -368,7 +368,7 @@ export default function AdminSafetyPage() {
                     )}
 
                     {/* 프로세스 안내 */}
-                    <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-500 space-y-1">
+                    <div className="mt-4 p-3 bg-surface-subtle border border-border rounded-xl text-xs text-content-secondary space-y-1">
                         <p>AI가 자동으로 금칙어를 탐지합니다.</p>
                         <p>과도하게 차단되는 단어는 &apos;제외 처리&apos;로 필터에서 제외할 수 있습니다.</p>
                     </div>
@@ -376,11 +376,11 @@ export default function AdminSafetyPage() {
 
                 {/* ── 우측: 신고 댓글 패널 ── */}
                 <div>
-                    <h2 className="text-lg font-semibold mb-4">
+                    <h2 className="text-lg font-semibold text-content-primary mb-4">
                         신고 댓글
                         {reportsTotal > 0 && (
                             <span className={[
-                                'ml-2 text-sm font-normal px-2 py-0.5 rounded',
+                                'ml-2 text-sm font-normal px-2 py-0.5 rounded-xl',
                                 reportsTotal >= 5
                                     ? 'bg-red-100 text-red-700'
                                     : 'bg-yellow-100 text-yellow-700',
@@ -391,25 +391,25 @@ export default function AdminSafetyPage() {
                     </h2>
 
                     {/* 신고 처리 프로세스 안내 (접기/펼치기) */}
-                    <div className="mb-4 bg-blue-50 border border-blue-200 rounded overflow-hidden">
+                    <div className="card overflow-hidden mb-4 p-0">
                         <button
                             onClick={() => setProcessGuideOpen(!processGuideOpen)}
-                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-blue-100 transition-colors"
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-primary-light transition-colors"
                         >
-                            <span className="font-bold text-sm text-blue-900">
-                                📋 신고 처리 프로세스
+                            <span className="font-bold text-sm text-primary-dark">
+                                신고 처리 프로세스
                             </span>
-                            <span className="text-blue-700 text-lg leading-none">
+                            <span className="text-primary text-lg leading-none">
                                 {processGuideOpen ? '▼' : '▶'}
                             </span>
                         </button>
                         
                         {processGuideOpen && (
-                            <div className="px-4 pb-4 text-xs text-blue-900 space-y-3 animate-in slide-in-from-top duration-200">
+                            <div className="px-4 pb-4 text-xs text-primary-dark space-y-3 animate-in slide-in-from-top duration-200">
                                 <div className="space-y-2">
-                                    <div className="bg-white/60 p-2 rounded">
-                                        <p className="font-semibold text-blue-800 mb-1">1. 자동 처리 정책 (실시간)</p>
-                                        <ul className="space-y-1 leading-relaxed text-blue-700">
+                                    <div className="bg-surface/60 p-2 rounded-xl">
+                                        <p className="font-semibold text-primary-dark mb-1">1. 자동 처리 정책 (실시간)</p>
+                                        <ul className="space-y-1 leading-relaxed text-primary">
                                             <li className="flex items-start gap-1">
                                                 <span className="text-red-600 font-bold shrink-0">즉시 알림:</span>
                                                 <span>&apos;욕설/혐오&apos; 신고 1건 이상 → 관리자에게 즉시 이메일 발송 (1시간 쿨다운)</span>
@@ -425,18 +425,18 @@ export default function AdminSafetyPage() {
                                         </ul>
                                     </div>
 
-                                    <div className="bg-white/60 p-2 rounded">
-                                        <p className="font-semibold text-blue-800 mb-1">2. 신고 건수 이해하기</p>
-                                        <p className="leading-relaxed text-blue-700">
+                                    <div className="bg-surface/60 p-2 rounded-xl">
+                                        <p className="font-semibold text-primary-dark mb-1">2. 신고 건수 이해하기</p>
+                                        <p className="leading-relaxed text-primary">
                                             <span className="font-medium">신고 건수</span>는 같은 댓글에 대해 여러 사용자가 신고한 총 횟수입니다. 
                                             예: 댓글 A를 유저 3명이 각각 신고 → [3건 신고] 표시. 
                                             <span className="font-medium">2건 이상 = 다수가 문제로 인식</span> → 실제 문제일 가능성 높음.
                                         </p>
                                     </div>
                                     
-                                    <div className="bg-white/60 p-2 rounded">
-                                        <p className="font-semibold text-blue-800 mb-1">3. 우선순위 판단</p>
-                                        <ul className="space-y-1 leading-relaxed text-blue-700">
+                                    <div className="bg-surface/60 p-2 rounded-xl">
+                                        <p className="font-semibold text-primary-dark mb-1">3. 우선순위 판단</p>
+                                        <ul className="space-y-1 leading-relaxed text-primary">
                                             <li className="flex items-start gap-1">
                                                 <span className="text-red-600 font-bold shrink-0">🔴</span>
                                                 <span><span className="font-medium">&apos;욕설/혐오&apos; 사유</span>는 1건만 신고되어도 최우선 검토 (심각한 유해 콘텐츠)</span>
@@ -446,27 +446,27 @@ export default function AdminSafetyPage() {
                                                 <span><span className="font-medium">2건 이상 신고</span>는 오신고 가능성 낮음 → 우선 검토</span>
                                             </li>
                                             <li className="flex items-start gap-1">
-                                                <span className="text-gray-400 font-bold shrink-0">⚪</span>
+                                                <span className="text-content-muted font-bold shrink-0">⚪</span>
                                                 <span>1건 신고(기타 사유)는 낮은 우선순위</span>
                                             </li>
                                         </ul>
                                     </div>
                                     
-                                    <div className="bg-white/60 p-2 rounded">
-                                        <p className="font-semibold text-blue-800 mb-1">4. 처리 결정</p>
-                                        <div className="space-y-1.5 leading-relaxed text-blue-700">
+                                    <div className="bg-surface/60 p-2 rounded-xl">
+                                        <p className="font-semibold text-primary-dark mb-1">4. 처리 결정</p>
+                                        <div className="space-y-1.5 leading-relaxed text-primary">
                                             <div>
                                                 <span className="font-medium text-red-700">[댓글 삭제]</span> 
                                                 <span className="ml-1">→ reports.status=&apos;처리완료&apos; + comments.visibility=&apos;deleted&apos;</span>
-                                                <p className="ml-3 text-[11px] text-blue-600 mt-0.5">
+                                                <p className="ml-3 text-[11px] text-content-secondary mt-0.5">
                                                     · 댓글이 사용자 화면에서 즉시 숨겨짐 (삭제된 댓글로 표시)
                                                     <br />· 명확한 위반(욕설/스팸/허위정보)만 삭제 권장
                                                 </p>
                                             </div>
                                             <div>
-                                                <span className="font-medium text-gray-700">[무시]</span> 
+                                                <span className="font-medium text-content-primary">[무시]</span> 
                                                 <span className="ml-1">→ reports.status=&apos;무시&apos; (댓글은 그대로 유지)</span>
-                                                <p className="ml-3 text-[11px] text-blue-600 mt-0.5">
+                                                <p className="ml-3 text-[11px] text-content-secondary mt-0.5">
                                                     · 정상 의견 표현, 오신고로 판단 시 선택
                                                     <br />· 애매한 경우 무시 우선 (표현의 자유 존중)
                                                 </p>
@@ -474,7 +474,7 @@ export default function AdminSafetyPage() {
                                         </div>
                                     </div>
                                     
-                                    <div className="bg-amber-50 border border-amber-200 p-2 rounded">
+                                    <div className="bg-amber-50 border border-amber-200 p-2 rounded-xl">
                                         <p className="font-semibold text-amber-900 mb-1">판단 기준</p>
                                         <p className="leading-relaxed text-amber-800 text-[11px]">
                                             · 원문 보기로 문맥 파악 필수
@@ -493,14 +493,14 @@ export default function AdminSafetyPage() {
                     {reportsLoading ? (
                         <div className="space-y-3">
                             {[1, 2].map((i) => (
-                                <div key={i} className="p-3 border rounded space-y-2">
-                                    <div className="h-3 w-1/3 bg-gray-100 rounded animate-pulse" />
-                                    <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                                <div key={i} className="card p-3 space-y-2">
+                                    <div className="h-3 w-1/3 bg-surface-muted rounded-xl animate-pulse" />
+                                    <div className="h-4 w-full bg-surface-muted rounded-xl animate-pulse" />
                                 </div>
                             ))}
                         </div>
                     ) : reports.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-8">신고된 댓글이 없습니다.</p>
+                        <p className="text-sm text-content-muted text-center py-8">신고된 댓글이 없습니다.</p>
                     ) : (
                         <ul className="space-y-3 max-h-[480px] overflow-y-auto">
                             {reports.map((report) => {
@@ -532,58 +532,58 @@ export default function AdminSafetyPage() {
                                     priorityLabel = '일반 검토'
                                 }
                                 
-                                // 우선순위별 배경색
-                                const bgColor = priorityLevel === 'critical' 
-                                    ? 'bg-red-50 border-red-200' 
+                                // 우선순위별 badge 색상
+                                const priorityColor = priorityLevel === 'critical' 
+                                    ? 'bg-red-500 text-white' 
                                     : priorityLevel === 'high' 
-                                    ? 'bg-orange-50 border-orange-200' 
+                                    ? 'bg-orange-500 text-white' 
                                     : priorityLevel === 'medium'
-                                    ? 'bg-yellow-50 border-yellow-200'
-                                    : 'bg-gray-50 border-gray-200'
+                                    ? 'bg-yellow-500 text-white'
+                                    : 'bg-gray-500 text-white'
                                 
                                 return (
-                                    <li key={report.id} className={`p-3 border rounded ${bgColor}`}>
+                                    <li key={report.id} className="p-3 card">
                                         <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-xs font-medium">
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor}`}>
                                                     {priorityBadge} {priorityLabel}
                                                 </span>
                                                 <span className={[
-                                                    'text-xs px-2 py-0.5 rounded font-medium text-white',
-                                                    isHate ? 'bg-red-600' : 'bg-red-400',
+                                                    'text-xs px-2 py-0.5 rounded-full font-medium',
+                                                    isHate ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-orange-100 text-orange-700 border border-orange-200',
                                                 ].join(' ')}>
                                                     {report.reason}
                                                 </span>
                                                 {report.report_count >= 2 && (
-                                                    <span className="text-xs px-2 py-0.5 rounded bg-red-500 text-white font-medium">
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500 text-white font-medium">
                                                         {report.report_count}건 신고
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 {contextLink && (
-                                                    <Link href={contextLink} target="_blank" className="text-xs text-blue-500 hover:underline">
+                                                    <Link href={contextLink} target="_blank" className="text-xs text-primary hover:underline">
                                                         원문 보기
                                                     </Link>
                                                 )}
-                                                <span className="text-xs text-gray-400">{formatDate(report.created_at)}</span>
+                                                <span className="text-xs text-content-muted">{formatDate(report.created_at)}</span>
                                             </div>
                                         </div>
-                                        <p className="text-sm text-gray-800 my-2 leading-relaxed">
-                                            {report.comment_body ?? <span className="text-gray-400 italic">삭제된 댓글</span>}
+                                        <p className="text-sm text-content-primary my-2 leading-relaxed">
+                                            {report.comment_body ?? <span className="text-content-muted italic">삭제된 댓글</span>}
                                         </p>
                                         <div className="flex gap-2 justify-end">
                                             <button
                                                 onClick={() => handleReportAction(report.id, '처리완료')}
                                                 disabled={isProcessing}
-                                                className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                                                className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
                                             >
                                                 {isProcessing ? '처리 중...' : '댓글 삭제'}
                                             </button>
                                             <button
                                                 onClick={() => handleReportAction(report.id, '무시')}
                                                 disabled={isProcessing}
-                                                className="text-xs px-3 py-1.5 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 disabled:opacity-50"
+                                                className="btn-neutral btn-sm text-xs"
                                             >
                                                 무시
                                             </button>

@@ -15,6 +15,7 @@ import type { Comment } from '@/types'
 import ReportModal from '@/components/issue/ReportModal'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
 import NicknameAvatar from '@/components/common/NicknameAvatar'
+import { formatDate } from '@/lib/utils/format-date'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
@@ -46,17 +47,6 @@ const STARTERS = [
     '사회적으로 봤을 때...',
 ]
 
-function formatRelativeTime(dateString: string): string {
-    const diff = Date.now() - new Date(dateString).getTime()
-    const minutes = Math.floor(diff / 60000)
-    if (minutes < 1) return '방금 전'
-    if (minutes < 60) return `${minutes}분 전`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}시간 전`
-    const days = Math.floor(hours / 24)
-    if (days < 30) return `${days}일 전`
-    return new Date(dateString).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
-}
 
 function authorLabel(comment: Comment): string {
     if (comment.display_name?.trim()) return comment.display_name.trim()
@@ -488,8 +478,8 @@ export default function DiscussionComments({
             <div className="space-y-3">
                 {[1, 2].map((i) => (
                     <div key={i} className="space-y-2">
-                        <div className="h-3 w-24 bg-purple-100 rounded animate-pulse" />
-                        <div className="h-4 w-4/5 bg-purple-50 rounded animate-pulse" />
+                        <div className="h-3 w-24 bg-border-muted rounded animate-pulse" />
+                        <div className="h-4 w-4/5 bg-surface-muted rounded animate-pulse" />
                     </div>
                 ))}
             </div>
@@ -504,7 +494,7 @@ export default function DiscussionComments({
                 {/* 베스트 의견 */}
                 {bestComments.length > 0 && (
                     <div className="mb-5">
-                        <p className="text-xs font-semibold text-purple-500 mb-2 uppercase tracking-wide">
+                        <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wide">
                             주목받는 의견
                         </p>
                         <ul className="space-y-2">
@@ -521,14 +511,14 @@ export default function DiscussionComments({
                                 />
                             ))}
                         </ul>
-                        <hr className="mt-4 border-purple-100" />
+                        <hr className="mt-4 border-border-muted" />
                     </div>
                 )}
 
                 {/* 작성 폼 */}
-                <div className="pb-4 border-b border-purple-100 mb-4">
+                <div className="pb-4 border-b border-border-muted mb-4">
                     {isClosed ? (
-                        <p className="text-sm text-gray-400 text-center py-3">
+                        <p className="text-sm text-content-muted text-center py-3">
                             종료된 토론입니다. 의견을 작성할 수 없습니다.
                         </p>
                     ) : userId ? (
@@ -540,7 +530,7 @@ export default function DiscussionComments({
                                         key={starter}
                                         type="button"
                                         onClick={() => setDraft((prev) => (prev ? prev + ' ' + starter : starter))}
-                                        className="text-xs px-2.5 py-1 rounded-full border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors"
+                                        className="text-xs px-2.5 py-1 rounded-full border border-border text-primary hover:bg-primary-light transition-colors"
                                     >
                                         {starter}
                                     </button>
@@ -575,28 +565,28 @@ export default function DiscussionComments({
                                 placeholder="단순 찬반보다는, 이 주제에 대한 나만의 관점이나 경험을 자유롭게 적어주세요."
                                 rows={4}
                                 className={[
-                                    'w-full px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none',
+                                    'w-full px-3 py-2 text-sm border rounded-xl resize-none focus:outline-none transition-colors',
                                     writeErrorType === 'validation'
                                         ? 'border-red-400 focus:border-red-500'
-                                        : 'border-purple-200 focus:border-purple-400',
+                                        : 'border-border focus:border-primary',
                                 ].join(' ')}
                             />
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-400">{draft.length} / 1000</span>
+                                <span className="text-xs text-content-muted">{draft.length} / 1000</span>
                                 <button
                                     onClick={handleWrite}
                                     disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
-                                    className="text-sm px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {submittingWrite ? '등록 중...' : '의견 남기기'}
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <p className="text-sm text-gray-500 text-center py-3">
+                        <p className="text-sm text-content-secondary text-center py-3">
                             <a
                                 href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
-                                className="text-purple-600 underline"
+                                className="text-primary underline"
                             >
                                 로그인
                             </a>
@@ -607,17 +597,17 @@ export default function DiscussionComments({
 
                 {/* 정렬 + 총 개수 */}
                 <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm text-gray-500">의견 {total.toLocaleString()}개</p>
+                    <p className="text-sm text-content-secondary">의견 {total.toLocaleString()}개</p>
                     <div className="flex gap-1">
                         {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
                             <button
                                 key={s}
                                 onClick={() => handleSortChange(s)}
                                 className={[
-                                    'text-xs px-2.5 py-1 rounded border transition-colors',
+                                    'text-xs px-2.5 py-1 rounded-full border transition-colors',
                                     sort === s
-                                        ? 'border-purple-600 bg-purple-600 text-white'
-                                        : 'border-gray-200 text-gray-500 hover:border-purple-300',
+                                        ? 'border-border-strong text-content-primary font-medium'
+                                        : 'border-border text-content-secondary hover:border-border-strong',
                                 ].join(' ')}
                             >
                                 {SORT_LABELS[s]}
@@ -627,18 +617,21 @@ export default function DiscussionComments({
                 </div>
 
                 {/* 세이프티봇 안내 바 */}
-                <div className="flex items-center justify-between px-3 py-2 mb-3 bg-purple-50 border border-purple-100 rounded-lg">
-                    <p className="text-xs text-gray-500">
+                <div className="flex items-center justify-between px-3 py-2 mb-3 bg-surface-muted border border-border rounded-xl">
+                    <p className="text-xs text-content-secondary">
                         <span className="mr-1">🤖</span>
-                        {safetyBotEnabled
-                            ? '세이프티봇이 불쾌한 의견으로부터 보호하고 있어요.'
-                            : '세이프티봇이 꺼져 있어요. 모든 의견이 표시됩니다.'}
+                        {safetyBotEnabled ? (
+                            <><span className="text-green-500 font-medium">세이프티봇</span>이 불쾌한 의견으로부터 보호하고 있어요.</>
+                        ) : (
+                            <><span className="text-green-500 font-medium">세이프티봇</span>이 꺼져 있어요. 모든 의견이 표시됩니다.</>
+                        )}
                     </p>
                     <button
                         onClick={() => setSafetyModalOpen(true)}
-                        className="text-xs text-gray-500 hover:text-gray-700 border border-purple-200 rounded px-2 py-0.5 shrink-0 ml-2 transition-colors hover:border-purple-400"
+                        className="flex items-center gap-1 text-xs text-content-secondary shrink-0 ml-2"
                     >
-                        설정
+                        <span>⚙️</span>
+                        <span>설정</span>
                     </button>
                 </div>
 
@@ -651,9 +644,9 @@ export default function DiscussionComments({
 
                 {/* 의견 목록 */}
                 {comments.length === 0 ? (
-                    <p className="text-sm text-gray-400 py-4 text-center">첫 번째 의견을 남겨보세요.</p>
+                    <p className="text-sm text-content-muted py-4 text-center">첫 번째 의견을 남겨보세요.</p>
                 ) : (
-                    <ul className="divide-y divide-purple-50 mb-4">
+                    <ul className="divide-y divide-border-muted mb-4">
                         {comments.map((c) => (
                             <DiscussionCommentItem
                                 key={c.id}
@@ -687,7 +680,7 @@ export default function DiscussionComments({
                         <button
                             onClick={handleLoadMore}
                             disabled={loadingMore}
-                            className="text-sm px-5 py-2 border border-purple-200 rounded text-purple-600 hover:bg-purple-50 disabled:opacity-50"
+                            className="btn-neutral btn-sm disabled:opacity-50"
                         >
                             {loadingMore ? '불러오는 중...' : `더보기 (${total - comments.length}개)`}
                         </button>
@@ -779,28 +772,28 @@ function DiscussionCommentItem({
     return (
         <li className={[
             'py-4',
-            isBest ? 'px-3 bg-purple-50 rounded-lg border border-purple-100' : '',
+            isBest ? 'px-3 bg-amber-50/50 rounded-xl border border-amber-100' : '',
             isReply ? 'py-3' : '',
         ].join(' ')}>
             <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
                     <NicknameAvatar name={authorLabel(comment)} />
-                    <span className="text-xs text-gray-500">{authorLabel(comment)}</span>
+                    <span className="text-xs text-content-secondary">{authorLabel(comment)}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
+                    <span className="text-xs text-content-muted">{formatDate(comment.created_at)}</span>
                     {isMine && !isEditing && (
                         <div className="flex gap-2">
                             <button
                                 onClick={() => onEditStart(comment)}
-                                className="text-xs text-gray-500 hover:text-gray-700"
+                                className="text-xs text-content-secondary hover:text-content-primary transition-colors"
                             >
                                 수정
                             </button>
                             <button
                                 onClick={() => onDelete(comment.id)}
                                 disabled={isDeleting}
-                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50 transition-colors"
                             >
                                 {isDeleting ? '삭제 중...' : '삭제'}
                             </button>
@@ -809,21 +802,21 @@ function DiscussionCommentItem({
                     {!isMine && userId && (
                         <div className="relative" ref={menuRef}>
                             {isReported ? (
-                                <span className="text-xs text-gray-400 px-1">신고완료</span>
+                                <span className="text-xs text-content-muted px-1">신고완료</span>
                             ) : (
                                 <button
                                     onClick={() => setMenuOpen((prev) => !prev)}
-                                    className="text-xs text-gray-400 hover:text-gray-600 px-1 leading-none"
+                                    className="text-xs text-content-muted hover:text-content-secondary px-1 leading-none transition-colors"
                                     aria-label="더보기"
                                 >
                                     ⋮
                                 </button>
                             )}
                             {menuOpen && (
-                                <div className="absolute right-0 top-6 z-10 w-28 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                                <div className="absolute right-0 top-6 z-10 w-28 bg-surface border border-border rounded-xl shadow-card py-1">
                                     <button
                                         onClick={() => { setMenuOpen(false); onOpenReportModal(comment) }}
-                                        className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors"
+                                        className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-surface-muted transition-colors"
                                     >
                                         신고하기
                                     </button>
@@ -840,26 +833,26 @@ function DiscussionCommentItem({
                         value={editDraft}
                         onChange={(e) => setEditDraft(e.target.value)}
                         rows={3}
-                        className="w-full px-3 py-2 text-sm border border-purple-200 rounded resize-none focus:outline-none focus:border-purple-400"
+                        className="w-full px-3 py-2 text-sm border border-border rounded-xl resize-none focus:outline-none focus:border-primary transition-colors"
                     />
                     <div className="flex gap-2 justify-end">
                         <button
                             onClick={onEditCancel}
-                            className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                            className="btn-neutral btn-sm text-xs"
                         >
                             취소
                         </button>
                         <button
                             onClick={() => onEditSave(comment.id)}
                             disabled={!editDraft.trim() || submittingEdit}
-                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                            className="btn-primary btn-sm text-xs disabled:opacity-50"
                         >
                             {submittingEdit ? '저장 중...' : '저장'}
                         </button>
                     </div>
                 </div>
             ) : (
-                <p className={['text-gray-800 leading-relaxed whitespace-pre-wrap', isReply ? 'text-xs' : 'text-sm'].join(' ')}>
+                <p className={['text-content-primary leading-relaxed whitespace-pre-wrap', isReply ? 'text-xs' : 'text-sm'].join(' ')}>
                     {comment.body}
                 </p>
             )}
@@ -871,19 +864,19 @@ function DiscussionCommentItem({
                         {!isReply && userId && onReplyToggle && (
                             <button
                                 onClick={() => onReplyToggle(comment.id)}
-                                className="text-xs text-gray-400 hover:text-gray-600"
+                                className="text-xs text-content-muted hover:text-content-secondary transition-colors"
                             >
                                 {isReplyFormOpen ? '취소' : '답글 달기'}
                             </button>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <button
                             onClick={() => onLike(comment.id, 'like')}
                             disabled={!userId || isLiking}
                             className={[
-                                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
-                                myType === 'like' ? 'border-purple-400 bg-purple-50 text-purple-600 font-medium' : 'border-gray-200 text-gray-500 hover:border-purple-300',
+                                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors bg-surface',
+                                myType === 'like' ? 'border-primary-muted text-primary font-semibold' : 'border-border text-content-secondary hover:border-border-strong',
                                 (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                             ].join(' ')}
                         >
@@ -894,8 +887,8 @@ function DiscussionCommentItem({
                             onClick={() => onLike(comment.id, 'dislike')}
                             disabled={!userId || isLiking}
                             className={[
-                                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border transition-colors',
-                                myType === 'dislike' ? 'border-red-400 bg-red-50 text-red-500 font-medium' : 'border-gray-200 text-gray-500 hover:border-gray-400',
+                                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors bg-surface',
+                                myType === 'dislike' ? 'border-border-strong text-content-secondary font-semibold' : 'border-border text-content-secondary hover:border-border-strong',
                                 (!userId || isLiking) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                             ].join(' ')}
                         >
@@ -908,21 +901,21 @@ function DiscussionCommentItem({
 
             {/* 인라인 답글 작성 폼 */}
             {!isReply && isReplyFormOpen && onReplyDraftChange && onReplySubmit && (
-                <div className="mt-3 pl-4 border-l-2 border-purple-100">
+                <div className="mt-3 pl-4 border-l-2 border-border-muted">
                     {replyError && <p className="text-xs text-red-500 mb-1">{replyError}</p>}
                     <textarea
                         value={replyDraft ?? ''}
                         onChange={(e) => onReplyDraftChange(e.target.value)}
                         placeholder="답글을 입력하세요..."
                         rows={2}
-                        className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg resize-none focus:outline-none focus:border-purple-400"
+                        className="w-full px-3 py-2 text-sm border border-border rounded-xl resize-none focus:outline-none focus:border-primary transition-colors"
                     />
                     <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs text-gray-400">{(replyDraft ?? '').length} / 1000</span>
+                        <span className="text-xs text-content-muted">{(replyDraft ?? '').length} / 1000</span>
                         <button
                             onClick={() => onReplySubmit(comment.id)}
                             disabled={!replyDraft?.trim() || submittingReply || (rateLimitCountdown ?? 0) > 0}
-                            className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                            className="btn-primary btn-sm text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {submittingReply ? '등록 중...' : '등록'}
                         </button>
@@ -934,7 +927,7 @@ function DiscussionCommentItem({
             {!isReply && hasReplies && onToggleReplies && (
                 <button
                     onClick={() => onToggleReplies(comment.id)}
-                    className="mt-2 text-xs text-purple-500 hover:text-purple-700"
+                    className="mt-2 text-xs text-primary hover:text-primary-dark transition-colors"
                 >
                     {repliesLoading
                         ? '불러오는 중...'
@@ -946,7 +939,7 @@ function DiscussionCommentItem({
 
             {/* 답글 목록 */}
             {!isReply && repliesExpanded && replies && replies.length > 0 && (
-                <ul className="mt-2 pl-8 border-l border-purple-100 divide-y divide-purple-50">
+                <ul className="mt-2 pl-8 border-l border-border-muted divide-y divide-border-muted">
                     {replies.map((reply) => (
                         <DiscussionCommentItem
                             key={reply.id}

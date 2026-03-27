@@ -35,14 +35,14 @@ function LoginForm() {
     return (
         <div className="container mx-auto px-4 py-12 max-w-sm">
             <div className="text-center mb-8">
-                <h1 className="text-2xl font-bold mb-2">로그인</h1>
-                <p className="text-sm text-gray-500">
+                <h1 className="text-2xl font-bold text-content-primary mb-2">로그인</h1>
+                <p className="text-sm text-content-secondary">
                     로그인하면 감정 표현, 댓글, 투표에 참여할 수 있습니다.
                 </p>
             </div>
 
             {error && (
-                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
                     {error}
                 </div>
             )}
@@ -51,7 +51,7 @@ function LoginForm() {
                 <button
                     onClick={() => handleOAuth('google')}
                     disabled={loading !== null}
-                    className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border-strong rounded-xl text-sm font-medium hover:bg-surface-muted disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path
@@ -78,31 +78,37 @@ function LoginForm() {
                     <button
                         onClick={() => handleOAuth('kakao')}
                         disabled={loading !== null}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-yellow-400 rounded-lg text-sm font-medium text-gray-900 hover:bg-yellow-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-yellow-400 rounded-xl text-sm font-medium text-gray-900 hover:bg-yellow-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                     >
                         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.61 1.636 4.904 4.125 6.266-.182.676-.66 2.453-.757 2.833-.12.47.173.464.364.338.149-.098 2.367-1.605 3.324-2.255.629.09 1.277.138 1.944.138 5.523 0 10-3.477 10-7.78C21 6.477 17.523 3 12 3z" />
                         </svg>
                         {loading === 'kakao' ? '연결 중...' : 'Kakao로 로그인'}
                     </button>
+                    <p className="text-xs text-content-muted mt-1.5 px-1">
+                        카카오 앱 검수 진행 중으로 일시적으로 로그인이 제한됩니다.
+                    </p>
                 </div>
 
                 <div>
                     <Link
                         href={`/auth/naver${searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next')!)}` : ''}`}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#03C75A] text-white rounded-lg text-sm font-medium hover:bg-[#02b350] disabled:opacity-60 transition-colors border border-transparent"
+                        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#03C75A] text-white rounded-xl text-sm font-medium hover:bg-[#02b350] disabled:opacity-60 transition-colors border border-transparent"
                     >
                         <span className="w-5 h-5 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
                         네이버로 로그인
                     </Link>
+                    <p className="text-xs text-content-muted mt-1.5 px-1">
+                        테스트 단계로 테스터 ID를 등록해야 로그인이 가능합니다.
+                    </p>
                 </div>
             </div>
 
-            <p className="text-xs text-gray-400 text-center mt-6">
+            <p className="text-xs text-content-muted text-center mt-6">
                 로그인 시{' '}
-                <Link href="/terms" className="underline hover:text-gray-600">서비스 이용약관</Link>
+                <Link href="/terms" className="underline hover:text-content-secondary">서비스 이용약관</Link>
                 {' '}및{' '}
-                <Link href="/privacy" className="underline hover:text-gray-600">개인정보처리방침</Link>
+                <Link href="/privacy" className="underline hover:text-content-secondary">개인정보처리방침</Link>
                 에 동의하는 것으로 간주됩니다.
             </p>
         </div>
@@ -113,7 +119,7 @@ export default function LoginPage() {
     return (
         <Suspense fallback={
             <div className="container mx-auto px-4 py-12 max-w-sm text-center">
-                <p className="text-gray-500">로딩 중...</p>
+                <p className="text-content-secondary">로딩 중...</p>
             </div>
         }>
             <LoginForm />

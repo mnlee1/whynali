@@ -142,11 +142,11 @@ function StatCard({
     return (
         <Link
             href={href}
-            className={`block rounded-lg border p-5 hover:shadow-md transition-shadow ${accentClass}`}
+            className={`block rounded-xl border p-5 hover:shadow-md transition-shadow ${accentClass}`}
         >
-            <p className="text-xs font-medium text-gray-500 mb-2">{label}</p>
+            <p className="text-xs font-medium text-content-muted mb-2">{label}</p>
             {loading ? (
-                <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-12 bg-surface-muted rounded animate-pulse" />
             ) : (
                 <p className={`text-3xl font-bold ${valueClass}`}>{value.toLocaleString()}</p>
             )}
@@ -272,19 +272,19 @@ export default function AdminDashboardPage() {
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-xl font-bold text-gray-900">대시보드</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">운영 현황을 한눈에 확인합니다</p>
+                    <h1 className="text-xl font-bold text-content-primary">대시보드</h1>
+                    <p className="text-sm text-content-secondary mt-0.5">운영 현황을 한눈에 확인합니다</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                             갱신 {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
                     <button
                         onClick={fetchAll}
                         disabled={statsLoading}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                        className="btn-neutral btn-md disabled:opacity-50"
                     >
                         새로고침
                     </button>
@@ -325,11 +325,11 @@ export default function AdminDashboardPage() {
 
             {/* 24시간 파이프라인 현황 */}
             <div className="mb-6">
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div className="card p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
-                            <h2 className="text-sm font-semibold text-gray-800">최근 24시간 파이프라인</h2>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                            <h2 className="text-sm font-semibold text-content-primary">최근 24시간 파이프라인</h2>
+                            <p className="text-xs text-content-secondary mt-0.5">
                                 수집된 데이터가 이슈로 얼마나 연결됐는지 확인합니다
                             </p>
                         </div>
@@ -338,11 +338,11 @@ export default function AdminDashboardPage() {
                     {stats24hLoading ? (
                         <div className="space-y-3">
                             {[1, 2].map((i) => (
-                                <div key={i} className="h-24 bg-gray-100 rounded animate-pulse" />
+                                <div key={i} className="h-24 bg-surface-muted rounded animate-pulse" />
                             ))}
                         </div>
                     ) : !stats24h ? (
-                        <p className="text-sm text-gray-400 py-4 text-center">데이터를 불러올 수 없습니다</p>
+                        <p className="text-sm text-content-muted py-4 text-center">데이터를 불러올 수 없습니다</p>
                     ) : (
                         <div className="space-y-4">
                             {/* 경고 배너 */}
@@ -375,32 +375,32 @@ export default function AdminDashboardPage() {
                             )}
 
                             {/* 수집 현황 */}
-                            <div className="rounded-lg border border-gray-100 overflow-hidden">
-                                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">수집 현황</p>
+                            <div className="rounded-xl border border-border-muted overflow-hidden">
+                                <div className="px-4 py-2.5 bg-surface-subtle border-b border-border-muted">
+                                    <p className="text-xs font-semibold text-content-primary uppercase tracking-wide">수집 현황</p>
                                 </div>
-                                <div className="grid grid-cols-2 divide-x divide-gray-100">
+                                <div className="grid grid-cols-2 divide-x divide-border-muted">
                                     {/* 커뮤니티 */}
                                     <div className="p-4">
                                         <div className="flex items-baseline gap-2 mb-3">
-                                            <span className="text-2xl font-bold text-gray-900">
+                                            <span className="text-2xl font-bold text-content-primary">
                                                 {stats24h.collection.community.total.toLocaleString()}
                                             </span>
-                                            <span className="text-xs text-gray-500">건 수집</span>
+                                            <span className="text-xs text-content-secondary">건 수집</span>
                                             <span className="ml-auto text-xs font-medium text-green-600">
                                                 {stats24h.linking.community.linked}건 연결
                                             </span>
                                         </div>
-                                        <p className="text-xs font-medium text-gray-500 mb-2">커뮤니티 · 채널별</p>
+                                        <p className="text-xs font-medium text-content-secondary mb-2">커뮤니티 · 채널별</p>
                                         {Object.keys(stats24h.collection.community.bySite).length > 0 ? (
                                             <div className="space-y-1.5">
                                                 {Object.entries(stats24h.collection.community.bySite)
                                                     .sort((a, b) => b[1].total - a[1].total)
                                                     .map(([site, data]) => (
                                                         <div key={site} className="flex items-center justify-between text-xs">
-                                                            <span className="text-gray-600 truncate">{site}</span>
+                                                            <span className="text-content-secondary truncate">{site}</span>
                                                             <div className="flex items-center gap-2 shrink-0">
-                                                                <span className="text-gray-400">{data.total}건</span>
+                                                                <span className="text-content-muted">{data.total}건</span>
                                                                 {data.linked > 0 && (
                                                                     <span className="text-green-600 font-medium">{data.linked} 연결</span>
                                                                 )}
@@ -409,10 +409,10 @@ export default function AdminDashboardPage() {
                                                     ))}
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-gray-400">수집 없음</p>
+                                            <p className="text-xs text-content-muted">수집 없음</p>
                                         )}
                                         {stats24h.linking.community.unlinked > 0 && (
-                                            <p className="mt-3 text-xs text-gray-400 border-t border-gray-100 pt-2">
+                                            <p className="mt-3 text-xs text-content-muted border-t border-border-muted pt-2">
                                                 미연결 {stats24h.linking.community.unlinked}건 — 버스트 감지 미달·AI 검증 실패·관련 뉴스 없음 등
                                             </p>
                                         )}
@@ -421,24 +421,24 @@ export default function AdminDashboardPage() {
                                     {/* 뉴스 */}
                                     <div className="p-4">
                                         <div className="flex items-baseline gap-2 mb-3">
-                                            <span className="text-2xl font-bold text-gray-900">
+                                            <span className="text-2xl font-bold text-content-primary">
                                                 {stats24h.collection.news.total.toLocaleString()}
                                             </span>
-                                            <span className="text-xs text-gray-500">건 수집</span>
+                                            <span className="text-xs text-content-secondary">건 수집</span>
                                             <span className="ml-auto text-xs font-medium text-green-600">
                                                 {stats24h.linking.news.linked}건 연결
                                             </span>
                                         </div>
-                                        <p className="text-xs font-medium text-gray-500 mb-2">뉴스 · 출처별</p>
+                                        <p className="text-xs font-medium text-content-secondary mb-2">뉴스 · 출처별</p>
                                         {Object.keys(stats24h.collection.news.bySource).length > 0 ? (
                                             <div className="space-y-1.5">
                                                 {Object.entries(stats24h.collection.news.bySource)
                                                     .sort((a, b) => b[1].total - a[1].total)
                                                     .map(([source, data]) => (
                                                         <div key={source} className="flex items-center justify-between text-xs">
-                                                            <span className="text-gray-600 truncate">{source}</span>
+                                                            <span className="text-content-secondary truncate">{source}</span>
                                                             <div className="flex items-center gap-2 shrink-0">
-                                                                <span className="text-gray-400">{data.total}건</span>
+                                                                <span className="text-content-muted">{data.total}건</span>
                                                                 {data.linked > 0 && (
                                                                     <span className="text-green-600 font-medium">{data.linked} 연결</span>
                                                                 )}
@@ -447,10 +447,10 @@ export default function AdminDashboardPage() {
                                                     ))}
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-gray-400">수집 없음</p>
+                                            <p className="text-xs text-content-muted">수집 없음</p>
                                         )}
                                         {stats24h.linking.news.unlinked > 0 && (
-                                            <p className="mt-3 text-xs text-gray-400 border-t border-gray-100 pt-2">
+                                            <p className="mt-3 text-xs text-content-muted border-t border-border-muted pt-2">
                                                 미연결 {stats24h.linking.news.unlinked}건 — 이슈 키워드와 매칭되지 않음
                                             </p>
                                         )}
@@ -459,14 +459,14 @@ export default function AdminDashboardPage() {
                             </div>
 
                             {/* 이슈 생성 결과 */}
-                            <div className="rounded-lg border border-gray-100 overflow-hidden">
-                                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">이슈 생성 결과</p>
-                                    <span className="text-xs text-gray-500">신규 {stats24h.issues.created}건</span>
+                            <div className="rounded-xl border border-border-muted overflow-hidden">
+                                <div className="px-4 py-2.5 bg-surface-subtle border-b border-border-muted flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-content-primary uppercase tracking-wide">이슈 생성 결과</p>
+                                    <span className="text-xs text-content-secondary">신규 {stats24h.issues.created}건</span>
                                 </div>
                                 <div className="p-4">
                                     {stats24h.issues.created === 0 ? (
-                                        <p className="text-sm text-gray-400 text-center py-2">24시간 내 생성된 이슈 없음</p>
+                                        <p className="text-sm text-content-muted text-center py-2">24시간 내 생성된 이슈 없음</p>
                                     ) : (
                                         <div className="grid grid-cols-4 gap-2">
                                             <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3 text-center">
@@ -491,7 +491,7 @@ export default function AdminDashboardPage() {
                             </div>
 
                             {/* 타임스탬프 */}
-                            <p className="text-xs text-gray-400 text-right">
+                            <p className="text-xs text-content-muted text-right">
                                 기준 {new Date(stats24h.timestamp).toLocaleString('ko-KR')}
                             </p>
                         </div>
@@ -501,30 +501,30 @@ export default function AdminDashboardPage() {
 
             {/* AI 시스템 현황 */}
             <div className="mb-6">
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div className="card p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
-                            <h2 className="text-sm font-semibold text-gray-800">AI 시스템 현황</h2>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                            <h2 className="text-sm font-semibold text-content-primary">AI 시스템 현황</h2>
+                            <p className="text-xs text-content-secondary mt-0.5">
                                 기준일: {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
                             </p>
                         </div>
-                        <span className="text-xs text-gray-400">실시간 모니터링</span>
+                        <span className="text-xs text-content-muted">실시간 모니터링</span>
                     </div>
 
                     {costsLoading ? (
                         <div className="space-y-3">
                             {[1, 2].map((i) => (
-                                <div key={i} className="h-32 bg-gray-100 rounded animate-pulse" />
+                                <div key={i} className="h-32 bg-surface-muted rounded animate-pulse" />
                             ))}
                         </div>
                     ) : !apiCosts ? (
-                        <p className="text-sm text-gray-400 py-4 text-center">데이터를 불러올 수 없습니다</p>
+                        <p className="text-sm text-content-muted py-4 text-center">데이터를 불러올 수 없습니다</p>
                     ) : (
                         <div className="space-y-4">
                             {/* AI 활성 기능 */}
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <p className="text-xs font-semibold text-gray-600 mb-2.5">활성 AI 기능</p>
+                            <div className="p-4 bg-surface-subtle rounded-xl border border-border">
+                                <p className="text-xs font-semibold text-content-secondary mb-2.5">활성 AI 기능</p>
                                 <div className="grid grid-cols-2 gap-1.5">
                                     {[
                                         { label: '이슈 진위 판단', desc: '카테고리·키워드·제목 추출 포함' },
@@ -533,11 +533,11 @@ export default function AdminDashboardPage() {
                                         { label: '토론 주제 생성', desc: '승인 이슈 대상 (매일)' },
                                         { label: '투표 생성', desc: '승인 이슈 대상 (매일)' },
                                     ].map((feature) => (
-                                        <div key={feature.label} className="flex items-start gap-1.5 text-xs bg-white rounded px-2.5 py-1.5 border border-gray-100">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 mt-0.5" />
+                                        <div key={feature.label} className="flex items-start gap-1.5 text-xs bg-surface rounded px-2.5 py-1.5 border border-border-muted">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-0.5" />
                                             <div>
-                                                <p className="text-gray-700 font-medium">{feature.label}</p>
-                                                <p className="text-gray-400 text-[10px] mt-0.5">{feature.desc}</p>
+                                                <p className="text-content-primary font-medium">{feature.label}</p>
+                                                <p className="text-content-muted text-[10px] mt-0.5">{feature.desc}</p>
                                             </div>
                                         </div>
                                     ))}
@@ -545,13 +545,13 @@ export default function AdminDashboardPage() {
                             </div>
 
                             {/* Claude AI (1순위) */}
-                            <div className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                            <div className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-200">
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-pulse" />
                                         <div>
-                                            <p className="text-base font-semibold text-gray-900">Claude AI</p>
-                                            <p className="text-xs text-gray-500 mt-0.5">claude-sonnet-4-6</p>
+                                            <p className="text-base font-semibold text-content-primary">Claude AI</p>
+                                            <p className="text-xs text-content-secondary mt-0.5">claude-sonnet-4-6</p>
                                         </div>
                                     </div>
                                     <span className="px-2.5 py-1 text-xs font-semibold bg-orange-500 text-white rounded-full">
@@ -560,37 +560,37 @@ export default function AdminDashboardPage() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div className="bg-white/60 rounded-lg p-3">
-                                        <p className="text-xs text-gray-500 mb-1">
+                                    <div className="bg-white/60 rounded-xl p-3">
+                                        <p className="text-xs text-content-secondary mb-1">
                                             오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
                                         </p>
-                                        <p className="text-2xl font-bold text-gray-900">{apiCosts.claude.calls.today}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                        <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.today}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
                                         <p className="text-xs font-semibold text-orange-600 mt-1">${apiCosts.claude.today.toFixed(4)}</p>
                                     </div>
-                                    <div className="bg-white/60 rounded-lg p-3">
-                                        <p className="text-xs text-gray-500 mb-1">
+                                    <div className="bg-white/60 rounded-xl p-3">
+                                        <p className="text-xs text-content-secondary mb-1">
                                             이번 달 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
                                         </p>
-                                        <p className="text-2xl font-bold text-gray-900">{apiCosts.claude.calls.monthly}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                        <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.monthly}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
                                         <p className="text-xs font-semibold text-orange-600 mt-1">${apiCosts.claude.monthly.toFixed(4)}</p>
                                     </div>
                                 </div>
 
-                                <div className="bg-white/60 rounded-lg p-3 mb-3">
+                                <div className="bg-white/60 rounded-xl p-3 mb-3">
                                     <p className="text-xs font-medium text-orange-700 mb-2">
                                         토큰 사용량 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
                                     </p>
                                     <div className="grid grid-cols-3 gap-3">
                                         <div>
-                                            <p className="text-xs text-gray-500">입력</p>
-                                            <p className="text-sm font-bold text-gray-900">{(apiCosts.claude.tokens.monthly.input / 1000).toFixed(1)}K</p>
+                                            <p className="text-xs text-content-secondary">입력</p>
+                                            <p className="text-sm font-bold text-content-primary">{(apiCosts.claude.tokens.monthly.input / 1000).toFixed(1)}K</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-gray-500">출력</p>
-                                            <p className="text-sm font-bold text-gray-900">{(apiCosts.claude.tokens.monthly.output / 1000).toFixed(1)}K</p>
+                                            <p className="text-xs text-content-secondary">출력</p>
+                                            <p className="text-sm font-bold text-content-primary">{(apiCosts.claude.tokens.monthly.output / 1000).toFixed(1)}K</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-gray-500">전체</p>
+                                            <p className="text-xs text-content-secondary">전체</p>
                                             <p className="text-sm font-bold text-orange-600">{(apiCosts.claude.tokens.monthly.total / 1000).toFixed(1)}K</p>
                                         </div>
                                     </div>
@@ -598,7 +598,7 @@ export default function AdminDashboardPage() {
 
                                 <div className="pt-3 border-t border-orange-200">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs text-gray-600">성공률</span>
+                                        <span className="text-xs text-content-secondary">성공률</span>
                                         <span className="text-lg font-bold text-orange-600">
                                             {apiCosts.claude.calls.monthly > 0
                                                 ? Math.round((apiCosts.claude.successes / apiCosts.claude.calls.monthly) * 100)
@@ -609,13 +609,13 @@ export default function AdminDashboardPage() {
                             </div>
 
                             {/* Groq AI (2순위) */}
-                            <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                            <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200">
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                                         <div>
-                                            <p className="text-base font-semibold text-gray-900">Groq AI</p>
-                                            <p className="text-xs text-gray-500 mt-0.5">Llama 3.1 8B Instant</p>
+                                            <p className="text-base font-semibold text-content-primary">Groq AI</p>
+                                            <p className="text-xs text-content-secondary mt-0.5">Llama 3.1 8B Instant</p>
                                         </div>
                                     </div>
                                     <span className="px-2.5 py-1 text-xs font-semibold bg-green-500 text-white rounded-full">
@@ -624,25 +624,25 @@ export default function AdminDashboardPage() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div className="bg-white/60 rounded-lg p-3">
-                                        <p className="text-xs text-gray-500 mb-1">
+                                    <div className="bg-white/60 rounded-xl p-3">
+                                        <p className="text-xs text-content-secondary mb-1">
                                             오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
                                         </p>
-                                        <p className="text-2xl font-bold text-gray-900">{apiCosts.groq?.today || 0}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                        <p className="text-2xl font-bold text-content-primary">{apiCosts.groq?.today || 0}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
                                         <p className="text-xs font-semibold text-green-600 mt-1">$0.00</p>
                                     </div>
-                                    <div className="bg-white/60 rounded-lg p-3">
-                                        <p className="text-xs text-gray-500 mb-1">
+                                    <div className="bg-white/60 rounded-xl p-3">
+                                        <p className="text-xs text-content-secondary mb-1">
                                             이번 달 ({new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재)
                                         </p>
-                                        <p className="text-2xl font-bold text-gray-900">{apiCosts.groq?.monthly || 0}<span className="text-sm font-normal text-gray-500 ml-1">회</span></p>
+                                        <p className="text-2xl font-bold text-content-primary">{apiCosts.groq?.monthly || 0}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
                                         <p className="text-xs font-semibold text-green-600 mt-1">$0.00 (무료)</p>
                                     </div>
                                 </div>
 
                                 <div className="pt-3 border-t border-green-200">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs text-gray-600">성공률</span>
+                                        <span className="text-xs text-content-secondary">성공률</span>
                                         <span className="text-lg font-bold text-green-600">
                                             {apiCosts.groq?.monthly > 0
                                                 ? Math.round((apiCosts.groq.successes / apiCosts.groq.monthly) * 100)
@@ -653,37 +653,37 @@ export default function AdminDashboardPage() {
                             </div>
 
                             {/* 전체 요약 */}
-                            <div className="p-4 bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg border-2 border-gray-300">
+                            <div className="p-4 bg-gradient-to-r from-surface-subtle to-surface-muted rounded-xl border-2 border-border-strong">
                                 <div className="flex items-center justify-between mb-3">
                                     <div>
-                                        <p className="text-sm font-semibold text-gray-800">AI 시스템 총 비용</p>
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="text-sm font-semibold text-content-primary">AI 시스템 총 비용</p>
+                                        <p className="text-xs text-content-secondary mt-0.5">
                                             {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })} 누적
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-3xl font-bold text-gray-900">
+                                        <p className="text-3xl font-bold text-content-primary">
                                             ${apiCosts.total.monthly.toFixed(2)}
                                         </p>
                                         {apiCosts.total.monthly === 0 ? (
                                             <p className="text-xs text-green-600 font-semibold mt-1">모두 무료</p>
                                         ) : (
-                                            <p className="text-xs text-gray-600 mt-1">
+                                            <p className="text-xs text-content-secondary mt-1">
                                                 ≈ ₩{Math.round(apiCosts.total.monthly * 1300).toLocaleString()}
                                             </p>
                                         )}
                                     </div>
                                 </div>
-                                <div className="border-t border-gray-200 pt-3 space-y-1.5">
+                                <div className="border-t border-border pt-3 space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-500 flex items-center gap-1.5">
+                                        <span className="text-content-secondary flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
                                             Claude AI
                                         </span>
-                                        <span className="font-medium text-gray-700">${apiCosts.claude.monthly.toFixed(4)}</span>
+                                        <span className="font-medium text-content-primary">${apiCosts.claude.monthly.toFixed(4)}</span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-500 flex items-center gap-1.5">
+                                        <span className="text-content-secondary flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
                                             Groq AI
                                         </span>
@@ -699,10 +699,10 @@ export default function AdminDashboardPage() {
             {/* 수집 현황 요약 + 최근 로그 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 수집 현황 요약 */}
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div className="card p-5">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-semibold text-gray-800">수집 현황</h2>
-                        <Link href="/admin/collections" className="text-xs text-gray-400 hover:text-gray-600">
+                        <h2 className="text-sm font-semibold text-content-primary">수집 현황</h2>
+                        <Link href="/admin/collections" className="text-xs text-content-muted hover:text-content-secondary">
                             상세 보기 →
                         </Link>
                     </div>
@@ -710,28 +710,28 @@ export default function AdminDashboardPage() {
                     {statsLoading ? (
                         <div className="space-y-3">
                             {[1, 2].map((i) => (
-                                <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />
+                                <div key={i} className="h-12 bg-surface-muted rounded animate-pulse" />
                             ))}
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                            <div className="flex items-center justify-between py-3 border-b border-border-muted">
                                 <div>
-                                    <p className="text-sm font-medium text-gray-700">뉴스</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">30분 주기 수집</p>
+                                    <p className="text-sm font-medium text-content-primary">뉴스</p>
+                                    <p className="text-xs text-content-muted mt-0.5">30분 주기 수집</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-lg font-bold text-gray-900">{stats?.newsTotal.toLocaleString() ?? 0}</p>
+                                    <p className="text-lg font-bold text-content-primary">{stats?.newsTotal.toLocaleString() ?? 0}</p>
                                     <p className="text-xs text-green-600">+{stats?.news24h ?? 0} (24h)</p>
                                 </div>
                             </div>
                             <div className="flex items-center justify-between py-3">
                                 <div>
-                                    <p className="text-sm font-medium text-gray-700">커뮤니티</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">3분 주기 수집</p>
+                                    <p className="text-sm font-medium text-content-primary">커뮤니티</p>
+                                    <p className="text-xs text-content-muted mt-0.5">3분 주기 수집</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-lg font-bold text-gray-900">{stats?.communityTotal.toLocaleString() ?? 0}</p>
+                                    <p className="text-lg font-bold text-content-primary">{stats?.communityTotal.toLocaleString() ?? 0}</p>
                                     <p className="text-xs text-green-600">+{stats?.community24h ?? 0} (24h)</p>
                                 </div>
                             </div>
@@ -740,10 +740,10 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 최근 운영 로그 */}
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div className="card p-5">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-semibold text-gray-800">최근 운영 로그</h2>
-                        <Link href="/admin/logs" className="text-xs text-gray-400 hover:text-gray-600">
+                        <h2 className="text-sm font-semibold text-content-primary">최근 운영 로그</h2>
+                        <Link href="/admin/logs" className="text-xs text-content-muted hover:text-content-secondary">
                             전체 보기 →
                         </Link>
                     </div>
@@ -751,23 +751,23 @@ export default function AdminDashboardPage() {
                     {logsLoading ? (
                         <div className="space-y-2">
                             {[1, 2, 3, 4].map((i) => (
-                                <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
+                                <div key={i} className="h-8 bg-surface-muted rounded animate-pulse" />
                             ))}
                         </div>
                     ) : recentLogs.length === 0 ? (
-                        <p className="text-sm text-gray-400 py-4 text-center">로그가 없습니다</p>
+                        <p className="text-sm text-content-muted py-4 text-center">로그가 없습니다</p>
                     ) : (
                         <ul className="space-y-2">
                             {recentLogs.map((log) => (
                                 <li key={log.id} className="flex items-center gap-2 py-1.5">
-                                    <span className={`shrink-0 px-2 py-0.5 text-xs rounded font-medium ${ACTION_BADGE[log.action] ?? 'bg-gray-100 text-gray-600'}`}>
+                                    <span className={`shrink-0 px-2 py-0.5 text-xs rounded font-medium ${ACTION_BADGE[log.action] ?? 'bg-surface-muted text-content-secondary'}`}>
                                         {log.action}
                                     </span>
-                                    <span className="text-xs text-gray-500 truncate flex-1">
+                                    <span className="text-xs text-content-secondary truncate flex-1">
                                         {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
-                                        {log.target_id && <span className="text-gray-300 ml-1">#{log.target_id.slice(0, 6)}</span>}
+                                        {log.target_id && <span className="text-content-muted ml-1">#{log.target_id.slice(0, 6)}</span>}
                                     </span>
-                                    <span className="text-xs text-gray-300 shrink-0">{fmt(log.created_at)}</span>
+                                    <span className="text-xs text-content-muted shrink-0">{fmt(log.created_at)}</span>
                                 </li>
                             ))}
                         </ul>

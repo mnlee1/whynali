@@ -28,10 +28,10 @@ interface IssuePreviewDrawerProps {
 }
 
 const getHeatMeta = (heat: number | null | undefined): { label: string; className: string } => {
-    if (heat == null) return { label: '-', className: 'text-gray-400' }
+    if (heat == null) return { label: '-', className: 'text-content-muted' }
     if (heat >= 70) return { label: '높음', className: 'text-red-600' }
     if (heat >= 30) return { label: '보통', className: 'text-amber-600' }
-    return { label: '낮음', className: 'text-gray-400' }
+    return { label: '낮음', className: 'text-content-muted' }
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -83,18 +83,18 @@ export default function IssuePreviewDrawer({
             />
 
             {/* 드로어 패널 */}
-            <aside className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white z-50 flex flex-col shadow-2xl">
+            <aside className="fixed top-0 right-0 h-full w-full max-w-2xl bg-surface z-50 flex flex-col shadow-2xl">
                 {/* 헤더 */}
-                <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-neutral-200 shrink-0">
+                <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border shrink-0">
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-blue-600 mb-1">미리보기</p>
-                        <h2 className="text-lg font-bold leading-tight line-clamp-2">
+                        <p className="text-xs font-medium text-primary mb-1">미리보기</p>
+                        <h2 className="text-lg font-bold text-content-primary leading-tight line-clamp-2">
                             {decodeHtml(issue.title)}
                         </h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="shrink-0 mt-0.5 p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+                        className="shrink-0 mt-0.5 p-1.5 rounded-xl hover:bg-surface-muted text-content-muted hover:text-content-secondary"
                         aria-label="닫기"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -109,12 +109,12 @@ export default function IssuePreviewDrawer({
                     <div>
                         <div className="flex items-center gap-2 mb-3">
                             <CategoryBadge category={issue.category} size="sm" />
-                            <span className={`text-xs px-2 py-0.5 rounded border font-medium ${statusStyle}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusStyle}`}>
                                 {issue.status}
                             </span>
                         </div>
                         {issue.description && (
-                            <p className="text-gray-600 leading-relaxed text-sm">
+                            <p className="text-content-secondary leading-relaxed text-sm">
                                 {issue.description}
                             </p>
                         )}
@@ -123,12 +123,12 @@ export default function IssuePreviewDrawer({
                     {/* 화력 지수 */}
                     <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl">
                         <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-gray-700">화력 지수</span>
+                            <span className="text-sm font-semibold text-content-primary">화력 지수</span>
                             <div className="flex items-center gap-2">
                                 <span className="text-2xl font-bold text-orange-600">
                                     {(issue.heat_index ?? 0).toFixed(1)}
                                 </span>
-                                <span className={`text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded border border-orange-200 font-medium ${heatMeta.className}`}>
+                                <span className={`text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full border border-orange-200 font-medium ${heatMeta.className}`}>
                                     {heatMeta.label}
                                 </span>
                             </div>
@@ -136,10 +136,10 @@ export default function IssuePreviewDrawer({
                     </div>
 
                     {/* 타임라인 편집 */}
-                    <div className="border border-neutral-200 rounded-xl overflow-hidden">
-                        <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                            <p className="text-sm font-semibold text-neutral-800">타임라인</p>
-                            <p className="text-xs text-gray-400 mt-0.5">포인트를 추가하면 이슈 상세 페이지에 즉시 반영됩니다.</p>
+                    <div className="card overflow-hidden">
+                        <div className="px-4 py-3 bg-surface-subtle border-b border-border-muted">
+                            <p className="text-sm font-semibold text-content-primary">타임라인</p>
+                            <p className="text-xs text-content-muted mt-0.5">포인트를 추가하면 이슈 상세 페이지에 즉시 반영됩니다.</p>
                         </div>
                         <div className="p-4">
                             <TimelineEditor issueId={issue.id} />
@@ -147,9 +147,9 @@ export default function IssuePreviewDrawer({
                     </div>
 
                     {/* 출처 */}
-                    <div className="border border-neutral-200 rounded-xl overflow-hidden">
-                        <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
-                            <p className="text-sm font-semibold text-neutral-800">출처</p>
+                    <div className="card overflow-hidden">
+                        <div className="px-4 py-3 bg-surface-subtle border-b border-border-muted">
+                            <p className="text-sm font-semibold text-content-primary">출처</p>
                         </div>
                         <div className="p-4">
                             <SourcesSection issueId={issue.id} />
@@ -159,49 +159,49 @@ export default function IssuePreviewDrawer({
 
                 {/* 하단 액션 (대기 상태일 때만) */}
                 {isPending && (
-                    <div className="shrink-0 px-6 py-4 border-t border-neutral-200 flex gap-3 bg-white">
+                    <div className="shrink-0 px-6 py-4 border-t border-border flex gap-3 bg-surface">
                         <button
                             onClick={() => { onApprove(issue.id); onClose() }}
-                            className="flex-1 py-2.5 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600"
+                            className="flex-1 py-2.5 text-sm font-medium bg-green-500 text-white rounded-full hover:bg-green-600 whitespace-nowrap"
                         >
                             승인
                         </button>
                         <button
                             onClick={() => { onReject(issue.id); onClose() }}
-                            className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+                            className="flex-1 py-2.5 text-sm font-medium bg-orange-500 text-white rounded-full hover:bg-orange-600 whitespace-nowrap"
                         >
                             반려
                         </button>
                         <button
                             onClick={onClose}
-                            className="px-5 py-2.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                            className="btn-neutral btn-md px-5"
                         >
                             닫기
                         </button>
                     </div>
                 )}
                 {!isPending && !isMerged && (
-                    <div className="shrink-0 px-6 py-4 border-t border-neutral-200 bg-white">
+                    <div className="shrink-0 px-6 py-4 border-t border-border bg-surface">
                         <button
                             onClick={onClose}
-                            className="w-full py-2.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                            className="btn-neutral btn-md w-full"
                         >
                             닫기
                         </button>
                     </div>
                 )}
                 {isMerged && issue.merged_into_id && (
-                    <div className="shrink-0 px-6 py-4 border-t border-neutral-200 bg-white flex gap-3">
+                    <div className="shrink-0 px-6 py-4 border-t border-border bg-surface flex gap-3">
                         <a
                             href={`/issue/${issue.merged_into_id}`}
                             target="_blank"
-                            className="flex-1 py-2.5 text-sm font-medium text-center bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+                            className="flex-1 py-2.5 text-sm font-medium text-center bg-primary text-white rounded-xl hover:bg-primary-dark"
                         >
                             병합된 이슈 보기
                         </a>
                         <button
                             onClick={onClose}
-                            className="px-5 py-2.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                            className="btn-neutral btn-md px-5"
                         >
                             닫기
                         </button>

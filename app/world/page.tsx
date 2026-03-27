@@ -14,7 +14,7 @@ export const revalidate = 900
 export default function WorldPage() {
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-xl md:text-2xl font-semibold text-neutral-900 mb-6">세계 이슈</h1>
+            <h1 className="text-2xl font-bold text-content-primary mb-6">세계 이슈</h1>
             <IssueList category="세계" />
         </div>
     )

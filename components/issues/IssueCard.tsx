@@ -50,19 +50,19 @@ export default function IssueCard({ issue }: IssueCardProps) {
 
     return (
         <Link href={`/issue/${issue.id}`} className="block">
-            <article className="p-5 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:shadow-sm transition-all">
+            <article className="card-hover p-5 transition-all">
                 {/* 상단: 상태 배지 */}
                 <div className="mb-2.5">
                     <StatusBadge status={issue.status} size="sm" />
                 </div>
 
                 {/* 제목 */}
-                <h3 className="text-base font-semibold text-neutral-900 mb-3 line-clamp-2">
+                <h3 className="text-base font-semibold text-content-primary mb-3 line-clamp-2">
                     {decodeHtml(issue.title)}
                 </h3>
 
                 {/* 하단: 카테고리 · 날짜 */}
-                <div className="flex items-center gap-2 text-xs text-neutral-400 mb-3">
+                <div className="flex items-center gap-2 text-xs text-content-muted mb-3">
                     <span>{issue.category}</span>
                     <span>·</span>
                     <span>{formatDate(issue.created_at)}</span>
@@ -70,7 +70,7 @@ export default function IssueCard({ issue }: IssueCardProps) {
 
                 {/* 통계 정보 */}
                 {stats && (
-                    <div className="flex items-center gap-4 text-xs text-neutral-500 pt-3 border-t border-neutral-100">
+                    <div className="flex items-center gap-4 text-xs text-content-secondary pt-3 border-t border-border-muted">
                         {stats.viewCount > 0 && (
                             <span className="flex items-center gap-1">
                                 <span>👁️</span>

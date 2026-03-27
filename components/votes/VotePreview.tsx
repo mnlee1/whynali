@@ -21,9 +21,9 @@ import { Swiper, SwiperSlide } from 'swiper/react'
 import { Autoplay, Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
-import type { Issue } from '@/types/issue'
 import type { Vote, VoteChoice } from '@/types/index'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import Tooltip from '@/components/common/Tooltip'
 
 // votes API 응답 형태 (vote_choices가 조인됨)
 interface VoteWithChoices extends Vote {
@@ -72,132 +72,116 @@ export default function VotePreview() {
 
     if (votes.length === 0) return null
 
+    const themes = [
+        { bg: 'bg-violet-50', border: 'border-violet-200', bar: 'from-violet-400 to-purple-500', rankBg: 'bg-violet-100', rankText: 'text-violet-700', pctText: 'text-violet-600', btnBg: 'bg-violet-500', divider: 'border-violet-200', badgeBg: 'bg-violet-100 text-violet-700' },
+        { bg: 'bg-sky-50', border: 'border-sky-200', bar: 'from-sky-400 to-blue-500', rankBg: 'bg-sky-100', rankText: 'text-sky-700', pctText: 'text-sky-600', btnBg: 'bg-sky-500', divider: 'border-sky-200', badgeBg: 'bg-sky-100 text-sky-700' },
+        { bg: 'bg-rose-50', border: 'border-rose-200', bar: 'from-pink-400 to-rose-500', rankBg: 'bg-rose-100', rankText: 'text-rose-700', pctText: 'text-rose-600', btnBg: 'bg-rose-500', divider: 'border-rose-200', badgeBg: 'bg-rose-100 text-rose-700' },
+        { bg: 'bg-amber-50', border: 'border-amber-200', bar: 'from-amber-400 to-orange-500', rankBg: 'bg-amber-100', rankText: 'text-amber-700', pctText: 'text-amber-600', btnBg: 'bg-amber-500', divider: 'border-amber-200', badgeBg: 'bg-amber-100 text-amber-700' },
+        { bg: 'bg-emerald-50', border: 'border-emerald-200', bar: 'from-emerald-400 to-teal-500', rankBg: 'bg-emerald-100', rankText: 'text-emerald-700', pctText: 'text-emerald-600', btnBg: 'bg-emerald-500', divider: 'border-emerald-200', badgeBg: 'bg-emerald-100 text-emerald-700' },
+    ]
+
+    const renderCard = (vote: VoteWithChoices, index: number) => {
+        const choices = vote.vote_choices ?? []
+        const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
+        const issueId = vote.issues?.id ?? ''
+        if (!issueId) return null
+
+        const sortedChoices = [...choices].sort((a, b) => b.count - a.count)
+        const first = sortedChoices[0]
+        const second = sortedChoices[1]
+        const remaining = choices.length - 2
+        const firstRatio = totalCount > 0 ? Math.round((first.count / totalCount) * 100) : 0
+        const secondRatio = totalCount > 0 && second ? Math.round((second.count / totalCount) * 100) : 0
+        const theme = themes[index % themes.length]
+
+        return (
+            <Link href={`/issue/${issueId}`}>
+                <div className={`relative ${theme.bg} border ${theme.border} rounded-2xl shadow-card hover:shadow-lg transition-all overflow-hidden group`}>
+                    <div className={`h-1 bg-gradient-to-r ${theme.bar}`} />
+                    <div className="p-5 space-y-4">
+                        <div className="space-y-1 min-h-[3rem]">
+                            <h3 className="text-base font-bold text-content-primary line-clamp-2">
+                                {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
+                            </h3>
+                            {vote.issues?.title && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${theme.badgeBg}`}>이슈</span>
+                                    <span className="text-xs text-content-secondary truncate font-medium">
+                                        {vote.issues.title}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <div className={`${theme.rankBg} rounded-xl p-3`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className={`text-xs font-bold ${theme.rankText}`}>1위</span>
+                                    <span className={`text-2xl font-black ${theme.pctText}`}>{firstRatio}%</span>
+                                </div>
+                                <p className="text-sm font-semibold text-content-primary line-clamp-1">{first.label}</p>
+                            </div>
+                            {second && (
+                                <div className="bg-white/70 border border-border rounded-xl p-3">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-bold text-content-muted">2위</span>
+                                        <span className="text-xl font-bold text-content-secondary">{secondRatio}%</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-content-secondary line-clamp-1">{second.label}</p>
+                                </div>
+                            )}
+                            {remaining > 0 && (
+                                <p className="text-xs text-content-muted text-center">외 {remaining}개 선택지</p>
+                            )}
+                        </div>
+                        <div className={`flex items-center justify-between pt-3 border-t ${theme.divider}`}>
+                            <span className="text-xs text-content-secondary font-medium">
+                                {totalCount.toLocaleString()}명 참여
+                            </span>
+                            <div className={`px-4 py-1.5 ${theme.btnBg} rounded-full`}>
+                                <span className="text-xs font-bold text-white">투표하기</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Link>
+        )
+    }
+
     return (
         <section>
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-neutral-900">지금 투표 중</h2>
-                <span className="text-xs text-neutral-400">
-                    투표 참여도 높은 순으로 정렬 됩니다.
-                </span>
+                <h2 className="text-base font-bold text-content-primary">지금 투표 중</h2>
+                <Tooltip label="참여도순" text="투표 참여 수가 가장 많은 순으로 정렬됩니다." />
             </div>
 
-            {/* Swiper를 사용한 슬라이드 영역 */}
+            <div className="py-2 -my-2">
             <Swiper
                 modules={[Autoplay, Pagination]}
-                spaceBetween={16}
+                spaceBetween={12}
                 slidesPerView="auto"
-                autoplay={{
-                    delay: 5000,
-                    disableOnInteraction: false,
-                }}
-                pagination={{
+                autoplay={votes.length > 1 ? { delay: 5000, disableOnInteraction: false } : false}
+                pagination={votes.length > 1 ? {
                     clickable: true,
                     bulletClass: 'swiper-pagination-bullet !bg-neutral-300',
                     bulletActiveClass: 'swiper-pagination-bullet-active !bg-violet-500',
-                }}
-                loop={votes.length > 1}
-                className="!pb-10"
+                } : false}
+                loop={votes.length > 2}
+                className={votes.length > 1 ? '!overflow-visible !pb-10 !-mr-4 md:!mr-0' : '!overflow-visible'}
             >
-                {votes.map((vote, index) => {
-                    const choices = vote.vote_choices ?? []
-                    const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
-                    const issueId = vote.issues?.id ?? ''
-                    if (!issueId) return null
-
-                    // 득표순 정렬
-                    const sortedChoices = [...choices].sort((a, b) => b.count - a.count)
-                    const first = sortedChoices[0]
-                    const second = sortedChoices[1]
-                    const remaining = choices.length - 2
-
-                    const firstRatio = totalCount > 0 ? Math.round((first.count / totalCount) * 100) : 0
-                    const secondRatio = totalCount > 0 && second ? Math.round((second.count / totalCount) * 100) : 0
-
-                    // 슬라이드마다 다른 그라디언트
-                    const gradients = [
-                        'from-violet-500 to-purple-600',
-                        'from-blue-500 to-cyan-600',
-                        'from-pink-500 to-rose-600',
-                        'from-amber-500 to-orange-600',
-                        'from-emerald-500 to-teal-600',
-                    ]
-                    const gradient = gradients[index % gradients.length]
-
-                    return (
-                        <SwiperSlide key={vote.id} className="!w-80 md:!w-96">
-                            <Link href={`/issue/${issueId}`}>
-                                <div className={`relative p-5 bg-gradient-to-br ${gradient} rounded-2xl hover:shadow-xl transition-all overflow-hidden group`}>
-                                    {/* 배경 패턴 */}
-                                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors" />
-                                    
-                                    <div className="relative space-y-4">
-                                        {/* 투표 제목 + 연결 이슈 */}
-                                        <div className="space-y-1 min-h-[3rem]">
-                                            <h3 className="text-base font-bold text-white line-clamp-2">
-                                                {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
-                                            </h3>
-                                            {vote.issues?.title && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] px-1.5 py-0.5 bg-white/20 rounded text-white/80 font-bold flex-shrink-0">이슈</span>
-                                                    <span className="text-xs text-white/70 truncate font-medium">
-                                                        {vote.issues.title}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* 1위 vs 2위 대결 */}
-                                        <div className="space-y-3">
-                                            {/* 1위 */}
-                                            <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                                                <div className="flex items-center justify-between mb-1.5">
-                                                    <span className="text-xs font-bold text-white/90">1위</span>
-                                                    <span className="text-2xl font-black text-white">{firstRatio}%</span>
-                                                </div>
-                                                <p className="text-sm font-semibold text-white line-clamp-1">
-                                                    {first.label}
-                                                </p>
-                                            </div>
-
-                                            {/* 2위 (있을 경우) */}
-                                            {second && (
-                                                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <span className="text-xs font-bold text-white/80">2위</span>
-                                                        <span className="text-xl font-bold text-white/90">{secondRatio}%</span>
-                                                    </div>
-                                                    <p className="text-sm font-medium text-white/90 line-clamp-1">
-                                                        {second.label}
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {/* 나머지 선택지 */}
-                                            {remaining > 0 && (
-                                                <p className="text-xs text-white/70 text-center">
-                                                    외 {remaining}개 선택지
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        {/* 하단 정보 */}
-                                        <div className="flex items-center justify-between pt-3 border-t border-white/20">
-                                            <span className="text-xs text-white/80 font-medium">
-                                                {totalCount.toLocaleString()}명 참여
-                                            </span>
-                                            <div className="px-4 py-1.5 bg-white rounded-full">
-                                                <span className="text-xs font-bold text-violet-600">
-                                                    투표하기
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Link>
-                        </SwiperSlide>
-                    )
-                })}
+                {votes.map((vote, index) => (
+                    <SwiperSlide
+                        key={vote.id}
+                        className={
+                            votes.length === 1
+                                ? '!w-full md:!w-96'
+                                : '!w-[85%] md:!w-96'
+                        }
+                    >
+                        {renderCard(vote, index)}
+                    </SwiperSlide>
+                ))}
             </Swiper>
+            </div>
         </section>
     )
 }

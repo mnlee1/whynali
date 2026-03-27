@@ -13,8 +13,8 @@ export const metadata = {
 export default function TermsPage() {
     return (
         <div className="container mx-auto px-4 py-12 max-w-3xl">
-            <h1 className="text-2xl font-bold mb-2">서비스 이용약관</h1>
-            <p className="text-sm text-gray-500 mb-10">시행일: 2026년 4월 16일 &nbsp;|&nbsp; 운영사: NHN AD</p>
+            <h1 className="text-2xl font-bold text-content-primary mb-2">서비스 이용약관</h1>
+            <p className="text-sm text-gray-500 mb-10">시행일: [시행일] &nbsp;|&nbsp; 운영자: [운영자명]</p>
 
             <div className="space-y-10 text-gray-700 text-sm leading-relaxed">
 

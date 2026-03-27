@@ -66,10 +66,10 @@ export default function AdminLoginPage() {
 
     return (
         <div className="max-w-sm mx-auto mt-16">
-            <h1 className="text-lg font-semibold text-neutral-800 mb-6">관리자 로그인</h1>
+            <h1 className="text-lg font-semibold text-content-primary mb-6">관리자 로그인</h1>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                    <label className="block text-sm font-medium text-content-secondary mb-1">
                         이메일
                     </label>
                     <input
@@ -79,20 +79,20 @@ export default function AdminLoginPage() {
                         placeholder="admin@nhnad.com"
                         required
                         autoComplete="email"
-                        className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                     <label className="flex items-center gap-2 mt-2 cursor-pointer w-fit">
                         <input
                             type="checkbox"
                             checked={saveEmail}
                             onChange={(e) => setSaveEmail(e.target.checked)}
-                            className="w-3.5 h-3.5 accent-blue-600"
+                            className="w-3.5 h-3.5 accent-primary"
                         />
-                        <span className="text-xs text-neutral-500">이메일 저장</span>
+                        <span className="text-xs text-content-muted">이메일 저장</span>
                     </label>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                    <label className="block text-sm font-medium text-content-secondary mb-1">
                         비밀번호
                     </label>
                     <input
@@ -102,7 +102,7 @@ export default function AdminLoginPage() {
                         placeholder="비밀번호"
                         required
                         autoComplete="current-password"
-                        className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                 </div>
 
@@ -111,7 +111,7 @@ export default function AdminLoginPage() {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2 px-4 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    className="btn-primary btn-md w-full"
                 >
                     {loading ? '로그인 중...' : '로그인'}
                 </button>
