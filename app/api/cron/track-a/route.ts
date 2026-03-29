@@ -41,7 +41,7 @@ const AUTO_APPROVE_HEAT_THRESHOLD = parseInt(process.env.AUTO_APPROVE_HEAT_THRES
 
 // Rate Limit 완화 설정
 // 기본 3개: Groq Rate Limit을 고려해 한 번 실행당 최대 3개 키워드 처리
-const MAX_KEYWORDS_PER_RUN = parseInt(process.env.TRACK_A_MAX_KEYWORDS ?? '3')
+const MAX_KEYWORDS_PER_RUN = parseInt(process.env.TRACK_A_MAX_KEYWORDS ?? '1')
 const AI_CALL_DELAY_MS = parseInt(process.env.TRACK_A_AI_DELAY_MS ?? '10000')  // AI 호출 간 대기 시간 (기본 10초)
 
 /**
