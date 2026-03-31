@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/track-a",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/update-timeline",
+      "schedule": "30 * * * *"
     }
   ],
   "functions": {

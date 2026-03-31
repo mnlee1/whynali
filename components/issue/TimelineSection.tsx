@@ -18,6 +18,8 @@ import type { TimelinePoint } from '@/types/issue'
 
 interface TimelineSectionProps {
     issueId: string
+    issueStatus?: string
+    issueUpdatedAt?: string
 }
 
 const STAGE_STYLES: Record<string, { card: string; dot: string; line: string; badge: string; header: string; headerText: string; headerLine: string }> = {
@@ -66,7 +68,7 @@ const STAGE_TEXT_COLOR: Record<string, string> = {
     '진정': 'text-gray-600',
 }
 
-export default function TimelineSection({ issueId }: TimelineSectionProps) {
+export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }: TimelineSectionProps) {
     const [timeline, setTimeline] = useState<TimelinePoint[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -132,6 +134,8 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
             </div>
         )
     }
+
+    const isClosed = issueStatus === '종결'
 
     return (
         <div className="space-y-0">
@@ -202,6 +206,25 @@ export default function TimelineSection({ issueId }: TimelineSectionProps) {
                     </div>
                 )
             })}
+
+            {/* 종결 표시 */}
+            {isClosed && (
+                <div className="flex gap-3 mt-2">
+                    <div className="flex flex-col items-center">
+                        <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 bg-gray-400" />
+                    </div>
+                    <div className="flex-1 pb-3">
+                        <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <span className="text-xs text-gray-400 block mb-1">
+                                {issueUpdatedAt ? formatDateWithTime(issueUpdatedAt) : ''}
+                            </span>
+                            <p className="text-sm font-medium text-gray-500">
+                                이슈 종결
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

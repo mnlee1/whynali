@@ -22,7 +22,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 import { callGroq } from '@/lib/ai/groq-client'
-import { parseJsonObject } from '@/lib/ai/parse-json-response'
+import { parseJsonObject, parseJsonArray } from '@/lib/ai/parse-json-response'
 import { searchNaverNewsByKeyword } from '@/lib/collectors/naver-news'
 import { checkDuplicateIssue } from '@/lib/candidate/duplicate-checker'
 import { calculateHeatIndex } from '@/lib/analysis/heat'
@@ -187,8 +187,83 @@ function simpleInferCategory(title: string): IssueCategory {
 }
 
 /**
+ * classifyTimelineStages - Groq으로 타임라인 기사 단계 분류
+ *
+ * 첫 번째 기사 = '발단', 마지막 기사 = 이슈 상태에 따라 '진정'/'전개'
+ * 중간 기사들만 Groq 배치 요청으로 '전개'/'파생' 분류.
+ * 중간이 2개 이하이거나 Groq 실패 시 전부 '전개'로 fallback.
+ */
+async function classifyTimelineStages(
+    issueTitle: string,
+    news: Array<{ id: string; title: string }>,
+    issueStatus: string,
+): Promise<Map<string, '발단' | '전개' | '파생' | '진정'>> {
+    const result = new Map<string, '발단' | '전개' | '파생' | '진정'>()
+
+    if (news.length === 0) return result
+
+    // 기사 1개: 발단만
+    result.set(news[0].id, '발단')
+    if (news.length === 1) return result
+
+    // 마지막: 종결이면 진정, 아니면 전개
+    const lastStage = issueStatus === '종결' ? '진정' : '전개'
+    result.set(news[news.length - 1].id, lastStage)
+
+    // 중간 기사 없으면 끝
+    const middle = news.slice(1, -1)
+    if (middle.length === 0) return result
+
+    // 중간 2개 이하: Groq 호출 없이 전개 배정
+    if (middle.length <= 2) {
+        middle.forEach(n => result.set(n.id, '전개'))
+        return result
+    }
+
+    // Groq 배치 요청으로 전개/파생 분류
+    try {
+        const listText = middle.map((n, i) => `${i + 1}. ${n.title}`).join('\n')
+        const prompt = `다음은 한국 이슈와 관련 기사 목록입니다.
+
+이슈 제목: ${issueTitle}
+
+아래 기사들을 각각 "전개" 또는 "파생"으로 분류해주세요.
+- 전개: 이슈의 직접적인 발전 (입장 발표, 후속 조치, 사건 확대 등)
+- 파생: 이슈로 인해 새로 불거진 별개의 논란 (새 인물 등장, 연관 사건 등)
+
+기사 목록:
+${listText}
+
+반드시 아래 JSON 형식으로만 답하세요:
+[{"index":1,"stage":"전개"},{"index":2,"stage":"파생"}]`
+
+        const content = await callGroq(
+            [{ role: 'user', content: prompt }],
+            { model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: 300 },
+        )
+
+        const parsed = parseJsonArray<{ index: number; stage: string }>(content)
+        if (parsed) {
+            parsed.forEach(item => {
+                const target = middle[item.index - 1]
+                if (target && (item.stage === '전개' || item.stage === '파생')) {
+                    result.set(target.id, item.stage)
+                }
+            })
+        }
+    } catch (error) {
+        console.warn('  ⚠️ [타임라인 단계 분류 실패] 전개로 fallback:', error)
+    }
+
+    // 분류 누락된 중간 기사 → 전개 fallback
+    middle.forEach(n => { if (!result.has(n.id)) result.set(n.id, '전개') })
+
+    return result
+}
+
+/**
  * filterAndTitleByAI - 뉴스 필터링 + 커뮤니티 필터링 + 제목 생성 통합
- * 
+ *
  * AI 호출을 3개에서 1개로 줄여 Rate Limit 문제 해결
  */
 async function filterAndTitleByAI(
@@ -887,32 +962,41 @@ async function processTrackA(): Promise<{
         if (duplicateCheck.isDuplicate) {
             console.log(`  ✗ [중복 이슈] "${duplicateCheck.existingIssue?.title}"`)
 
-            // 기존 이슈에 커뮤니티 글 연결 (AI 필터링 적용 — 오매칭 방지)
+            // 기존 이슈에 커뮤니티 글 + 뉴스 연결 (AI 필터링 적용 — 오매칭 방지)
             try {
-                const { relevantCommunityIds: filteredIds } = await filterAndTitleByAI(
+                const { relevantCommunityIds: filteredCommunityIds, relevantNewsIds: filteredNewsIds } = await filterAndTitleByAI(
                     burst.keyword,
                     duplicateCheck.existingIssue!.title,
-                    [],  // 뉴스 필터링 불필요 (이미 이슈 존재)
-                    burst.posts
+                    newsItems,
+                    burst.posts,
                 )
 
-                if (filteredIds.length > 0) {
+                if (filteredCommunityIds.length > 0) {
                     await supabaseAdmin
                         .from('community_data')
                         .update({ issue_id: duplicateCheck.existingIssue!.id })
-                        .in('id', filteredIds)
-                    console.log(`  → 기존 이슈에 커뮤니티 ${filteredIds.length}/${burst.posts.length}건 추가 연결`)
+                        .in('id', filteredCommunityIds)
+                    console.log(`  → 기존 이슈에 커뮤니티 ${filteredCommunityIds.length}/${burst.posts.length}건 추가 연결`)
                 } else {
                     console.log(`  → 관련 커뮤니티 글 없음 (필터링 후 0건) — 연결 건너뜀`)
                 }
+
+                if (filteredNewsIds.length > 0) {
+                    await supabaseAdmin
+                        .from('news_data')
+                        .update({ issue_id: duplicateCheck.existingIssue!.id })
+                        .in('id', filteredNewsIds)
+                        .is('issue_id', null) // 이미 다른 이슈에 연결된 뉴스는 건드리지 않음
+                    console.log(`  → 기존 이슈에 뉴스 ${filteredNewsIds.length}/${newsItems.length}건 추가 연결`)
+                }
             } catch {
-                // AI 실패 시 폴백: 전체 연결
+                // AI 실패 시 폴백: 커뮤니티만 전체 연결 (뉴스는 연결 안 함 — 노이즈 방지)
                 const postIds = burst.posts.map(p => p.id)
                 await supabaseAdmin
                     .from('community_data')
                     .update({ issue_id: duplicateCheck.existingIssue!.id })
                     .in('id', postIds)
-                console.log(`  → [폴백] 기존 이슈에 커뮤니티 ${postIds.length}건 추가 연결`)
+                console.log(`  → [폴백] 기존 이슈에 커뮤니티 ${postIds.length}건 추가 연결 (뉴스 연결 건너뜀)`)
             }
 
             await logTrackA(burst.keyword, burst.count, 'duplicate_linked', {
@@ -1040,15 +1124,28 @@ async function processTrackA(): Promise<{
                 const bTime = relevantNews.find(n => n.id === b.id)?.published_at ?? ''
                 return new Date(aTime).getTime() - new Date(bTime).getTime()
             })
-            
-            timelinePoints = sortedNews.slice(0, 5).map((news, index) => {
+
+            const sampledNews = sortedNews.slice(0, 5)
+            const newsForClassify = sampledNews.map(news => {
+                const item = relevantNews.find(n => n.id === news.id)
+                return { id: news.id, title: item?.title ?? '' }
+            })
+
+            // Groq으로 단계 분류 (발단/전개/파생/진정)
+            const stageMap = await classifyTimelineStages(
+                finalIssueTitle,
+                newsForClassify,
+                '점화', // 신규 이슈는 항상 점화 상태
+            )
+
+            timelinePoints = sampledNews.map(news => {
                 const newsItem = relevantNews.find(n => n.id === news.id)
                 return {
                     issue_id: newIssue.id,
                     title: newsItem?.title ?? '',
                     occurred_at: newsItem?.published_at ?? new Date().toISOString(),
                     source_url: newsItem?.link ?? '',
-                    stage: (index === 0 ? '발단' : '전개') as '발단' | '전개' | '파생' | '진정',
+                    stage: stageMap.get(news.id) ?? '전개',
                 }
             })
         }
