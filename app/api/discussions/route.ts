@@ -4,6 +4,7 @@ import { sanitizeText, validateContent, checkRateLimit, loadBannedWords } from '
 
 
 export const dynamic = 'force-dynamic'
+export const preferredRegion = 'icn1'
 /* GET /api/discussions?issue_id=&q=&status=&limit=&offset= */
 /* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색, status 지정 시 특정 상태만 조회 */
 export async function GET(request: NextRequest) {
@@ -44,22 +45,29 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 각 토론 주제별 의견(댓글) 수 조회
-    const topicsWithOpinions = await Promise.all(
-        (data || []).map(async (topic) => {
-            const { count: opinionCount } = await admin
-                .from('comments')
-                .select('*', { count: 'exact', head: true })
-                .eq('discussion_topic_id', topic.id)
-                .eq('visibility', 'public')
+    // 토론 주제별 의견(댓글) 수 — 단건 N회 → 1회 배치 조회로 개선
+    const topicIds = (data || []).map((t) => t.id)
+    const countMap: Record<string, number> = {}
 
-            return {
-                ...topic,
-                opinionCount: opinionCount || 0,
-                viewCount: topic.view_count ?? 0,
+    if (topicIds.length > 0) {
+        const { data: commentRows } = await admin
+            .from('comments')
+            .select('discussion_topic_id')
+            .in('discussion_topic_id', topicIds)
+            .eq('visibility', 'public')
+
+        for (const row of commentRows ?? []) {
+            if (row.discussion_topic_id) {
+                countMap[row.discussion_topic_id] = (countMap[row.discussion_topic_id] ?? 0) + 1
             }
-        })
-    )
+        }
+    }
+
+    const topicsWithOpinions = (data || []).map((topic) => ({
+        ...topic,
+        opinionCount: countMap[topic.id] ?? 0,
+        viewCount: topic.view_count ?? 0,
+    }))
 
     return NextResponse.json({ data: topicsWithOpinions, total: count ?? 0 })
 }

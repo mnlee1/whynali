@@ -32,10 +32,7 @@ export default function Footer() {
                         </a>
                     </nav>
                 </div>
-                <p className="mt-3 text-center sm:text-left text-xs text-content-muted">
-                    한국 이슈를 한눈에 파악하고 여론을 확인하세요
-                </p>
-                <p className="mt-1 text-center sm:text-left text-xs text-neutral-400">
+                <p className="mt-3 text-center sm:text-left text-xs text-neutral-400">
                     © NHN AD. All rights reserved.
                 </p>
             </div>

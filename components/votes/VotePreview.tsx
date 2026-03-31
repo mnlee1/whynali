@@ -6,11 +6,9 @@
  * 메인화면에서 현재 진행 중인 투표를 미리 보여줘 참여를 유도합니다.
  * 참여가 가장 활발한 투표 5개를 스와이프 형태로 보여줍니다.
  * 1위 vs 2위 대결 구도를 크게 강조하여 시각적 흥미를 높입니다.
- * 그라디언트 배경과 큰 "투표하기" 버튼으로 참여를 유도합니다.
  *
- * 투표가 하나도 없으면 섹션 전체를 숨깁니다.
- * 
- * Swiper 라이브러리를 사용하여 터치/마우스 스와이프를 지원합니다.
+ * initialVotes prop이 제공되면 SSR 데이터를 바로 사용하고,
+ * 없으면 클라이언트에서 직접 fetch합니다.
  */
 
 'use client'
@@ -25,36 +23,39 @@ import type { Vote, VoteChoice } from '@/types/index'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import Tooltip from '@/components/common/Tooltip'
 
-// votes API 응답 형태 (vote_choices가 조인됨)
 interface VoteWithChoices extends Vote {
     vote_choices: VoteChoice[]
     issues?: { id: string; title: string } | null
 }
 
-export default function VotePreview() {
-    const [votes, setVotes] = useState<VoteWithChoices[]>([])
-    const [loading, setLoading] = useState(true)
+function sortVotes(votes: VoteWithChoices[]): VoteWithChoices[] {
+    return votes
+        .map(vote => ({
+            ...vote,
+            _total: (vote.vote_choices ?? []).reduce((sum, c) => sum + (c.count ?? 0), 0),
+        }))
+        .sort((a, b) => b._total - a._total)
+        .slice(0, 5)
+}
+
+interface Props {
+    initialVotes?: VoteWithChoices[]
+}
+
+export default function VotePreview({ initialVotes }: Props) {
+    const [votes, setVotes] = useState<VoteWithChoices[]>(
+        initialVotes ? sortVotes(initialVotes) : []
+    )
+    const [loading, setLoading] = useState(!initialVotes)
 
     useEffect(() => {
+        if (initialVotes) return
         async function load() {
             try {
-                // 진행 중인 투표 목록 가져오기
                 const res = await fetch('/api/votes?limit=50')
                 if (!res.ok) return
-
                 const json = await res.json()
-                const allVotes: VoteWithChoices[] = json.data ?? []
-
-                // 참여도 기준으로 정렬 (총 투표 수가 많은 순)
-                const sortedVotes = allVotes
-                    .map(vote => ({
-                        ...vote,
-                        totalVotes: (vote.vote_choices ?? []).reduce((sum, c) => sum + (c.count ?? 0), 0)
-                    }))
-                    .sort((a, b) => b.totalVotes - a.totalVotes)
-                    .slice(0, 5)
-
-                setVotes(sortedVotes)
+                setVotes(sortVotes(json.data ?? []))
             } catch {
                 // 실패 시 섹션 미표시
             } finally {
@@ -62,7 +63,7 @@ export default function VotePreview() {
             }
         }
         load()
-    }, [])
+    }, [initialVotes])
 
     if (loading) {
         return (
@@ -185,4 +186,3 @@ export default function VotePreview() {
         </section>
     )
 }
-

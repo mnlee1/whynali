@@ -30,15 +30,30 @@ export const revalidate = 900
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
-    /* 이슈 데이터 조회: RLS 우회를 위해 admin 클라이언트 사용
-       (조건에서 이미 approval_status·visibility_status 필터 적용) */
     const adminClient = createSupabaseAdminClient()
 
-    const { data: issue, error: issueError } = await adminClient
-        .from('issues')
-        .select('*')
-        .eq('id', id)
-        .single()
+    /* 이슈 데이터 + 관련 데이터 + 사용자 세션을 병렬로 조회 */
+    const [
+        { data: issue, error: issueError },
+        { data: discussionTopics },
+        { count: voteCount },
+        sessionClient,
+    ] = await Promise.all([
+        adminClient.from('issues').select('*').eq('id', id).single(),
+        adminClient
+            .from('discussion_topics')
+            .select('id, body, created_at')
+            .eq('issue_id', id)
+            .in('approval_status', ['진행중', '마감'])
+            .order('created_at', { ascending: false })
+            .limit(5),
+        adminClient
+            .from('votes')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', id)
+            .in('phase', ['진행중', '마감']),
+        createSupabaseServerClient(),
+    ])
 
     if (issueError || !issue) {
         return (
@@ -66,24 +81,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         )
     }
 
-    /* 관련 토론 주제 조회 */
-    const { data: discussionTopics } = await adminClient
-        .from('discussion_topics')
-        .select('id, body, created_at')
-        .eq('issue_id', id)
-        .in('approval_status', ['진행중', '마감'])
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-    /* 투표 데이터 존재 여부 확인 */
-    const { count: voteCount } = await adminClient
-        .from('votes')
-        .select('*', { count: 'exact', head: true })
-        .eq('issue_id', id)
-        .in('phase', ['진행중', '마감'])
-
-    /* 사용자 세션 확인: anon 클라이언트로 쿠키 기반 세션 조회 */
-    const sessionClient = await createSupabaseServerClient()
+    /* 사용자 세션 확인 */
     const { data: { user } } = await sessionClient.auth.getUser()
     const userId = user?.id ?? null
 

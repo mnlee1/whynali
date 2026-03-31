@@ -33,11 +33,11 @@ function LoginForm() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-12 max-w-sm">
-            <div className="text-center mb-8">
+        <div className="min-h-[calc(100svh-3rem)] xl:min-h-[calc(100svh-3.5rem)] flex flex-col justify-center px-4 py-8 max-w-sm mx-auto">
+            <div className="text-center mb-5 sm:mb-8">
                 <h1 className="text-2xl font-bold text-content-primary mb-2">로그인</h1>
                 <p className="text-sm text-content-secondary">
-                    로그인하면 감정 표현, 댓글, 투표에 참여할 수 있습니다.
+                    지금 일어나는 난리에 반응하세요.
                 </p>
             </div>
 
@@ -51,9 +51,9 @@ function LoginForm() {
                 <button
                     onClick={() => handleOAuth('google')}
                     disabled={loading !== null}
-                    className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border-strong rounded-xl text-sm font-medium hover:bg-surface-muted disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    className="btn-neutral btn-lg w-full gap-3"
                 >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                         <path
                             fill="#4285F4"
                             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -74,42 +74,29 @@ function LoginForm() {
                     {loading === 'google' ? '연결 중...' : 'Google로 로그인'}
                 </button>
 
-                <div>
-                    <button
-                        onClick={() => handleOAuth('kakao')}
-                        disabled={loading !== null}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-yellow-400 rounded-xl text-sm font-medium text-gray-900 hover:bg-yellow-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                    >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.61 1.636 4.904 4.125 6.266-.182.676-.66 2.453-.757 2.833-.12.47.173.464.364.338.149-.098 2.367-1.605 3.324-2.255.629.09 1.277.138 1.944.138 5.523 0 10-3.477 10-7.78C21 6.477 17.523 3 12 3z" />
-                        </svg>
-                        {loading === 'kakao' ? '연결 중...' : 'Kakao로 로그인'}
-                    </button>
-                    <p className="text-xs text-content-muted mt-1.5 px-1">
-                        카카오 앱 검수 진행 중으로 일시적으로 로그인이 제한됩니다.
-                    </p>
-                </div>
+                <button
+                    onClick={() => handleOAuth('kakao')}
+                    disabled={loading !== null}
+                    className="btn btn-lg w-full gap-3 bg-[#FEE500] text-gray-900 hover:bg-[#F6DC00] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.61 1.636 4.904 4.125 6.266-.182.676-.66 2.453-.757 2.833-.12.47.173.464.364.338.149-.098 2.367-1.605 3.324-2.255.629.09 1.277.138 1.944.138 5.523 0 10-3.477 10-7.78C21 6.477 17.523 3 12 3z" />
+                    </svg>
+                    {loading === 'kakao' ? '연결 중...' : 'Kakao로 로그인'}
+                </button>
 
-                <div>
-                    <Link
-                        href={`/auth/naver${searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next')!)}` : ''}`}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#03C75A] text-white rounded-xl text-sm font-medium hover:bg-[#02b350] disabled:opacity-60 transition-colors border border-transparent"
-                    >
-                        <span className="w-5 h-5 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
-                        네이버로 로그인
-                    </Link>
-                    <p className="text-xs text-content-muted mt-1.5 px-1">
-                        테스트 단계로 테스터 ID를 등록해야 로그인이 가능합니다.
-                    </p>
-                </div>
+                <Link
+                    href={`/auth/naver${searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next')!)}` : ''}`}
+                    className="btn btn-lg w-full gap-3 bg-[#03C75A] text-white hover:bg-[#02b350]"
+                >
+                    <span className="w-5 h-5 shrink-0 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
+                    네이버로 로그인
+                </Link>
             </div>
 
-            <p className="text-xs text-content-muted text-center mt-6">
-                로그인 시{' '}
-                <Link href="/terms" className="underline hover:text-content-secondary">서비스 이용약관</Link>
-                {' '}및{' '}
-                <Link href="/privacy" className="underline hover:text-content-secondary">개인정보처리방침</Link>
-                에 동의하는 것으로 간주됩니다.
+            <p className="text-xs text-content-muted text-center mt-6 break-keep">
+                로그인 시 <Link href="/terms" className="underline hover:text-content-secondary">서비스 이용약관</Link> 및{' '}
+                <Link href="/privacy" className="underline hover:text-content-secondary">개인정보처리방침</Link>에 동의하는 것으로 간주됩니다.
             </p>
         </div>
     )

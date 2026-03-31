@@ -1,12 +1,15 @@
 /**
  * components/issues/IssueList.tsx
- * 
+ *
  * [이슈 목록 컴포넌트 - 검색/상태탭 + 카드 리스트]
- * 
+ *
  * 홈, 연예, 스포츠 등 모든 목록 화면에서 사용하는 메인 컴포넌트입니다.
  * 검색창, 상태 탭(전체/점화/논란중/종결), 이슈 카드 리스트, 더 보기 버튼을 포함합니다.
  * 정렬은 기본값(최신순)으로 고정됩니다.
- * 
+ *
+ * initialData prop이 제공되면 SSR 데이터로 즉시 렌더링하고,
+ * 필터/검색 변경 시에는 클라이언트에서 새로 fetch합니다.
+ *
  * 사용 예시:
  *   <IssueList category="연예" />  // 연예 카테고리 목록
  *   <IssueList />                   // 전체 목록
@@ -27,6 +30,7 @@ interface IssueListProps {
     initialLimit?: number   // 초기 로드 개수 (기본 20개)
     hideSearch?: boolean    // 검색바 숨김 여부
     showFullLabel?: boolean // 전체 탭을 "전체 이슈"로 표시 (기본: false)
+    initialData?: { data: Issue[]; total: number } // SSR에서 전달받은 초기 데이터
 }
 
 // 상태 탭 목록
@@ -40,23 +44,23 @@ const STATUS_TABS = [
 const LIMIT = 20
 const DEBOUNCE_MS = 350
 
-export default function IssueList({ category, initialLimit, hideSearch, showFullLabel }: IssueListProps) {
-    const [issues, setIssues] = useState<Issue[]>([])
-    const [total, setTotal] = useState(0)
-    const [loading, setLoading] = useState(true)
+export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData }: IssueListProps) {
+    const [issues, setIssues] = useState<Issue[]>(initialData?.data ?? [])
+    const [total, setTotal] = useState(initialData?.total ?? 0)
+    const [loading, setLoading] = useState(!initialData)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
-    const [searchInput, setSearchInput] = useState('')     // 입력 중인 값
-    const [searchQuery, setSearchQuery] = useState('')     // 실제 API 호출 트리거 값
+    const [searchInput, setSearchInput] = useState('')
+    const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
 
-    /* 더보기 offset은 ref로 관리해 stale 클로저 경합 방지 */
-    const offsetRef = useRef(0)
+    const offsetRef = useRef(initialData?.data.length ?? 0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
     const loadLimit = initialLimit ?? LIMIT
+    // 마운트 시 initialData가 있으면 첫 fetch 건너뜀
+    const skipNextFetch = useRef(!!initialData)
 
-    /* 검색 입력 → debounce → searchQuery 업데이트 */
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
         if (debounceTimer.current) clearTimeout(debounceTimer.current)
@@ -65,13 +69,11 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         }, DEBOUNCE_MS)
     }
 
-    /* Enter 키: debounce 취소 후 즉시 검색 트리거 */
     const handleSearch = () => {
         if (debounceTimer.current) clearTimeout(debounceTimer.current)
         setSearchQuery(searchInput)
     }
 
-    /* 목록 초기 로드 / 필터·검색 변경 시 */
     const fetchIssues = async () => {
         try {
             setLoading(true)
@@ -97,7 +99,6 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         }
     }
 
-    /* 더보기: loadingMore로 중복 클릭 차단, 함수형 업데이트로 경합 방지 */
     const fetchMore = async () => {
         if (loadingMore) return
 
@@ -125,6 +126,10 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     }
 
     useEffect(() => {
+        if (skipNextFetch.current) {
+            skipNextFetch.current = false
+            return
+        }
         fetchIssues()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [category, statusFilter, searchQuery])

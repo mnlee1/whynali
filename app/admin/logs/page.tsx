@@ -59,7 +59,6 @@ export default function AdminLogsPage() {
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [filterType, setFilterType] = useState('')
-    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
     const loadLogs = useCallback(async (type: string, currentOffset: number, append: boolean) => {
         try {
@@ -70,7 +69,6 @@ export default function AdminLogsPage() {
             if (!res.ok) throw new Error(json.error)
             setLogs((prev) => append ? [...prev, ...(json.data ?? [])] : (json.data ?? []))
             setTotal(json.total ?? 0)
-            setLastRefreshedAt(new Date())
         } catch (e) {
             setError(e instanceof Error ? e.message : '로그 조회 실패')
         } finally {
@@ -92,31 +90,10 @@ export default function AdminLogsPage() {
         loadLogs(filterType, next, true)
     }
 
-    const handleRefresh = () => {
-        setLoading(true)
-        setOffset(0)
-        loadLogs(filterType, 0, false)
-    }
-
     return (
         <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-content-primary">운영 로그</h1>
-                </div>
-                <div className="flex items-center gap-3">
-                    {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
-                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
-                    <button
-                        onClick={handleRefresh}
-                        className="btn-neutral btn-md"
-                    >
-                        새로고침
-                    </button>
-                </div>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-content-primary">운영 로그</h1>
             </div>
 
             {/* 대상 유형 필터 */}

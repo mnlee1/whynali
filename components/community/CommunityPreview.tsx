@@ -5,22 +5,21 @@
  *
  * 메인화면 하단에 배치되는 섹션입니다.
  * 진행중인 토론 주제를 최대 5개 표시합니다.
- * 토론 주제가 없거나 로드 실패 시 섹션 전체를 숨깁니다.
  *
- * 사용 예시:
- *   <CommunityPreview />
+ * initialTopics prop이 제공되면 SSR 데이터를 바로 사용하고,
+ * 없으면 클라이언트에서 직접 fetch합니다.
+ * visibilitychange 이벤트로 탭 복귀 시 최신 데이터를 다시 로드합니다.
  */
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import type { DiscussionTopic } from '@/types/index'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatDate } from '@/lib/utils/format-date'
 import Tooltip from '@/components/common/Tooltip'
 
-// 토론 주제에 연결된 이슈 정보와 의견 수가 포함된 타입 (discussions API 응답 형태)
 interface TopicWithIssue extends DiscussionTopic {
     issues?: { id: string; title: string } | null
     opinionCount?: number
@@ -29,19 +28,21 @@ interface TopicWithIssue extends DiscussionTopic {
 
 const PREVIEW_LIMIT = 5
 
-export default function CommunityPreview() {
-    const [topics, setTopics] = useState<TopicWithIssue[]>([])
-    const [total, setTotal] = useState(0)
-    const [loading, setLoading] = useState(true)
+interface Props {
+    initialTopics?: TopicWithIssue[]
+}
+
+export default function CommunityPreview({ initialTopics }: Props) {
+    const [topics, setTopics] = useState<TopicWithIssue[]>(initialTopics ?? [])
+    const [loading, setLoading] = useState(!initialTopics)
+    const hasInitialData = useRef(!!initialTopics)
 
     const load = useCallback(async () => {
         try {
             const res = await fetch(`/api/discussions?limit=${PREVIEW_LIMIT}&status=진행중`, { cache: 'no-store' })
             if (!res.ok) return
-
             const json = await res.json()
             setTopics(json.data ?? [])
-            setTotal(json.total ?? 0)
         } catch {
             // 실패 시 섹션 미표시
         } finally {
@@ -50,9 +51,12 @@ export default function CommunityPreview() {
     }, [])
 
     useEffect(() => {
-        load()
+        // 초기 데이터가 없을 때만 마운트 시 fetch
+        if (!hasInitialData.current) {
+            load()
+        }
 
-        // Next.js 라우터 캐시에서 복원될 때도 최신 데이터 로드
+        // 탭 복귀 시 최신 데이터 갱신
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') load()
         }
@@ -90,24 +94,20 @@ export default function CommunityPreview() {
                         <article className="card-hover p-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
-                                    {/* 진행중 뱃지 */}
                                     <div className="flex items-center gap-2 mb-2">
                                         <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
                                             진행중
                                         </span>
                                     </div>
 
-                                    {/* 연결된 이슈명 */}
                                     {topic.issues?.title && (
                                         <p className="text-xs text-content-muted mb-1 line-clamp-1">
                                             {decodeHtml(topic.issues.title)}
                                         </p>
                                     )}
-                                    {/* 토론 주제 본문 */}
                                     <p className="text-sm font-medium text-content-primary line-clamp-2 leading-snug mb-2">
                                         {decodeHtml(topic.body)}
                                     </p>
-                                    {/* 의견 수 · 조회수 */}
                                     <div className="flex items-center gap-3 text-xs text-content-secondary">
                                         {topic.opinionCount !== undefined && (
                                             <span className="flex items-center gap-1">
