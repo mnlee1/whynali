@@ -604,6 +604,8 @@ export default function AdminCollectionsPage() {
                                 fetchPipelineLogs(pipelineResultFilter, pipelineDateFilter)
                             } else {
                                 fetchStats()
+                                fetchNews(newsPage, newsSort, newsOrder, newsLinkFilter)
+                                fetchCommunity(communityPage, communitySort, communityOrder, communitySiteFilter, communityLinkFilter)
                             }
                         }}
                         disabled={statsLoading || pipelineLoading}

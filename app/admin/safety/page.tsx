@@ -61,8 +61,6 @@ export default function AdminSafetyPage() {
     const [processingReportId, setProcessingReportId] = useState<string | null>(null)
     const [processGuideOpen, setProcessGuideOpen] = useState(true)
 
-    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
-
     /* ── 로드 함수 ── */
     const loadAiRules = useCallback(async () => {
         setAiLoading(true); setAiError(null)
@@ -148,15 +146,7 @@ export default function AdminSafetyPage() {
         loadAiRules()
         loadExcludedRules()
         loadReports()
-        setLastRefreshedAt(new Date())
     }, [loadAiRules, loadExcludedRules, loadReports])
-
-    const handleRefresh = () => {
-        loadAiRules()
-        loadExcludedRules()
-        loadReports()
-        setLastRefreshedAt(new Date())
-    }
 
     /* ── kind 변경 (제외 처리 / 복원) ── */
     const handleChangeKind = async (
@@ -267,21 +257,8 @@ export default function AdminSafetyPage() {
     return (
         <div>
             {/* 헤더 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+            <div className="mb-6">
                 <h1 className="text-2xl font-bold text-content-primary">세이프티</h1>
-                <div className="flex items-center gap-3">
-                    {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
-                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
-                    <button
-                        onClick={handleRefresh}
-                        className="btn-neutral btn-md"
-                    >
-                        새로고침
-                    </button>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

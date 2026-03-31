@@ -87,7 +87,6 @@ export default function AdminVotesPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
-    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
     /* 다중 선택 */
     const [selectedVoteIds, setSelectedVoteIds] = useState<Set<string>>(new Set())
@@ -263,7 +262,6 @@ export default function AdminVotesPage() {
             }
             setVotes(data)
             setTotal(json.total ?? 0)
-            setLastRefreshedAt(new Date())
         } catch (e) {
             setError(e instanceof Error ? e.message : '조회 실패')
         } finally {
@@ -404,17 +402,6 @@ export default function AdminVotesPage() {
                     <h1 className="text-2xl font-bold text-content-primary">투표 관리</h1>
                 </div>
                 <div className="flex items-center gap-3">
-                    {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
-                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
-                    <button
-                        onClick={() => loadVotes(filter, page)}
-                        className="btn-neutral btn-md"
-                    >
-                        새로고침
-                    </button>
                     <button
                         onClick={handleOpenForm}
                         className="btn-primary btn-md"

@@ -11,8 +11,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
+import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
     {
@@ -124,22 +123,9 @@ export function AdminMobileNav() {
 /** 데스크톱 전용 왼쪽 사이드바 (md 이상에서 표시) */
 export default function AdminSidebar() {
     const isActive = useIsActive()
-    const router = useRouter()
-
-    const handleLogout = async () => {
-        await supabase.auth.signOut()
-        router.push('/admin/login')
-    }
 
     return (
         <aside className="admin-sidebar hidden md:flex md:flex-col">
-            <div className="admin-sidebar-header">
-                <Link href="/admin" className="admin-sidebar-logo">
-                    <span className="admin-sidebar-logo-badge">A</span>
-                    <span className="admin-sidebar-logo-text">관리자</span>
-                </Link>
-            </div>
-
             <nav className="admin-sidebar-nav">
                 {NAV_ITEMS.map((item) => (
                     <Link
@@ -152,21 +138,6 @@ export default function AdminSidebar() {
                     </Link>
                 ))}
             </nav>
-
-            <div className="admin-sidebar-footer">
-                <Link href="/" className="admin-sidebar-back">
-                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    <span>사이트로 돌아가기</span>
-                </Link>
-                <button onClick={handleLogout} className="admin-sidebar-back w-full text-left text-red-400 hover:text-red-600">
-                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span>로그아웃</span>
-                </button>
-            </div>
         </aside>
     )
 }

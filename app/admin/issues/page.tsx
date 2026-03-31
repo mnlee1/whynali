@@ -24,7 +24,6 @@ export default function AdminIssuesPage() {
     const [filter, setFilter] = useState<string>('대기')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -119,7 +118,6 @@ export default function AdminIssuesPage() {
                 })
             }
             setIssues(sortIssues(list))
-            setLastRefreshedAt(new Date())
         } catch (err) {
             setError(err instanceof Error ? err.message : '오류 발생')
         } finally {
@@ -266,24 +264,9 @@ export default function AdminIssuesPage() {
 
     return (
         <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-content-primary">이슈 관리</h1>
-                    <p className="text-sm text-content-secondary mt-1">트랙 A (자동) + 수동 생성 이슈 전체</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
-                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
-                    <button
-                        onClick={fetchIssues}
-                        className="btn-neutral btn-md"
-                    >
-                        새로고침
-                    </button>
-                </div>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-content-primary">이슈 관리</h1>
+                <p className="text-sm text-content-secondary mt-1">트랙 A (자동) + 수동 생성 이슈 전체</p>
             </div>
 
             {/* 트랙 A 프로세스 기준 안내 */}

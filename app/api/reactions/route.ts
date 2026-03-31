@@ -4,6 +4,8 @@ import { checkRateLimit } from '@/lib/safety'
 import { toUserMessage } from '@/lib/api-errors'
 import { ensurePublicUser } from '@/lib/ensure-user'
 
+export const preferredRegion = 'icn1'
+
 /* GET /api/reactions?issue_id= — 타입별 집계 + 현재 사용자 반응 */
 export async function GET(request: NextRequest) {
     const issue_id = request.nextUrl.searchParams.get('issue_id')
