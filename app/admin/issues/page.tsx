@@ -21,7 +21,7 @@ type SortOrder = 'asc' | 'desc'
 
 export default function AdminIssuesPage() {
     const [issues, setIssues] = useState<Issue[]>([])
-    const [filter, setFilter] = useState<string>('')
+    const [filter, setFilter] = useState<string>('대기')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
@@ -472,10 +472,10 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-28">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-24">
                                 카테고리
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-32">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-24">
                                 <button
                                     onClick={() => handleSort('status')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -486,7 +486,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-32">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-28">
                                 <button
                                     onClick={() => handleSort('approval_status')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -497,7 +497,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-40">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-36">
                                 <button
                                     onClick={() => handleSort('heat_index')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -511,7 +511,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-40">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-32">
                                 <button
                                     onClick={() => handleSort('created_at')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -522,7 +522,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-2 py-3 text-center text-xs font-medium text-content-muted uppercase w-24">
+                            <th className="px-2 py-3 text-left text-xs font-medium text-content-muted uppercase w-40">
                                 액션
                             </th>
                         </tr>
@@ -534,18 +534,18 @@ export default function AdminIssuesPage() {
                                     <a
                                         href={`/issue/${issue.id}`}
                                         target="_blank"
-                                        className="text-primary hover:underline"
+                                        className="text-primary hover:underline line-clamp-2"
                                     >
                                         {decodeHtml(issue.title)}
                                     </a>
                                 </td>
-                                <td className="px-4 py-3 w-28">
+                                <td className="px-4 py-3 w-24 whitespace-nowrap">
                                     <CategoryBadge category={issue.category} size="sm" />
                                 </td>
-                                <td className="px-4 py-3 w-32 whitespace-nowrap">
+                                <td className="px-4 py-3 w-24 whitespace-nowrap">
                                     <StatusBadge status={issue.status} />
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap w-32">
+                                <td className="px-4 py-3 whitespace-nowrap w-28">
                                     {(() => {
                                         const approvalMeta = getApprovalDisplay(issue)
                                         return (
@@ -555,7 +555,7 @@ export default function AdminIssuesPage() {
                                         )
                                     })()}
                                 </td>
-                                <td className="px-4 py-3 text-sm whitespace-nowrap w-40">
+                                <td className="px-4 py-3 text-sm whitespace-nowrap w-36">
                                     {(() => {
                                         const currentHeat = issue.heat_index ?? 0
                                         const createdHeat = issue.created_heat_index
@@ -582,87 +582,51 @@ export default function AdminIssuesPage() {
                                         )
                                     })()}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap w-40">
+                                <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap w-32">
                                     {formatDate(issue.created_at)}
                                 </td>
-                                <td className="px-2 py-3 text-sm w-24">
-                                    <div className="flex justify-center gap-1">
-                                        <div className="relative group">
-                                            <button
-                                                onClick={() => setPreviewIssue(issue)}
-                                                className="p-1.5 text-primary hover:bg-primary-light rounded-xl transition-colors"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                            </button>
-                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-content-primary rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                미리보기
-                                            </span>
-                                        </div>
-                                        
+                                <td className="px-2 py-3 text-sm w-40">
+                                    <div className="flex flex-nowrap justify-start gap-1.5">
+                                        <button
+                                            onClick={() => setPreviewIssue(issue)}
+                                            className="btn-neutral btn-sm text-xs whitespace-nowrap"
+                                        >
+                                            미리보기
+                                        </button>
+
                                         {issue.approval_status === '대기' && (
                                             <>
-                                                <div className="relative group">
-                                                    <button
-                                                        onClick={() => handleApprove(issue.id)}
-                                                        className="p-1.5 text-green-600 hover:bg-green-50 rounded-xl transition-colors"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    </button>
-                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-content-primary rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                        승인
-                                                    </span>
-                                                </div>
-                                                <div className="relative group">
-                                                    <button
-                                                        onClick={() => handleReject(issue.id)}
-                                                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-content-primary rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                        반려
-                                                    </span>
-                                                </div>
-                                            </>
-                                        )}
-                                        
-                                        {issue.approval_status === '승인' && (
-                                            <div className="relative group">
+                                                <button
+                                                    onClick={() => handleApprove(issue.id)}
+                                                    className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded-full hover:bg-green-600 whitespace-nowrap"
+                                                >
+                                                    승인
+                                                </button>
                                                 <button
                                                     onClick={() => handleReject(issue.id)}
-                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                                                    className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 whitespace-nowrap"
                                                 >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                </button>
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-content-primary rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                                     반려
-                                                </span>
-                                            </div>
-                                        )}
-                                        
-                                        {issue.approval_status === '반려' && (
-                                            <div className="relative group">
-                                                <button
-                                                    onClick={() => handleRestore(issue.id)}
-                                                    className="p-1.5 text-content-secondary hover:bg-surface-muted rounded-xl transition-colors"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                    </svg>
                                                 </button>
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-content-primary rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                    복구
-                                                </span>
-                                            </div>
+                                            </>
+                                        )}
+
+                                        {issue.approval_status === '승인' && (
+                                            <button
+                                                onClick={() => handleReject(issue.id)}
+                                                className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 whitespace-nowrap"
+                                            >
+                                                반려
+                                            </button>
+                                        )}
+
+                                        {issue.approval_status === '반려' && (
+                                            <button
+                                                onClick={() => handleRestore(issue.id)}
+                                                className="btn-neutral btn-sm text-xs whitespace-nowrap"
+                                            >
+                                                복구
+                                            </button>
                                         )}
                                     </div>
                                 </td>

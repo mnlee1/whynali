@@ -118,7 +118,11 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
                 </div>
                 <div className="p-4">
-                    <TimelineSection issueId={id} />
+                    <TimelineSection
+                        issueId={id}
+                        issueStatus={issue.status}
+                        issueUpdatedAt={issue.updated_at}
+                    />
                 </div>
             </div>
 
