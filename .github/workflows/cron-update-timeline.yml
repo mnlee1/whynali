@@ -1,0 +1,20 @@
+name: Cron - Update Timeline
+
+# Vercel Cron으로 실행됨 (vercel.json: "30 * * * *")
+on:
+    workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+    update-timeline:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - name: Update Timeline API 호출
+              run: |
+                  response=$(curl -fsS -X GET \
+                    -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+                    -H "Content-Type: application/json" \
+                    --max-time 540 \
+                    https://whynali.vercel.app/api/cron/update-timeline 2>&1)
+                  echo "$response"
