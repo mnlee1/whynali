@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 
+export const preferredRegion = 'icn1'
+
 /* GET /api/votes?issue_id=&limit= — 투표 목록 + 선택지 + 현재 사용자 참여 기록 */
 export async function GET(request: NextRequest) {
     const issue_id = request.nextUrl.searchParams.get('issue_id')

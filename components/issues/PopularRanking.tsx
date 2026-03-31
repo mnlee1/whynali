@@ -6,8 +6,8 @@
  * 메인화면 오른쪽 사이드에 배치되는 랭킹 섹션입니다.
  * 현재 화력 상위 이슈 최대 6개를 순위 목록으로 보여줍니다.
  *
- * 예시:
- *   <PopularRanking />
+ * initialIssues prop이 제공되면 SSR 데이터를 바로 사용하고,
+ * 없으면 클라이언트에서 직접 fetch합니다.
  */
 
 'use client'
@@ -20,19 +20,29 @@ import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatDate } from '@/lib/utils/format-date'
 import Tooltip from '@/components/common/Tooltip'
 
-export default function PopularRanking() {
-    const [issues, setIssues] = useState<Issue[]>([])
-    const [loading, setLoading] = useState(true)
+interface Props {
+    initialIssues?: Issue[]
+}
+
+function filterThisWeek(issues: Issue[]): Issue[] {
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return issues
+        .filter((i) => new Date(i.created_at).getTime() >= sevenDaysAgo)
+        .slice(0, 6)
+}
+
+export default function PopularRanking({ initialIssues }: Props) {
+    const [issues, setIssues] = useState<Issue[]>(
+        initialIssues ? filterThisWeek(initialIssues) : []
+    )
+    const [loading, setLoading] = useState(!initialIssues)
 
     useEffect(() => {
+        if (initialIssues) return
         async function load() {
             try {
                 const res = await getIssues({ sort: 'heat', limit: 30 })
-                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-                const thisWeek = res.data
-                    .filter((i) => new Date(i.created_at).getTime() >= sevenDaysAgo)
-                    .slice(0, 6)
-                setIssues(thisWeek)
+                setIssues(filterThisWeek(res.data))
             } catch {
                 // 실패 시 섹션 미표시
             } finally {
@@ -40,7 +50,7 @@ export default function PopularRanking() {
             }
         }
         load()
-    }, [])
+    }, [initialIssues])
 
     return (
         <section className="flex flex-col h-full">
@@ -65,12 +75,9 @@ export default function PopularRanking() {
                         <li key={issue.id} className="flex-1">
                             <Link href={`/issue/${issue.id}`} className="block h-full">
                                 <article className="h-full bg-surface border border-border shadow-card rounded-xl hover:shadow-card-hover transition-shadow flex items-center gap-3 p-3 group">
-                                    {/* 순위 번호 */}
                                     <span className="shrink-0 text-sm font-bold w-5 text-center text-primary">
                                         {idx + 1}
                                     </span>
-
-                                    {/* 텍스트 영역 */}
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-content-primary line-clamp-1 group-hover:text-primary mb-0.5 transition-colors">
                                             {decodeHtml(issue.title)}

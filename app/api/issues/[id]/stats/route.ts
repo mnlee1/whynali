@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
+export const preferredRegion = 'icn1'
 
 export async function GET(
     request: NextRequest,
@@ -19,33 +20,33 @@ export async function GET(
     const { id } = await context.params
 
     try {
-        // 1. 진행중인 투표 개수
-        const { count: voteCount } = await supabaseAdmin
-            .from('votes')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id)
-            .eq('phase', '진행중')
-
-        // 2. 전체 댓글 수 조회
-        const { count: commentCount } = await supabaseAdmin
-            .from('comments')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id)
-            .eq('visibility', 'public')
-
-        // 3. 진행중인 토론 개수
-        const { count: discussionCount } = await supabaseAdmin
-            .from('discussion_topics')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id)
-            .eq('approval_status', '진행중')
-
-        // 4. 실제 조회수
-        const { data: issueData } = await supabaseAdmin
-            .from('issues')
-            .select('view_count')
-            .eq('id', id)
-            .single()
+        const [
+            { count: voteCount },
+            { count: commentCount },
+            { count: discussionCount },
+            { data: issueData },
+        ] = await Promise.all([
+            supabaseAdmin
+                .from('votes')
+                .select('*', { count: 'exact', head: true })
+                .eq('issue_id', id)
+                .eq('phase', '진행중'),
+            supabaseAdmin
+                .from('comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('issue_id', id)
+                .eq('visibility', 'public'),
+            supabaseAdmin
+                .from('discussion_topics')
+                .select('*', { count: 'exact', head: true })
+                .eq('issue_id', id)
+                .eq('approval_status', '진행중'),
+            supabaseAdmin
+                .from('issues')
+                .select('view_count')
+                .eq('id', id)
+                .single(),
+        ])
 
         return NextResponse.json({
             voteCount: voteCount || 0,

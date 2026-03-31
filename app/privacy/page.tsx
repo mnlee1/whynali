@@ -43,13 +43,13 @@ export default function PrivacyPage() {
                             <tbody>
                                 <tr>
                                     <td className="border border-gray-200 px-3 py-2" rowSpan={2}>카카오</td>
-                                    <td className="border border-gray-200 px-3 py-2">카카오 고유 식별자, 프로필 닉네임</td>
+                                    <td className="border border-gray-200 px-3 py-2">카카오 고유 식별자, 이메일 주소</td>
                                     <td className="border border-gray-200 px-3 py-2">필수</td>
                                     <td className="border border-gray-200 px-3 py-2" rowSpan={2}>최초 로그인 시</td>
                                 </tr>
                                 <tr>
-                                    <td className="border border-gray-200 px-3 py-2">이메일 주소</td>
-                                    <td className="border border-gray-200 px-3 py-2">필수</td>
+                                    <td className="border border-gray-200 px-3 py-2">프로필 닉네임, 프로필 사진</td>
+                                    <td className="border border-gray-200 px-3 py-2">선택</td>
                                 </tr>
                                 <tr>
                                     <td className="border border-gray-200 px-3 py-2" rowSpan={2}>네이버</td>
@@ -71,7 +71,8 @@ export default function PrivacyPage() {
                         </table>
                     </div>
                     <p className="text-gray-500 text-xs mb-4">
-                        수집된 프로필 닉네임/이름은 서비스 내 닉네임 설정 전까지 임시 저장 후 즉시 파기됩니다.
+                        카카오 프로필 닉네임·프로필 사진은 OAuth 인증 흐름상 수신될 수 있으나 서버에 저장하지 않으며 즉시 파기됩니다.
+                        네이버 이름은 서비스 내 닉네임 설정 전까지 임시 저장 후 즉시 파기됩니다.
                         서비스에서 표시되는 닉네임은 이용자가 온보딩 과정에서 직접 설정한 값을 사용합니다.
                     </p>
 

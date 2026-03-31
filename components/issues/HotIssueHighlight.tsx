@@ -6,7 +6,9 @@
  * 메인화면 최상단에 배치되는 히어로 섹션입니다.
  * 화력 상위 이슈 최대 5개를 Swiper 캐러셀로 보여줍니다.
  * 카테고리별 그라디언트 배경으로 이미지 없이도 시각적으로 강조합니다.
- * 간결한 정보 제공으로 가독성을 높입니다.
+ *
+ * initialIssues prop이 제공되면 SSR 데이터를 바로 사용하고,
+ * 없으면 클라이언트에서 직접 fetch합니다.
  */
 
 'use client'
@@ -24,44 +26,20 @@ import { formatDate } from '@/lib/utils/format-date'
 import 'swiper/css'
 import 'swiper/css/pagination'
 
-interface IssueStats {
-    viewCount: number
-    commentCount: number
-    voteCount: number
-    discussionCount: number
+interface Props {
+    initialIssues?: Issue[]
 }
 
-interface IssueWithStats extends Issue {
-    stats?: IssueStats
-}
-
-export default function HotIssueHighlight() {
-    const [issues, setIssues] = useState<IssueWithStats[]>([])
-    const [loading, setLoading] = useState(true)
+export default function HotIssueHighlight({ initialIssues }: Props) {
+    const [issues, setIssues] = useState<Issue[]>(initialIssues ?? [])
+    const [loading, setLoading] = useState(!initialIssues)
 
     useEffect(() => {
+        if (initialIssues) return
         async function load() {
             try {
                 const res = await getIssues({ sort: 'heat', limit: 10 })
-                const active = res.data.filter((i) => i.status !== '종결').slice(0, 5)
-                
-                // 각 이슈의 통계 데이터 가져오기
-                const issuesWithStats = await Promise.all(
-                    active.map(async (issue) => {
-                        try {
-                            const statsRes = await fetch(`/api/issues/${issue.id}/stats`)
-                            if (statsRes.ok) {
-                                const stats = await statsRes.json()
-                                return { ...issue, stats }
-                            }
-                        } catch {
-                            // 통계 로드 실패 시 이슈만 반환
-                        }
-                        return issue
-                    })
-                )
-                
-                setIssues(issuesWithStats)
+                setIssues(res.data.filter((i) => i.status !== '종결').slice(0, 5))
             } catch {
                 // 실패 시 섹션 미표시
             } finally {
@@ -69,7 +47,7 @@ export default function HotIssueHighlight() {
             }
         }
         load()
-    }, [])
+    }, [initialIssues])
 
     if (loading) {
         return (
@@ -102,13 +80,12 @@ export default function HotIssueHighlight() {
                 className="h-full rounded-2xl transition-shadow duration-300 hover:shadow-2xl"
             >
             {issues.map((issue, index) => {
-                // 슬라이드 순서에 따른 고유 배경 그라디언트 (5가지 색상)
                 const gradients = [
-                    'from-pink-500 via-purple-500 to-indigo-500',      // 슬라이드 1: 핑크-퍼플-인디고
-                    'from-blue-500 via-cyan-500 to-teal-500',          // 슬라이드 2: 블루-시안-틸
-                    'from-red-500 via-orange-500 to-amber-500',        // 슬라이드 3: 레드-오렌지-앰버
-                    'from-emerald-500 via-teal-500 to-cyan-500',       // 슬라이드 4: 에메랄드-틸-시안
-                    'from-violet-500 via-blue-500 to-cyan-500',        // 슬라이드 5: 바이올렛-블루-시안
+                    'from-pink-500 via-purple-500 to-indigo-500',
+                    'from-blue-500 via-cyan-500 to-teal-500',
+                    'from-red-500 via-orange-500 to-amber-500',
+                    'from-emerald-500 via-teal-500 to-cyan-500',
+                    'from-violet-500 via-blue-500 to-cyan-500',
                 ]
                 const gradient = gradients[index % gradients.length]
 
@@ -121,55 +98,23 @@ export default function HotIssueHighlight() {
 
                                 {/* 콘텐츠 */}
                                 <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-14">
-                                    {/* 빈 공간 (왜난리 이슈 뱃지를 위한 여백) */}
                                     <div />
 
                                     {/* 하단: 이슈 정보 */}
                                     <div className="space-y-3">
-                                        {/* 상태 배지 */}
                                         <div>
                                             <StatusBadge status={issue.status} size="sm" />
                                         </div>
 
-                                        {/* 제목 */}
                                         <h2 className="text-xl lg:text-2xl font-bold text-white leading-tight line-clamp-2">
                                             {decodeHtml(issue.title)}
                                         </h2>
 
-                                        {/* 카테고리 · 생성일 */}
                                         <div className="flex items-center gap-2 text-sm text-white/80 font-medium">
                                             <span>{issue.category}</span>
                                             <span>·</span>
                                             <span>{formatDate(issue.created_at)}</span>
                                         </div>
-
-                                        {/* 통계 정보 */}
-                                        {issue.stats && (
-                                            <div className="flex items-center gap-4 text-sm text-white/75">
-                                                {issue.stats.viewCount > 0 && (
-                                                    <span className="flex items-center gap-1.5">
-                                                        <span>👁️</span>
-                                                        <span>{issue.stats.viewCount.toLocaleString()}</span>
-                                                    </span>
-                                                )}
-                                                <span className="flex items-center gap-1.5">
-                                                    <span>💬</span>
-                                                    <span>{issue.stats.commentCount.toLocaleString()}</span>
-                                                </span>
-                                                {issue.stats.voteCount > 0 && (
-                                                    <span className="flex items-center gap-1.5">
-                                                        <span>🗳️</span>
-                                                        <span>{issue.stats.voteCount}</span>
-                                                    </span>
-                                                )}
-                                                {issue.stats.discussionCount > 0 && (
-                                                    <span className="flex items-center gap-1.5">
-                                                        <span>💭</span>
-                                                        <span>{issue.stats.discussionCount}</span>
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </article>

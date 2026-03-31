@@ -5,6 +5,7 @@ import type { IssueCategory, IssueStatus } from '@/types/issue'
 import { getCategoryIds } from '@/lib/config/categories'
 
 export const dynamic = 'force-dynamic'
+export const preferredRegion = 'icn1'
 
 const VALID_CATEGORIES = getCategoryIds() as readonly IssueCategory[]
 const VALID_STATUSES: readonly IssueStatus[] = ['점화', '논란중', '종결']

@@ -4,6 +4,8 @@ import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
 import { toUserMessage } from '@/lib/api-errors'
 import { ensurePublicUser } from '@/lib/ensure-user'
 
+export const preferredRegion = 'icn1'
+
 /* comment_likes 에서 userId 기준 { commentId → 'like'|'dislike' } 맵 조회 */
 async function getUserLikesMap(
     admin: ReturnType<typeof createSupabaseAdminClient>,

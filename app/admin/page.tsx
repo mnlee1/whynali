@@ -18,10 +18,7 @@ interface DashboardStats {
     issuesPending: number
     discussionsPending: number
     safetyPending: number
-    newsTotal: number
-    news24h: number
-    communityTotal: number
-    community24h: number
+    votesPending: number
 }
 
 interface RecentLog {
@@ -181,7 +178,6 @@ export default function AdminDashboardPage() {
     const [statsLoading, setStatsLoading] = useState(true)
     const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
     const [logsLoading, setLogsLoading] = useState(true)
-    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
     const [apiCosts, setApiCosts] = useState<ApiCostsSummary | null>(null)
     const [costsLoading, setCostsLoading] = useState(true)
     const [stats24h, setStats24h] = useState<Stats24h | null>(null)
@@ -196,12 +192,12 @@ export default function AdminDashboardPage() {
 
         try {
             console.log('[Admin Dashboard] 핵심 API 호출 시작 (병렬 처리)')
-            const [issuesRes, discussionsRes, safetyRes, collectionsRes, logsRes, apiUsageRes, stats24hRes] =
+            const [issuesRes, discussionsRes, safetyRes, votesRes, logsRes, apiUsageRes, stats24hRes] =
                 await Promise.all([
                     fetch('/api/admin/issues?approval_status=대기'),
                     fetch('/api/admin/discussions?status=대기'),
                     fetch('/api/admin/safety/pending'),
-                    fetch('/api/admin/collections'),
+                    fetch('/api/admin/votes?approval_status=대기&limit=1'),
                     fetch('/api/admin/logs?limit=8'),
                     fetch('/api/admin/api-usage'),
                     fetch('/api/admin/stats-24h'),
@@ -209,38 +205,27 @@ export default function AdminDashboardPage() {
 
             console.log('[Admin Dashboard] 핵심 API 응답 받음')
 
-            const [issuesData, discussionsData, safetyData, collectionsData, logsData, apiUsageData, stats24hData] =
+            const [issuesData, discussionsData, safetyData, votesData, logsData, apiUsageData, stats24hData] =
                 await Promise.all([
                     issuesRes.ok ? issuesRes.json() : null,
                     discussionsRes.ok ? discussionsRes.json() : null,
                     safetyRes.ok ? safetyRes.json() : null,
-                    collectionsRes.ok ? collectionsRes.json() : null,
+                    votesRes.ok ? votesRes.json() : null,
                     logsRes.ok ? logsRes.json() : null,
                     apiUsageRes.ok ? apiUsageRes.json() : null,
                     stats24hRes.ok ? stats24hRes.json() : null,
                 ])
 
-            const news24h = collectionsData
-                ? Object.values(collectionsData.news?.last24h ?? {}).reduce((a: number, b) => a + (b as number), 0)
-                : 0
-            const community24h = collectionsData
-                ? Object.values(collectionsData.community?.last24h ?? {}).reduce((a: number, b) => a + (b as number), 0)
-                : 0
-
             setStats({
                 issuesPending: issuesData?.total ?? 0,
                 discussionsPending: discussionsData?.total ?? 0,
                 safetyPending: safetyData?.total ?? 0,
-                newsTotal: collectionsData?.news?.total ?? 0,
-                news24h: news24h as number,
-                communityTotal: collectionsData?.community?.total ?? 0,
-                community24h: community24h as number,
+                votesPending: votesData?.total ?? 0,
             })
 
             setRecentLogs(logsData?.data ?? [])
             setApiCosts(apiUsageData)
             setStats24h(stats24hData)
-            setLastRefreshedAt(new Date())
         } catch (error) {
             console.error('[Admin Dashboard] 데이터 로드 에러:', error)
         } finally {
@@ -270,25 +255,9 @@ export default function AdminDashboardPage() {
     return (
         <div>
             {/* 헤더 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-                <div>
-                    <h1 className="text-xl font-bold text-content-primary">대시보드</h1>
-                    <p className="text-sm text-content-secondary mt-0.5">운영 현황을 한눈에 확인합니다</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
-                            갱신 {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
-                    <button
-                        onClick={fetchAll}
-                        disabled={statsLoading}
-                        className="btn-neutral btn-md disabled:opacity-50"
-                    >
-                        새로고침
-                    </button>
-                </div>
+            <div className="mb-6">
+                <h1 className="text-xl font-bold text-content-primary">대시보드</h1>
+                <p className="text-sm text-content-secondary mt-0.5">운영 현황을 한눈에 확인합니다</p>
             </div>
 
             {/* 핵심 지표 카드 */}
@@ -315,9 +284,9 @@ export default function AdminDashboardPage() {
                     loading={statsLoading}
                 />
                 <StatCard
-                    label="오늘 수집 (뉴스+커뮤니티)"
-                    value={statsLoading ? 0 : (stats?.news24h ?? 0) + (stats?.community24h ?? 0)}
-                    href="/admin/collections"
+                    label="투표 승인 대기"
+                    value={stats?.votesPending ?? 0}
+                    href="/admin/votes"
                     accent="green"
                     loading={statsLoading}
                 />
@@ -429,26 +398,6 @@ export default function AdminDashboardPage() {
                                                 {stats24h.linking.news.linked}건 연결
                                             </span>
                                         </div>
-                                        <p className="text-xs font-medium text-content-secondary mb-2">뉴스 · 출처별</p>
-                                        {Object.keys(stats24h.collection.news.bySource).length > 0 ? (
-                                            <div className="space-y-1.5">
-                                                {Object.entries(stats24h.collection.news.bySource)
-                                                    .sort((a, b) => b[1].total - a[1].total)
-                                                    .map(([source, data]) => (
-                                                        <div key={source} className="flex items-center justify-between text-xs">
-                                                            <span className="text-content-secondary truncate">{source}</span>
-                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                <span className="text-content-muted">{data.total}건</span>
-                                                                {data.linked > 0 && (
-                                                                    <span className="text-green-600 font-medium">{data.linked} 연결</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-xs text-content-muted">수집 없음</p>
-                                        )}
                                         {stats24h.linking.news.unlinked > 0 && (
                                             <p className="mt-3 text-xs text-content-muted border-t border-border-muted pt-2">
                                                 미연결 {stats24h.linking.news.unlinked}건 — 이슈 키워드와 매칭되지 않음
@@ -696,83 +645,39 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* 수집 현황 요약 + 최근 로그 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 수집 현황 요약 */}
-                <div className="card p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-semibold text-content-primary">수집 현황</h2>
-                        <Link href="/admin/collections" className="text-xs text-content-muted hover:text-content-secondary">
-                            상세 보기 →
-                        </Link>
-                    </div>
-
-                    {statsLoading ? (
-                        <div className="space-y-3">
-                            {[1, 2].map((i) => (
-                                <div key={i} className="h-12 bg-surface-muted rounded animate-pulse" />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between py-3 border-b border-border-muted">
-                                <div>
-                                    <p className="text-sm font-medium text-content-primary">뉴스</p>
-                                    <p className="text-xs text-content-muted mt-0.5">30분 주기 수집</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-lg font-bold text-content-primary">{stats?.newsTotal.toLocaleString() ?? 0}</p>
-                                    <p className="text-xs text-green-600">+{stats?.news24h ?? 0} (24h)</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between py-3">
-                                <div>
-                                    <p className="text-sm font-medium text-content-primary">커뮤니티</p>
-                                    <p className="text-xs text-content-muted mt-0.5">3분 주기 수집</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-lg font-bold text-content-primary">{stats?.communityTotal.toLocaleString() ?? 0}</p>
-                                    <p className="text-xs text-green-600">+{stats?.community24h ?? 0} (24h)</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+            {/* 최근 운영 로그 */}
+            <div className="card p-5">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-content-primary">최근 운영 로그</h2>
+                    <Link href="/admin/logs" className="text-xs text-content-muted hover:text-content-secondary">
+                        전체 보기 →
+                    </Link>
                 </div>
 
-                {/* 최근 운영 로그 */}
-                <div className="card p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-semibold text-content-primary">최근 운영 로그</h2>
-                        <Link href="/admin/logs" className="text-xs text-content-muted hover:text-content-secondary">
-                            전체 보기 →
-                        </Link>
+                {logsLoading ? (
+                    <div className="space-y-2">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="h-8 bg-surface-muted rounded animate-pulse" />
+                        ))}
                     </div>
-
-                    {logsLoading ? (
-                        <div className="space-y-2">
-                            {[1, 2, 3, 4].map((i) => (
-                                <div key={i} className="h-8 bg-surface-muted rounded animate-pulse" />
-                            ))}
-                        </div>
-                    ) : recentLogs.length === 0 ? (
-                        <p className="text-sm text-content-muted py-4 text-center">로그가 없습니다</p>
-                    ) : (
-                        <ul className="space-y-2">
-                            {recentLogs.map((log) => (
-                                <li key={log.id} className="flex items-center gap-2 py-1.5">
-                                    <span className={`shrink-0 px-2 py-0.5 text-xs rounded font-medium ${ACTION_BADGE[log.action] ?? 'bg-surface-muted text-content-secondary'}`}>
-                                        {log.action}
-                                    </span>
-                                    <span className="text-xs text-content-secondary truncate flex-1">
-                                        {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
-                                        {log.target_id && <span className="text-content-muted ml-1">#{log.target_id.slice(0, 6)}</span>}
-                                    </span>
-                                    <span className="text-xs text-content-muted shrink-0">{fmt(log.created_at)}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
+                ) : recentLogs.length === 0 ? (
+                    <p className="text-sm text-content-muted py-4 text-center">로그가 없습니다</p>
+                ) : (
+                    <ul className="space-y-2">
+                        {recentLogs.map((log) => (
+                            <li key={log.id} className="flex items-center gap-2 py-1.5">
+                                <span className={`shrink-0 px-2 py-0.5 text-xs rounded font-medium ${ACTION_BADGE[log.action] ?? 'bg-surface-muted text-content-secondary'}`}>
+                                    {log.action}
+                                </span>
+                                <span className="text-xs text-content-secondary truncate flex-1">
+                                    {TARGET_TYPE_LABELS[log.target_type] ?? log.target_type}
+                                    {log.target_id && <span className="text-content-muted ml-1">#{log.target_id.slice(0, 6)}</span>}
+                                </span>
+                                <span className="text-xs text-content-muted shrink-0">{fmt(log.created_at)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
         </div>
     )
