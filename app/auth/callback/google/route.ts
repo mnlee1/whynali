@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
     // 3. 기존 유저 탐색
     // - provider_id === googleId AND provider === 'google' : 커스텀 콜백으로 가입한 유저
     // - sub === googleId AND provider === 'google'         : 네이티브 OAuth로 가입한 유저 (마이그레이션)
+    const syntheticEmail = `${googleId}@google.oauth`
     const perPage = 50
     let existing: { id: string; email: string; user_metadata?: Record<string, unknown> } | null = null
 
@@ -103,7 +104,9 @@ export async function GET(request: NextRequest) {
         const users = data?.users ?? []
 
         const byProviderId = users.find(
-            (u) => u.user_metadata?.provider_id === googleId && u.app_metadata?.provider === 'google'
+            (u) =>
+                (u.user_metadata?.provider_id === googleId && u.user_metadata?.provider === 'google') ||
+                u.email === syntheticEmail
         )
         if (byProviderId) {
             existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown> }

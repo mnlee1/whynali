@@ -111,18 +111,20 @@ export async function GET(request: NextRequest) {
         auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // naverId(네이버 고유 ID)로만 기존 유저를 찾음.
-    // 네이버 프로필 이메일은 다른 계정 이메일과 동일할 수 있으므로 매칭에 사용하지 않음.
+    // naverId 기반으로 기존 유저 탐색.
+    // 1순위: provider_id + app_metadata.provider 일치
+    // 2순위: 합성 이메일(naverId@naver.oauth) 일치 — 메타데이터 불완전 계정도 포착
+    const syntheticEmail = `${naverId}@naver.oauth`
     const perPage = 50
     let existing: { id: string; email: string; app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null = null
     for (let page = 1; ; page++) {
         const { data } = await admin.auth.admin.listUsers({ page, perPage })
         const users = data?.users ?? []
         const found = users.find(
-                (u) =>
-                    u.user_metadata?.provider_id === naverId &&
-                    u.app_metadata?.provider === 'naver'
-            )
+            (u) =>
+                (u.user_metadata?.provider_id === naverId && u.user_metadata?.provider === 'naver') ||
+                u.email === syntheticEmail
+        )
         if (found) {
             existing = { id: found.id, email: found.email!, app_metadata: found.app_metadata as Record<string, unknown>, user_metadata: found.user_metadata as Record<string, unknown> }
             break
@@ -154,7 +156,7 @@ export async function GET(request: NextRequest) {
     } else {
         // 신규 유저: 네이버 프로필 이메일 대신 naverId 기반 고유 이메일 사용
         // (프로필 이메일이 다른 계정과 충돌할 수 있으므로)
-        linkEmail = `${naverId}@naver.oauth`
+        linkEmail = syntheticEmail
         const { data: newUser, error: createError } = await admin.auth.admin.createUser({
             email: linkEmail,
             email_confirm: true,
