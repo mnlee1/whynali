@@ -24,7 +24,8 @@ export default async function MypagePage() {
         .eq('id', user.id)
         .single()
 
-    const isAdmin = (user.email ?? '').endsWith('@nhnad.com')
+    const effectiveEmail = (user.user_metadata?.real_email as string | null) ?? user.email
+    const isAdmin = (effectiveEmail ?? '').endsWith('@nhnad.com')
 
     if (!userData?.display_name && !isAdmin) redirect('/onboarding')
 
@@ -56,9 +57,10 @@ export default async function MypagePage() {
             .limit(30),
     ])
 
-    const displayEmail = user.email && !user.email.endsWith('@naver.oauth')
-        ? user.email
-        : null
+    const isSyntheticEmail = (user.email ?? '').match(/@(naver|google|kakao)\.oauth$/)
+    const displayEmail = isSyntheticEmail
+        ? ((user.user_metadata?.real_email as string | null) ?? null)
+        : (user.email ?? null)
 
     return (
         <MypageClient
