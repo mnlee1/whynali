@@ -176,9 +176,12 @@ export default function Header() {
 
         // 드롭다운 서브텍스트: 관리자는 실제 이메일, 일반 유저는 이메일 또는 제공자명
         // 가짜 합성 이메일 제외 (네이버 이메일 미제공 시 생성한 내부 식별자)
+        const naverInfo = (user.user_metadata?.naver_nickname as string | undefined)
+            ?? (user.user_metadata?.naver_email as string | undefined)
+            ?? null
         const subtitleEmail = isAdmin
             ? user.email
-            : (user.email && !user.email.endsWith('@naver.oauth') ? user.email : null)
+            : (user.email && !user.email.endsWith('@naver.oauth') ? user.email : naverInfo)
         const subtitleText = subtitleEmail ?? getProviderName(user)
 
         const dropdownMenu = (

@@ -265,7 +265,10 @@ export default function AdminSafetyPage() {
 
                 {/* ── 좌측: AI 금칙어 관리 패널 ── */}
                 <div>
-                    <h2 className="text-lg font-semibold text-content-primary mb-3">금칙어 관리</h2>
+                    <h2 className="text-lg font-semibold text-content-primary mb-3">
+                        금칙어 관리
+                        <span className="ml-2 text-sm font-normal text-content-muted">한국어 온라인 커뮤니티 기본 금칙어 목록</span>
+                    </h2>
 
                     {/* 좌측 탭 */}
                     <div className="flex gap-1 mb-4 border-b border-border pb-2">
@@ -288,20 +291,17 @@ export default function AdminSafetyPage() {
                             {aiLoading ? <RuleListSkeleton /> : aiRules.length === 0 ? (
                                 <p className="text-sm text-content-muted text-center py-8">AI가 생성한 금칙어가 없습니다.</p>
                             ) : (
-                                <ul className="space-y-2 max-h-80 overflow-y-auto">
+                                <ul className="space-y-2 max-h-[560px] overflow-y-auto">
                                     {aiRules.map((rule) => (
                                         <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-border rounded-xl card">
                                             <span className="text-sm font-medium text-content-primary">{rule.value}</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xs text-content-muted">{formatDate(rule.created_at)}</span>
-                                                <button
-                                                    onClick={() => handleChangeKind(rule.id, 'excluded_word', 'ai_banned_word')}
-                                                    disabled={changingKindId === rule.id}
-                                                    className="text-xs text-orange-500 hover:text-orange-700 disabled:opacity-50"
-                                                >
-                                                    {changingKindId === rule.id ? '처리 중...' : '제외 처리'}
-                                                </button>
-                                            </div>
+                                            <button
+                                                onClick={() => handleChangeKind(rule.id, 'excluded_word', 'ai_banned_word')}
+                                                disabled={changingKindId === rule.id}
+                                                className="text-xs text-orange-500 hover:text-orange-700 disabled:opacity-50"
+                                            >
+                                                {changingKindId === rule.id ? '처리 중...' : '제외 처리'}
+                                            </button>
                                         </li>
                                     ))}
                                 </ul>
@@ -316,12 +316,11 @@ export default function AdminSafetyPage() {
                             {excludedLoading ? <RuleListSkeleton /> : excludedRules.length === 0 ? (
                                 <p className="text-sm text-content-muted text-center py-8">제외 처리된 단어가 없습니다.</p>
                             ) : (
-                                <ul className="space-y-2 max-h-80 overflow-y-auto">
+                                <ul className="space-y-2 max-h-[560px] overflow-y-auto">
                                     {excludedRules.map((rule) => (
                                         <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-border rounded-xl card">
                                             <span className="text-sm font-medium text-content-secondary line-through">{rule.value}</span>
                                             <div className="flex items-center gap-3">
-                                                <span className="text-xs text-content-muted">{formatDate(rule.created_at)}</span>
                                                 <button
                                                     onClick={() => handleChangeKind(rule.id, 'ai_banned_word', 'excluded_word')}
                                                     disabled={changingKindId === rule.id}
@@ -345,7 +344,7 @@ export default function AdminSafetyPage() {
                     )}
 
                     {/* 프로세스 안내 */}
-                    <div className="mt-4 p-3 bg-surface-subtle border border-border rounded-xl text-xs text-content-secondary space-y-1">
+                    <div className="mt-4 p-3 bg-surface-subtle border border-border rounded-xl text-sm text-content-secondary space-y-1">
                         <p>AI가 자동으로 금칙어를 탐지합니다.</p>
                         <p>과도하게 차단되는 단어는 &apos;제외 처리&apos;로 필터에서 제외할 수 있습니다.</p>
                     </div>
@@ -371,22 +370,33 @@ export default function AdminSafetyPage() {
                     <div className="card overflow-hidden mb-4 p-0">
                         <button
                             onClick={() => setProcessGuideOpen(!processGuideOpen)}
-                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-primary-light transition-colors"
+                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-subtle transition-colors"
                         >
-                            <span className="font-bold text-sm text-primary-dark">
+                            <span className="font-bold text-sm text-content-primary">
                                 신고 처리 프로세스
                             </span>
-                            <span className="text-primary text-lg leading-none">
-                                {processGuideOpen ? '▼' : '▶'}
-                            </span>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={`text-content-secondary transition-transform duration-200 ${processGuideOpen ? 'rotate-180' : ''}`}
+                            >
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
                         </button>
                         
                         {processGuideOpen && (
-                            <div className="px-4 pb-4 text-xs text-primary-dark space-y-3 animate-in slide-in-from-top duration-200">
+                            <div className="px-4 pb-4 text-xs text-content-secondary space-y-3 animate-in slide-in-from-top duration-200">
                                 <div className="space-y-2">
                                     <div className="bg-surface/60 p-2 rounded-xl">
-                                        <p className="font-semibold text-primary-dark mb-1">1. 자동 처리 정책 (실시간)</p>
-                                        <ul className="space-y-1 leading-relaxed text-primary">
+                                        <p className="font-semibold text-content-primary mb-1">1. 자동 처리 정책 (실시간)</p>
+                                        <ul className="space-y-1 leading-relaxed text-content-secondary">
                                             <li className="flex items-start gap-1">
                                                 <span className="text-red-600 font-bold shrink-0">즉시 알림:</span>
                                                 <span>&apos;욕설/혐오&apos; 신고 1건 이상 → 관리자에게 즉시 이메일 발송 (1시간 쿨다운)</span>
@@ -403,8 +413,8 @@ export default function AdminSafetyPage() {
                                     </div>
 
                                     <div className="bg-surface/60 p-2 rounded-xl">
-                                        <p className="font-semibold text-primary-dark mb-1">2. 신고 건수 이해하기</p>
-                                        <p className="leading-relaxed text-primary">
+                                        <p className="font-semibold text-content-primary mb-1">2. 신고 건수 이해하기</p>
+                                        <p className="leading-relaxed text-content-secondary">
                                             <span className="font-medium">신고 건수</span>는 같은 댓글에 대해 여러 사용자가 신고한 총 횟수입니다. 
                                             예: 댓글 A를 유저 3명이 각각 신고 → [3건 신고] 표시. 
                                             <span className="font-medium">2건 이상 = 다수가 문제로 인식</span> → 실제 문제일 가능성 높음.
@@ -412,8 +422,8 @@ export default function AdminSafetyPage() {
                                     </div>
                                     
                                     <div className="bg-surface/60 p-2 rounded-xl">
-                                        <p className="font-semibold text-primary-dark mb-1">3. 우선순위 판단</p>
-                                        <ul className="space-y-1 leading-relaxed text-primary">
+                                        <p className="font-semibold text-content-primary mb-1">3. 우선순위 판단</p>
+                                        <ul className="space-y-1 leading-relaxed text-content-secondary">
                                             <li className="flex items-start gap-1">
                                                 <span className="text-red-600 font-bold shrink-0">🔴</span>
                                                 <span><span className="font-medium">&apos;욕설/혐오&apos; 사유</span>는 1건만 신고되어도 최우선 검토 (심각한 유해 콘텐츠)</span>
@@ -430,12 +440,12 @@ export default function AdminSafetyPage() {
                                     </div>
                                     
                                     <div className="bg-surface/60 p-2 rounded-xl">
-                                        <p className="font-semibold text-primary-dark mb-1">4. 처리 결정</p>
-                                        <div className="space-y-1.5 leading-relaxed text-primary">
+                                        <p className="font-semibold text-content-primary mb-1">4. 처리 결정</p>
+                                        <div className="space-y-1.5 leading-relaxed text-content-secondary">
                                             <div>
                                                 <span className="font-medium text-red-700">[댓글 삭제]</span> 
                                                 <span className="ml-1">→ reports.status=&apos;처리완료&apos; + comments.visibility=&apos;deleted&apos;</span>
-                                                <p className="ml-3 text-[11px] text-content-secondary mt-0.5">
+                                                <p className="ml-3 text-sm text-content-muted mt-0.5">
                                                     · 댓글이 사용자 화면에서 즉시 숨겨짐 (삭제된 댓글로 표시)
                                                     <br />· 명확한 위반(욕설/스팸/허위정보)만 삭제 권장
                                                 </p>
@@ -443,7 +453,7 @@ export default function AdminSafetyPage() {
                                             <div>
                                                 <span className="font-medium text-content-primary">[무시]</span> 
                                                 <span className="ml-1">→ reports.status=&apos;무시&apos; (댓글은 그대로 유지)</span>
-                                                <p className="ml-3 text-[11px] text-content-secondary mt-0.5">
+                                                <p className="ml-3 text-sm text-content-muted mt-0.5">
                                                     · 정상 의견 표현, 오신고로 판단 시 선택
                                                     <br />· 애매한 경우 무시 우선 (표현의 자유 존중)
                                                 </p>
@@ -451,9 +461,9 @@ export default function AdminSafetyPage() {
                                         </div>
                                     </div>
                                     
-                                    <div className="bg-amber-50 border border-amber-200 p-2 rounded-xl">
-                                        <p className="font-semibold text-amber-900 mb-1">판단 기준</p>
-                                        <p className="leading-relaxed text-amber-800 text-[11px]">
+                                    <div className="bg-surface-subtle border border-border p-2 rounded-xl">
+                                        <p className="font-semibold text-content-primary mb-1">판단 기준</p>
+                                        <p className="leading-relaxed text-content-secondary text-xs">
                                             · 원문 보기로 문맥 파악 필수
                                             <br />· 비판적이지만 욕설 없는 의견은 정상 (무시)
                                             <br />· 신고 건수가 많을수록 실제 문제일 가능성 높음
@@ -543,7 +553,7 @@ export default function AdminSafetyPage() {
                                                         원문 보기
                                                     </Link>
                                                 )}
-                                                <span className="text-xs text-content-muted">{formatDate(report.created_at)}</span>
+                                                <span className="text-sm text-content-muted">{formatDate(report.created_at)}</span>
                                             </div>
                                         </div>
                                         <p className="text-sm text-content-primary my-2 leading-relaxed">
