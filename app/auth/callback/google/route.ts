@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
             (u) => u.user_metadata?.provider_id === googleId && u.app_metadata?.provider === 'google'
         )
         if (byProviderId) {
-            existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown>, isMigrating: false }
+            existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown> }
             break
         }
 
