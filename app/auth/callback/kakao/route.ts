@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
     // 3. 기존 유저 탐색
     // - provider_id === kakaoId AND provider === 'kakao' : 커스텀 콜백으로 가입한 유저
     // - sub === kakaoId AND provider === 'kakao'         : 네이티브 OAuth로 가입한 유저 (마이그레이션)
+    const syntheticEmail = `${kakaoId}@kakao.oauth`
     const perPage = 50
     let existing: { id: string; email: string; user_metadata?: Record<string, unknown> } | null = null
 
@@ -107,7 +108,9 @@ export async function GET(request: NextRequest) {
         const users = data?.users ?? []
 
         const byProviderId = users.find(
-            (u) => u.user_metadata?.provider_id === kakaoId && u.app_metadata?.provider === 'kakao'
+            (u) =>
+                (u.user_metadata?.provider_id === kakaoId && u.user_metadata?.provider === 'kakao') ||
+                u.email === syntheticEmail
         )
         if (byProviderId) {
             existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown> }
