@@ -13,10 +13,21 @@
  */
 
 import { NextResponse } from 'next/server'
+import type { User } from '@supabase/supabase-js'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 /** @nhnad.com 도메인 — 이 도메인의 모든 이메일이 관리자 */
 const ADMIN_DOMAIN = '@nhnad.com'
+
+/**
+ * 합성 이메일({id}@google.oauth 등) 사용자의 실제 이메일을 반환.
+ * user_metadata.real_email이 있으면 그 값을, 없으면 auth email을 반환.
+ */
+export function resolveEmail(user: Pick<User, 'email' | 'user_metadata'>): string | null {
+    const real = user.user_metadata?.real_email
+    if (typeof real === 'string' && real) return real
+    return user.email ?? null
+}
 
 /** .env의 ADMIN_EMAILS (콤마 구분)을 파싱해 Set으로 반환 */
 function getAdminEmailSet(): Set<string> {
@@ -60,7 +71,7 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
         }
     }
 
-    if (!isAdminEmail(user.email)) {
+    if (!isAdminEmail(resolveEmail(user))) {
         return {
             adminEmail: null,
             error: NextResponse.json(
@@ -70,5 +81,5 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
         }
     }
 
-    return { adminEmail: user.email!, error: null }
+    return { adminEmail: resolveEmail(user)!, error: null }
 }

@@ -38,7 +38,8 @@ export async function ensurePublicUser(
 ): Promise<void> {
     // 관리자 계정(email provider)은 row를 수동 관리하므로 건너뜀
     const rawProvider = user.app_metadata?.provider ?? user.user_metadata?.provider
-    if (rawProvider === 'email' || user.email?.toLowerCase().endsWith('@nhnad.com')) return
+    const effectiveEmail = (user.user_metadata?.real_email as string | null) ?? user.email
+    if (rawProvider === 'email' || effectiveEmail?.toLowerCase().endsWith('@nhnad.com')) return
 
     const provider = toProvider(rawProvider)
     const display_name = toDisplayName(user)

@@ -118,7 +118,11 @@ export async function GET(request: NextRequest) {
     for (let page = 1; ; page++) {
         const { data } = await admin.auth.admin.listUsers({ page, perPage })
         const users = data?.users ?? []
-        const found = users.find((u) => u.user_metadata?.provider_id === naverId)
+        const found = users.find(
+                (u) =>
+                    u.user_metadata?.provider_id === naverId &&
+                    u.app_metadata?.provider === 'naver'
+            )
         if (found) {
             existing = { id: found.id, email: found.email!, app_metadata: found.app_metadata as Record<string, unknown>, user_metadata: found.user_metadata as Record<string, unknown> }
             break

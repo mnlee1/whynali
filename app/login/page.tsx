@@ -1,36 +1,14 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
-
-type OAuthProvider = 'google' | 'kakao'
 
 function LoginForm() {
     const searchParams = useSearchParams()
-    const [loading, setLoading] = useState<OAuthProvider | null>(null)
-    const [error, setError] = useState<string | null>(
-        () => searchParams.get('error') ?? null
-    )
-
-    const handleOAuth = async (provider: OAuthProvider) => {
-        setLoading(provider)
-        setError(null)
-        const next = searchParams.get('next') ?? '/'
-        const options: { redirectTo: string; scopes?: string } = {
-            redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-            scopes: provider === 'kakao' ? 'account_email' : undefined,
-        }
-        const { error: err } = await supabase.auth.signInWithOAuth({
-            provider,
-            options,
-        })
-        if (err) {
-            setError(err.message)
-            setLoading(null)
-        }
-    }
+    const error = searchParams.get('error')
+    const next = searchParams.get('next') ?? '/'
+    const nextParam = next !== '/' ? `?next=${encodeURIComponent(next)}` : ''
 
     return (
         <div className="min-h-[calc(100svh-3rem)] xl:min-h-[calc(100svh-3.5rem)] flex flex-col justify-center px-4 py-8 max-w-sm mx-auto">
@@ -48,10 +26,9 @@ function LoginForm() {
             )}
 
             <div className="space-y-3">
-                <button
-                    onClick={() => handleOAuth('google')}
-                    disabled={loading !== null}
-                    className="btn-neutral btn-lg w-full gap-3"
+                <Link
+                    href={`/auth/google${nextParam}`}
+                    className="btn-neutral btn-lg w-full gap-3 flex items-center justify-center"
                 >
                     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                         <path
@@ -71,23 +48,22 @@ function LoginForm() {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                         />
                     </svg>
-                    {loading === 'google' ? '연결 중...' : 'Google로 로그인'}
-                </button>
+                    Google로 로그인
+                </Link>
 
-                <button
-                    onClick={() => handleOAuth('kakao')}
-                    disabled={loading !== null}
-                    className="btn btn-lg w-full gap-3 bg-[#FEE500] text-gray-900 hover:bg-[#F6DC00] disabled:opacity-40 disabled:cursor-not-allowed"
+                <Link
+                    href={`/auth/kakao${nextParam}`}
+                    className="btn btn-lg w-full gap-3 flex items-center justify-center bg-[#FEE500] text-gray-900 hover:bg-[#F6DC00]"
                 >
                     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.61 1.636 4.904 4.125 6.266-.182.676-.66 2.453-.757 2.833-.12.47.173.464.364.338.149-.098 2.367-1.605 3.324-2.255.629.09 1.277.138 1.944.138 5.523 0 10-3.477 10-7.78C21 6.477 17.523 3 12 3z" />
                     </svg>
-                    {loading === 'kakao' ? '연결 중...' : 'Kakao로 로그인'}
-                </button>
+                    Kakao로 로그인
+                </Link>
 
                 <Link
-                    href={`/auth/naver${searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next')!)}` : ''}`}
-                    className="btn btn-lg w-full gap-3 bg-[#03C75A] text-white hover:bg-[#02b350]"
+                    href={`/auth/naver${nextParam}`}
+                    className="btn btn-lg w-full gap-3 flex items-center justify-center bg-[#03C75A] text-white hover:bg-[#02b350]"
                 >
                     <span className="w-5 h-5 shrink-0 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
                     네이버로 로그인
