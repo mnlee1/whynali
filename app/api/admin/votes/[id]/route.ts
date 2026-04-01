@@ -35,8 +35,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
         )
     }
 
-    // 진행중이나 마감된 투표는 삭제 불가
-    if (vote.phase === '진행중' || vote.phase === '마감') {
+    // 진행중이나 마감된 투표는 삭제 불가 (단, 반려 처리된 경우는 삭제 허용)
+    if ((vote.phase === '진행중' || vote.phase === '마감') && vote.approval_status !== '반려') {
         return NextResponse.json(
             { error: '진행중이거나 마감된 투표는 삭제할 수 없습니다.' },
             { status: 422 }

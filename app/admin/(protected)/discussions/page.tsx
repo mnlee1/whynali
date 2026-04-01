@@ -401,7 +401,7 @@ export default function AdminDiscussionsPage() {
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-content-secondary">대상 이슈 (승인된 이슈만)</label>
                         {loadingIssues ? (
-                            <p className="text-xs text-content-muted">이슈 목록 로딩 중...</p>
+                            <p className="text-sm text-content-muted">이슈 목록 로딩 중...</p>
                         ) : (
                             <select
                                 value={selectedIssue?.id ?? ''}
@@ -445,7 +445,7 @@ export default function AdminDiscussionsPage() {
                             maxLength={500}
                             className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary resize-none bg-surface"
                         />
-                        <p className="text-xs text-content-muted text-right">{newContent.length}/500</p>
+                        <p className="text-sm text-content-muted text-right">{newContent.length}/500</p>
                     </div>
 
                     {/* 하단 버튼 */}
@@ -554,22 +554,22 @@ export default function AdminDiscussionsPage() {
                                     className="w-4 h-4 accent-primary"
                                 />
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 토론 내용
                             </th>
-                            <th className="w-64 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-64 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 연결 이슈
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 생성 유형
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 승인 상태
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-32 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 생성일
                             </th>
-                            <th className="w-56 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-56 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 액션
                             </th>
                         </tr>
@@ -615,7 +615,7 @@ export default function AdminDiscussionsPage() {
                                                         className="w-full px-2 py-1 text-sm border border-primary rounded-xl resize-none focus:outline-none bg-surface"
                                                     />
                                                     <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-content-muted flex-1">{editDraft.length}/500</span>
+                                                        <span className="text-sm text-content-muted flex-1">{editDraft.length}/500</span>
                                                         <button
                                                             onClick={() => handleEditSave(topic.id)}
                                                             disabled={!editDraft.trim() || submittingEdit}

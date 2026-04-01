@@ -3,7 +3,7 @@
  * 
  * [관리자 - 이슈 관리 페이지]
  * 
- * 트랙 A 프로세스로 생성된 이슈를 관리합니다.
+ * 자동/수동 생성된 이슈를 관리합니다.
  * 이슈 승인·거부·수정·삭제 기능을 제공합니다.
  */
 
@@ -25,6 +25,7 @@ export default function AdminIssuesPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
+    const [criteriaOpen, setCriteriaOpen] = useState(false)
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
 
@@ -266,18 +267,36 @@ export default function AdminIssuesPage() {
         <div>
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-content-primary">이슈 관리</h1>
-                <p className="text-sm text-content-secondary mt-1">트랙 A (자동) + 수동 생성 이슈 전체</p>
             </div>
 
-            {/* 트랙 A 프로세스 기준 안내 */}
-            <div className="mb-6 p-6 bg-primary-light/30 border border-primary-muted rounded-xl">
-                <h2 className="text-lg font-bold text-primary-dark mb-4">트랙 A 이슈 생성 기준 (신규 프로세스)</h2>
-                
-                <div className="space-y-4">
-                    <div className="p-4 bg-surface border border-primary-muted/50 rounded-xl">
-                        <h3 className="font-semibold text-primary-dark mb-3 text-sm flex items-center gap-2">
+            {/* 이슈 생성 프로세스 안내 */}
+            <div className="mb-6 border border-border rounded-xl overflow-hidden">
+                <button
+                    onClick={() => setCriteriaOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left bg-surface-subtle hover:bg-surface-muted transition-colors"
+                >
+                    <h2 className="text-sm font-bold text-content-primary">이슈 생성 프로세스 안내</h2>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`text-content-muted transition-transform duration-200 ${criteriaOpen ? 'rotate-180' : ''}`}
+                    >
+                        <path d="m6 9 6 6 6-6" />
+                    </svg>
+                </button>
+
+                {criteriaOpen && <div className="px-4 pb-4 space-y-4 border-t border-border">
+                    <div className="p-4 bg-surface border border-border rounded-xl mt-4">
+                        <h3 className="font-semibold text-content-primary mb-3 text-sm flex items-center gap-2">
                             <span className="text-primary">💬</span>
-                            트랙 A: 커뮤니티 급증 감지 (10분 주기)
+                            커뮤니티 급증 감지 (10분 주기) <span className="font-normal text-amber-600">※ 현재 임시: 1시간 주기 (AI API 비용 절감)</span>
                         </h3>
                         <div className="space-y-3 ml-4">
                             <div className="flex items-start gap-2">
@@ -286,6 +305,9 @@ export default function AdminIssuesPage() {
                                     커뮤니티 글에서 <span className="font-semibold">10분간 특정 키워드가 10건 이상</span> 급증하면 감지
                                     <span className="block text-content-secondary mt-1">
                                         (임계값: 10건, 시간창: 10분)
+                                    </span>
+                                    <span className="block text-amber-600 mt-1">
+                                        ※ 현재 임시 적용: 3건 (이슈 수집량 확보를 위해 완화)
                                     </span>
                                 </p>
                             </div>
@@ -358,6 +380,7 @@ export default function AdminIssuesPage() {
                                 <p className="text-xs text-content-primary">
                                     화력 계산 및 최종 승인 판단
                                     <span className="block text-red-600 mt-1">• 화력 15점 미만이면 이슈 삭제 (등록하지 않음)</span>
+                                    <span className="block text-amber-600 mt-1">※ 현재 임시 적용: 8점 (이슈 수집량 확보를 위해 완화)</span>
                                     <span className="block text-content-secondary mt-1">• 화력 30점 이상 + 자동 승인 카테고리(사회/경제/기술/세계/스포츠) → 자동 승인</span>
                                     <span className="block text-amber-600 mt-1">• 그 외(연예/정치는 수동 승인 필수, 또는 화력 15-29점) → 대기 (관리자 승인 필수)</span>
                                     <span className="block text-blue-600 mt-1">• 등록 후 화력이 15점 미만으로 떨어져도 대기 상태 유지 (자동 반려 안 함)</span>
@@ -366,40 +389,14 @@ export default function AdminIssuesPage() {
                         </div>
                     </div>
 
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                        <h3 className="font-semibold text-green-900 mb-3 text-sm">✅ 트랙 A 개선 효과</h3>
-                        <ul className="space-y-2 text-xs text-content-primary ml-4">
-                            <li>• <span className="font-semibold">AI 통합 작업</span>: 뉴스 필터링 + 커뮤니티 필터링 + 제목 생성을 1번의 AI 호출로 처리 (Rate Limit 완화)</li>
-                            <li>• <span className="font-semibold">뉴스 필터링</span>: AI가 키워드와 관련 없는 뉴스 자동 제거 (정확도 대폭 향상)</li>
-                            <li>• <span className="font-semibold">커뮤니티 필터링</span>: AI가 이슈와 무관한 커뮤니티 글 자동 제거 (이슈 등록 전 필터링)</li>
-                            <li>• <span className="font-semibold">이슈 제목 품질</span>: 필터링된 뉴스 제목 기반 생성으로 팩트 체크됨 (8-15자, 사실 중심)</li>
-                            <li>• <span className="font-semibold">타임라인 필수</span>: 모든 이슈가 타임라인 포함 (생성 실패 시 이슈 삭제)</li>
-                            <li>• <span className="font-semibold">법적 안전</span>: 커뮤니티 게시글 내용 사용 안 함 (메타데이터만 사용)</li>
-                            <li>• <span className="font-semibold">중복 방지 (4단계)</span>: 제목 일치 → 키워드 필터 → 반대어/숫자 감지 → AI 정밀 비교 (신뢰도 80%)</li>
-                            <li>• <span className="font-semibold">품질 관리</span>: 화력 8점 미만, 뉴스 0건, 커뮤니티 0건, 타임라인 생성 실패 시 이슈 자동 삭제</li>
-                        </ul>
-                    </div>
-
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                        <h3 className="font-semibold text-amber-900 mb-3 text-sm">⚠️ 관리자 확인 포인트</h3>
-                        <ul className="space-y-2 text-xs text-content-primary ml-4">
-                            <li>• <span className="font-semibold">이슈 제목</span>: AI가 필터링된 뉴스 제목들을 분석하여 생성 (8-15자, 사실 중심)</li>
-                            <li>• <span className="font-semibold">연결된 뉴스</span>: AI 필터링으로 관련 뉴스만 연결 (무관한 뉴스 제거됨)</li>
-                            <li>• <span className="font-semibold">연결된 커뮤니티</span>: AI 필터링으로 관련 글만 연결 (무관한 글 제거됨)</li>
-                            <li>• <span className="font-semibold">타임라인</span>: 연결된 뉴스 기준으로 발단/전개 자동 생성 (최대 5개, 없으면 이슈 삭제됨)</li>
-                            <li>• <span className="font-semibold">중복 체크</span>: AI가 4단계 검증했지만 최종 확인 권장</li>
-                            <li>• <span className="font-semibold">화력 추이</span>: 등록 시점과 현재 화력 비교 (8점 미만 이슈는 등록 단계에서 자동 삭제)</li>
-                        </ul>
-                    </div>
-
                     <div className="grid grid-cols-2 gap-3">
                         <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
                             <p className="text-xs font-medium text-blue-800 mb-1">급증 임계값</p>
-                            <p className="text-xs text-content-primary">10분간 10건 이상</p>
+                            <p className="text-xs text-content-primary">10분간 10건 이상 <span className="text-amber-600">(임시: 3건)</span></p>
                         </div>
-                        <div className="p-3 bg-primary-light/50 rounded-xl border border-primary-muted">
-                            <p className="text-xs font-medium text-primary-dark mb-1">화력 기준</p>
-                            <p className="text-xs text-content-primary">15점 이상 (이슈 등록 최소 기준)</p>
+                        <div className="p-3 bg-surface-subtle rounded-xl border border-border">
+                            <p className="text-xs font-medium text-content-secondary mb-1">화력 기준</p>
+                            <p className="text-xs text-content-primary">15점 이상 <span className="text-amber-600">(임시: 8점)</span></p>
                         </div>
                         <div className="p-3 bg-green-50 rounded-xl border border-green-200">
                             <p className="text-xs font-medium text-green-800 mb-1">승인 정책</p>
@@ -410,7 +407,7 @@ export default function AdminIssuesPage() {
                             <p className="text-xs text-content-primary">화력 15점 미만, 뉴스 0건, 커뮤니티 0건, 타임라인 실패 시 자동 삭제</p>
                         </div>
                     </div>
-                </div>
+                </div>}
             </div>
 
             {/* 필터 */}
@@ -444,7 +441,7 @@ export default function AdminIssuesPage() {
                 <table className="min-w-full divide-y divide-border">
                     <thead className="bg-surface-subtle">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 <button
                                     onClick={() => handleSort('title')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -455,10 +452,10 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-24">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-24">
                                 카테고리
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-24">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-24">
                                 <button
                                     onClick={() => handleSort('status')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -469,7 +466,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-28">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-28">
                                 <button
                                     onClick={() => handleSort('approval_status')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -480,21 +477,21 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-36">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-36">
                                 <button
                                     onClick={() => handleSort('heat_index')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
                                 >
                                     <div className="flex flex-col items-start">
                                         <span>화력 추이</span>
-                                        <span className="text-[10px] text-content-muted font-normal normal-case">등록 시 → 현재</span>
+                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재</span>
                                     </div>
                                     {sortField === 'heat_index' && (
                                         <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                                     )}
                                 </button>
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase w-32">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-32">
                                 <button
                                     onClick={() => handleSort('created_at')}
                                     className="flex items-center gap-1 hover:text-content-secondary"
@@ -505,7 +502,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-2 py-3 text-left text-xs font-medium text-content-muted uppercase w-40">
+                            <th className="px-2 py-3 text-left text-sm font-medium text-content-muted uppercase w-40">
                                 액션
                             </th>
                         </tr>
@@ -620,7 +617,7 @@ export default function AdminIssuesPage() {
             </div>
 
             {issues.length === 0 && (
-                <p className="text-center py-8 text-content-secondary">트랙 A 이슈가 없습니다</p>
+                <p className="text-center py-8 text-content-secondary">이슈가 없습니다</p>
             )}
 
             <IssuePreviewDrawer

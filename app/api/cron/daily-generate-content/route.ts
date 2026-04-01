@@ -320,6 +320,8 @@ export async function GET(request: NextRequest) {
                             title: vote.title,
                             phase: '대기',
                             approval_status: '대기',
+                            is_ai_generated: true,
+                            issue_status_snapshot: issue.status ?? null,
                         })
                         .select('id')
                         .single()

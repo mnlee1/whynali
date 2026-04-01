@@ -349,10 +349,10 @@ ${postTitlesText}
                 // JSON 파싱 실패 → 기술적 실패이므로 재시도
                 console.warn(`  ⚠️ [JSON 파싱 실패] AI 응답: ${content?.substring(0, 200)} (시도 ${attempt}/${MAX_ATTEMPTS})`)
                 if (attempt < MAX_ATTEMPTS) continue
-                // 최종 실패 → 폴백 (커뮤니티 빈 배열로 이슈 생성 건너뜀)
+                // 최종 실패 → 필터링 불가로 빈 배열 반환 (무관한 뉴스 연결 방지)
                 return {
                     finalIssueTitle: tentativeTitle,
-                    relevantNewsIds: newsItems.map(n => n.id),
+                    relevantNewsIds: [],
                     relevantCommunityIds: [],
                 }
             }
@@ -366,7 +366,8 @@ ${postTitlesText}
                 .filter(n => n >= 1 && n <= communityPosts.length)
                 .map(n => communityPosts[n - 1].id)
 
-            const finalNewsIds = relevantNewsIds.length > 0 ? relevantNewsIds : newsItems.map(n => n.id)
+            // AI가 명시적으로 선별한 뉴스만 사용 (빈 배열이면 관련 뉴스 없음으로 처리)
+            const finalNewsIds = relevantNewsIds
             const finalTitle = result.finalIssueTitle || tentativeTitle
 
             console.log(`  ✓ [뉴스 필터링] ${finalNewsIds.length}/${newsItems.length}건 선별`)
@@ -383,12 +384,12 @@ ${postTitlesText}
             const isRateLimit = error instanceof Error && error.message.includes('Rate Limit')
             if (isRateLimit) recordRateLimitFailure()
 
-            // Rate Limit은 재시도해도 의미 없으므로 즉시 폴백
+            // Rate Limit은 재시도해도 의미 없으므로 즉시 폴백 (필터링 불가로 빈 배열 반환)
             if (isRateLimit || attempt >= MAX_ATTEMPTS) {
                 console.error(`[AI 필터링+제목 생성 에러] (시도 ${attempt}/${MAX_ATTEMPTS})`, error)
                 return {
                     finalIssueTitle: tentativeTitle,
-                    relevantNewsIds: newsItems.map(n => n.id),
+                    relevantNewsIds: [],
                     relevantCommunityIds: [],
                 }
             }
@@ -397,10 +398,10 @@ ${postTitlesText}
         }
     }
 
-    // 루프 정상 종료 불가 경로 (타입 안전을 위한 폴백)
+    // 루프 정상 종료 불가 경로 (타입 안전을 위한 폴백, 필터링 불가)
     return {
         finalIssueTitle: tentativeTitle,
-        relevantNewsIds: newsItems.map(n => n.id),
+        relevantNewsIds: [],
         relevantCommunityIds: [],
     }
 }

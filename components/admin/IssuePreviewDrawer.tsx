@@ -18,7 +18,8 @@ import type { Issue } from '@/types/issue'
 import TimelineEditor from '@/components/admin/TimelineEditor'
 import SourcesSection from '@/components/issue/SourcesSection'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import CategoryBadge from '@/components/common/CategoryBadge'
+import StatusBadge from '@/components/common/StatusBadge'
+import { formatDate } from '@/lib/utils/format-date'
 
 interface IssuePreviewDrawerProps {
     issue: Issue | null
@@ -27,17 +28,6 @@ interface IssuePreviewDrawerProps {
     onReject: (id: string) => void
 }
 
-const getHeatMeta = (heat: number | null | undefined): { label: string; className: string } => {
-    if (heat == null) return { label: '-', className: 'text-content-muted' }
-    if (heat >= 70) return { label: '높음', className: 'text-red-600' }
-    if (heat >= 30) return { label: '보통', className: 'text-amber-600' }
-    return { label: '낮음', className: 'text-content-muted' }
-}
-
-const STATUS_STYLE: Record<string, string> = {
-    '점화': 'bg-red-50 text-red-600 border-red-200',
-    '논란중': 'bg-orange-50 text-orange-600 border-orange-200',
-}
 
 export default function IssuePreviewDrawer({
     issue,
@@ -68,8 +58,6 @@ export default function IssuePreviewDrawer({
 
     if (!issue) return null
 
-    const heatMeta = getHeatMeta(issue.heat_index)
-    const statusStyle = STATUS_STYLE[issue.status] ?? 'bg-gray-50 text-gray-600 border-gray-200'
     const isPending = issue.approval_status === '대기'
     const isMerged = issue.approval_status === '병합됨'
 
@@ -105,41 +93,27 @@ export default function IssuePreviewDrawer({
 
                 {/* 본문 (스크롤 가능) */}
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-                    {/* 배지 + 설명 */}
+                    {/* 배지 + 메타 + 설명 */}
                     <div>
                         <div className="flex items-center gap-2 mb-3">
-                            <CategoryBadge category={issue.category} size="sm" />
-                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusStyle}`}>
-                                {issue.status}
-                            </span>
+                            <StatusBadge status={issue.status} size="md" />
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
+                            <span>{issue.category}</span>
+                            <span>·</span>
+                            <span>{formatDate(issue.created_at)}</span>
                         </div>
                         {issue.description && (
-                            <p className="text-content-secondary leading-relaxed text-sm">
-                                {issue.description}
+                            <p className="text-content-secondary leading-relaxed">
+                                {decodeHtml(issue.description)}
                             </p>
                         )}
                     </div>
 
-                    {/* 화력 지수 */}
-                    <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-content-primary">화력 지수</span>
-                            <div className="flex items-center gap-2">
-                                <span className="text-2xl font-bold text-orange-600">
-                                    {(issue.heat_index ?? 0).toFixed(1)}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full border border-orange-200 font-medium ${heatMeta.className}`}>
-                                    {heatMeta.label}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* 타임라인 편집 */}
                     <div className="card overflow-hidden">
-                        <div className="px-4 py-3 bg-surface-subtle border-b border-border-muted">
-                            <p className="text-sm font-semibold text-content-primary">타임라인</p>
-                            <p className="text-xs text-content-muted mt-0.5">포인트를 추가하면 이슈 상세 페이지에 즉시 반영됩니다.</p>
+                        <div className="px-4 py-3 border-b border-border-muted">
+                            <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
                         </div>
                         <div className="p-4">
                             <TimelineEditor issueId={issue.id} />
@@ -147,14 +121,7 @@ export default function IssuePreviewDrawer({
                     </div>
 
                     {/* 출처 */}
-                    <div className="card overflow-hidden">
-                        <div className="px-4 py-3 bg-surface-subtle border-b border-border-muted">
-                            <p className="text-sm font-semibold text-content-primary">출처</p>
-                        </div>
-                        <div className="p-4">
-                            <SourcesSection issueId={issue.id} />
-                        </div>
-                    </div>
+                    <SourcesSection issueId={issue.id} />
                 </div>
 
                 {/* 하단 액션 (대기 상태일 때만) */}

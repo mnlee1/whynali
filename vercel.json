@@ -1,37 +1,61 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/collect-community",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/recalculate-heat",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/track-a",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/update-timeline",
-      "schedule": "30 * * * *"
+    "crons": [
+        {
+            "path": "/api/cron/collect-community",
+            "schedule": "* * * * *"
+        },
+        {
+            "path": "/api/cron/recalculate-heat",
+            "schedule": "*/10 * * * *"
+        },
+        {
+            "path": "/api/cron/track-a",
+            "schedule": "0 * * * *"
+        },
+        {
+            "path": "/api/cron/update-timeline",
+            "schedule": "30 * * * *"
+        },
+        {
+            "path": "/api/cron/daily-generate-content",
+            "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/cron/auto-end-discussions",
+            "schedule": "0 * * * *"
+        },
+        {
+            "path": "/api/cron/auto-end-votes",
+            "schedule": "0 * * * *"
+        },
+        {
+            "path": "/api/cron/notify-pending-reports",
+            "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/cron/cleanup-unlinked",
+            "schedule": "0 3 * * 0"
+        },
+        {
+            "path": "/api/cron/generate-banned-words",
+            "schedule": "0 18 * * 6"
+        }
+    ],
+    "functions": {
+        "app/api/cron/**": {
+            "maxDuration": 300
+        },
+        "app/api/admin/discussions/generate/**": {
+            "maxDuration": 60
+        },
+        "app/api/admin/votes/generate/**": {
+            "maxDuration": 60
+        },
+        "app/api/admin/shortform/*/generate/**": {
+            "maxDuration": 60
+        },
+        "app/api/admin/rematch-community/**": {
+            "maxDuration": 120
+        }
     }
-  ],
-  "functions": {
-    "app/api/cron/**": {
-      "maxDuration": 300
-    },
-    "app/api/admin/discussions/generate/**": {
-      "maxDuration": 60
-    },
-    "app/api/admin/votes/generate/**": {
-      "maxDuration": 60
-    },
-    "app/api/admin/shortform/*/generate/**": {
-      "maxDuration": 60
-    },
-    "app/api/admin/rematch-community/**": {
-      "maxDuration": 120
-    }
-  }
 }
