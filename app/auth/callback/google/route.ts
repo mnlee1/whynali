@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     // - provider_id === googleId AND provider === 'google' : 커스텀 콜백으로 가입한 유저
     // - sub === googleId AND provider === 'google'         : 네이티브 OAuth로 가입한 유저 (마이그레이션)
     const perPage = 50
-    let existing: { id: string; email: string; user_metadata?: Record<string, unknown>; isMigrating: boolean } | null = null
+    let existing: { id: string; email: string; user_metadata?: Record<string, unknown> } | null = null
 
     for (let page = 1; ; page++) {
         const { data } = await admin.auth.admin.listUsers({ page, perPage })
@@ -106,15 +106,7 @@ export async function GET(request: NextRequest) {
             (u) => u.user_metadata?.provider_id === googleId && u.app_metadata?.provider === 'google'
         )
         if (byProviderId) {
-            existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown>, isMigrating: false }
-            break
-        }
-
-        const bySub = users.find(
-            (u) => u.user_metadata?.sub === googleId && u.app_metadata?.provider === 'google'
-        )
-        if (bySub) {
-            existing = { id: bySub.id, email: bySub.email!, user_metadata: bySub.user_metadata as Record<string, unknown>, isMigrating: true }
+            existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown> }
             break
         }
 
