@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
             (u) => u.user_metadata?.provider_id === kakaoId && u.app_metadata?.provider === 'kakao'
         )
         if (byProviderId) {
-            existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown>, isMigrating: false }
+            existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown> }
             break
         }
 
