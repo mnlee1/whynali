@@ -99,7 +99,7 @@
     }
 
     .table-head {
-        @apply bg-surface-muted border-b border-border text-xs text-content-muted font-medium;
+        @apply bg-surface-muted border-b border-border text-sm text-content-muted font-medium;
     }
 
     .table-row {
@@ -188,7 +188,7 @@
 }
 
 .admin-mobile-nav-item {
-    @apply flex items-center gap-1.5 px-3 py-1.5 text-xs text-content-secondary rounded-full border border-border whitespace-nowrap hover:border-border-strong hover:text-content-primary transition-colors shrink-0;
+    @apply flex items-center gap-1.5 px-3 py-1.5 text-sm text-content-secondary rounded-full border border-border whitespace-nowrap hover:border-border-strong hover:text-content-primary transition-colors shrink-0;
 }
 
 .admin-mobile-nav-item--active {
@@ -199,8 +199,17 @@
     /* flex / hidden 제어는 HTML 클래스(hidden md:flex)에서만 담당 */
     @apply w-52 shrink-0 bg-surface border border-border rounded-xl flex-col self-start;
     position: sticky;
-    top: 24px;
-    max-height: calc(100vh - 48px);
+    /* md~xl: 헤더 h-12(48px) + container py-6(24px) */
+    top: calc(48px + 24px);
+    max-height: calc(100vh - 48px - 24px - 24px);
+}
+
+@media (min-width: 1280px) {
+    .admin-sidebar {
+        /* xl+: 헤더 h-14(56px) + container py-6(24px) */
+        top: calc(56px + 24px);
+        max-height: calc(100vh - 56px - 24px - 24px);
+    }
 }
 
 .admin-sidebar-header {
@@ -212,7 +221,7 @@
 }
 
 .admin-sidebar-logo-badge {
-    @apply w-7 h-7 bg-primary text-white text-xs font-bold rounded flex items-center justify-center shrink-0;
+    @apply w-7 h-7 bg-primary text-white text-sm font-bold rounded flex items-center justify-center shrink-0;
 }
 
 .admin-sidebar-logo-text {
@@ -236,7 +245,7 @@
 }
 
 .admin-sidebar-back {
-    @apply flex items-center gap-2.5 px-3 py-2 text-xs text-content-muted rounded-xl hover:bg-surface-subtle hover:text-content-secondary transition-colors;
+    @apply flex items-center gap-2.5 px-3 py-2 text-sm text-content-muted rounded-xl hover:bg-surface-subtle hover:text-content-secondary transition-colors;
 }
 
 .admin-main {

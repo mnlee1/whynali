@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import AdminPagination from '@/components/admin/AdminPagination'
 
 interface Issue {
     id: string
@@ -98,17 +99,11 @@ export default function AdminVotesPage() {
     const [loadingIssues, setLoadingIssues] = useState(false)
     const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
     const [voteTitle, setVoteTitle] = useState('')
-    const [voteChoices, setVoteChoices] = useState(['', ''])
+    const [voteChoices, setVoteChoices] = useState(['찬성', '반대', '중립'])
     const [submitting, setSubmitting] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
     const [generating, setGenerating] = useState(false)
     const [isAiFilled, setIsAiFilled] = useState(false)
-
-    /* 자동 종료 옵션 */
-    const [autoEndEnabled, setAutoEndEnabled] = useState(false)
-    const [autoEndType, setAutoEndType] = useState<'date' | 'participants'>('date')
-    const [autoEndDate, setAutoEndDate] = useState('')
-    const [autoEndParticipants, setAutoEndParticipants] = useState('')
 
     /* 전체 탭 정렬: 대기(0) → 진행중(1) → 반려(2) → 마감(3) */
     const SORT_ORDER = (vote: Vote): number => {
@@ -142,13 +137,9 @@ export default function AdminVotesPage() {
         setShowCreateForm(false)
         setSelectedIssue(null)
         setVoteTitle('')
-        setVoteChoices(['', ''])
+        setVoteChoices(['찬성', '반대', '중립'])
         setFormError(null)
         setIsAiFilled(false)
-        setAutoEndEnabled(false)
-        setAutoEndType('date')
-        setAutoEndDate('')
-        setAutoEndParticipants('')
     }
 
     /* AI 생성으로 폼 채우기 */
@@ -168,7 +159,7 @@ export default function AdminVotesPage() {
             if (generated) {
                 setVoteTitle(generated.title || '')
                 setVoteChoices(
-                    generated.vote_choices?.map((c: any) => c.label).filter(Boolean) || ['', '']
+                    generated.choices?.filter(Boolean) || ['', '']
                 )
                 setIsAiFilled(true)
             }
@@ -196,23 +187,11 @@ export default function AdminVotesPage() {
         setFormError(null)
 
         try {
-            // 자동 종료 옵션 준비
-            const autoEndOptions: any = {}
-            if (autoEndEnabled) {
-                if (autoEndType === 'date' && autoEndDate) {
-                    autoEndOptions.auto_end_date = new Date(autoEndDate).toISOString()
-                }
-                if (autoEndType === 'participants' && autoEndParticipants) {
-                    autoEndOptions.auto_end_participants = parseInt(autoEndParticipants, 10)
-                }
-            }
-
             const bodyData: any = {
                 issue_id: selectedIssue.id,
                 title: voteTitle.trim(),
                 choices: validChoices,
                 is_ai_generated: isAiFilled,
-                ...autoEndOptions,
             }
             
             const res = await fetch('/api/admin/votes', {
@@ -431,7 +410,7 @@ export default function AdminVotesPage() {
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-content-secondary">대상 이슈 (승인된 이슈만)</label>
                         {loadingIssues ? (
-                            <p className="text-xs text-content-muted">이슈 목록 불러오는 중...</p>
+                            <p className="text-sm text-content-muted">이슈 목록 불러오는 중...</p>
                         ) : (
                             <select
                                 value={selectedIssue?.id ?? ''}
@@ -475,7 +454,7 @@ export default function AdminVotesPage() {
                             maxLength={40}
                             className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
                         />
-                        <p className="text-xs text-content-muted text-right">{voteTitle.length}/40</p>
+                        <p className="text-sm text-content-muted text-right">{voteTitle.length}/40</p>
                     </div>
 
                     {/* 선택지 */}
@@ -515,71 +494,6 @@ export default function AdminVotesPage() {
                             >
                                 + 선택지 추가
                             </button>
-                        )}
-                    </div>
-
-                    {/* 자동 종료 설정 */}
-                    <div className="space-y-2 pt-2 border-t border-border">
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="autoEndEnabled"
-                                checked={autoEndEnabled}
-                                onChange={(e) => setAutoEndEnabled(e.target.checked)}
-                                className="rounded accent-primary"
-                            />
-                            <label htmlFor="autoEndEnabled" className="text-xs font-medium text-content-secondary">
-                                자동 종료 설정
-                            </label>
-                        </div>
-
-                        {autoEndEnabled && (
-                            <div className="pl-6 space-y-2">
-                                <div className="flex gap-2">
-                                    <label className="flex items-center gap-1.5">
-                                        <input
-                                            type="radio"
-                                            name="autoEndType"
-                                            value="date"
-                                            checked={autoEndType === 'date'}
-                                            onChange={(e) => setAutoEndType(e.target.value as 'date')}
-                                            className="accent-primary"
-                                        />
-                                        <span className="text-xs text-content-secondary">날짜</span>
-                                    </label>
-                                    <label className="flex items-center gap-1.5">
-                                        <input
-                                            type="radio"
-                                            name="autoEndType"
-                                            value="participants"
-                                            checked={autoEndType === 'participants'}
-                                            onChange={(e) => setAutoEndType(e.target.value as 'participants')}
-                                            className="accent-primary"
-                                        />
-                                        <span className="text-xs text-content-secondary">참여자 수</span>
-                                    </label>
-                                </div>
-
-                                {autoEndType === 'date' && (
-                                    <input
-                                        type="datetime-local"
-                                        value={autoEndDate}
-                                        onChange={(e) => setAutoEndDate(e.target.value)}
-                                        className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
-                                    />
-                                )}
-
-                                {autoEndType === 'participants' && (
-                                    <input
-                                        type="number"
-                                        value={autoEndParticipants}
-                                        onChange={(e) => setAutoEndParticipants(e.target.value)}
-                                        placeholder="목표 참여자 수 입력"
-                                        min="1"
-                                        className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
-                                    />
-                                )}
-                            </div>
                         )}
                     </div>
 
@@ -683,25 +597,25 @@ export default function AdminVotesPage() {
                                     className="w-4 h-4 accent-primary"
                                 />
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 투표 제목
                             </th>
-                            <th className="w-48 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-36 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 선택지
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 생성 유형
                             </th>
-                            <th className="w-64 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-48 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 연결 이슈
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 상태
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-28 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 생성일
                             </th>
-                            <th className="w-52 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-40 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 액션
                             </th>
                         </tr>
@@ -741,7 +655,7 @@ export default function AdminVotesPage() {
                                                 {vote.title || '(제목 없음)'}
                                             </p>
                                             {vote.issue_status_snapshot && (
-                                                <span className="text-xs text-content-muted block">
+                                                <span className="text-sm text-content-muted block">
                                                     시점: {vote.issue_status_snapshot}
                                                 </span>
                                             )}
@@ -807,7 +721,7 @@ export default function AdminVotesPage() {
                                                 )}
                                             </div>
                                             {vote.phase !== '대기' && (
-                                                <div className="text-xs text-content-muted mt-1">
+                                                <div className="text-sm text-content-muted mt-1">
                                                     {totalVotes.toLocaleString()}표
                                                 </div>
                                             )}
@@ -816,7 +730,7 @@ export default function AdminVotesPage() {
                                             {formatDate(vote.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            {vote.phase === '대기' && (
+                                            {vote.phase === '대기' && vote.approval_status !== '반려' && (
                                                 <div className="flex flex-nowrap gap-1.5 min-w-max">
                                                     <button
                                                         onClick={() => handleAction(vote.id, '승인')}
@@ -863,7 +777,7 @@ export default function AdminVotesPage() {
                                                     )}
                                                 </div>
                                             )}
-                                            {vote.phase === '마감' && (
+                                            {vote.phase === '마감' && vote.approval_status !== '반려' && (
                                                 <button
                                                     onClick={() => handleAction(vote.id, '재개')}
                                                     disabled={isProcessing}
@@ -872,7 +786,7 @@ export default function AdminVotesPage() {
                                                     재개
                                                 </button>
                                             )}
-                                            {vote.approval_status === '반려' && vote.phase !== '대기' && (
+                                            {vote.approval_status === '반려' && (
                                                 <button
                                                     onClick={() => handleAction(vote.id, '삭제')}
                                                     disabled={isProcessing}
@@ -891,46 +805,14 @@ export default function AdminVotesPage() {
             </div>
 
             {/* 페이지네이션 */}
-            {total > 0 && (
-                <div className="flex items-center justify-between mt-4">
-                    <span className="text-sm text-content-secondary">
-                        {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / 총 {total}개
-                    </span>
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => { setPage(1); loadVotes(filter, 1) }}
-                            disabled={page === 1 || loading}
-                            className="px-2 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            «
-                        </button>
-                        <button
-                            onClick={() => { setPage(page - 1); loadVotes(filter, page - 1) }}
-                            disabled={page === 1 || loading}
-                            className="px-3 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            이전
-                        </button>
-                        <span className="px-3 py-1.5 text-sm font-medium text-content-primary">
-                            {page} / {Math.ceil(total / PAGE_SIZE)}
-                        </span>
-                        <button
-                            onClick={() => { setPage(page + 1); loadVotes(filter, page + 1) }}
-                            disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
-                            className="px-3 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            다음
-                        </button>
-                        <button
-                            onClick={() => { const last = Math.ceil(total / PAGE_SIZE); setPage(last); loadVotes(filter, last) }}
-                            disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
-                            className="px-2 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            »
-                        </button>
-                    </div>
-                </div>
-            )}
+            <AdminPagination
+                page={page}
+                totalPages={Math.ceil(total / PAGE_SIZE)}
+                total={total}
+                pageSize={PAGE_SIZE}
+                disabled={loading}
+                onChange={(p) => { setPage(p); loadVotes(filter, p) }}
+            />
         </div>
     )
 }

@@ -98,6 +98,8 @@ export async function GET(request: NextRequest) {
     }
 
     const naverId = profileJson.response.id
+    const naverNickname = profileJson.response.nickname ?? null
+    const naverEmail = profileJson.response.email ?? null
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -133,13 +135,15 @@ export async function GET(request: NextRequest) {
         const needsUpdate =
             existing.user_metadata?.provider !== 'naver' ||
             existing.app_metadata?.provider !== 'naver'
-        if (needsUpdate) {
+        if (needsUpdate || existing.user_metadata?.naver_nickname !== naverNickname || existing.user_metadata?.naver_email !== naverEmail) {
             await admin.auth.admin.updateUserById(existing.id, {
                 app_metadata: { provider: 'naver', providers: ['naver'] },
                 user_metadata: {
                     ...existing.user_metadata,
                     provider: 'naver',
                     provider_id: naverId,
+                    naver_nickname: naverNickname,
+                    naver_email: naverEmail,
                 },
             })
         }
@@ -151,7 +155,7 @@ export async function GET(request: NextRequest) {
             email: linkEmail,
             email_confirm: true,
             app_metadata: { provider: 'naver', providers: ['naver'] },
-            user_metadata: { provider: 'naver', provider_id: naverId },
+            user_metadata: { provider: 'naver', provider_id: naverId, naver_nickname: naverNickname, naver_email: naverEmail },
         })
         if (createError || !newUser.user) {
             return redirectError(createError?.message ?? '계정 생성에 실패했습니다.')

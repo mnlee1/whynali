@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import AdminPagination from '@/components/admin/AdminPagination'
 
 interface AdminLog {
     id: string
@@ -54,41 +55,34 @@ function formatDate(dateString: string): string {
 export default function AdminLogsPage() {
     const [logs, setLogs] = useState<AdminLog[]>([])
     const [total, setTotal] = useState(0)
-    const [offset, setOffset] = useState(0)
+    const [page, setPage] = useState(1)
     const [loading, setLoading] = useState(true)
-    const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [filterType, setFilterType] = useState('')
+    const [actionTooltip, setActionTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
 
-    const loadLogs = useCallback(async (type: string, currentOffset: number, append: boolean) => {
+    const loadLogs = useCallback(async (type: string, targetPage: number) => {
         try {
-            const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(currentOffset) })
+            setLoading(true)
+            const offset = (targetPage - 1) * PAGE_SIZE
+            const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
             if (type) params.set('target_type', type)
             const res = await fetch(`/api/admin/logs?${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setLogs((prev) => append ? [...prev, ...(json.data ?? [])] : (json.data ?? []))
+            setLogs(json.data ?? [])
             setTotal(json.total ?? 0)
         } catch (e) {
             setError(e instanceof Error ? e.message : '로그 조회 실패')
         } finally {
             setLoading(false)
-            setLoadingMore(false)
         }
     }, [])
 
     useEffect(() => {
-        setLoading(true)
-        setOffset(0)
-        loadLogs(filterType, 0, false)
+        setPage(1)
+        loadLogs(filterType, 1)
     }, [filterType, loadLogs])
-
-    const handleLoadMore = () => {
-        const next = offset + PAGE_SIZE
-        setOffset(next)
-        setLoadingMore(true)
-        loadLogs(filterType, next, true)
-    }
 
     return (
         <div>
@@ -135,26 +129,25 @@ export default function AdminLogsPage() {
                 <table className="min-w-full divide-y divide-border">
                     <thead className="bg-surface-subtle">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">시간</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">액션</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">대상 유형</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">내용</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">대상 ID</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">관리자</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">시간</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">액션</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">대상 유형</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">내용</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">관리자</th>
                         </tr>
                     </thead>
                     <tbody className="bg-surface divide-y divide-border">
                         {loading ? (
                             [1, 2, 3, 4, 5].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={6} className="px-4 py-3">
+                                    <td colSpan={5} className="px-4 py-3">
                                         <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : logs.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-content-muted">
+                                <td colSpan={5} className="px-4 py-8 text-center text-sm text-content-muted">
                                     기록된 로그가 없습니다.
                                 </td>
                             </tr>
@@ -164,11 +157,25 @@ export default function AdminLogsPage() {
                                     <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                         {formatDate(log.created_at)}
                                     </td>
-                                    <td className="px-4 py-3 w-28 max-w-[7rem]">
-                                        <span className={[
-                                            'text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap inline-block max-w-full truncate',
-                                            ACTION_BADGE[log.action] ?? 'bg-surface-muted text-content-secondary',
-                                        ].join(' ')} title={log.action}>
+                                    <td className="px-4 py-3 w-44 max-w-[11rem]">
+                                        <span
+                                            className={[
+                                                'text-xs px-2 py-0.5 rounded-full font-medium inline-block max-w-full truncate cursor-default',
+                                                ACTION_BADGE[log.action] ?? 'bg-surface-muted text-content-secondary',
+                                            ].join(' ')}
+                                            onMouseEnter={(e) => {
+                                                const el = e.currentTarget
+                                                if (el.scrollWidth > el.clientWidth) {
+                                                    const rect = el.getBoundingClientRect()
+                                                    setActionTooltip({
+                                                        text: log.action,
+                                                        x: rect.left + rect.width / 2,
+                                                        y: rect.top - 6,
+                                                    })
+                                                }
+                                            }}
+                                            onMouseLeave={() => setActionTooltip(null)}
+                                        >
                                             {log.action}
                                         </span>
                                     </td>
@@ -182,10 +189,7 @@ export default function AdminLogsPage() {
                                             <span className="text-border-strong">—</span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-content-muted font-mono whitespace-nowrap">
-                                        {log.target_id ? `…${log.target_id.slice(-8)}` : '—'}
-                                    </td>
-                                    <td className="px-4 py-3 text-xs text-content-secondary whitespace-nowrap">
+                                    <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                         {log.admin_id ? log.admin_id.split('@')[0] : '시스템'}
                                     </td>
                                 </tr>
@@ -195,15 +199,21 @@ export default function AdminLogsPage() {
                 </table>
             </div>
 
-            {!loading && logs.length < total && (
-                <div className="text-center mt-4">
-                    <button
-                        onClick={handleLoadMore}
-                        disabled={loadingMore}
-                        className="btn-neutral btn-md"
-                    >
-                        {loadingMore ? '불러오는 중...' : `더보기 (${total - logs.length}건 남음)`}
-                    </button>
+            <AdminPagination
+                page={page}
+                totalPages={Math.ceil(total / PAGE_SIZE)}
+                total={total}
+                pageSize={PAGE_SIZE}
+                disabled={loading}
+                onChange={(p) => { setPage(p); loadLogs(filterType, p) }}
+            />
+
+            {actionTooltip && (
+                <div
+                    className="fixed z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded pointer-events-none -translate-x-1/2 -translate-y-full max-w-[14rem] break-keep leading-relaxed"
+                    style={{ left: actionTooltip.x, top: actionTooltip.y }}
+                >
+                    {actionTooltip.text}
                 </div>
             )}
         </div>

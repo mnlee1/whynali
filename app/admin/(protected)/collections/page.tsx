@@ -3,14 +3,14 @@
  *
  * [관리자 - 시스템 모니터링 페이지]
  *
- * 트랙A 프로세스 상태, 커뮤니티 수집 상태, 경고 등을 모니터링합니다.
- * 상세 데이터는 접기/펼치기로 필요시에만 표시합니다.
+ * 이슈 프로세스 상태, 커뮤니티 수집 상태, 경고 등을 모니터링합니다.
  */
 
 'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import AdminPagination from '@/components/admin/AdminPagination'
 
 // ─── 타입 ────────────────────────────────────────────────
 
@@ -137,9 +137,9 @@ type SiteFilter = '전체' | '더쿠' | '네이트판' | '클리앙' | '보배�
 function StatCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
     return (
         <div className="text-center">
-            <p className="text-xs text-content-secondary mb-1">{label}</p>
+            <p className="text-sm text-content-secondary mb-1">{label}</p>
             <p className="text-2xl font-bold text-content-primary">{value.toLocaleString()}</p>
-            {sub && <p className="text-xs text-content-muted mt-0.5">{sub}</p>}
+            {sub && <p className="text-sm text-content-muted mt-0.5">{sub}</p>}
         </div>
     )
 }
@@ -200,7 +200,7 @@ function Th({
     return (
         <th
             onClick={() => onSort(col)}
-            className={`px-4 py-2.5 text-xs font-medium text-content-muted whitespace-nowrap cursor-pointer select-none hover:text-content-primary ${className ?? 'text-left'}`}
+            className={`px-4 py-2.5 text-sm font-medium text-content-muted whitespace-nowrap cursor-pointer select-none hover:text-content-primary ${className ?? 'text-left'}`}
         >
             {label}
             <span className="ml-1 inline-block w-3 text-content-muted">
@@ -210,64 +210,7 @@ function Th({
     )
 }
 
-function Pagination({
-    page,
-    totalPages,
-    onChange,
-}: {
-    page: number
-    totalPages: number
-    onChange: (p: number) => void
-}) {
-    if (totalPages <= 1) return null
-
-    const range: (number | '…')[] = []
-    if (totalPages <= 7) {
-        for (let i = 1; i <= totalPages; i++) range.push(i)
-    } else {
-        range.push(1)
-        if (page > 3) range.push('…')
-        for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
-            range.push(i)
-        }
-        if (page < totalPages - 2) range.push('…')
-        range.push(totalPages)
-    }
-
-    return (
-        <div className="flex items-center justify-center gap-1 mt-4">
-            <button
-                onClick={() => onChange(page - 1)}
-                disabled={page === 1}
-                className="px-2 py-1 text-sm border border-border rounded-xl disabled:opacity-30 hover:bg-surface-muted"
-            >
-                ←
-            </button>
-            {range.map((p, i) =>
-                p === '…' ? (
-                    <span key={`el-${i}`} className="px-2 text-content-muted text-sm">…</span>
-                ) : (
-                    <button
-                        key={p}
-                        onClick={() => onChange(p as number)}
-                        className={`px-3 py-1 text-sm border rounded-xl ${
-                            page === p ? 'bg-primary text-white border-primary' : 'border-border hover:bg-surface-muted'
-                        }`}
-                    >
-                        {p}
-                    </button>
-                )
-            )}
-            <button
-                onClick={() => onChange(page + 1)}
-                disabled={page === totalPages}
-                className="px-2 py-1 text-sm border border-border rounded-xl disabled:opacity-30 hover:bg-surface-muted"
-            >
-                →
-            </button>
-        </div>
-    )
-}
+const COLLECTION_PAGE_SIZE = 20
 
 // ─── 메인 페이지 ─────────────────────────────────────────
 
@@ -278,7 +221,6 @@ export default function AdminCollectionsPage() {
     const [stats, setStats] = useState<CollectionStats | null>(null)
     const [statsLoading, setStatsLoading] = useState(true)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
-    const [showDetails, setShowDetails] = useState(false)
     const [diagnosing, setDiagnosing] = useState(false)
     const [diagnosis, setDiagnosis] = useState<any>(null)
     const [collecting, setCollecting] = useState(false)
@@ -590,11 +532,10 @@ export default function AdminCollectionsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <div>
                     <h1 className="text-2xl font-bold text-content-primary">수집 현황</h1>
-                    <p className="text-sm text-content-secondary mt-1">트랙A 프로세스 및 수집 시스템 상태</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
+                        <span className="text-sm text-content-muted">
                             갱신 {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
@@ -660,7 +601,7 @@ export default function AdminCollectionsPage() {
                                         {warning.message}
                                     </p>
                                     {warning.details && (
-                                        <p className="text-xs text-content-secondary mt-1">{warning.details}</p>
+                                        <p className="text-sm text-content-secondary mt-1">{warning.details}</p>
                                     )}
                                 </div>
                             </div>
@@ -673,7 +614,7 @@ export default function AdminCollectionsPage() {
                             <h3 className="text-sm font-semibold text-content-primary mb-2">🔍 가능한 원인</h3>
                             <ul className="space-y-1">
                                 {trackAStats.diagnostics.possibleCauses.map((cause, idx) => (
-                                    <li key={idx} className="text-xs text-content-secondary pl-2">
+                                    <li key={idx} className="text-sm text-content-secondary pl-2">
                                         {cause}
                                     </li>
                                 ))}
@@ -684,7 +625,7 @@ export default function AdminCollectionsPage() {
                                     <h3 className="text-sm font-semibold text-content-primary mt-4 mb-2">💡 해결 방법</h3>
                                     <ul className="space-y-1">
                                         {trackAStats.diagnostics.recommendations.map((rec, idx) => (
-                                            <li key={idx} className="text-xs text-content-secondary pl-2">
+                                            <li key={idx} className="text-sm text-content-secondary pl-2">
                                                 {rec}
                                             </li>
                                         ))}
@@ -725,7 +666,7 @@ export default function AdminCollectionsPage() {
                                 </h3>
                                 <button
                                     onClick={() => setCollectResult(null)}
-                                    className="text-xs text-content-muted hover:text-content-secondary"
+                                    className="text-sm text-content-muted hover:text-content-secondary"
                                 >
                                     닫기
                                 </button>
@@ -752,7 +693,7 @@ export default function AdminCollectionsPage() {
                                             </div>
                                         )
                                     })}
-                                    <div className="flex items-center justify-between text-xs text-content-secondary">
+                                    <div className="flex items-center justify-between text-sm text-content-secondary">
                                         <span>소요 시간:</span>
                                         <span>{collectResult.elapsed}</span>
                                     </div>
@@ -773,7 +714,7 @@ export default function AdminCollectionsPage() {
                                             )}
                                         </div>
                                     )}
-                                    <p className="text-xs text-green-600 mt-2">
+                                    <p className="text-sm text-green-600 mt-2">
                                         💡 통계가 자동으로 갱신됩니다 (2초 후)
                                     </p>
                                 </div>
@@ -797,7 +738,7 @@ export default function AdminCollectionsPage() {
                                 <h3 className="text-sm font-semibold text-content-primary">📊 진단 결과</h3>
                                 <button
                                     onClick={() => setDiagnosis(null)}
-                                    className="text-xs text-content-muted hover:text-content-secondary"
+                                    className="text-sm text-content-muted hover:text-content-secondary"
                                 >
                                     닫기
                                 </button>
@@ -812,10 +753,10 @@ export default function AdminCollectionsPage() {
                             
                             {diagnosis.currentBranch && (
                                 <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                    <p className="text-xs text-yellow-700">
+                                    <p className="text-sm text-yellow-700">
                                         현재 브랜치: <code className="font-mono font-bold">{diagnosis.currentBranch}</code>
                                     </p>
-                                    <p className="text-xs text-yellow-600 mt-1">
+                                    <p className="text-sm text-yellow-600 mt-1">
                                         ⚠️ GitHub Actions 크론은 main/develop 브랜치에서만 실행됩니다
                                     </p>
                                 </div>
@@ -825,7 +766,7 @@ export default function AdminCollectionsPage() {
                             
                             <div className="space-y-2">
                                 {diagnosis.checks.map((check: any, idx: number) => (
-                                    <div key={idx} className="flex items-start gap-2 text-xs">
+                                    <div key={idx} className="flex items-start gap-2 text-sm">
                                         <span>
                                             {check.status === 'ok' ? '✅' : check.status === 'warning' ? '⚠️' : '❌'}
                                         </span>
@@ -833,7 +774,7 @@ export default function AdminCollectionsPage() {
                                             <span className="font-medium">{check.name}:</span>{' '}
                                             <span className="text-content-secondary">{check.message}</span>
                                             {check.details && (
-                                                <pre className="mt-1 text-xs text-content-secondary bg-surface-muted p-2 rounded-xl overflow-x-auto">
+                                                <pre className="mt-1 text-sm text-content-secondary bg-surface-muted p-2 rounded-xl overflow-x-auto">
                                                     {JSON.stringify(check.details, null, 2)}
                                                 </pre>
                                             )}
@@ -849,11 +790,11 @@ export default function AdminCollectionsPage() {
             {/* 트랙A 프로세스 상태 */}
             {trackAStats && (
                 <div className="card p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-content-primary mb-4">트랙A 프로세스 상태</h2>
+                    <h2 className="text-lg font-semibold text-content-primary mb-4">이슈 프로세스 상태</h2>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div className={`p-4 rounded-xl border ${getStatusColor(trackAStats.lastRun.status)}`}>
-                            <p className="text-xs text-content-secondary mb-1">마지막 이슈 생성</p>
+                            <p className="text-sm text-content-secondary mb-1">마지막 이슈 생성</p>
                             <p className="text-xl font-bold">
                                 {trackAStats.lastRun.minutesAgo !== null
                                     ? formatTimeAgo(trackAStats.lastRun.minutesAgo)
@@ -862,23 +803,23 @@ export default function AdminCollectionsPage() {
                         </div>
                         
                         <div className="p-4 rounded-xl border bg-blue-50 border-blue-200">
-                            <p className="text-xs text-content-secondary mb-1">다음 실행 예정</p>
+                            <p className="text-sm text-content-secondary mb-1">다음 실행 예정</p>
                             <p className="text-xl font-bold text-blue-600">
                                 {new Date(trackAStats.lastRun.nextRun).toLocaleTimeString('ko-KR', {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                 })}
                             </p>
-                            <p className="text-xs text-content-secondary mt-1">10분 주기</p>
+                            <p className="text-sm text-content-secondary mt-1">10분 주기</p>
                         </div>
                         
                         <div className="p-4 rounded-xl border bg-surface-subtle border-border">
-                            <p className="text-xs text-content-secondary mb-1">24시간 이슈 생성</p>
+                            <p className="text-sm text-content-secondary mb-1">24시간 이슈 생성</p>
                             <p className="text-xl font-bold text-content-primary">
                                 {trackAStats.last24h.issuesCreated}건
                             </p>
-                            <p className="text-xs text-content-secondary mt-1">
-                                트랙A {trackAStats.last24h.trackAIssues}건 ({trackAStats.last24h.trackAPercentage}%)
+                            <p className="text-sm text-content-secondary mt-1">
+                                자동 {trackAStats.last24h.trackAIssues}건 ({trackAStats.last24h.trackAPercentage}%)
                             </p>
                         </div>
                     </div>
@@ -904,7 +845,7 @@ export default function AdminCollectionsPage() {
                                 disabled ? (
                                     <span
                                         key={site}
-                                        className="flex items-center gap-1.5 text-xs text-content-muted line-through"
+                                        className="flex items-center gap-1.5 text-sm text-content-muted line-through"
                                     >
                                         <span className="font-medium">{site}</span>
                                         <span>·</span>
@@ -931,30 +872,30 @@ export default function AdminCollectionsPage() {
                                 )
                             ))}
                         </div>
-                        <p className="text-xs text-blue-500 mt-2">이슈 연결 게시글 지속 추적 · 인기글(조회 3만+ 또는 댓글 50+) 추가 크롤링</p>
+                        <p className="text-sm text-blue-500 mt-2">이슈 연결 게시글 지속 추적 · 인기글(조회 3만+ 또는 댓글 50+) 추가 크롤링</p>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className={`p-4 rounded-xl border ${getStatusColor(trackAStats.communityCollection.status)}`}>
-                            <p className="text-xs text-content-secondary mb-1">마지막 수집</p>
+                            <p className="text-sm text-content-secondary mb-1">마지막 수집</p>
                             <p className="text-xl font-bold">
                                 {formatTimeAgo(trackAStats.communityCollection.minutesAgo)}
                             </p>
-                            <p className="text-xs text-content-secondary mt-1">
+                            <p className="text-sm text-content-secondary mt-1">
                                 상태: {trackAStats.communityCollection.status === 'active' ? '정상' : '경고'}
                             </p>
                         </div>
                         
                         <div className="p-4 rounded-xl border bg-surface-subtle border-border">
-                            <p className="text-xs text-content-secondary mb-1">24시간 수집</p>
+                            <p className="text-sm text-content-secondary mb-1">24시간 수집</p>
                             <p className="text-xl font-bold text-content-primary">
                                 {trackAStats.communityCollection.last24h.toLocaleString()}건
                             </p>
-                            <p className="text-xs text-content-secondary mt-1">1분 주기</p>
+                            <p className="text-sm text-content-secondary mt-1">1분 주기</p>
                         </div>
                         
                         <div className="p-4 rounded-xl border bg-surface-subtle border-border">
-                            <p className="text-xs text-content-secondary mb-1">최근 3시간</p>
+                            <p className="text-sm text-content-secondary mb-1">최근 3시간</p>
                             <p className="text-xl font-bold text-content-primary">
                                 {trackAStats.communityCollection.last3h.toLocaleString()}건
                             </p>
@@ -963,24 +904,8 @@ export default function AdminCollectionsPage() {
                 </div>
             )}
 
-            {/* 상세 데이터 접기/펼치기 */}
-            <div className="mb-6">
-                <button
-                    onClick={() => setShowDetails(!showDetails)}
-                    className="w-full p-4 text-left card hover:bg-surface-subtle transition-colors flex items-center justify-between"
-                >
-                    <span className="font-medium text-content-primary">
-                        {showDetails ? '▼' : '▶'} 상세 수집 데이터 {showDetails ? '접기' : '펼치기'}
-                    </span>
-                    <span className="text-xs text-content-secondary">
-                        트랙A 검색 뉴스 및 커뮤니티 수집 목록
-                    </span>
-                </button>
-            </div>
-
-            {/* 상세 데이터 (접기/펼치기) */}
-            {showDetails && (
-                <div className="space-y-10">
+            {/* 상세 수집 데이터 */}
+            <div className="space-y-10">
             {/* ── 수집 커뮤니티 목록 ── */}
             <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -990,7 +915,7 @@ export default function AdminCollectionsPage() {
                         인기글 선별 수집
                     </span>
                     {!communityLoading && communityResult && (
-                        <span className="text-xs text-content-muted ml-auto">
+                        <span className="text-sm text-content-muted ml-auto">
                             총 {communityResult.total.toLocaleString()}건
                         </span>
                     )}
@@ -1058,7 +983,7 @@ export default function AdminCollectionsPage() {
                                                 {item.source_site}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap max-w-[12rem]">
+                                        <td className="px-4 py-2.5 text-sm whitespace-nowrap max-w-[12rem]">
                                             {item.issues ? (
                                                 <Link href={`/issue/${item.issues.id}`}
                                                     className="text-primary hover:underline line-clamp-1 block">
@@ -1068,19 +993,19 @@ export default function AdminCollectionsPage() {
                                                 <span className="text-border-strong">미연결</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-secondary text-right whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-secondary text-right whitespace-nowrap">
                                             {item.view_count.toLocaleString()}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-secondary text-right whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-secondary text-right whitespace-nowrap">
                                             {item.comment_count.toLocaleString()}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-muted whitespace-nowrap">
                                             {item.written_at ? fmt(item.written_at) : <span className="text-border-strong">-</span>}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-muted whitespace-nowrap">
                                             {fmt(item.created_at)}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-muted whitespace-nowrap">
                                             {fmt(item.updated_at)}
                                         </td>
                                     </tr>
@@ -1090,9 +1015,11 @@ export default function AdminCollectionsPage() {
                     </table>
                 </div>
                 {communityResult && (
-                    <Pagination
+                    <AdminPagination
                         page={communityPage}
                         totalPages={communityResult.totalPages}
+                        total={communityResult.total}
+                        pageSize={COLLECTION_PAGE_SIZE}
                         onChange={handleCommunityPage}
                     />
                 )}
@@ -1101,12 +1028,12 @@ export default function AdminCollectionsPage() {
             {/* ── 트랙 A 검색 뉴스 목록 ── */}
             <section>
                 <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-base font-semibold text-content-primary">트랙 A 검색 뉴스</h2>
+                    <h2 className="text-base font-semibold text-content-primary">검색 뉴스</h2>
                     <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                         수시 검색
                     </span>
                     {!newsLoading && newsResult && (
-                        <span className="text-xs text-content-muted ml-auto">
+                        <span className="text-sm text-content-muted ml-auto">
                             총 {newsResult.total.toLocaleString()}건
                         </span>
                     )}
@@ -1146,14 +1073,14 @@ export default function AdminCollectionsPage() {
                                                 <span className="line-clamp-1">{decodeHtml(item.title)}</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-secondary whitespace-nowrap">{item.source}</td>
-                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-secondary whitespace-nowrap">{item.source}</td>
+                                        <td className="px-4 py-2.5 text-sm whitespace-nowrap">
                                             {item.search_keyword
                                                 ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{item.search_keyword}</span>
                                                 : <span className="text-border-strong">-</span>
                                             }
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm whitespace-nowrap">
                                             {item.issues ? (
                                                 <Link href={`/issue/${item.issues.id}`} target="_blank"
                                                     className="text-primary hover:underline">
@@ -1163,10 +1090,10 @@ export default function AdminCollectionsPage() {
                                                 <span className="text-border-strong">미연결</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-muted whitespace-nowrap">
                                             {item.published_at ? fmt(item.published_at) : '-'}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs text-content-muted whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-sm text-content-muted whitespace-nowrap">
                                             {fmt(item.created_at)}
                                         </td>
                                     </tr>
@@ -1176,11 +1103,16 @@ export default function AdminCollectionsPage() {
                     </table>
                 </div>
                 {newsResult && (
-                    <Pagination page={newsPage} totalPages={newsResult.totalPages} onChange={handleNewsPage} />
+                    <AdminPagination
+                        page={newsPage}
+                        totalPages={newsResult.totalPages}
+                        total={newsResult.total}
+                        pageSize={COLLECTION_PAGE_SIZE}
+                        onChange={handleNewsPage}
+                    />
                 )}
             </section>
             </div>
-            )}
 
             </>)}
 
@@ -1189,36 +1121,44 @@ export default function AdminCollectionsPage() {
                 <div>
                     {/* 필터 바 */}
                     <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <select
-                            value={pipelineResultFilter}
-                            onChange={(e) => {
-                                const v = e.target.value as TrackAResult | 'all'
-                                setPipelineResultFilter(v)
-                                fetchPipelineLogs(v, pipelineDateFilter)
-                            }}
-                            className="text-sm border border-border rounded-xl px-2 py-1.5 bg-surface"
-                        >
-                            <option value="all">전체 결과</option>
-                            <option value="issue_created">이슈 생성</option>
-                            <option value="auto_approved">자동 승인</option>
-                            <option value="duplicate_linked">기존 이슈 연결</option>
-                            <option value="ai_rejected">AI 검증 실패</option>
-                            <option value="no_news">뉴스 없음</option>
-                            <option value="no_community">커뮤니티 없음</option>
-                            <option value="heat_too_low">화력 미달</option>
-                            <option value="no_news_linked">뉴스 연결 실패</option>
-                            <option value="no_timeline">타임라인 없음</option>
-                            <option value="validation_failed">검증 실패</option>
-                            <option value="rate_limited">Rate Limit</option>
-                            <option value="error">에러</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                value={pipelineResultFilter}
+                                onChange={(e) => {
+                                    const v = e.target.value as TrackAResult | 'all'
+                                    setPipelineResultFilter(v)
+                                    fetchPipelineLogs(v, pipelineDateFilter)
+                                }}
+                                className="appearance-none text-sm border border-border rounded-xl pl-3 pr-8 py-2 bg-surface focus:outline-none focus:border-primary"
+                            >
+                                <option value="all">전체 결과</option>
+                                <option value="issue_created">이슈 생성</option>
+                                <option value="auto_approved">자동 승인</option>
+                                <option value="duplicate_linked">기존 이슈 연결</option>
+                                <option value="ai_rejected">AI 검증 실패</option>
+                                <option value="no_news">뉴스 없음</option>
+                                <option value="no_community">커뮤니티 없음</option>
+                                <option value="heat_too_low">화력 미달</option>
+                                <option value="no_news_linked">뉴스 연결 실패</option>
+                                <option value="no_timeline">타임라인 없음</option>
+                                <option value="validation_failed">검증 실패</option>
+                                <option value="rate_limited">Rate Limit</option>
+                                <option value="error">에러</option>
+                            </select>
+                            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-content-muted">
+                                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div className="relative">
                         <select
                             value={pipelineDateFilter}
                             onChange={(e) => {
                                 setPipelineDateFilter(e.target.value)
                                 fetchPipelineLogs(pipelineResultFilter, e.target.value)
                             }}
-                            className="text-sm border border-border rounded-xl px-2 py-1.5 bg-surface"
+                            className="appearance-none text-sm border border-border rounded-xl pl-3 pr-8 py-2 bg-surface focus:outline-none focus:border-primary"
                         >
                             {availableDates.length === 0 ? (
                                 <option value={pipelineDateFilter}>{pipelineDateFilter}</option>
@@ -1231,6 +1171,12 @@ export default function AdminCollectionsPage() {
                                 })
                             )}
                         </select>
+                            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-content-muted">
+                                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                </svg>
+                            </span>
+                        </div>
                     </div>
 
                     {/* 요약 뱃지 */}
@@ -1348,7 +1294,7 @@ export default function AdminCollectionsPage() {
                                             : ''
                                         return (
                                             <tr key={log.id} className="hover:bg-surface-subtle">
-                                                <td className="px-4 py-3 text-xs text-content-muted whitespace-nowrap">
+                                                <td className="px-4 py-3 text-sm text-content-muted whitespace-nowrap">
                                                     {new Date(log.run_at).toLocaleString('ko-KR', {
                                                         month: '2-digit', day: '2-digit',
                                                         hour: '2-digit', minute: '2-digit',
@@ -1365,7 +1311,7 @@ export default function AdminCollectionsPage() {
                                                         {RESULT_LABEL[log.result] ?? log.result}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-xs text-content-secondary w-48">
+                                                <td className="px-4 py-3 text-sm text-content-secondary w-48">
                                                     {log.issues ? (
                                                         <Link
                                                             href={`/admin/issues/${log.issue_id}`}

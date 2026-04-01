@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import AdminPagination from '@/components/admin/AdminPagination'
 
 interface AiValidation {
     status: 'passed' | 'flagged'
@@ -248,7 +249,7 @@ export default function AdminShortformPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     {lastRefreshedAt && (
-                        <span className="text-xs text-content-muted">
+                        <span className="text-sm text-content-muted">
                             마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}
@@ -396,7 +397,7 @@ export default function AdminShortformPage() {
                                             <span className={`inline-block px-2 py-1 text-xs rounded-full mb-1 ${HEAT_GRADE_STYLE[job.heat_grade]}`}>
                                                 화력 {job.heat_grade}
                                             </span>
-                                            <div className="text-xs text-content-secondary">
+                                            <div className="text-sm text-content-secondary">
                                                 뉴스 {job.source_count.news}건 / 커뮤니티 {job.source_count.community}건
                                             </div>
                                         </td>
@@ -411,7 +412,7 @@ export default function AdminShortformPage() {
                                                  job.approval_status === 'approved' ? '승인' : '반려'}
                                             </span>
                                             {job.upload_status && (
-                                                <div className="mt-1 text-xs text-content-secondary">
+                                                <div className="mt-1 text-sm text-content-secondary">
                                                     {Object.entries(job.upload_status).map(([platform, statusObj]) => {
                                                         const status = typeof statusObj === 'object' && statusObj !== null
                                                             ? (statusObj as any).status || 'unknown'
@@ -526,7 +527,7 @@ export default function AdminShortformPage() {
                                                 })()
                                             )}
                                             {job.approval_status === 'rejected' && (
-                                                <span className="text-xs text-content-muted">-</span>
+                                                <span className="text-sm text-content-muted">-</span>
                                             )}
                                         </td>
                                     </tr>
@@ -538,46 +539,14 @@ export default function AdminShortformPage() {
             </div>
 
             {/* 페이지네이션 */}
-            {total > 0 && (
-                <div className="flex items-center justify-between mt-4">
-                    <span className="text-sm text-content-secondary">
-                        {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / 총 {total}개
-                    </span>
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => { setPage(1); loadJobs(filter, 1) }}
-                            disabled={page === 1 || loading}
-                            className="px-2 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            «
-                        </button>
-                        <button
-                            onClick={() => { setPage(page - 1); loadJobs(filter, page - 1) }}
-                            disabled={page === 1 || loading}
-                            className="px-3 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            이전
-                        </button>
-                        <span className="px-3 py-1.5 text-sm font-medium text-content-primary">
-                            {page} / {Math.ceil(total / PAGE_SIZE)}
-                        </span>
-                        <button
-                            onClick={() => { setPage(page + 1); loadJobs(filter, page + 1) }}
-                            disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
-                            className="px-3 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            다음
-                        </button>
-                        <button
-                            onClick={() => { const last = Math.ceil(total / PAGE_SIZE); setPage(last); loadJobs(filter, last) }}
-                            disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
-                            className="px-2 py-1.5 text-sm border border-border rounded-xl hover:bg-surface-muted disabled:opacity-40"
-                        >
-                            »
-                        </button>
-                    </div>
-                </div>
-            )}
+            <AdminPagination
+                page={page}
+                totalPages={Math.ceil(total / PAGE_SIZE)}
+                total={total}
+                pageSize={PAGE_SIZE}
+                disabled={loading}
+                onChange={(p) => { setPage(p); loadJobs(filter, p) }}
+            />
 
             {/* 수동 job 생성 모달 */}
             {manualCreate.open && (
