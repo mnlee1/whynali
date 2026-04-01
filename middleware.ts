@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { isAdminEmail } from '@/lib/admin'
+import { isAdminEmail, resolveEmail } from '@/lib/admin'
 
 /* 로그인이 필요한 일반 사용자 API 경로 (GET 제외, 쓰기 전용) */
 const PROTECTED_PATHS = [
@@ -78,7 +78,7 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/admin/login', request.url))
         }
 
-        if (!isAdminEmail(user.email)) {
+        if (!isAdminEmail(resolveEmail(user))) {
             if (pathname.startsWith('/api/admin')) {
                 return NextResponse.json(
                     { error: 'FORBIDDEN', message: '관리자 권한이 없습니다.' },

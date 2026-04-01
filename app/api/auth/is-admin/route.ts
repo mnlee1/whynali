@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { isAdminEmail } from '@/lib/admin'
+import { isAdminEmail, resolveEmail } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,5 +10,5 @@ export async function GET() {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    return NextResponse.json({ isAdmin: isAdminEmail(user?.email) })
+    return NextResponse.json({ isAdmin: user ? isAdminEmail(resolveEmail(user)) : false })
 }
