@@ -35,7 +35,7 @@ interface Props {
 export default function CommunityPreview({ initialTopics }: Props) {
     const [topics, setTopics] = useState<TopicWithIssue[]>(initialTopics ?? [])
     const [loading, setLoading] = useState(!initialTopics)
-    const hasInitialData = useRef(!!initialTopics)
+    const hasInitialData = useRef(!!initialTopics?.length)
 
     const load = useCallback(async () => {
         try {
