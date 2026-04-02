@@ -6,15 +6,35 @@
  * IT, 과학, AI, 스타트업 등 기술 관련 이슈를 포함합니다.
  */
 
+import type { Metadata } from 'next'
+import Script from 'next/script'
 import IssueList from '@/components/issues/IssueList'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
+import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
+
+export const metadata: Metadata = {
+    title: '기술 이슈',
+    description: '기술계의 최신 이슈와 논란을 한눈에. IT, 과학, AI, 스타트업, 반도체, 전기차 등 첨단 기술 뉴스를 실시간으로 확인하세요.',
+    keywords: ['기술', 'IT', '과학', '스타트업', '테크', '혁신', 'AI', '인공지능', '반도체', '전기차', '기술 이슈', '기술 뉴스'],
+    openGraph: {
+        title: '기술 이슈 | 왜난리',
+        description: '기술계의 최신 이슈와 논란을 한눈에. IT, 과학, AI, 스타트업, 반도체, 전기차 등 첨단 기술 뉴스를 실시간으로 확인하세요.',
+    },
+}
 
 export const revalidate = 900
 
 const MIN_HEAT = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 export default async function TechPage() {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const collectionSchema = generateCollectionPageSchema('기술')
+    const breadcrumbSchema = generateBreadcrumbSchema([
+        { name: '홈', url: baseUrl },
+        { name: '기술', url: `${baseUrl}/tech` },
+    ])
+
     const { data, count } = await supabaseAdmin
         .from('issues')
         .select('*', { count: 'exact' })
@@ -27,12 +47,24 @@ export default async function TechPage() {
         .range(0, 19)
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl font-bold text-content-primary mb-6">기술 이슈</h1>
-            <IssueList
-                category="기술"
-                initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+        <>
+            <Script
+                id="tech-collection-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(collectionSchema)}
             />
-        </div>
+            <Script
+                id="tech-breadcrumb-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
+            />
+            <div className="container mx-auto px-4 py-6 md:py-8">
+                <h1 className="text-2xl font-bold text-content-primary mb-6">기술 이슈</h1>
+                <IssueList
+                    category="기술"
+                    initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+                />
+            </div>
+        </>
     )
 }

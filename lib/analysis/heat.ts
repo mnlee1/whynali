@@ -117,12 +117,31 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
         Math.min(100, Math.max(0, newsCredibility * (0.3 + 0.7 * communityAmp)))
     )
 
+    // 현재 화력 값 조회 (히스토리 백업용)
+    const { data: currentIssue } = await supabaseAdmin
+        .from('issues')
+        .select('heat_index, heat_updated_at')
+        .eq('id', issueId)
+        .single()
+
+    const now = new Date().toISOString()
+    const shouldBackup = currentIssue?.heat_updated_at
+        ? (Date.now() - new Date(currentIssue.heat_updated_at).getTime()) >= 60 * 60 * 1000
+        : true
+
+    const updateData: any = {
+        heat_index: heatIndex,
+        updated_at: now,
+        heat_updated_at: now,
+    }
+
+    if (shouldBackup && currentIssue && currentIssue.heat_index !== null) {
+        updateData.heat_index_1h_ago = currentIssue.heat_index
+    }
+
     const { error } = await supabaseAdmin
         .from('issues')
-        .update({
-            heat_index: heatIndex,
-            updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', issueId)
 
     if (error) throw error
@@ -240,13 +259,32 @@ export async function calculateBothHeats(issueId: string): Promise<{
         Math.min(100, Math.max(0, newsCredibilityRecent * (0.3 + 0.7 * ampRecent)))
     )
 
+    // 현재 화력 값 조회 (히스토리 백업용)
+    const { data: currentIssue } = await supabaseAdmin
+        .from('issues')
+        .select('heat_index, heat_updated_at')
+        .eq('id', issueId)
+        .single()
+
+    const now = new Date().toISOString()
+    const shouldBackup = currentIssue?.heat_updated_at
+        ? (Date.now() - new Date(currentIssue.heat_updated_at).getTime()) >= 60 * 60 * 1000
+        : true
+
     // issues 테이블 업데이트 (heatIndex 기준)
+    const updateData: any = {
+        heat_index: heatIndex,
+        updated_at: now,
+        heat_updated_at: now,
+    }
+
+    if (shouldBackup && currentIssue && currentIssue.heat_index !== null) {
+        updateData.heat_index_1h_ago = currentIssue.heat_index
+    }
+
     const { error } = await supabaseAdmin
         .from('issues')
-        .update({
-            heat_index: heatIndex,
-            updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', issueId)
     if (error) throw error
 
