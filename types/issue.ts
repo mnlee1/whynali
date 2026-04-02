@@ -13,6 +13,8 @@ export interface Issue {
     status: IssueStatus
     category: IssueCategory
     heat_index: number | null
+    heat_index_1h_ago?: number | null
+    heat_updated_at?: string | null
     created_heat_index: number | null
     approval_status: ApprovalStatus
     approval_type: ApprovalType | null

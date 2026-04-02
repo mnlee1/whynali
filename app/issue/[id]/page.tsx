@@ -8,8 +8,16 @@
  * 성능 최적화:
  * - ISR (Incremental Static Regeneration): 15분 캐싱
  * - 효과: 페이지 로딩 0.6초 → 0.06초 (10배 향상)
+ * 
+ * SEO:
+ * - 동적 메타데이터 (generateMetadata)
+ * - JSON-LD Article 스키마 (구조화된 데이터)
+ * - JSON-LD BreadcrumbList 스키마 (네비게이션 경로)
+ * - 실시간 업데이트 시그널 (lastModified)
  */
 
+import type { Metadata } from 'next'
+import Script from 'next/script'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
@@ -19,13 +27,102 @@ import SourcesSection from '@/components/issue/SourcesSection'
 import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
+import IssueFAQ from '@/components/issue/IssueFAQ'
 import StatusBadge from '@/components/common/StatusBadge'
 import ViewCounter from '@/components/issue/ViewCounter'
 import { formatDate } from '@/lib/utils/format-date'
+import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
 // ISR: 15분(900초)마다 페이지 재생성
 // 같은 이슈를 여러 사용자가 보더라도 15분에 한 번만 생성
 export const revalidate = 900
+
+// 동적 메타데이터 생성 (SEO + 실시간 업데이트 시그널)
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+    const { id } = await params
+    const adminClient = createSupabaseAdminClient()
+
+    const { data: issue } = await adminClient
+        .from('issues')
+        .select('id, title, description, category, status, heat_index, created_at, updated_at')
+        .eq('id', id)
+        .single()
+
+    if (!issue) {
+        return {
+            title: '이슈를 찾을 수 없습니다',
+        }
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const title = `${issue.title}`
+    const description = issue.description || `${issue.category} 카테고리의 ${issue.status} 이슈. 화력 지수 ${issue.heat_index ?? 0}점. 실시간 반응, 타임라인, 투표, 댓글을 확인하세요.`
+
+    const categoryKeywords: Record<string, string[]> = {
+        '연예': ['연예', '연예계', '셀럽', '아이돌', '배우', '가수'],
+        '스포츠': ['스포츠', '축구', '야구', '농구', '올림픽', '선수'],
+        '정치': ['정치', '국회', '정당', '선거', '정책', '정부'],
+        '사회': ['사회', '사건', '사고', '범죄', '재판'],
+        '경제': ['경제', '주식', '부동산', '금융', '기업', '시장'],
+        '기술': ['기술', 'IT', '과학', '스타트업', '테크', '혁신'],
+        '세계': ['세계', '국제', '해외', '외교', '글로벌'],
+    }
+
+    const keywords = ['이슈', '논란', '왜난리', issue.title, issue.category, ...(categoryKeywords[issue.category] || [])]
+
+    const relativeTime = (date: string) => {
+        const now = new Date()
+        const past = new Date(date)
+        const diffMs = now.getTime() - past.getTime()
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+        const diffDays = Math.floor(diffHours / 24)
+
+        if (diffHours < 1) return '방금 전'
+        if (diffHours < 24) return `${diffHours}시간 전`
+        if (diffDays < 7) return `${diffDays}일 전`
+        return `${Math.floor(diffDays / 7)}주 전`
+    }
+
+    const updatedDescription = `${description} (마지막 업데이트: ${relativeTime(issue.updated_at)})`
+
+    return {
+        title,
+        description: updatedDescription,
+        keywords,
+        openGraph: {
+            type: 'article',
+            locale: 'ko_KR',
+            url: `/issue/${id}`,
+            siteName: '왜난리',
+            title,
+            description: updatedDescription,
+            publishedTime: issue.created_at,
+            modifiedTime: issue.updated_at,
+            section: issue.category,
+            tags: keywords,
+            images: [
+                {
+                    url: '/og-image.png',
+                    width: 1200,
+                    height: 630,
+                    alt: issue.title,
+                },
+            ],
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title,
+            description: updatedDescription,
+            images: ['/og-image.png'],
+        },
+        alternates: {
+            canonical: `${baseUrl}/issue/${id}`,
+        },
+        other: {
+            'article:modified_time': issue.updated_at,
+        },
+    }
+}
 
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -37,6 +134,10 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         { data: issue, error: issueError },
         { data: discussionTopics },
         { count: voteCount },
+        { count: newsCount },
+        { count: communityCount },
+        { count: reactionCount },
+        { count: commentCount },
         sessionClient,
     ] = await Promise.all([
         adminClient.from('issues').select('*').eq('id', id).single(),
@@ -52,6 +153,22 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', id)
             .in('phase', ['진행중', '마감']),
+        adminClient
+            .from('news_data')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', id),
+        adminClient
+            .from('community_data')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', id),
+        adminClient
+            .from('reactions')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', id),
+        adminClient
+            .from('comments')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', id),
         createSupabaseServerClient(),
     ])
 
@@ -85,10 +202,42 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     const { data: { user } } = await sessionClient.auth.getUser()
     const userId = user?.id ?? null
 
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+
+    const categoryUrls: Record<string, string> = {
+        '연예': '/entertain',
+        '스포츠': '/sports',
+        '정치': '/politics',
+        '사회': '/society',
+        '경제': '/economy',
+        '기술': '/tech',
+        '세계': '/world',
+    }
+
+    const breadcrumbItems = [
+        { name: '홈', url: baseUrl },
+        { name: issue.category, url: `${baseUrl}${categoryUrls[issue.category] || '/'}` },
+        { name: issue.title, url: `${baseUrl}/issue/${id}` },
+    ]
+
+    const articleSchema = generateArticleSchema(issue)
+    const breadcrumbSchema = generateBreadcrumbSchema(breadcrumbItems)
+
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
-            {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출) */}
-            <ViewCounter endpoint={`/api/issues/${id}/view`} />
+        <>
+            <Script
+                id="issue-article-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(articleSchema)}
+            />
+            <Script
+                id="issue-breadcrumb-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
+            />
+            <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
+                {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출) */}
+                <ViewCounter endpoint={`/api/issues/${id}/view`} />
 
             {/* 이슈 헤더 */}
             <div className="mb-6">
@@ -101,13 +250,30 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
                     <span>{issue.category}</span>
                     <span>·</span>
-                    <span>{formatDate(issue.created_at)}</span>
+                    <span>시작: {formatDate(issue.created_at)}</span>
+                    {issue.updated_at !== issue.created_at && (
+                        <>
+                            <span>·</span>
+                            <span className="text-primary font-medium">업데이트: {formatDate(issue.updated_at)}</span>
+                        </>
+                    )}
                 </div>
                 {issue.description && (
                     <p className="text-content-secondary leading-relaxed">
                         {decodeHtml(issue.description)}
                     </p>
                 )}
+            </div>
+
+            {/* FAQ - AI 검색 최적화 */}
+            <div className="mb-6">
+                <IssueFAQ
+                    issue={issue}
+                    newsCount={newsCount ?? 0}
+                    communityCount={communityCount ?? 0}
+                    reactionCount={reactionCount ?? 0}
+                    commentCount={commentCount ?? 0}
+                />
             </div>
 
             {/* 타임라인 */}
@@ -209,5 +375,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 </div>
             </div>
         </div>
+        </>
     )
 }

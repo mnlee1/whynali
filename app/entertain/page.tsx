@@ -4,15 +4,35 @@
  * [연예 카테고리 페이지]
  */
 
+import type { Metadata } from 'next'
+import Script from 'next/script'
 import IssueList from '@/components/issues/IssueList'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
+import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
+
+export const metadata: Metadata = {
+    title: '연예 이슈',
+    description: '연예계의 최신 이슈와 논란을 한눈에. 아이돌, 배우, 가수, 방송인의 사건과 뉴스를 실시간으로 확인하세요.',
+    keywords: ['연예', '연예계', '아이돌', '배우', '가수', '방송인', '셀럽', '연예 이슈', '연예 뉴스'],
+    openGraph: {
+        title: '연예 이슈 | 왜난리',
+        description: '연예계의 최신 이슈와 논란을 한눈에. 아이돌, 배우, 가수, 방송인의 사건과 뉴스를 실시간으로 확인하세요.',
+    },
+}
 
 export const revalidate = 900
 
 const MIN_HEAT = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 export default async function EntertainPage() {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const collectionSchema = generateCollectionPageSchema('연예')
+    const breadcrumbSchema = generateBreadcrumbSchema([
+        { name: '홈', url: baseUrl },
+        { name: '연예', url: `${baseUrl}/entertain` },
+    ])
+
     const { data, count } = await supabaseAdmin
         .from('issues')
         .select('*', { count: 'exact' })
@@ -25,12 +45,24 @@ export default async function EntertainPage() {
         .range(0, 19)
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl font-bold text-content-primary mb-6">연예 이슈</h1>
+        <>
+            <Script
+                id="entertain-collection-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(collectionSchema)}
+            />
+            <Script
+                id="entertain-breadcrumb-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
+            />
+            <div className="container mx-auto px-4 py-6 md:py-8">
+                <h1 className="text-2xl font-bold text-content-primary mb-6">연예 이슈</h1>
             <IssueList
                 category="연예"
                 initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
             />
         </div>
+        </>
     )
 }

@@ -14,8 +14,12 @@
  * - 서버사이드 병렬 데이터 패칭: 모든 섹션 데이터를 한 번에 SSR로 가져옴
  *   → 클라이언트 waterfall(HTML → JS → fetch → render) 제거
  *   → 홈 진입 시 스켈레톤 없이 즉시 콘텐츠 표시
+ * 
+ * SEO:
+ * - JSON-LD WebSite 스키마 (사이트 검색 기능)
  */
 
+import Script from 'next/script'
 import IssueList from '@/components/issues/IssueList'
 import HotIssueHighlight from '@/components/issues/HotIssueHighlight'
 import PopularRanking from '@/components/issues/PopularRanking'
@@ -24,6 +28,7 @@ import CommunityPreview from '@/components/community/CommunityPreview'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
 import type { Vote, VoteChoice, DiscussionTopic } from '@/types/index'
+import { generateWebSiteSchema, createJsonLd } from '@/lib/seo/schema'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
@@ -40,8 +45,8 @@ interface TopicWithIssue extends DiscussionTopic {
 }
 
 async function fetchPageData() {
-    const [hotResult, latestResult, votesResult, discussionsResult] = await Promise.all([
-        // HotIssueHighlight + PopularRanking 공용 (heat 상위 30개)
+    const [hotResult, surgingResult, latestResult, votesResult, discussionsResult] = await Promise.all([
+        // HotIssueHighlight용 (heat 상위 30개)
         supabaseAdmin
             .from('issues')
             .select('*')
@@ -51,6 +56,18 @@ async function fetchPageData() {
             .gte('heat_index', MIN_HEAT)
             .order('heat_index', { ascending: false, nullsFirst: false })
             .limit(30),
+
+        // PopularRanking용 급상승 이슈 (heat_index_1h_ago가 있는 이슈만)
+        supabaseAdmin
+            .from('issues')
+            .select('*')
+            .eq('approval_status', '승인')
+            .eq('visibility_status', 'visible')
+            .is('merged_into_id', null)
+            .gte('heat_index', MIN_HEAT)
+            .not('heat_index_1h_ago', 'is', null)
+            .order('heat_index', { ascending: false, nullsFirst: false })
+            .limit(50),
 
         // IssueList 초기 데이터 (최신순 10개)
         supabaseAdmin
@@ -97,8 +114,22 @@ async function fetchPageData() {
             issues: v.issues ? { id: v.issues.id, title: v.issues.title } : null,
         }))
 
+    // 급상승 이슈 계산: 증가율 기준 정렬
+    const surgingCandidates = (surgingResult.data ?? []) as Issue[]
+    const surgingIssues = surgingCandidates
+        .filter(issue => issue.heat_index_1h_ago && issue.heat_index_1h_ago > 0)
+        .map(issue => {
+            const currentHeat = issue.heat_index ?? 0
+            const previousHeat = issue.heat_index_1h_ago ?? 0
+            const surgePct = ((currentHeat - previousHeat) / previousHeat) * 100
+            return { ...issue, surgePct }
+        })
+        .sort((a, b) => b.surgePct - a.surgePct)
+        .slice(0, 10)
+
     return {
         hotIssues: (hotResult.data ?? []) as Issue[],
+        surgingIssues,
         latestIssues: {
             data: (latestResult.data ?? []) as Issue[],
             total: latestResult.count ?? 0,
@@ -109,13 +140,21 @@ async function fetchPageData() {
 }
 
 export default async function HomePage() {
-    const { hotIssues, latestIssues, votes, discussions } = await fetchPageData()
+    const { hotIssues, surgingIssues, latestIssues, votes, discussions } = await fetchPageData()
 
     // HotIssueHighlight: 종결 제외 상위 5개
     const heroIssues = hotIssues.filter(i => i.status !== '종결').slice(0, 5)
 
+    const websiteSchema = generateWebSiteSchema()
+
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8 space-y-10">
+        <>
+            <Script
+                id="home-website-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(websiteSchema)}
+            />
+            <div className="container mx-auto px-4 py-6 md:py-8 space-y-10">
             {/* 상단 2컬럼: 히어로 / 인기 랭킹 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 왼쪽: 캐러셀 */}
@@ -123,9 +162,9 @@ export default async function HomePage() {
                     <HotIssueHighlight initialIssues={heroIssues} />
                 </div>
 
-                {/* 오른쪽: 인기 랭킹 */}
+                {/* 오른쪽: 급상승 랭킹 */}
                 <div className="lg:col-span-1 h-full">
-                    <PopularRanking initialIssues={hotIssues} />
+                    <PopularRanking initialIssues={surgingIssues} isSurging />
                 </div>
             </div>
 
@@ -140,5 +179,6 @@ export default async function HomePage() {
             {/* 커뮤니티 최신 토론 */}
             <CommunityPreview initialTopics={discussions} />
         </div>
+        </>
     )
 }
