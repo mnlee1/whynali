@@ -93,7 +93,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             </h3>
                             <div className="space-y-2">
                                 {visibleNews.map((item) => (
-                                    <div key={item.id} className="card p-3">
+                                    <div key={item.id} className="border border-border rounded-xl bg-surface p-3">
                                         <div className="flex items-start justify-between gap-2 mb-1.5">
                                             <a
                                                 href={item.link}
@@ -130,7 +130,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                             </h3>
                             <div className="space-y-2">
                                 {visibleCommunity.map((item) => (
-                                    <div key={item.id} className="card p-3">
+                                    <div key={item.id} className="border border-border rounded-xl bg-surface p-3">
                                         <div className="flex items-start justify-between gap-2 mb-1.5">
                                             <a
                                                 href={item.url}

@@ -15,12 +15,6 @@ export default function Footer() {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-content-secondary">
                     <span className="font-medium text-content-primary">왜난리</span>
                     <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1">
-                        <Link href="/" className="hover:text-content-primary transition-colors">
-                            홈
-                        </Link>
-                        <Link href="/community" className="hover:text-content-primary transition-colors">
-                            커뮤니티
-                        </Link>
                         <Link href="/terms" className="hover:text-content-primary transition-colors">
                             이용약관
                         </Link>

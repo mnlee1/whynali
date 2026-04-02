@@ -19,7 +19,7 @@ export default function SafetyBotSettingModal({ onClose, onConfirm }: SafetyBotS
 
     const title = '세이프티봇 설정'
     const description = enabled
-        ? '불쾌한 댓글을 자동으로 걸러드리고 있어요. 더 편안하게 댓글을 둘러보세요.'
+        ? '악성 댓글을 자동으로 필터링하여 안전한 환경을 제공합니다.'
         : '세이프티봇이 꺼져 있어요. 모든 댓글이 표시되니 주의해 주세요.'
 
     const handleConfirm = () => {

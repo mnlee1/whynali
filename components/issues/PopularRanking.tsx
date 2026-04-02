@@ -36,6 +36,7 @@ export default function PopularRanking({ initialIssues }: Props) {
         initialIssues ? filterThisWeek(initialIssues) : []
     )
     const [loading, setLoading] = useState(!initialIssues)
+    const [activeIndex, setActiveIndex] = useState(0)
 
     useEffect(() => {
         if (initialIssues) return
@@ -51,6 +52,14 @@ export default function PopularRanking({ initialIssues }: Props) {
         }
         load()
     }, [initialIssues])
+
+    useEffect(() => {
+        if (issues.length === 0) return
+        const interval = setInterval(() => {
+            setActiveIndex((prev) => (prev + 1) % issues.length)
+        }, 2500)
+        return () => clearInterval(interval)
+    }, [issues.length])
 
     return (
         <section className="flex flex-col h-full">
@@ -71,27 +80,41 @@ export default function PopularRanking({ initialIssues }: Props) {
                 </div>
             ) : (
                 <ol className="flex flex-col flex-1 gap-2">
-                    {issues.map((issue, idx) => (
-                        <li key={issue.id} className="flex-1">
-                            <Link href={`/issue/${issue.id}`} className="block h-full">
-                                <article className="h-full bg-surface border border-border shadow-card rounded-xl hover:shadow-card-hover transition-shadow flex items-center gap-3 p-3 group">
-                                    <span className="shrink-0 text-sm font-bold w-5 text-center text-primary">
-                                        {idx + 1}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-content-primary line-clamp-1 group-hover:text-primary mb-0.5 transition-colors">
-                                            {decodeHtml(issue.title)}
-                                        </p>
-                                        <div className="flex items-center gap-2 text-xs text-content-muted">
-                                            <span>{issue.category}</span>
-                                            <span>·</span>
-                                            <span>{formatDate(issue.created_at)}</span>
+                    {issues.map((issue, idx) => {
+                        const isActive = activeIndex === idx
+                        return (
+                            <li 
+                                key={issue.id} 
+                                className="flex-1"
+                            >
+                                <Link href={`/issue/${issue.id}`} className="block h-full">
+                                    <article className={`h-full bg-surface border rounded-xl transition-all duration-300 flex items-center gap-3 p-3 group ${
+                                        isActive 
+                                            ? 'border-primary-muted shadow-card-hover -translate-y-0.5 bg-gradient-to-r from-primary-light/30 to-transparent' 
+                                            : 'border-border shadow-card hover:shadow-card-hover hover:border-primary-muted hover:-translate-y-0.5'
+                                    }`}>
+                                        <span className={`shrink-0 text-sm font-bold w-5 text-center transition-all duration-300 ${
+                                            isActive ? 'text-primary scale-110' : 'text-primary group-hover:scale-110'
+                                        }`}>
+                                            {idx + 1}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm font-semibold line-clamp-1 mb-0.5 transition-colors duration-300 ${
+                                                isActive ? 'text-primary' : 'text-content-primary group-hover:text-primary'
+                                            }`}>
+                                                {decodeHtml(issue.title)}
+                                            </p>
+                                            <div className="flex items-center gap-2 text-xs text-content-muted">
+                                                <span>{issue.category}</span>
+                                                <span>·</span>
+                                                <span>{formatDate(issue.created_at)}</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                </article>
-                            </Link>
-                        </li>
-                    ))}
+                                    </article>
+                                </Link>
+                            </li>
+                        )
+                    })}
                 </ol>
             )}
         </section>
