@@ -49,12 +49,25 @@ export async function ensurePublicUser(
     const provider = toProvider(rawProvider)
     const display_name = toDisplayName(user)
 
-    const { error } = await admin
+    // 기존 row 확인: display_name이 이미 설정된 경우 덮어쓰지 않음
+    const { data: existingRow } = await admin
         .from('users')
-        .upsert(
-            { id: user.id, provider, provider_id: user.id, display_name },
-            { onConflict: 'id' }
-        )
+        .select('id, display_name')
+        .eq('id', user.id)
+        .single()
 
-    if (error) throw error
+    if (!existingRow) {
+        // row 없음: 전체 insert
+        const { error } = await admin
+            .from('users')
+            .insert({ id: user.id, provider, provider_id: user.id, display_name })
+        if (error) throw error
+    } else {
+        // row 있음: provider만 동기화, 온보딩에서 설정한 display_name 보호
+        const { error } = await admin
+            .from('users')
+            .update({ provider, provider_id: user.id })
+            .eq('id', user.id)
+        if (error) throw error
+    }
 }

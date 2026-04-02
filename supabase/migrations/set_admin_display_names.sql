@@ -17,16 +17,30 @@ FROM auth.users
 WHERE email = 'mnlee@nhnad.com'
 ON CONFLICT (id) DO UPDATE SET display_name = '운영자A';
 
--- 운영자B (이메일 확인 후 기입)
--- INSERT INTO public.users (id, provider, provider_id, display_name)
--- SELECT id, NULL, id::TEXT, '운영자B'
--- FROM auth.users
--- WHERE email = 'jeongyun.seo@nhnad.com'
--- ON CONFLICT (id) DO UPDATE SET display_name = '운영자B';
+-- 운영자B
+INSERT INTO public.users (id, provider, provider_id, display_name)
+SELECT id, NULL, id::TEXT, '운영자B'
+FROM auth.users
+WHERE email = 'jeongyun.seo@nhnad.com'
+ON CONFLICT (id) DO UPDATE SET display_name = '운영자B';
 
--- 운영자C (이메일 확인 후 기입)
--- INSERT INTO public.users (id, provider, provider_id, display_name)
--- SELECT id, NULL, id::TEXT, '운영자C'
--- FROM auth.users
--- WHERE email = 'ks.kim@nhnad.com'
--- ON CONFLICT (id) DO UPDATE SET display_name = '운영자C';
+-- 운영자C
+INSERT INTO public.users (id, provider, provider_id, display_name)
+SELECT id, NULL, id::TEXT, '운영자C'
+FROM auth.users
+WHERE email = 'ks.kim@nhnad.com'
+ON CONFLICT (id) DO UPDATE SET display_name = '운영자C';
+
+-- 운영자D
+INSERT INTO public.users (id, provider, provider_id, display_name)
+SELECT id, NULL, id::TEXT, '운영자D'
+FROM auth.users
+WHERE email = 'h.gayoung@nhnad.com'
+ON CONFLICT (id) DO UPDATE SET display_name = '운영자D';
+
+-- 운영자F
+INSERT INTO public.users (id, provider, provider_id, display_name)
+SELECT id, NULL, id::TEXT, '운영자F'
+FROM auth.users
+WHERE email = 'seoyun.hyeong@nhnad.com'
+ON CONFLICT (id) DO UPDATE SET display_name = '운영자F';
