@@ -135,7 +135,7 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
         heat_updated_at: now,
     }
 
-    if (shouldBackup && currentIssue?.heat_index !== null) {
+    if (shouldBackup && currentIssue && currentIssue.heat_index !== null) {
         updateData.heat_index_1h_ago = currentIssue.heat_index
     }
 
@@ -278,7 +278,7 @@ export async function calculateBothHeats(issueId: string): Promise<{
         heat_updated_at: now,
     }
 
-    if (shouldBackup && currentIssue?.heat_index !== null) {
+    if (shouldBackup && currentIssue && currentIssue.heat_index !== null) {
         updateData.heat_index_1h_ago = currentIssue.heat_index
     }
 
