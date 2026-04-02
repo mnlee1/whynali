@@ -106,7 +106,8 @@ export async function GET(request: NextRequest) {
         const byProviderId = users.find(
             (u) =>
                 (u.user_metadata?.provider_id === googleId && u.user_metadata?.provider === 'google') ||
-                u.email === syntheticEmail
+                u.email === syntheticEmail ||
+                u.identities?.some(i => i.provider === 'google' && i.id === googleId)
         )
         if (byProviderId) {
             existing = { id: byProviderId.id, email: byProviderId.email!, user_metadata: byProviderId.user_metadata as Record<string, unknown> }
@@ -135,6 +136,13 @@ export async function GET(request: NextRequest) {
                 name: googleName,
             },
         })
+
+        // public.users provider 동기화 (row 없으면 insert, 있으면 provider만 update)
+        await admin.from('users').upsert(
+            { id: userId, provider: '구글', provider_id: userId, display_name: null },
+            { onConflict: 'id', ignoreDuplicates: true }
+        )
+        await admin.from('users').update({ provider: '구글' }).eq('id', userId)
     } else {
         // 신규 유저: 합성 이메일로 계정 생성
         linkEmail = `${googleId}@google.oauth`

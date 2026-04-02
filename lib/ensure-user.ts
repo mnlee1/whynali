@@ -37,7 +37,12 @@ export async function ensurePublicUser(
     user: User
 ): Promise<void> {
     // 관리자 계정(email provider)은 row를 수동 관리하므로 건너뜀
-    const rawProvider = user.app_metadata?.provider ?? user.user_metadata?.provider
+    // app_metadata.provider가 'email'이면 Supabase 매직링크가 덮어쓴 값이므로
+    // user_metadata.provider(OAuth 콜백이 직접 설정한 값)를 우선 사용
+    const appProvider = user.app_metadata?.provider as string | undefined
+    const rawProvider = (appProvider && appProvider !== 'email')
+        ? appProvider
+        : (user.user_metadata?.provider as string | undefined)
     const effectiveEmail = (user.user_metadata?.real_email as string | null) ?? user.email
     if (rawProvider === 'email' || effectiveEmail?.toLowerCase().endsWith('@nhnad.com')) return
 

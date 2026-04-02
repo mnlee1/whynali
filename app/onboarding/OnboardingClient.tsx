@@ -17,9 +17,11 @@ import { useState, useEffect, useRef } from 'react'
 
 interface OnboardingClientProps {
     initialNickname: string
+    provider: string | null
+    providerAccount: string | null
 }
 
-export default function OnboardingClient({ initialNickname }: OnboardingClientProps) {
+export default function OnboardingClient({ initialNickname, provider, providerAccount }: OnboardingClientProps) {
 
 
     const [nickname, setNickname] = useState(initialNickname)
@@ -152,11 +154,33 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
 
     const isFormValid = nicknameValid && isDuplicate === false && termsService && termsPrivacy && ageConfirmed
 
+    const providerLabel: Record<string, string> = {
+        naver: '네이버',
+        kakao: '카카오',
+        google: '구글',
+    }
+    const providerBadgeClass: Record<string, string> = {
+        naver: 'bg-green-500 text-white',
+        kakao: 'bg-yellow-300 text-gray-900',
+        google: 'bg-white border border-gray-300 text-blue-600',
+    }
+
     return (
         <div className="container mx-auto px-4 py-8 max-w-2xl">
             <div className="text-center mb-8">
                 <h1 className="text-2xl font-bold mb-2 text-content-primary">왜난리 시작하기</h1>
                 <p className="text-sm text-content-secondary">닉네임 설정하고 지금 바로 시작하세요</p>
+                {provider && (
+                    <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-surface border border-border rounded-full text-xs text-content-secondary">
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0 ${providerBadgeClass[provider] ?? ''}`}>
+                            {provider === 'naver' ? 'N' : provider === 'kakao' ? 'K' : 'G'}
+                        </span>
+                        <span>
+                            {providerLabel[provider] ?? provider}
+                            {providerAccount ? ` · ${providerAccount}` : ''} 계정으로 가입 중
+                        </span>
+                    </div>
+                )}
             </div>
 
             <div className="mb-8">

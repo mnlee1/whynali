@@ -27,7 +27,6 @@ import SourcesSection from '@/components/issue/SourcesSection'
 import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
-import IssueFAQ from '@/components/issue/IssueFAQ'
 import StatusBadge from '@/components/common/StatusBadge'
 import ViewCounter from '@/components/issue/ViewCounter'
 import { formatDate } from '@/lib/utils/format-date'
@@ -134,10 +133,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         { data: issue, error: issueError },
         { data: discussionTopics },
         { count: voteCount },
-        { count: newsCount },
-        { count: communityCount },
-        { count: reactionCount },
-        { count: commentCount },
         sessionClient,
     ] = await Promise.all([
         adminClient.from('issues').select('*').eq('id', id).single(),
@@ -153,22 +148,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', id)
             .in('phase', ['진행중', '마감']),
-        adminClient
-            .from('news_data')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id),
-        adminClient
-            .from('community_data')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id),
-        adminClient
-            .from('reactions')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id),
-        adminClient
-            .from('comments')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', id),
         createSupabaseServerClient(),
     ])
 
@@ -263,17 +242,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                         {decodeHtml(issue.description)}
                     </p>
                 )}
-            </div>
-
-            {/* FAQ - AI 검색 최적화 */}
-            <div className="mb-6">
-                <IssueFAQ
-                    issue={issue}
-                    newsCount={newsCount ?? 0}
-                    communityCount={communityCount ?? 0}
-                    reactionCount={reactionCount ?? 0}
-                    commentCount={commentCount ?? 0}
-                />
             </div>
 
             {/* 타임라인 */}

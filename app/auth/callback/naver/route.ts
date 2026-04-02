@@ -112,8 +112,9 @@ export async function GET(request: NextRequest) {
     })
 
     // naverId 기반으로 기존 유저 탐색.
-    // 1순위: provider_id + app_metadata.provider 일치
+    // 1순위: provider_id + user_metadata.provider 일치 (커스텀 콜백으로 가입한 유저)
     // 2순위: 합성 이메일(naverId@naver.oauth) 일치 — 메타데이터 불완전 계정도 포착
+    // 3순위: identities 배열에서 naver provider + naverId 일치 — Supabase 네이티브 OAuth로 가입한 유저
     const syntheticEmail = `${naverId}@naver.oauth`
     const perPage = 50
     let existing: { id: string; email: string; app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null = null
@@ -123,7 +124,8 @@ export async function GET(request: NextRequest) {
         const found = users.find(
             (u) =>
                 (u.user_metadata?.provider_id === naverId && u.user_metadata?.provider === 'naver') ||
-                u.email === syntheticEmail
+                u.email === syntheticEmail ||
+                u.identities?.some(i => i.provider === 'naver' && i.id === naverId)
         )
         if (found) {
             existing = { id: found.id, email: found.email!, app_metadata: found.app_metadata as Record<string, unknown>, user_metadata: found.user_metadata as Record<string, unknown> }
@@ -153,6 +155,13 @@ export async function GET(request: NextRequest) {
                 },
             })
         }
+
+        // public.users provider 동기화
+        await admin.from('users').upsert(
+            { id: userId, provider: '네이버', provider_id: userId, display_name: null },
+            { onConflict: 'id', ignoreDuplicates: true }
+        )
+        await admin.from('users').update({ provider: '네이버' }).eq('id', userId)
     } else {
         // 신규 유저: 네이버 프로필 이메일 대신 naverId 기반 고유 이메일 사용
         // (프로필 이메일이 다른 계정과 충돌할 수 있으므로)

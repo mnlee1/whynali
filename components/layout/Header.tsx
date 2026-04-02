@@ -174,14 +174,17 @@ export default function Header() {
             ? { label: '운', className: 'bg-red-500 text-white' }
             : getProviderBadge(user)
 
-        // 드롭다운 서브텍스트: 관리자는 실제 이메일, 일반 유저는 이메일 또는 제공자명
-        // 가짜 합성 이메일 제외 (네이버 이메일 미제공 시 생성한 내부 식별자)
+        // 드롭다운 서브텍스트: 관리자는 실제 이메일, 일반 유저는 실제 이메일 또는 제공자명
+        // 합성 이메일(*.oauth) 제외 — 내부 식별자이므로 노출 금지
         const naverInfo = (user.user_metadata?.naver_nickname as string | undefined)
             ?? (user.user_metadata?.naver_email as string | undefined)
             ?? null
+        const isSyntheticEmail = (email: string) =>
+            email.endsWith('@naver.oauth') || email.endsWith('@kakao.oauth') || email.endsWith('@google.oauth')
+        const realEmail = user.email && !isSyntheticEmail(user.email) ? user.email : null
         const subtitleEmail = isAdmin
             ? user.email
-            : (user.email && !user.email.endsWith('@naver.oauth') ? user.email : naverInfo)
+            : (realEmail ?? naverInfo ?? (user.user_metadata?.real_email as string | undefined) ?? null)
         const subtitleText = subtitleEmail ?? getProviderName(user)
 
         const dropdownMenu = (

@@ -59,7 +59,9 @@ export default async function MypagePage() {
 
     const isSyntheticEmail = (user.email ?? '').match(/@(naver|google|kakao)\.oauth$/)
     const displayEmail = isSyntheticEmail
-        ? ((user.user_metadata?.real_email as string | null) ?? null)
+        ? ((user.user_metadata?.real_email as string | null)
+            ?? (user.user_metadata?.naver_email as string | null)
+            ?? null)
         : (user.email ?? null)
 
     return (
