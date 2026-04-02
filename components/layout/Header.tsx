@@ -276,68 +276,69 @@ export default function Header() {
     return (
         <>
         <header className="sticky top-0 z-50 bg-surface border-b border-border">
-            <div className="container mx-auto px-4">
-                {/* 데스크톱 레이아웃 (1280px 이상) - 1단 구조 */}
-                <div className="hidden xl:flex items-center justify-between h-14">
-                    <div className="flex items-center gap-8">
-                        <Link href="/" className="flex items-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src="/whynali-logo.png"
-                                alt="왜난리"
-                                className="h-8 w-auto"
-                            />
-                        </Link>
-                        <Nav />
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <SearchBar />
-                        <div className="flex items-center gap-1.5">
-                            <AuthButton />
-                            <Link
-                                href={isAdmin ? '/admin' : '/admin/login'}
-                                className="btn-neutral btn-sm"
-                            >
-                                관리자
+            {/* 데스크톱 레이아웃 (1280px 이상) - 1단 구조 */}
+            <div className="hidden xl:block">
+                <div className="container mx-auto px-4">
+                    <div className="flex items-center justify-between h-14">
+                        <div className="flex items-center gap-8 h-full">
+                            <Link href="/" className="flex items-center">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src="/whynali-logo.png"
+                                    alt="왜난리"
+                                    className="h-8 w-auto"
+                                />
                             </Link>
+                            <Nav />
                         </div>
-                    </div>
-                </div>
 
-                {/* 모바일 레이아웃 (1280px 미만) - 상단 바만 container 안에 */}
-                <div className="xl:hidden">
-                    {/* 상단 바: 로고 + 검색 + 유저 */}
-                    <div className="flex items-center justify-between h-12">
-                        <Link href="/" className="flex items-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src="/whynali-logo.png"
-                                alt="왜난리"
-                                className="h-6 w-auto"
-                            />
-                        </Link>
-
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-                                className="p-1.5 text-content-secondary hover:text-content-primary transition-colors"
-                                aria-label="검색"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </button>
-                            <AuthButton mobile />
+                        <div className="flex items-center gap-4">
+                            <SearchBar />
+                            <div className="flex items-center gap-1.5">
+                                <AuthButton />
+                                <Link
+                                    href={isAdmin ? '/admin' : '/admin/login'}
+                                    className="btn-neutral btn-sm"
+                                >
+                                    관리자
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* 모바일 GNB 바 - border가 화면 전체 너비로 표시되도록 container 밖에 위치 */}
+            {/* 모바일 레이아웃 (1280px 미만) - 상단 바 */}
+            <div className="xl:hidden px-4">
+                <div className="flex items-center justify-between h-12">
+                    <Link href="/" className="flex items-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src="/whynali-logo.png"
+                            alt="왜난리"
+                            className="h-6 w-auto"
+                        />
+                    </Link>
+
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+                            className="p-1.5 text-content-secondary hover:text-content-primary transition-colors"
+                            aria-label="검색"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </button>
+                        <AuthButton mobile />
+                    </div>
+                </div>
+            </div>
+
+            {/* 모바일 GNB 바 */}
             <div className="xl:hidden border-t border-border-muted">
                 <div className="overflow-x-auto scrollbar-hide px-4">
-                    <div className="flex gap-5 min-w-max">
+                    <div className="flex items-center gap-5 min-w-max">
                         <Nav mobile />
                     </div>
                 </div>
@@ -348,7 +349,7 @@ export default function Header() {
                 <>
                     {/* 검색바 컨테이너 (GNB 아래에 위치) */}
                     <div className="xl:hidden absolute left-0 right-0 z-50 bg-surface shadow-card border-b border-border">
-                        <div className="container mx-auto px-4 py-3">
+                        <div className="px-4 py-3">
                             <div className="flex items-center gap-3">
                                 <div className="flex-1">
                                     <SearchBar mobile onSearchComplete={() => setMobileSearchOpen(false)} />

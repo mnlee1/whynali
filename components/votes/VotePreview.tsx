@@ -16,11 +16,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Swiper, SwiperSlide } from 'swiper/react'
-import { Autoplay, Pagination } from 'swiper/modules'
+import { Pagination, Autoplay } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
 import type { Vote, VoteChoice } from '@/types/index'
-import { decodeHtml } from '@/lib/utils/decode-html'
 import Tooltip from '@/components/common/Tooltip'
 
 interface VoteWithChoices extends Vote {
@@ -73,14 +72,6 @@ export default function VotePreview({ initialVotes }: Props) {
 
     if (votes.length === 0) return null
 
-    const themes = [
-        { bg: 'bg-violet-50', border: 'border-violet-200', bar: 'from-violet-400 to-purple-500', rankBg: 'bg-violet-100', rankText: 'text-violet-700', pctText: 'text-violet-600', btnBg: 'bg-violet-500', divider: 'border-violet-200', badgeBg: 'bg-violet-100 text-violet-700' },
-        { bg: 'bg-sky-50', border: 'border-sky-200', bar: 'from-sky-400 to-blue-500', rankBg: 'bg-sky-100', rankText: 'text-sky-700', pctText: 'text-sky-600', btnBg: 'bg-sky-500', divider: 'border-sky-200', badgeBg: 'bg-sky-100 text-sky-700' },
-        { bg: 'bg-rose-50', border: 'border-rose-200', bar: 'from-pink-400 to-rose-500', rankBg: 'bg-rose-100', rankText: 'text-rose-700', pctText: 'text-rose-600', btnBg: 'bg-rose-500', divider: 'border-rose-200', badgeBg: 'bg-rose-100 text-rose-700' },
-        { bg: 'bg-amber-50', border: 'border-amber-200', bar: 'from-amber-400 to-orange-500', rankBg: 'bg-amber-100', rankText: 'text-amber-700', pctText: 'text-amber-600', btnBg: 'bg-amber-500', divider: 'border-amber-200', badgeBg: 'bg-amber-100 text-amber-700' },
-        { bg: 'bg-emerald-50', border: 'border-emerald-200', bar: 'from-emerald-400 to-teal-500', rankBg: 'bg-emerald-100', rankText: 'text-emerald-700', pctText: 'text-emerald-600', btnBg: 'bg-emerald-500', divider: 'border-emerald-200', badgeBg: 'bg-emerald-100 text-emerald-700' },
-    ]
-
     const renderCard = (vote: VoteWithChoices, index: number) => {
         const choices = vote.vote_choices ?? []
         const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
@@ -93,54 +84,68 @@ export default function VotePreview({ initialVotes }: Props) {
         const remaining = choices.length - 2
         const firstRatio = totalCount > 0 ? Math.round((first.count / totalCount) * 100) : 0
         const secondRatio = totalCount > 0 && second ? Math.round((second.count / totalCount) * 100) : 0
-        const theme = themes[index % themes.length]
 
         return (
             <Link href={`/issue/${issueId}`}>
-                <div className={`relative ${theme.bg} border ${theme.border} rounded-2xl shadow-card hover:shadow-lg transition-all overflow-hidden group`}>
-                    <div className={`h-1 bg-gradient-to-r ${theme.bar}`} />
-                    <div className="p-5 space-y-4">
-                        <div className="space-y-1 min-h-[3rem]">
-                            <h3 className="text-base font-bold text-content-primary line-clamp-2">
+                <div className="bg-white border border-border rounded-xl shadow-card hover:shadow-lg hover:border-border-strong transition-all duration-200 h-full flex flex-col group">
+                    <div className="p-4 space-y-4 flex-1 flex flex-col">
+                        <div className="space-y-3">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-xs font-semibold text-primary">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                투표 진행중
+                            </span>
+                            <h3 className="text-base font-bold text-content-primary line-clamp-2 leading-snug group-hover:text-primary transition-colors">
                                 {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
                             </h3>
-                            {vote.issues?.title && (
-                                <div className="flex items-center gap-1.5">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${theme.badgeBg}`}>이슈</span>
-                                    <span className="text-xs text-content-secondary truncate font-medium">
-                                        {vote.issues.title}
-                                    </span>
-                                </div>
-                            )}
                         </div>
-                        <div className="space-y-2">
-                            <div className={`${theme.rankBg} rounded-xl p-3`}>
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className={`text-xs font-bold ${theme.rankText}`}>1위</span>
-                                    <span className={`text-2xl font-black ${theme.pctText}`}>{firstRatio}%</span>
-                                </div>
-                                <p className="text-sm font-semibold text-content-primary line-clamp-1">{first.label}</p>
-                            </div>
-                            {second && (
-                                <div className="bg-white/70 border border-border rounded-xl p-3">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-xs font-bold text-content-muted">2위</span>
-                                        <span className="text-xl font-bold text-content-secondary">{secondRatio}%</span>
+
+                        <div className="space-y-2 flex-1">
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="text-xs font-semibold text-content-secondary shrink-0">1위</span>
+                                        <p className="text-sm font-semibold text-content-primary line-clamp-1">{first.label}</p>
                                     </div>
-                                    <p className="text-sm font-medium text-content-secondary line-clamp-1">{second.label}</p>
+                                    <span className="text-sm font-bold text-primary ml-2 shrink-0">{firstRatio}%</span>
+                                </div>
+                                <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-gradient-primary rounded-full transition-all duration-500" 
+                                        style={{ width: `${firstRatio}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {second && (
+                                <div className="relative">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <span className="text-xs font-semibold text-content-muted shrink-0">2위</span>
+                                            <p className="text-sm font-medium text-content-secondary line-clamp-1">{second.label}</p>
+                                        </div>
+                                        <span className="text-sm font-bold text-content-secondary ml-2 shrink-0">{secondRatio}%</span>
+                                    </div>
+                                    <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-border-strong rounded-full transition-all duration-500" 
+                                            style={{ width: `${secondRatio}%` }}
+                                        />
+                                    </div>
                                 </div>
                             )}
+                            
                             {remaining > 0 && (
-                                <p className="text-xs text-content-muted text-center">외 {remaining}개 선택지</p>
+                                <p className="text-xs text-content-muted pt-1">외 {remaining}개</p>
                             )}
                         </div>
-                        <div className={`flex items-center justify-between pt-3 border-t ${theme.divider}`}>
-                            <span className="text-xs text-content-secondary font-medium">
+
+                        <div className="flex items-center justify-between pt-3 border-t border-border-muted">
+                            <span className="text-xs text-content-muted font-medium">
                                 {totalCount.toLocaleString()}명 참여
                             </span>
-                            <div className={`px-4 py-1.5 ${theme.btnBg} rounded-full`}>
-                                <span className="text-xs font-bold text-white">투표하기</span>
-                            </div>
+                            <span className="text-xs font-semibold text-primary group-hover:underline">
+                                참여하기
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -149,39 +154,62 @@ export default function VotePreview({ initialVotes }: Props) {
     }
 
     return (
-        <section>
-            <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-content-primary">지금 투표 중</h2>
-                <Tooltip label="참여도순" text="투표 참여 수가 가장 많은 순으로 정렬됩니다." />
+        <section className="py-6 md:py-8">
+            <div className="container mx-auto">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-content-primary">지금 투표 중</h2>
+                    <Tooltip label="참여도순" text="투표 참여 수가 가장 많은 순으로 정렬됩니다." />
+                </div>
             </div>
 
-            <div className="py-2 -my-2">
-            <Swiper
-                modules={[Autoplay, Pagination]}
-                spaceBetween={12}
-                slidesPerView="auto"
-                autoplay={votes.length > 1 ? { delay: 5000, disableOnInteraction: false } : false}
-                pagination={votes.length > 1 ? {
-                    clickable: true,
-                    bulletClass: 'swiper-pagination-bullet !bg-neutral-300',
-                    bulletActiveClass: 'swiper-pagination-bullet-active !bg-violet-500',
-                } : false}
-                loop={votes.length > 2}
-                className={votes.length > 1 ? '!overflow-visible !pb-10 !-mr-4 md:!mr-0' : '!overflow-visible'}
-            >
-                {votes.map((vote, index) => (
-                    <SwiperSlide
-                        key={vote.id}
-                        className={
-                            votes.length === 1
-                                ? '!w-full md:!w-96'
-                                : '!w-[85%] md:!w-96'
-                        }
-                    >
-                        {renderCard(vote, index)}
-                    </SwiperSlide>
-                ))}
-            </Swiper>
+            <div className="container mx-auto">
+                <Swiper
+                    modules={[Pagination, Autoplay]}
+                    spaceBetween={12}
+                    slidesPerView={1}
+                    loop={true}
+                    autoplay={{
+                        delay: 3000,
+                        disableOnInteraction: false,
+                    }}
+                    pagination={{
+                        clickable: true,
+                        enabled: true,
+                    }}
+                    breakpoints={{
+                        640: {
+                            slidesPerView: 2,
+                            spaceBetween: 12,
+                        },
+                        1024: {
+                            slidesPerView: 3,
+                            spaceBetween: 12,
+                        },
+                        1280: {
+                            slidesPerView: 4,
+                            spaceBetween: 12,
+                        },
+                        1536: {
+                            slidesPerView: 5,
+                            spaceBetween: 12,
+                            loop: false,
+                            autoplay: false,
+                            pagination: {
+                                enabled: false,
+                            },
+                        },
+                    }}
+                    className="vote-swiper"
+                >
+                    {votes.map((vote, index) => (
+                        <SwiperSlide
+                            key={vote.id}
+                            className="!h-auto"
+                        >
+                            {renderCard(vote, index)}
+                        </SwiperSlide>
+                    ))}
+                </Swiper>
             </div>
         </section>
     )
