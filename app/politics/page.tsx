@@ -4,15 +4,35 @@
  * [정치 카테고리 페이지]
  */
 
+import type { Metadata } from 'next'
+import Script from 'next/script'
 import IssueList from '@/components/issues/IssueList'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
+import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
+
+export const metadata: Metadata = {
+    title: '정치 이슈',
+    description: '정치계의 최신 이슈와 논란을 한눈에. 국회, 정당, 선거, 정책, 정부의 주요 사건과 뉴스를 실시간으로 확인하세요.',
+    keywords: ['정치', '국회', '정당', '선거', '정책', '정부', '정치 이슈', '정치 뉴스'],
+    openGraph: {
+        title: '정치 이슈 | 왜난리',
+        description: '정치계의 최신 이슈와 논란을 한눈에. 국회, 정당, 선거, 정책, 정부의 주요 사건과 뉴스를 실시간으로 확인하세요.',
+    },
+}
 
 export const revalidate = 900
 
 const MIN_HEAT = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 export default async function PoliticsPage() {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const collectionSchema = generateCollectionPageSchema('정치')
+    const breadcrumbSchema = generateBreadcrumbSchema([
+        { name: '홈', url: baseUrl },
+        { name: '정치', url: `${baseUrl}/politics` },
+    ])
+
     const { data, count } = await supabaseAdmin
         .from('issues')
         .select('*', { count: 'exact' })
@@ -25,12 +45,24 @@ export default async function PoliticsPage() {
         .range(0, 19)
 
     return (
-        <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl font-bold text-content-primary mb-6">정치 이슈</h1>
-            <IssueList
-                category="정치"
-                initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+        <>
+            <Script
+                id="politics-collection-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(collectionSchema)}
             />
-        </div>
+            <Script
+                id="politics-breadcrumb-schema"
+                type="application/ld+json"
+                dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
+            />
+            <div className="container mx-auto px-4 py-6 md:py-8">
+                <h1 className="text-2xl font-bold text-content-primary mb-6">정치 이슈</h1>
+                <IssueList
+                    category="정치"
+                    initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+                />
+            </div>
+        </>
     )
 }

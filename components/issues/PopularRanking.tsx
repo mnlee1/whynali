@@ -1,10 +1,11 @@
 /**
  * components/issues/PopularRanking.tsx
  *
- * [지금 뜨는 이슈 랭킹 사이드 패널]
+ * [지금 뜨는 이슈 / 급상승 중 랭킹 사이드 패널]
  *
  * 메인화면 오른쪽 사이드에 배치되는 랭킹 섹션입니다.
- * 현재 화력 상위 이슈 최대 6개를 순위 목록으로 보여줍니다.
+ * - 기본 모드: 화력 상위 이슈 (최근 7일)
+ * - 급상승 모드: 1시간 기준 화력 증가율 상위 이슈
  *
  * initialIssues prop이 제공되면 SSR 데이터를 바로 사용하고,
  * 없으면 클라이언트에서 직접 fetch합니다.
@@ -20,8 +21,13 @@ import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatDate } from '@/lib/utils/format-date'
 import Tooltip from '@/components/common/Tooltip'
 
+interface IssueWithSurge extends Issue {
+    surgePct?: number
+}
+
 interface Props {
-    initialIssues?: Issue[]
+    initialIssues?: IssueWithSurge[]
+    isSurging?: boolean
 }
 
 function filterThisWeek(issues: Issue[]): Issue[] {
@@ -31,9 +37,9 @@ function filterThisWeek(issues: Issue[]): Issue[] {
         .slice(0, 6)
 }
 
-export default function PopularRanking({ initialIssues }: Props) {
-    const [issues, setIssues] = useState<Issue[]>(
-        initialIssues ? filterThisWeek(initialIssues) : []
+export default function PopularRanking({ initialIssues, isSurging = false }: Props) {
+    const [issues, setIssues] = useState<IssueWithSurge[]>(
+        initialIssues ? (isSurging ? initialIssues.slice(0, 6) : filterThisWeek(initialIssues)) : []
     )
     const [loading, setLoading] = useState(!initialIssues)
     const [activeIndex, setActiveIndex] = useState(0)
@@ -66,8 +72,16 @@ export default function PopularRanking({ initialIssues }: Props) {
             {/* 헤더 */}
             <div className="mb-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-content-primary">지금 뜨는 이슈</h2>
-                    <Tooltip label="화력순" text="최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬합니다." />
+                    <h2 className="text-base font-bold text-content-primary">
+                        {isSurging ? '🔥 급상승 중' : '지금 뜨는 이슈'}
+                    </h2>
+                    <Tooltip 
+                        label={isSurging ? "증가율순" : "화력순"} 
+                        text={isSurging 
+                            ? "최근 1시간 기준 화력 증가율이 높은 이슈를 보여줍니다." 
+                            : "최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬합니다."
+                        } 
+                    />
                 </div>
             </div>
 
@@ -108,6 +122,14 @@ export default function PopularRanking({ initialIssues }: Props) {
                                                 <span>{issue.category}</span>
                                                 <span>·</span>
                                                 <span>{formatDate(issue.created_at)}</span>
+                                                {isSurging && issue.surgePct !== undefined && issue.surgePct > 0 && (
+                                                    <>
+                                                        <span>·</span>
+                                                        <span className="text-red-500 font-semibold">
+                                                            ↑{issue.surgePct.toFixed(0)}%
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </article>
