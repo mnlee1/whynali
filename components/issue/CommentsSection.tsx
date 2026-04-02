@@ -627,7 +627,7 @@ export default function CommentsSection({
                     <p className="text-xs text-content-secondary">
                         <span className="mr-1">🤖</span>
                         {safetyBotEnabled ? (
-                            <><span className="text-green-500 font-medium">세이프티봇</span>이 불쾌한 댓글로부터 보호하고 있어요.</>
+                            <><span className="text-green-500 font-medium">세이프티봇</span>이 악성 댓글로부터 보호합니다.</>
                         ) : (
                             <><span className="text-green-500 font-medium">세이프티봇</span>이 꺼져 있어요. 모든 댓글이 표시됩니다.</>
                         )}
