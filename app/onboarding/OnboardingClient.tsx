@@ -155,133 +155,141 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
     return (
         <div className="container mx-auto px-4 py-8 max-w-2xl">
             <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold mb-2">왜난리 시작하기</h1>
-                <p className="text-gray-600">약관 동의 및 닉네임 설정을 완료해주세요</p>
-            </div>
-
-            <div className="mb-8 p-6 bg-gray-50 rounded-lg">
-                <h2 className="text-lg font-semibold mb-1">닉네임</h2>
-                <p className="text-xs text-gray-400 mb-3">한글·영문·숫자·_ 사용 가능, 2~16자</p>
-                <div className="flex items-center gap-3 mb-2">
-                    <input
-                        type="text"
-                        value={nickname}
-                        onChange={(e) => setNickname(e.target.value)}
-                        maxLength={16}
-                        className={`flex-1 px-4 py-3 bg-white rounded-lg border font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            nicknameValidationMsg ? 'border-red-400' : nicknameValid ? 'border-green-400' : 'border-gray-300'
-                        }`}
-                        placeholder="닉네임 입력"
-                    />
-                    <button
-                        onClick={handleRegenerate}
-                        disabled={regenerateCount >= 5 || isRegenerating}
-                        className="btn-primary btn-md whitespace-nowrap"
-                    >
-                        {isRegenerating ? '생성 중...' : '랜덤 생성'}
-                    </button>
-                </div>
-                {nicknameValidationMsg ? (
-                    <p className="text-xs text-red-500">{nicknameValidationMsg}</p>
-                ) : nicknameValid ? (
-                    isCheckingDuplicate ? (
-                        <p className="text-xs text-gray-400">중복 확인 중...</p>
-                    ) : isDuplicate === true ? (
-                        <p className="text-xs text-red-500">이미 사용 중인 닉네임입니다.</p>
-                    ) : isDuplicate === false ? (
-                        <p className="text-xs text-green-600">사용 가능한 닉네임입니다.</p>
-                    ) : null
-                ) : (
-                    <p className="text-xs text-gray-500">
-                        랜덤 닉네임을 사용하거나 직접 입력할 수 있어요 ({regenerateCount}/5)
-                    </p>
-                )}
+                <h1 className="text-2xl font-bold mb-2 text-content-primary">왜난리 시작하기</h1>
+                <p className="text-sm text-content-secondary">닉네임 설정하고 지금 바로 시작하세요</p>
             </div>
 
             <div className="mb-8">
-                <h2 className="text-lg font-semibold mb-4">약관 동의</h2>
+                <div className="p-6 bg-surface rounded-xl border border-border shadow-card">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-base font-semibold">닉네임</h2>
+                        <p className="text-xs text-content-muted">한글·영문·숫자·_ 사용 가능, 2~16자</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                        <div className="flex-1">
+                            <input
+                                type="text"
+                                value={nickname}
+                                onChange={(e) => setNickname(e.target.value)}
+                                maxLength={16}
+                                className={`w-full px-4 py-3 bg-white rounded-xl border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary ${
+                                    nicknameValidationMsg ? 'border-red-400' : nicknameValid ? 'border-green-400' : 'border-border'
+                                }`}
+                                placeholder="닉네임 입력"
+                            />
+                            <div className="mt-2">
+                                {nicknameValidationMsg ? (
+                                    <p className="text-xs text-red-500">{nicknameValidationMsg}</p>
+                                ) : nicknameValid ? (
+                                    isCheckingDuplicate ? (
+                                        <p className="text-xs text-gray-400">중복 확인 중...</p>
+                                    ) : isDuplicate === true ? (
+                                        <p className="text-xs text-red-500">이미 사용 중인 닉네임입니다.</p>
+                                    ) : isDuplicate === false ? (
+                                        <p className="text-xs text-green-600">사용 가능한 닉네임입니다.</p>
+                                    ) : null
+                                ) : (
+                                    <p className="text-xs text-gray-500">
+                                        랜덤 닉네임을 사용하거나 직접 입력할 수 있어요 ({regenerateCount}/5)
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleRegenerate}
+                            disabled={regenerateCount >= 5 || isRegenerating}
+                            className="btn-primary btn-md whitespace-nowrap text-sm sm:mt-0"
+                        >
+                            {isRegenerating ? '생성 중...' : '랜덤 생성'}
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-                <div className="mb-4 p-4 border border-gray-300 rounded-lg">
-                    <label className="flex items-center gap-2 cursor-pointer">
+            <div className="mb-8">
+                <h2 className="text-base font-semibold mb-4">약관 동의</h2>
+
+                <div className="mb-4 p-4 bg-surface rounded-xl border border-border shadow-card">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
                         <input
                             ref={allAgreeRef}
                             type="checkbox"
                             checked={allChecked}
                             onChange={(e) => handleAllAgree(e.target.checked)}
-                            className="w-5 h-5"
+                            className="w-4 h-4 rounded-md accent-primary cursor-pointer"
                         />
-                        <span className="font-medium">전체 동의</span>
-                        <span className="text-xs text-gray-400">(선택 항목 포함)</span>
+                        <span className="text-sm font-medium">전체 동의</span>
+                        <span className="text-xs text-content-muted">(선택 항목 포함)</span>
                     </label>
                 </div>
 
-                <div className="space-y-4">
-                    <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
+                <div className="space-y-3">
+                    <div className="bg-surface border border-primary rounded-xl p-4 shadow-card">
+                        <label className="flex items-center gap-2.5 cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={ageConfirmed}
                                 onChange={(e) => setAgeConfirmed(e.target.checked)}
-                                className="w-5 h-5"
+                                className="w-4 h-4 rounded-md accent-primary cursor-pointer"
                             />
-                            <span className="font-medium">[필수] 본인은 만 14세 이상입니다</span>
+                            <span className="text-sm font-medium">[필수] 본인은 만 14세 이상입니다</span>
                         </label>
-                        <p className="text-xs text-gray-500 mt-2 ml-7">
+                        <p className="text-xs text-content-secondary mt-3 ml-[26px]">
                             정보통신망법 제31조에 따라 만 14세 미만은 법정대리인의 동의가 필요합니다.
                         </p>
                     </div>
 
-                    <div className="border border-gray-300 rounded-lg p-4">
-                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <div className="bg-surface rounded-xl border border-border p-4 shadow-card">
+                        <label className="flex items-center gap-2.5 cursor-pointer mb-2">
                             <input
                                 type="checkbox"
                                 checked={termsService}
                                 onChange={(e) => setTermsService(e.target.checked)}
-                                className="w-5 h-5"
+                                className="w-4 h-4 rounded-md accent-primary cursor-pointer"
                             />
-                            <span className="font-medium">[필수] 서비스 이용약관 동의</span>
+                            <span className="text-sm font-medium">[필수] 서비스 이용약관 동의</span>
                         </label>
                         <a
                             href="/terms"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm text-blue-500 hover:underline"
+                            className="ml-[26px] text-xs text-primary hover:underline inline-flex items-center gap-1"
                         >
-                            전문 보기 ↗
+                            약관 보기 ↗
                         </a>
                     </div>
 
-                    <div className="border border-gray-300 rounded-lg p-4">
-                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <div className="bg-surface rounded-xl border border-border p-4 shadow-card">
+                        <label className="flex items-center gap-2.5 cursor-pointer mb-2">
                             <input
                                 type="checkbox"
                                 checked={termsPrivacy}
                                 onChange={(e) => setTermsPrivacy(e.target.checked)}
-                                className="w-5 h-5"
+                                className="w-4 h-4 rounded-md accent-primary cursor-pointer"
                             />
-                            <span className="font-medium">[필수] 개인정보 처리방침 동의</span>
+                            <span className="text-sm font-medium">[필수] 개인정보 처리방침 동의</span>
                         </label>
                         <a
                             href="/privacy"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm text-blue-500 hover:underline"
+                            className="ml-[26px] text-xs text-primary hover:underline inline-flex items-center gap-1"
                         >
-                            전문 보기 ↗
+                            약관 보기 ↗
                         </a>
                     </div>
 
-                    <div className="border border-gray-300 rounded-lg p-4">
-                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <div className="bg-surface rounded-xl border border-border p-4 shadow-card">
+                        <label className="flex items-center gap-2.5 cursor-pointer mb-2">
                             <input
                                 type="checkbox"
                                 checked={marketing}
                                 onChange={(e) => setMarketing(e.target.checked)}
-                                className="w-5 h-5"
+                                className="w-4 h-4 rounded-md accent-primary cursor-pointer"
                             />
-                            <span className="font-medium">[선택] 마케팅 수신 동의</span>
+                            <span className="text-sm font-medium">[선택] 마케팅 수신 동의</span>
                         </label>
-                        <p className="text-xs text-gray-500 ml-7">
+                        <p className="text-xs text-content-secondary mt-3 ml-[26px]">
                             이메일 주소를 통해 서비스 업데이트, 이벤트·혜택 정보를 받습니다.
                             동의하지 않아도 서비스 이용에 불이익이 없으며, 마이페이지에서 언제든지 변경 가능합니다.
                         </p>
@@ -290,7 +298,7 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
             </div>
 
             {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 shadow-card">
                     {error}
                 </div>
             )}
@@ -298,7 +306,7 @@ export default function OnboardingClient({ initialNickname }: OnboardingClientPr
             <button
                 onClick={handleSubmit}
                 disabled={!isFormValid || isSubmitting}
-                className="btn-primary btn-lg w-full"
+                className="btn-primary btn-md sm:btn-lg w-full"
             >
                 {isSubmitting ? '처리 중...' : '시작하기'}
             </button>

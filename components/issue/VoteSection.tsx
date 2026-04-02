@@ -196,8 +196,8 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
                 {/* 로그인 사용자용 간단 안내 */}
                 {userId && activeVotes.length > 0 && (
-                    <div className="p-3 bg-primary-light border border-primary-muted rounded-xl">
-                        <p className="text-xs text-primary">
+                    <div className="p-3 bg-surface-muted border border-border rounded-xl">
+                        <p className="text-xs text-content-secondary">
                             💡 선택지를 클릭하여 투표하세요. 다시 클릭하면 취소할 수 있습니다.
                         </p>
                     </div>
