@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
-import { sanitizeText, validateContent, checkRateLimit } from '@/lib/safety'
+import { sanitizeText, validateContent, checkRateLimit, loadBannedWords, getSafetyBotEnabled } from '@/lib/safety'
 import { toUserMessage } from '@/lib/api-errors'
 import { ensurePublicUser } from '@/lib/ensure-user'
 
@@ -165,15 +165,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'issue_id 또는 discussion_topic_id가 필요합니다.' }, { status: 400 })
     }
 
-    /* DB 금칙어 조회 (실패 시 빈 배열로 폴백 — 하드코딩 금칙어는 항상 적용) */
-    const adminClient = createSupabaseAdminClient()
-    const { data: dbRules } = await adminClient
-        .from('safety_rules')
-        .select('value')
-        .eq('kind', 'banned_word')
-    const dbBannedWords = (dbRules ?? []).map((r: { value: string }) => r.value)
+    /* DB 금칙어 조회 (banned_word + ai_banned_word) 및 세이프티봇 ON/OFF 확인 */
+    const [dbBannedWords, safetyBotEnabled] = await Promise.all([
+        loadBannedWords(admin),
+        getSafetyBotEnabled(admin),
+    ])
 
-    const { valid, pendingReview, reason } = validateContent(content, 'comment', dbBannedWords)
+    const { valid, pendingReview, reason } = validateContent(content, 'comment', dbBannedWords, safetyBotEnabled)
     if (!valid && !pendingReview) {
         return NextResponse.json({ error: reason }, { status: 400 })
     }
