@@ -44,5 +44,31 @@ export default async function OnboardingPage() {
 
     const initialNickname = await generateUniqueNickname(adminClient)
 
-    return <OnboardingClient initialNickname={initialNickname} />
+    const provider = (user.user_metadata?.provider ?? user.app_metadata?.provider) as string | undefined
+    const providerAccount = (() => {
+        switch (provider) {
+            case 'naver':
+                return (user.user_metadata?.naver_nickname as string | undefined)
+                    ?? (user.user_metadata?.naver_email as string | undefined)
+                    ?? null
+            case 'kakao':
+                return (user.user_metadata?.kakao_nickname as string | undefined)
+                    ?? (user.user_metadata?.real_email as string | undefined)
+                    ?? null
+            case 'google':
+                return (user.user_metadata?.name as string | undefined)
+                    ?? (user.user_metadata?.real_email as string | undefined)
+                    ?? null
+            default:
+                return null
+        }
+    })()
+
+    return (
+        <OnboardingClient
+            initialNickname={initialNickname}
+            provider={provider ?? null}
+            providerAccount={providerAccount}
+        />
+    )
 }
