@@ -20,7 +20,7 @@ export default async function MypagePage() {
 
     const { data: userData } = await admin
         .from('users')
-        .select('display_name, provider, created_at, marketing_agreed')
+        .select('display_name, provider, created_at, marketing_agreed, contact_email, provider_email')
         .eq('id', user.id)
         .single()
 
@@ -57,21 +57,32 @@ export default async function MypagePage() {
             .limit(30),
     ])
 
-    const isSyntheticEmail = (user.email ?? '').match(/@(naver|google|kakao)\.oauth$/)
-    const displayEmail = isSyntheticEmail
-        ? ((user.user_metadata?.real_email as string | null)
-            ?? (user.user_metadata?.naver_email as string | null)
-            ?? null)
-        : (user.email ?? null)
+    const providerAccount = isAdmin
+        ? (user.email ?? null)
+        : (userData?.provider_email ?? null)
+
+    // 운영자 contact_email이 DB에 없으면 가입 이메일로 자동 저장
+    const adminEmail = user.email ?? null
+    if (isAdmin && !userData?.contact_email && adminEmail) {
+        await admin
+            .from('users')
+            .update({ contact_email: adminEmail, marketing_agreed: true })
+            .eq('id', user.id)
+    }
+
+    const contactEmail = isAdmin
+        ? (userData?.contact_email ?? adminEmail)
+        : (userData?.contact_email ?? null)
 
     return (
         <MypageClient
             userId={user.id}
             provider={userData?.provider ?? ''}
-            email={displayEmail}
-            displayName={userData?.display_name ?? (displayEmail ?? '관리자')}
+            displayName={userData?.display_name ?? '관리자'}
             joinedAt={userData?.created_at ?? user.created_at ?? new Date().toISOString()}
-            marketingAgreed={userData?.marketing_agreed ?? false}
+            marketingAgreed={userData?.marketing_agreed ?? true}
+            contactEmail={contactEmail}
+            providerAccount={providerAccount}
             isAdmin={isAdmin}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             comments={(commentsRes.data ?? []) as any[]}

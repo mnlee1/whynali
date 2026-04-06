@@ -16,16 +16,24 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { marketingAgreed } = body
+    const { marketingAgreed, contactEmail } = body
 
-    if (typeof marketingAgreed !== 'boolean') {
+    if (typeof marketingAgreed !== 'boolean' && contactEmail === undefined) {
         return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 })
+    }
+
+    const updatePayload: Record<string, unknown> = {}
+    if (typeof marketingAgreed === 'boolean') updatePayload.marketing_agreed = marketingAgreed
+    if (contactEmail !== undefined) {
+        updatePayload.contact_email = typeof contactEmail === 'string' && contactEmail.trim()
+            ? contactEmail.trim()
+            : null
     }
 
     const admin = createSupabaseAdminClient()
     const { error: updateError } = await admin
         .from('users')
-        .update({ marketing_agreed: marketingAgreed })
+        .update(updatePayload)
         .eq('id', user.id)
 
     if (updateError) {

@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
             { id: userId, provider: '네이버', provider_id: userId, display_name: null },
             { onConflict: 'id', ignoreDuplicates: true }
         )
-        await admin.from('users').update({ provider: '네이버' }).eq('id', userId)
+        await admin.from('users').update({ provider: '네이버', provider_email: naverEmail }).eq('id', userId)
     } else {
         // 신규 유저: 네이버 프로필 이메일 대신 naverId 기반 고유 이메일 사용
         // (프로필 이메일이 다른 계정과 충돌할 수 있으므로)
@@ -181,6 +181,7 @@ export async function GET(request: NextRequest) {
             id: userId,
             provider: '네이버',
             provider_id: naverId,
+            provider_email: naverEmail,
             display_name: null,
         })
     }

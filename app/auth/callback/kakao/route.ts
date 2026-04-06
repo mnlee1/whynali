@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
             { id: userId, provider: '카카오', provider_id: userId, display_name: null },
             { onConflict: 'id', ignoreDuplicates: true }
         )
-        await admin.from('users').update({ provider: '카카오' }).eq('id', userId)
+        await admin.from('users').update({ provider: '카카오', provider_email: kakaoEmail }).eq('id', userId)
     } else {
         // 신규 유저: 합성 이메일로 계정 생성
         linkEmail = `${kakaoId}@kakao.oauth`
@@ -163,6 +163,7 @@ export async function GET(request: NextRequest) {
             id: userId,
             provider: '카카오',
             provider_id: kakaoId,
+            provider_email: kakaoEmail,
             display_name: null,
         })
     }

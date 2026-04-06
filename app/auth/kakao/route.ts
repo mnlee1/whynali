@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
         redirect_uri: redirectUri,
         state,
         scope: 'account_email',
+        prompt: 'select_account',
     })
 
     return NextResponse.redirect(`${KAKAO_AUTH_URL}?${params.toString()}`)
