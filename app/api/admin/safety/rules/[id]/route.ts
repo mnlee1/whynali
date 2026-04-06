@@ -25,6 +25,12 @@ export async function PATCH(
             return NextResponse.json({ error: '올바른 kind 값이 아닙니다.' }, { status: 400 })
         }
 
+        const { data: prevRule } = await supabaseAdmin
+            .from('safety_rules')
+            .select('value, kind')
+            .eq('id', id)
+            .single()
+
         const { data, error } = await supabaseAdmin
             .from('safety_rules')
             .update({ kind })
@@ -37,7 +43,13 @@ export async function PATCH(
             return NextResponse.json({ error: '규칙을 찾을 수 없습니다.' }, { status: 404 })
         }
 
-        await writeAdminLog(`금칙어 종류 변경 → ${kind}`, 'safety_rule', id, auth.adminEmail)
+        const actionLabel =
+            kind === 'excluded_word'
+                ? '금칙어 제외 처리'
+                : kind === 'ai_banned_word' && prevRule?.kind === 'excluded_word'
+                  ? '금칙어 복원'
+                  : '금칙어 종류 변경'
+        await writeAdminLog(actionLabel, 'safety_rule', id, auth.adminEmail, prevRule?.value ?? null)
         return NextResponse.json({ data })
     } catch {
         return NextResponse.json({ error: 'kind 변경 실패' }, { status: 500 })
