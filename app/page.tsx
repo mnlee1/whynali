@@ -56,7 +56,7 @@ async function fetchPageData() {
             .order('heat_index', { ascending: false, nullsFirst: false })
             .limit(30),
 
-        // PopularRanking용 급상승 이슈 (heat_index_1h_ago가 있는 이슈만)
+        // PopularRanking용 급상승 이슈 (heat_index_1h_ago가 있는 이슈만, 종결 제외)
         supabaseAdmin
             .from('issues')
             .select('*')
@@ -65,6 +65,7 @@ async function fetchPageData() {
             .is('merged_into_id', null)
             .gte('heat_index', MIN_HEAT)
             .not('heat_index_1h_ago', 'is', null)
+            .neq('status', '종결')
             .order('heat_index', { ascending: false, nullsFirst: false })
             .limit(50),
 

@@ -72,7 +72,7 @@ async function checkCategoryIssues() {
     console.log('카테고리 | 전체 | 대기 | 승인 | 반려 | 평균화력')
     console.log('-'.repeat(60))
     
-    const categories = ['연예', '정치', '사회', '경제', 'IT과학', '생활문화', '세계', '스포츠']
+    const categories = ['연예', '정치', '사회', '경제', '기술', '세계', '스포츠']
     categories.forEach(cat => {
         const stat = categoryStats[cat] || { total: 0, pending: 0, approved: 0, rejected: 0, avgHeat: 0 }
         console.log(`${cat.padEnd(8)} | ${String(stat.total).padStart(4)} | ${String(stat.pending).padStart(4)} | ${String(stat.approved).padStart(4)} | ${String(stat.rejected).padStart(4)} | ${stat.avgHeat.toFixed(1).padStart(6)}점`)
