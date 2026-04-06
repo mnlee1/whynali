@@ -168,40 +168,16 @@ export default function Header() {
             : (displayName || '유저')
         // 드롭다운 상단: 버튼과 동일하게 표시
         const dropdownName = name
-        // 관리자는 아바타·뱃지 모두 '운' 고정
         const initial = isAdmin ? '운' : dropdownName.charAt(0).toUpperCase()
-        const badge = isAdmin
-            ? { label: '운', className: 'bg-red-500 text-white' }
-            : getProviderBadge(user)
-
-        // 드롭다운 서브텍스트: 관리자는 실제 이메일, 일반 유저는 실제 이메일 또는 제공자명
-        // 합성 이메일(*.oauth) 제외 — 내부 식별자이므로 노출 금지
-        const naverInfo = (user.user_metadata?.naver_nickname as string | undefined)
-            ?? (user.user_metadata?.naver_email as string | undefined)
-            ?? null
-        const isSyntheticEmail = (email: string) =>
-            email.endsWith('@naver.oauth') || email.endsWith('@kakao.oauth') || email.endsWith('@google.oauth')
-        const realEmail = user.email && !isSyntheticEmail(user.email) ? user.email : null
-        const subtitleEmail = isAdmin
-            ? user.email
-            : (realEmail ?? naverInfo ?? (user.user_metadata?.real_email as string | undefined) ?? null)
-        const subtitleText = subtitleEmail ?? getProviderName(user)
+        const subtitleText = null
 
         const dropdownMenu = (
             <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-xl shadow-card z-50">
-                <div className="px-4 py-3 border-b border-border-muted">
-                    <p className="text-sm font-semibold text-content-primary truncate">{dropdownName}</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                        {badge && (
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0 ${badge.className}`}>
-                                {badge.label}
-                            </div>
-                        )}
-                        <span className="text-xs text-content-muted truncate">
-                            {subtitleText}
-                        </span>
+                {subtitleText && (
+                    <div className="px-4 py-3 border-b border-border-muted">
+                        <span className="text-xs text-content-muted truncate block">{subtitleText}</span>
                     </div>
-                </div>
+                )}
                 <div className="p-2">
                     <Link
                         href="/mypage"
@@ -228,15 +204,8 @@ export default function Header() {
                         className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-surface-subtle transition-colors"
                         aria-label="사용자 메뉴"
                     >
-                        <div className="relative">
-                            <div className="w-7 h-7 rounded-full bg-primary-light flex items-center justify-center text-sm font-semibold text-primary">
-                                {initial}
-                            </div>
-                            {badge && (
-                                <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none ${badge.className}`}>
-                                    {badge.label}
-                                </div>
-                            )}
+                        <div className="w-7 h-7 rounded-full bg-primary-light flex items-center justify-center text-sm font-semibold text-primary">
+                            {initial}
                         </div>
                         <svg xmlns="http://www.w3.org/2000/svg" className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -254,16 +223,9 @@ export default function Header() {
                         className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-surface-subtle transition-colors"
                         aria-label="사용자 메뉴"
                     >
-                        <div className="relative">
-                            <div className="w-6 h-6 rounded-full bg-primary-light flex items-center justify-center text-xs font-semibold text-primary">
-                                {initial}
-                            </div>
-                        {badge && (
-                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-bold leading-none ${badge.className}`}>
-                                {badge.label}
-                            </div>
-                        )}
-                    </div>
+                        <div className="w-6 h-6 rounded-full bg-primary-light flex items-center justify-center text-xs font-semibold text-primary">
+                            {initial}
+                        </div>
                     <span className="hidden xl:inline text-sm font-medium text-content-primary max-w-[14ch] truncate">
                         {name}
                     </span>

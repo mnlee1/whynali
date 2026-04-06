@@ -14,14 +14,16 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { validateEmail } from '@/lib/validate-email'
 
 interface OnboardingClientProps {
     initialNickname: string
     provider: string | null
     providerAccount: string | null
+    oauthEmail: string | null
 }
 
-export default function OnboardingClient({ initialNickname, provider, providerAccount }: OnboardingClientProps) {
+export default function OnboardingClient({ initialNickname, provider, providerAccount, oauthEmail }: OnboardingClientProps) {
 
 
     const [nickname, setNickname] = useState(initialNickname)
@@ -66,6 +68,10 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
     const [termsPrivacy, setTermsPrivacy] = useState(false)
     const [ageConfirmed, setAgeConfirmed] = useState(false)
     const [marketing, setMarketing] = useState(false)
+    const [contactEmail, setContactEmail] = useState(oauthEmail ?? '')
+    const [isEditingEmail, setIsEditingEmail] = useState(!oauthEmail)
+    const contactEmailError = contactEmail.trim() !== '' ? validateEmail(contactEmail) : null
+    const contactEmailValid = contactEmail.trim() !== '' && contactEmailError === null
 
     // 전체 동의: 필수 3개는 모두 체크, 선택(마케팅)은 미체크 → indeterminate 상태
     const allRequired = termsService && termsPrivacy && ageConfirmed
@@ -125,7 +131,8 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     nickname,
-                    marketingAgreed: marketing
+                    marketingAgreed: marketing,
+                    contactEmail: contactEmail.trim() || null,
                 })
             })
 
@@ -152,7 +159,7 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
         }
     }
 
-    const isFormValid = nicknameValid && isDuplicate === false && termsService && termsPrivacy && ageConfirmed
+    const isFormValid = nicknameValid && isDuplicate === false && termsService && termsPrivacy && ageConfirmed && contactEmailValid
 
     const providerLabel: Record<string, string> = {
         naver: '네이버',
@@ -227,6 +234,57 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
                             {isRegenerating ? '생성 중...' : '랜덤 생성'}
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div className="mb-8">
+                <div className="p-6 bg-surface rounded-xl border border-border shadow-card">
+                    <div className="flex items-center justify-between mb-1">
+                        <h2 className="text-base font-semibold">서비스 알림 이메일 <span className="text-sm text-red-400 font-normal">*</span></h2>
+                        <p className="text-xs text-content-muted">로그인 계정과 무관</p>
+                    </div>
+                    <p className="text-xs text-content-muted mb-4">서비스 운영 알림(필수) 및 이벤트 수신 동의(선택) 시 사용됩니다.</p>
+                    {isEditingEmail ? (
+                        <div>
+                            <div className="flex gap-2">
+                                <input
+                                    type="email"
+                                    value={contactEmail}
+                                    onChange={(e) => setContactEmail(e.target.value)}
+                                    placeholder="이메일 주소 입력"
+                                    className={`flex-1 px-4 py-3 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                                        contactEmailError ? 'border-red-400' : 'border-border'
+                                    }`}
+                                />
+                                {oauthEmail && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setContactEmail(oauthEmail)
+                                            setIsEditingEmail(false)
+                                        }}
+                                        className="text-xs text-primary hover:underline whitespace-nowrap"
+                                    >
+                                        원래대로
+                                    </button>
+                                )}
+                            </div>
+                            {contactEmailError && (
+                                <p className="mt-1.5 text-xs text-red-500">{contactEmailError}</p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-border">
+                            <span className="text-sm text-content-primary">{contactEmail || <span className="text-content-muted">이메일을 입력해주세요</span>}</span>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditingEmail(true)}
+                                className="text-xs text-primary hover:underline ml-2 shrink-0"
+                            >
+                                변경
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -311,11 +369,10 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
                                 onChange={(e) => setMarketing(e.target.checked)}
                                 className="w-4 h-4 rounded-md accent-primary cursor-pointer"
                             />
-                            <span className="text-sm font-medium">[선택] 마케팅 수신 동의</span>
+                            <span className="text-sm font-medium">[선택] 이벤트·혜택 알림 수신 동의</span>
                         </label>
-                        <p className="text-xs text-content-secondary mt-3 ml-[26px]">
-                            이메일 주소를 통해 서비스 업데이트, 이벤트·혜택 정보를 받습니다.
-                            동의하지 않아도 서비스 이용에 불이익이 없으며, 마이페이지에서 언제든지 변경 가능합니다.
+                        <p className="text-xs text-content-secondary mt-1 ml-[26px]">
+                            위 이메일로 이벤트·혜택 정보를 받습니다. 마이페이지에서 언제든 변경 가능합니다.
                         </p>
                     </div>
                 </div>

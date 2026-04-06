@@ -64,11 +64,22 @@ export default async function OnboardingPage() {
         }
     })()
 
+    // OAuth 프로필에서 가져온 실제 이메일 (알림 수신용 pre-fill)
+    const oauthEmail = (() => {
+        switch (provider) {
+            case 'naver': return (user.user_metadata?.naver_email as string | undefined) ?? null
+            case 'kakao': return (user.user_metadata?.real_email as string | undefined) ?? null
+            case 'google': return (user.user_metadata?.real_email as string | undefined) ?? null
+            default: return null
+        }
+    })()
+
     return (
         <OnboardingClient
             initialNickname={initialNickname}
             provider={provider ?? null}
             providerAccount={providerAccount}
+            oauthEmail={oauthEmail}
         />
     )
 }

@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { validateEmail } from '@/lib/validate-email'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -49,10 +50,11 @@ type VoteRow = {
 interface MypageClientProps {
     userId: string
     provider: string
-    email: string | null
     displayName: string
     joinedAt: string
     marketingAgreed: boolean
+    contactEmail: string | null
+    providerAccount: string | null
     isAdmin?: boolean
     comments: CommentRow[]
     discussions: DiscussionRow[]
@@ -76,10 +78,11 @@ function formatDate(dateStr: string) {
 export default function MypageClient({
     userId,
     provider,
-    email,
     displayName,
     joinedAt,
     marketingAgreed: initialMarketing,
+    contactEmail: initialContactEmail,
+    providerAccount,
     isAdmin = false,
     comments,
     discussions,
@@ -127,6 +130,14 @@ export default function MypageClient({
     const [marketing, setMarketing] = useState(initialMarketing)
     const [isSavingMarketing, setIsSavingMarketing] = useState(false)
     const [marketingError, setMarketingError] = useState<string | null>(null)
+
+    // 알림 수신 이메일
+    const [contactEmail, setContactEmail] = useState(initialContactEmail ?? '')
+    const [contactEmailInput, setContactEmailInput] = useState(initialContactEmail ?? '')
+    const [isEditingContactEmail, setIsEditingContactEmail] = useState(false)
+    const [isSavingContactEmail, setIsSavingContactEmail] = useState(false)
+    const [contactEmailError, setContactEmailError] = useState<string | null>(null)
+    const [contactEmailSuccess, setContactEmailSuccess] = useState(false)
 
     // 탈퇴 모달
     const [showWithdrawModal, setShowWithdrawModal] = useState(false)
@@ -181,6 +192,38 @@ export default function MypageClient({
             setNicknameError('서버 오류가 발생했습니다.')
         } finally {
             setIsSavingNickname(false)
+        }
+    }
+
+    const handleSaveContactEmail = async () => {
+        const trimmed = contactEmailInput.trim()
+        if (trimmed) {
+            const emailErr = validateEmail(trimmed)
+            if (emailErr) {
+                setContactEmailError(emailErr)
+                return
+            }
+        }
+        setIsSavingContactEmail(true)
+        setContactEmailError(null)
+        setContactEmailSuccess(false)
+        try {
+            const res = await fetch('/api/users/me', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contactEmail: contactEmailInput.trim() || null }),
+            })
+            if (res.ok) {
+                setContactEmail(contactEmailInput.trim())
+                setIsEditingContactEmail(false)
+                setContactEmailSuccess(true)
+            } else {
+                setContactEmailError('저장에 실패했습니다.')
+            }
+        } catch {
+            setContactEmailError('서버 오류가 발생했습니다.')
+        } finally {
+            setIsSavingContactEmail(false)
         }
     }
 
@@ -242,17 +285,19 @@ export default function MypageClient({
         <div className="container mx-auto px-4 py-8 max-w-2xl">
             {/* 프로필 카드 */}
             <div className="flex items-center gap-4 mb-8 p-5 bg-primary-light/35 border border-primary-muted rounded-xl">
-                <div className="relative shrink-0">
-                    <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted">
-                        {initial}
-                    </div>
-                    <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${providerInfo.badgeClass}`}>
-                        {providerInfo.badge}
-                    </div>
+                <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted shrink-0">
+                    {initial}
                 </div>
                 <div className="min-w-0">
                     <p className="text-lg font-bold text-content-primary">{nickname}</p>
-                    <p className="text-sm text-content-secondary mt-0.5 truncate">{email ?? providerInfo.text}</p>
+                    {providerAccount && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0 ${providerInfo.badgeClass}`}>
+                                {providerInfo.badge}
+                            </div>
+                            <span className="text-xs text-content-muted truncate">{providerAccount}</span>
+                        </div>
+                    )}
                     <p className="text-xs text-content-muted mt-1">가입일 {formatDate(joinedAt)}</p>
                 </div>
             </div>
@@ -343,31 +388,108 @@ export default function MypageClient({
                         )}
                     </section>
 
+                    {/* 서비스 알림 이메일 */}
+                    <section className="card p-5">
+                        <h2 className="text-sm font-semibold text-content-secondary mb-1">서비스 알림 이메일</h2>
+                        <p className="text-xs text-content-muted mb-3">서비스 운영 알림(필수) 및 이벤트 수신 동의(선택) 시 사용됩니다.</p>
+                        {isAdmin ? (
+                            <div>
+                                <input
+                                    type="email"
+                                    value={contactEmail ?? ''}
+                                    disabled
+                                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-surface-subtle text-content-disabled cursor-not-allowed"
+                                />
+                                <p className="mt-2 text-xs text-content-muted">관리자 계정은 가입 이메일({contactEmail})로 고정됩니다.</p>
+                            </div>
+                        ) : isEditingContactEmail ? (
+                            <div className="space-y-2">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="email"
+                                        value={contactEmailInput}
+                                        onChange={(e) => {
+                                            setContactEmailInput(e.target.value)
+                                            setContactEmailError(null)
+                                            setContactEmailSuccess(false)
+                                        }}
+                                        placeholder="이메일 주소 입력"
+                                        className="flex-1 px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                    <button
+                                        onClick={handleSaveContactEmail}
+                                        disabled={isSavingContactEmail}
+                                        className="btn-primary btn-sm"
+                                    >
+                                        {isSavingContactEmail ? '저장 중...' : '저장'}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setContactEmailInput(contactEmail)
+                                            setIsEditingContactEmail(false)
+                                            setContactEmailError(null)
+                                        }}
+                                        className="btn-neutral btn-sm"
+                                    >
+                                        취소
+                                    </button>
+                                </div>
+                                {contactEmailError && <p className="text-xs text-red-600">{contactEmailError}</p>}
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-content-primary">
+                                    {contactEmail || <span className="text-content-muted">설정된 이메일이 없습니다</span>}
+                                </span>
+                                <button
+                                    onClick={() => {
+                                        setContactEmailInput(contactEmail)
+                                        setIsEditingContactEmail(true)
+                                        setContactEmailSuccess(false)
+                                    }}
+                                    className="text-xs text-primary hover:underline ml-2 shrink-0"
+                                >
+                                    {contactEmail ? '변경' : '설정'}
+                                </button>
+                            </div>
+                        )}
+                        {contactEmailSuccess && !isEditingContactEmail && (
+                            <p className="mt-2 text-xs text-green-600">저장되었습니다.</p>
+                        )}
+                    </section>
+
                     {/* 마케팅 수신 동의 */}
                     <section className="card p-5">
-                        <h2 className="text-sm font-semibold text-content-secondary mb-3">마케팅 수신 동의</h2>
-                        <label className="flex items-center justify-between cursor-pointer">
-                            <div>
-                                <span className="text-sm text-content-secondary">서비스 업데이트·이벤트 알림 수신</span>
-                                <p className="text-xs text-content-muted mt-0.5">
-                                    가입 시 등록한 이메일로 발송됩니다.
-                                </p>
-                            </div>
-                            <button
-                                onClick={handleToggleMarketing}
-                                disabled={isSavingMarketing}
-                                className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ml-4 ${
-                                    marketing ? 'bg-primary' : 'bg-content-disabled'
-                                } disabled:opacity-50`}
-                                aria-label="마케팅 수신 동의 토글"
-                            >
-                                <span
-                                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        marketing ? 'translate-x-4' : 'translate-x-0'
-                                    }`}
-                                />
-                            </button>
-                        </label>
+                        <h2 className="text-sm font-semibold text-content-secondary mb-3">이벤트·혜택 알림 수신 동의</h2>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-content-secondary">위 이메일로 이벤트·혜택 정보를 받습니다.</span>
+                            {isAdmin ? (
+                                <div
+                                    className="relative w-9 h-5 rounded-full bg-primary shrink-0 ml-4 cursor-not-allowed opacity-60"
+                                    title="관리자 계정은 변경할 수 없습니다"
+                                >
+                                    <span className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow translate-x-4" />
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={handleToggleMarketing}
+                                    disabled={isSavingMarketing}
+                                    className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ml-4 ${
+                                        marketing ? 'bg-primary' : 'bg-content-disabled'
+                                    } disabled:opacity-50`}
+                                    aria-label="마케팅 수신 동의 토글"
+                                >
+                                    <span
+                                        className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+                                            marketing ? 'translate-x-4' : 'translate-x-0'
+                                        }`}
+                                    />
+                                </button>
+                            )}
+                        </div>
+                        {isAdmin && (
+                            <p className="mt-2 text-xs text-content-muted">관리자 계정은 변경할 수 없습니다.</p>
+                        )}
                         {marketingError && (
                             <p className="mt-2 text-xs text-red-600">{marketingError}</p>
                         )}
