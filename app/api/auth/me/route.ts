@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
-import { isAdminEmail, resolveEmail } from '@/lib/admin'
+import { isAdminUser } from '@/lib/admin'
 
 export async function GET() {
     const supabase = await createSupabaseServerClient()
@@ -22,7 +22,7 @@ export async function GET() {
     // 관리자 계정은 OAuth 실명 감지 로직 적용하지 않음.
     // Supabase 계정 생성 시 user_metadata.full_name 에 직접 설정한 이름이므로
     // OAuth 실명과 같다는 이유로 null 처리하면 안 됨.
-    const isAdmin = isAdminEmail(resolveEmail(user))
+    const isAdmin = isAdminUser(user)
 
     const oauthName = isAdmin ? null : (
         (user.user_metadata?.full_name as string | undefined) ??

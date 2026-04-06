@@ -137,12 +137,14 @@ export async function GET(request: NextRequest) {
             },
         })
 
-        // public.users provider 동기화 (row 없으면 insert, 있으면 provider만 update)
+        // public.users provider 동기화
+        // ignoreDuplicates: true → row 없으면 insert, 있으면 건너뜀 (display_name 보호)
         await admin.from('users').upsert(
-            { id: userId, provider: '구글', provider_id: userId, display_name: null },
+            { id: userId, provider: '구글', provider_id: googleId, display_name: null },
             { onConflict: 'id', ignoreDuplicates: true }
         )
-        await admin.from('users').update({ provider: '구글', provider_email: googleEmail }).eq('id', userId)
+        // provider_email은 트리거가 모르는 컬럼이므로 항상 별도 update
+        await admin.from('users').update({ provider: '구글', provider_id: googleId, provider_email: googleEmail }).eq('id', userId)
     } else {
         // 신규 유저: 합성 이메일로 계정 생성
         linkEmail = `${googleId}@google.oauth`
@@ -157,13 +159,13 @@ export async function GET(request: NextRequest) {
         }
         userId = newUser.user.id
 
-        await admin.from('users').insert({
-            id: userId,
-            provider: '구글',
-            provider_id: googleId,
-            provider_email: googleEmail,
-            display_name: null,
-        })
+        // on_auth_user_created 트리거가 계정 생성 직후 provider_email 없이 row를 먼저 만든다.
+        // insert는 중복키로 실패할 수 있으므로 upsert(ignoreDuplicates) 후 provider_email을 별도 update한다.
+        await admin.from('users').upsert(
+            { id: userId, provider: '구글', provider_id: googleId, display_name: null },
+            { onConflict: 'id', ignoreDuplicates: true }
+        )
+        await admin.from('users').update({ provider: '구글', provider_id: googleId, provider_email: googleEmail }).eq('id', userId)
     }
 
     // 4. 매직 링크로 세션 부여

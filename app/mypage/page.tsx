@@ -24,8 +24,7 @@ export default async function MypagePage() {
         .eq('id', user.id)
         .single()
 
-    const effectiveEmail = (user.user_metadata?.real_email as string | null) ?? user.email
-    const isAdmin = (effectiveEmail ?? '').endsWith('@nhnad.com')
+    const isAdmin = user.app_metadata?.is_admin === true
 
     if (!userData?.display_name && !isAdmin) redirect('/onboarding')
 
@@ -57,9 +56,11 @@ export default async function MypagePage() {
             .limit(30),
     ])
 
+    // admin 직접 로그인: user.email = mnlee@nhnad.com 그대로 표시
+    // 일반 사용자 또는 카카오/구글로 로그인한 운영자: provider_email(실제 이메일) 표시
     const providerAccount = isAdmin
         ? (user.email ?? null)
-        : (userData?.provider_email ?? null)
+        : (userData?.provider_email ?? (user.user_metadata?.real_email as string | null) ?? null)
 
     // 운영자 contact_email이 DB에 없으면 가입 이메일로 자동 저장
     const adminEmail = user.email ?? null
