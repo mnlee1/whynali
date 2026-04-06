@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { parseLimitOffset, parseEnum } from '@/lib/parse-params'
 import type { IssueCategory, IssueStatus } from '@/types/issue'
 import { getCategoryIds } from '@/lib/config/categories'
+import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-thresholds'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -10,7 +11,6 @@ export const preferredRegion = 'icn1'
 const VALID_CATEGORIES = getCategoryIds() as readonly IssueCategory[]
 const VALID_STATUSES: readonly IssueStatus[] = ['점화', '논란중', '종결']
 const VALID_SORTS = ['latest', 'heat'] as const
-const MIN_HEAT_TO_REGISTER = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams

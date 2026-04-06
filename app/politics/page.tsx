@@ -10,6 +10,7 @@ import IssueList from '@/components/issues/IssueList'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
 import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
+import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT } from '@/lib/config/candidate-thresholds'
 
 export const metadata: Metadata = {
     title: '정치 이슈',
@@ -23,7 +24,6 @@ export const metadata: Metadata = {
 
 export const revalidate = 900
 
-const MIN_HEAT = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 export default async function PoliticsPage() {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
