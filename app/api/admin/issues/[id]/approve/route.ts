@@ -5,9 +5,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
+
+const CATEGORY_PATH_MAP: Record<string, string> = {
+    '사회': '/society',
+    '기술': '/tech',
+    '연예': '/entertain',
+    '스포츠': '/sports',
+    '정치': '/politics',
+    '경제': '/economy',
+    '세계': '/world',
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +46,10 @@ export async function POST(
         if (error) throw error
 
         await writeAdminLog('이슈 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
+
+        const categoryPath = CATEGORY_PATH_MAP[data.category]
+        if (categoryPath) revalidatePath(categoryPath)
+        revalidatePath('/')
 
         return NextResponse.json({
             data,
