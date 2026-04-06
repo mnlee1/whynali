@@ -29,11 +29,10 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
 import type { Vote, VoteChoice, DiscussionTopic } from '@/types/index'
 import { generateWebSiteSchema, createJsonLd } from '@/lib/seo/schema'
+import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT } from '@/lib/config/candidate-thresholds'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
-
-const MIN_HEAT = parseInt(process.env.CANDIDATE_MIN_HEAT_TO_REGISTER ?? '10')
 
 interface VoteWithChoices extends Vote {
     vote_choices: VoteChoice[]

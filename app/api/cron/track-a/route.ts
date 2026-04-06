@@ -660,14 +660,46 @@ ${newsTitlesText}
 */
 
 /**
+ * samplePostTitles - 출처별로 다양한 게시글 제목 샘플 추출
+ *
+ * source_site가 다른 글을 우선 선택해 편향 방지.
+ * 최대 n개 반환.
+ */
+function samplePostTitles(
+    posts: Array<{ title: string; source_site: string }>,
+    n = 3
+): string[] {
+    const seen = new Set<string>()
+    const sampled: string[] = []
+
+    // 1순위: source_site 다양성 확보
+    for (const post of posts) {
+        if (sampled.length >= n) break
+        if (!seen.has(post.source_site)) {
+            seen.add(post.source_site)
+            sampled.push(post.title)
+        }
+    }
+
+    // 2순위: 부족하면 나머지에서 추가
+    for (const post of posts) {
+        if (sampled.length >= n) break
+        if (!sampled.includes(post.title)) {
+            sampled.push(post.title)
+        }
+    }
+
+    return sampled
+}
+
+/**
  * verifyIssueByAI - AI로 이슈 여부 및 검색 키워드 추출
- * 
- * 법적 안전성: 게시글 콘텐츠가 아닌 메타데이터만 사용
  */
 async function verifyIssueByAI(
     keyword: string,
     postCount: number,
-    sourceSites: string[]
+    sourceSites: string[],
+    sampleTitles: string[]
 ): Promise<AIVerificationResult> {
     // Rate Limit 상태 체크 (Critical 우선순위)
     if (shouldSkipDueToRateLimit({ priority: 'critical', taskName: '트랙 A 이슈 검증' })) {
@@ -676,17 +708,17 @@ async function verifyIssueByAI(
     }
     
     try {
-        // 메타데이터만 전달 (저작권 안전)
         const sourceSitesText = sourceSites.join(', ')
-        
+        const sampleTitlesText = sampleTitles.map((t, i) => `  ${i + 1}. "${t}"`).join('\n')
+
         const prompt = `커뮤니티에서 급증한 키워드가 뉴스 이슈가 될 만한지 판단하고, 카테고리, 임시 제목, 검색 키워드를 생성하세요.
 
 키워드: "${keyword}"
 급증 정보:
 - 게시글 수: ${postCount}건
 - 출처: ${sourceSitesText}
-
-⚠️ 법적 안전성: 게시글 내용은 제공되지 않습니다. 키워드와 메타데이터만으로 판단하세요.
+- 게시글 제목 샘플:
+${sampleTitlesText}
 
 ## 1단계: 키워드 맥락 파악
 - 키워드의 정확한 의미 파악
@@ -918,9 +950,10 @@ async function processTrackA(): Promise<{
             console.log(`\n[키워드 검증] "${burst.keyword}" (${burst.count}건)`)
 
             try {
-                // 4-1. AI 이슈 검증 및 검색 키워드 추출 (메타데이터만 사용)
+                // 4-1. AI 이슈 검증 및 검색 키워드 추출
                 const sourceSites = [...new Set(burst.posts.map(p => p.source_site))]
-                const aiResult = await verifyIssueByAI(burst.keyword, burst.count, sourceSites)
+                const sampleTitles = samplePostTitles(burst.posts)
+                const aiResult = await verifyIssueByAI(burst.keyword, burst.count, sourceSites, sampleTitles)
 
         if (!aiResult.isIssue) {
             console.log(`  ✗ [AI 검증 실패] 신뢰도 ${aiResult.confidence}% - ${aiResult.reason}`)
