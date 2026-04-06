@@ -17,7 +17,6 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     '경제': ['business', 'finance', 'office', 'corporate', 'economics'],
     '기술': ['technology', 'innovation', 'digital', 'computer', 'modern'],
     '세계': ['international', 'global', 'travel', 'world', 'geography'],
-    '생활문화': ['lifestyle', 'culture', 'daily life', 'modern living', 'art'],
 }
 
 /**

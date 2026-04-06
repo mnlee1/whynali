@@ -14,6 +14,8 @@ import type { TimelinePoint, TimelineStage } from '@/types/issue'
 
 interface TimelineEditorProps {
     issueId: string
+    issueStatus?: string       // 이슈 현재 상태 ('종결' 여부 판단용)
+    issueUpdatedAt?: string    // 종결 시각 표시용
 }
 
 
@@ -41,7 +43,7 @@ function formatDateTime(iso: string): string {
     })
 }
 
-export default function TimelineEditor({ issueId }: TimelineEditorProps) {
+export default function TimelineEditor({ issueId, issueStatus, issueUpdatedAt }: TimelineEditorProps) {
     const [points, setPoints] = useState<TimelinePoint[]>([])
     const [loading, setLoading] = useState(true)
     const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -109,7 +111,10 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
                     {points.map((point, index) => {
                         const style = STAGE_STYLES[point.stage as TimelineStage] ?? STAGE_STYLES['진정']
                         const textColor = STAGE_TEXT_COLOR[point.stage as TimelineStage] ?? 'text-content-secondary'
-                        const isLast = index === points.length - 1
+                        const isLastPoint = index === points.length - 1
+                        const isClosed = issueStatus === '종결'
+                        // 종결 블록이 뒤에 붙으면 마지막 포인트 세로선도 이어져야 함
+                        const isLast = isLastPoint && !isClosed
                         const prevStage = index > 0 ? points[index - 1].stage : null
                         const isNewStage = point.stage !== prevStage
 
@@ -182,6 +187,23 @@ export default function TimelineEditor({ issueId }: TimelineEditorProps) {
                             </div>
                         )
                     })}
+
+                    {/* 종결 블록 — issueStatus가 '종결'일 때만 표시 */}
+                    {issueStatus === '종결' && (
+                        <div className="flex gap-3 mt-2">
+                            <div className="flex flex-col items-center">
+                                <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 bg-gray-400" />
+                            </div>
+                            <div className="flex-1 pb-3">
+                                <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
+                                    <span className="text-xs text-gray-400 block mb-1">
+                                        {issueUpdatedAt ? formatDateTime(issueUpdatedAt) : ''}
+                                    </span>
+                                    <p className="text-sm font-medium text-gray-500">이슈 종결</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

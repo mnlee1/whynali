@@ -116,7 +116,11 @@ export default function IssuePreviewDrawer({
                             <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
                         </div>
                         <div className="p-4">
-                            <TimelineEditor issueId={issue.id} />
+                            <TimelineEditor
+                                issueId={issue.id}
+                                issueStatus={issue.status}
+                                issueUpdatedAt={issue.updated_at}
+                            />
                         </div>
                     </div>
 
