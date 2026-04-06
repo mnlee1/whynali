@@ -3,8 +3,13 @@
  *
  * 관리자 권한 검증 헬퍼
  *
- * isAdminEmail : @nhnad.com 도메인 OR ADMIN_EMAILS 환경변수에 포함된 이메일
+ * isAdminUser  : app_metadata.is_admin 플래그로 관리자 여부 확인
  * requireAdmin : API Route 핸들러 상단에서 호출하는 인증/인가 유틸
+ * resolveEmail : 표시용 실제 이메일 반환 (합성 이메일 대신)
+ *
+ * ※ admin 판단은 이메일에 의존하지 않음.
+ *    Supabase 대시보드에서 app_metadata: { "is_admin": true } 로 설정.
+ *    app_metadata는 service_role key로만 수정 가능 → 사용자 조작 불가.
  *
  * 사용 예시:
  *   const auth = await requireAdmin()
@@ -16,11 +21,8 @@ import { NextResponse } from 'next/server'
 import type { User } from '@supabase/supabase-js'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
-/** @nhnad.com 도메인 — 이 도메인의 모든 이메일이 관리자 */
-const ADMIN_DOMAIN = '@nhnad.com'
-
 /**
- * 합성 이메일({id}@google.oauth 등) 사용자의 실제 이메일을 반환.
+ * 합성 이메일({id}@kakao.oauth 등) 사용자의 실제 이메일을 반환. (표시 전용)
  * user_metadata.real_email이 있으면 그 값을, 없으면 auth email을 반환.
  */
 export function resolveEmail(user: Pick<User, 'email' | 'user_metadata'>): string | null {
@@ -29,24 +31,12 @@ export function resolveEmail(user: Pick<User, 'email' | 'user_metadata'>): strin
     return user.email ?? null
 }
 
-/** .env의 ADMIN_EMAILS (콤마 구분)을 파싱해 Set으로 반환 */
-function getAdminEmailSet(): Set<string> {
-    const raw = process.env.ADMIN_EMAILS ?? ''
-    return new Set(
-        raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
-    )
-}
-
 /**
- * 주어진 이메일이 관리자인지 확인.
- * 1순위: @nhnad.com 도메인 (여러 관리자 자동 지원)
- * 2순위: ADMIN_EMAILS 환경변수에 명시된 계정
+ * app_metadata.is_admin 플래그로 관리자 여부 확인.
+ * 이메일 형식·도메인·provider와 무관하게 동작.
  */
-export function isAdminEmail(email: string | null | undefined): boolean {
-    if (!email) return false
-    const lower = email.toLowerCase()
-    if (lower.endsWith(ADMIN_DOMAIN)) return true
-    return getAdminEmailSet().has(lower)
+export function isAdminUser(user: Pick<User, 'app_metadata'>): boolean {
+    return user.app_metadata?.is_admin === true
 }
 
 type RequireAdminResult =
@@ -55,7 +45,7 @@ type RequireAdminResult =
 
 /**
  * requireAdmin - API Route 핸들러 상단에서 호출하는 인증/인가 유틸.
- * 세션 미존재 → 401, @nhnad.com 아님 → 403
+ * 세션 미존재 → 401, is_admin 플래그 없음 → 403
  */
 export async function requireAdmin(): Promise<RequireAdminResult> {
     const supabase = await createSupabaseServerClient()
@@ -71,7 +61,7 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
         }
     }
 
-    if (!isAdminEmail(resolveEmail(user))) {
+    if (!isAdminUser(user)) {
         return {
             adminEmail: null,
             error: NextResponse.json(
@@ -81,5 +71,5 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
         }
     }
 
-    return { adminEmail: resolveEmail(user)!, error: null }
+    return { adminEmail: user.email!, error: null }
 }

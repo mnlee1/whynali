@@ -93,8 +93,7 @@ export default function Header() {
         router.refresh()
     }
 
-    /** 관리자 여부 (@nhnad.com 도메인) */
-    const isAdmin = !!user && !!user.email?.toLowerCase().endsWith('@nhnad.com')
+    const isAdmin = !!user && user.app_metadata?.is_admin === true
 
     /**
      * 표시 이름: display_name(닉네임) 우선. OAuth 실명은 노출하지 않음.
