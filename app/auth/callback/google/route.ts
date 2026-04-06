@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
             { id: userId, provider: '구글', provider_id: userId, display_name: null },
             { onConflict: 'id', ignoreDuplicates: true }
         )
-        await admin.from('users').update({ provider: '구글' }).eq('id', userId)
+        await admin.from('users').update({ provider: '구글', provider_email: googleEmail }).eq('id', userId)
     } else {
         // 신규 유저: 합성 이메일로 계정 생성
         linkEmail = `${googleId}@google.oauth`
@@ -161,6 +161,7 @@ export async function GET(request: NextRequest) {
             id: userId,
             provider: '구글',
             provider_id: googleId,
+            provider_email: googleEmail,
             display_name: null,
         })
     }

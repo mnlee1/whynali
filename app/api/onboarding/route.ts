@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { nickname, marketingAgreed } = body
+        const { nickname, marketingAgreed, contactEmail } = body
 
         if (!nickname || typeof nickname !== 'string') {
             return NextResponse.json(
@@ -72,13 +72,16 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        const updatePayload: Record<string, unknown> = {
+            display_name: nickname,
+            terms_agreed_at: new Date().toISOString(),
+            marketing_agreed: Boolean(marketingAgreed),
+            contact_email: (typeof contactEmail === 'string' && contactEmail.trim()) ? contactEmail.trim() : null,
+        }
+
         const { error: updateError } = await adminClient
             .from('users')
-            .update({
-                display_name: nickname,
-                terms_agreed_at: new Date().toISOString(),
-                marketing_agreed: Boolean(marketingAgreed)
-            })
+            .update(updatePayload)
             .eq('id', user.id)
 
         if (updateError) {

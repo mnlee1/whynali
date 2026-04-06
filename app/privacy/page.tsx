@@ -71,11 +71,41 @@ export default function PrivacyPage() {
                     </div>
                     <p className="text-gray-500 text-xs mb-4">
                         카카오 프로필 닉네임·프로필 사진은 OAuth 인증 흐름상 수신될 수 있으나 서버에 저장하지 않으며 즉시 파기됩니다.
-                        네이버 이름은 서비스 내 닉네임 설정 전까지 임시 저장 후 즉시 파기됩니다.
+                        네이버 닉네임은 인증 흐름상 수신될 수 있으나 서버에 저장하지 않으며 즉시 파기됩니다.
                         서비스에서 표시되는 닉네임은 이용자가 온보딩 과정에서 직접 설정한 값을 사용합니다.
+                        소셜 계정의 이메일 주소는 서비스 알림 이메일(contact_email)의 초기값으로 활용되며,
+                        이용자가 온보딩 과정에서 확인·변경할 수 있습니다.
                     </p>
 
-                    <p className="font-medium mb-1">② 서비스 이용 중 자동 수집 항목</p>
+                    <p className="font-medium mb-1">② 온보딩 시 이용자 직접 입력 항목</p>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs border-collapse border border-gray-200 mb-4">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th className="border border-gray-200 px-3 py-2 text-left">항목</th>
+                                    <th className="border border-gray-200 px-3 py-2 text-left">필수/선택</th>
+                                    <th className="border border-gray-200 px-3 py-2 text-left">수집 목적</th>
+                                    <th className="border border-gray-200 px-3 py-2 text-left">수집 시점</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td className="border border-gray-200 px-3 py-2">서비스 알림 이메일(contact_email)</td>
+                                    <td className="border border-gray-200 px-3 py-2">필수</td>
+                                    <td className="border border-gray-200 px-3 py-2">서비스 운영 필수 알림 및 이벤트 수신 동의 시 발송</td>
+                                    <td className="border border-gray-200 px-3 py-2">최초 가입(온보딩) 시</td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-gray-200 px-3 py-2">닉네임</td>
+                                    <td className="border border-gray-200 px-3 py-2">필수</td>
+                                    <td className="border border-gray-200 px-3 py-2">서비스 내 이용자 식별 표시명</td>
+                                    <td className="border border-gray-200 px-3 py-2">최초 가입(온보딩) 시</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p className="font-medium mb-1">③ 서비스 이용 중 자동 수집 항목</p>
                     <ul className="list-disc pl-5 space-y-1 mb-3">
                         <li>서비스 이용 기록 (댓글 내용, 투표 참여 기록, 감정 표현 기록)</li>
                         <li>접속 IP 주소, 브라우저 정보, 운영체제 정보 (서버 접속 시 자동 수집)</li>
@@ -99,6 +129,7 @@ export default function PrivacyPage() {
                         <li>금칙어 자동 필터링(세이프티봇) 적용을 통한 서비스 품질 유지</li>
                         <li>서비스 개선을 위한 이용 통계 분석</li>
                         <li>법령 의무 이행 및 분쟁 처리</li>
+                        <li>서비스 운영 필수 알림 발송 (계정 제재, 약관 변경 등)</li>
                         <li>서비스 업데이트, 이벤트, 혜택 등 마케팅 정보 안내 (마케팅 수신에 별도 동의한 회원에 한함)</li>
                     </ul>
                 </section>
@@ -195,7 +226,7 @@ export default function PrivacyPage() {
                                     <td className="border border-gray-200 px-3 py-2">Supabase Inc.</td>
                                     <td className="border border-gray-200 px-3 py-2">미국</td>
                                     <td className="border border-gray-200 px-3 py-2">회원 인증 및 데이터 저장</td>
-                                    <td className="border border-gray-200 px-3 py-2">이메일, 소셜 고유 ID, 이용 기록</td>
+                                    <td className="border border-gray-200 px-3 py-2">소셜 고유 ID, 서비스 알림 이메일(contact_email), 이용 기록 (로그인 식별자는 서비스 내부에서만 사용되는 합성 값으로 외부에 노출되지 않음)</td>
                                     <td className="border border-gray-200 px-3 py-2">회원 탈퇴 시까지</td>
                                 </tr>
                                 <tr>
@@ -299,6 +330,7 @@ export default function PrivacyPage() {
                         <li>
                             회사는 회원의 별도 사전 동의를 받은 경우에 한하여 이메일 등을 통해
                             서비스 업데이트, 이벤트, 혜택 등 마케팅 정보를 발송합니다.
+                            발송 시 사용되는 이메일 주소는 온보딩 또는 마이페이지에서 설정한 서비스 알림 이메일(contact_email)입니다.
                         </li>
                         <li>
                             마케팅 수신 동의 여부는 서비스 가입(온보딩) 또는 마이페이지에서 확인·변경할 수 있습니다.
