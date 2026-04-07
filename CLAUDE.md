@@ -103,8 +103,8 @@ CANDIDATE_NO_RESPONSE_HOURS=6
 
 ## 주요 문서
 
-- `/docs/01_AI기획.md` — 전체 제품 기획서
-- `/docs/07_이슈등록_화력_정렬_규격.md` — 화력 지수 계산 규격
-- `/docs/08_이슈상태전환_규격.md` — 이슈 상태 전환 규칙
-- `/docs/97_API규약.md` — API 계약
+@docs/기획서.md
+@docs/99_미구현_미흡_정리.md
+@docs/97_API규약.md
+
 - `/types/issue.ts` — 핵심 TypeScript 타입 정의

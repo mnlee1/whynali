@@ -21,8 +21,8 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { recalculateHeatForIssue, calculateBothHeats } from '@/lib/analysis/heat'
 import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
-import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
-import { closeDiscussionsOnIssueClosed } from '@/lib/discussion-auto-closer'
+import { closeVotesOnIssueClosed, cancelVoteScheduledClose } from '@/lib/vote-auto-closer'
+import { closeDiscussionsOnIssueClosed, cancelDiscussionScheduledClose } from '@/lib/discussion-auto-closer'
 import { type IssueCategory } from '@/lib/config/categories'
 import {
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
@@ -58,7 +58,9 @@ export async function GET(request: NextRequest) {
         // 1) 점화 상태 이슈 (상태 전환이 시급함)
         // 2) 논란중 상태 이슈 (종결 전환 확인 필요)
         // 3) 최근 업데이트된 대기/승인 이슈
-        const [igniteIssues, debateIssues, recentIssues] = await Promise.all([
+        // 4) 종결 후 30일 이내 승인 이슈 (재점화 감지)
+        const recentlyClosedSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        const [igniteIssues, debateIssues, recentIssues, closedIssues] = await Promise.all([
             // 점화 상태 이슈 (최대 30개)
             supabaseAdmin
                 .from('issues')
@@ -85,12 +87,22 @@ export async function GET(request: NextRequest) {
                 .not('status', 'in', '(점화,논란중)')
                 .order('updated_at', { ascending: false })
                 .limit(15),
+
+            // 종결 후 30일 이내 승인 이슈 (최대 10개, 재점화 감지용)
+            supabaseAdmin
+                .from('issues')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
+                .eq('status', '종결')
+                .eq('approval_status', '승인')
+                .gte('updated_at', recentlyClosedSince)
+                .order('updated_at', { ascending: false })
+                .limit(10),
         ])
 
-        // 중복 제거하며 병합 (점화 > 논란중 > 최근 순서)
+        // 중복 제거하며 병합 (점화 > 논란중 > 최근 > 종결 순서)
         const issueMap = new Map<string, any>()
-        
-        ;[...(igniteIssues.data ?? []), ...(debateIssues.data ?? []), ...(recentIssues.data ?? [])]
+
+        ;[...(igniteIssues.data ?? []), ...(debateIssues.data ?? []), ...(recentIssues.data ?? []), ...(closedIssues.data ?? [])]
             .forEach(issue => {
                 if (!issueMap.has(issue.id)) {
                     issueMap.set(issue.id, issue)
@@ -195,6 +207,7 @@ export async function GET(request: NextRequest) {
                             const transition = await evaluateStatusTransition({
                                 id: issue.id,
                                 status: issue.status,
+                                approval_status: issue.approval_status,
                                 approved_at: issue.approved_at ?? null,
                                 created_at: issue.created_at,
                                 heat_index: recentHeat,  // 상태 전환은 최근 화력 기준
@@ -219,6 +232,18 @@ export async function GET(request: NextRequest) {
                                     const { count: discussionCount } = await closeDiscussionsOnIssueClosed(issue.id)
                                     if (discussionCount > 0) {
                                         console.log(`[토론 마감 예약] 이슈 ${issue.id} 종결 → ${discussionCount}개 토론 7일 후 마감`)
+                                    }
+                                }
+
+                                // 재점화(종결 → 논란중)되면 마감 예약 취소
+                                if (oldStatus === '종결' && transition.newStatus === '논란중') {
+                                    const { count: voteCount } = await cancelVoteScheduledClose(issue.id)
+                                    if (voteCount > 0) {
+                                        console.log(`[투표 마감 취소] 이슈 ${issue.id} 재점화 → ${voteCount}개 투표 마감 예약 취소`)
+                                    }
+                                    const { count: discussionCount } = await cancelDiscussionScheduledClose(issue.id)
+                                    if (discussionCount > 0) {
+                                        console.log(`[토론 마감 취소] 이슈 ${issue.id} 재점화 → ${discussionCount}개 토론 마감 예약 취소`)
                                     }
                                 }
                                 
