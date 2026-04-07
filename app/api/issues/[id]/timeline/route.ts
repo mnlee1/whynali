@@ -29,7 +29,15 @@ export async function GET(
 
         if (error) throw error
 
-        return NextResponse.json({ data: data ?? [] })
+        const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
+        const sorted = (data ?? []).sort((a, b) => {
+            const stageA = STAGE_ORDER[a.stage] ?? 4
+            const stageB = STAGE_ORDER[b.stage] ?? 4
+            if (stageA !== stageB) return stageA - stageB
+            return new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
+        })
+
+        return NextResponse.json({ data: sorted })
     } catch (error) {
         console.error('Timeline fetch error:', error)
         return NextResponse.json(
