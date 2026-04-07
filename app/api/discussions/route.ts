@@ -6,7 +6,7 @@ import { sanitizeText, validateContent, checkRateLimit, loadBannedWords } from '
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 /* GET /api/discussions?issue_id=&q=&status=&limit=&offset= */
-/* issue_id 생략 시 전체 목록, q 지정 시 본문 키워드 검색, status 지정 시 특정 상태만 조회 */
+/* issue_id 생략 시 전체 목록, q 지정 시 본문 및 이슈 제목 키워드 검색, status 지정 시 특정 상태만 조회 */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const issue_id = searchParams.get('issue_id')
@@ -36,7 +36,20 @@ export async function GET(request: NextRequest) {
         query = query.eq('issue_id', issue_id)
     }
     if (q) {
-        query = query.ilike('body', `%${q}%`)
+        const { data: matchingIssues } = await admin
+            .from('issues')
+            .select('id')
+            .ilike('title', `%${q}%`)
+
+        const matchingIssueIds = (matchingIssues ?? []).map((i) => i.id)
+
+        if (matchingIssueIds.length > 0) {
+            query = query.or(
+                `body.ilike.%${q}%,issue_id.in.(${matchingIssueIds.join(',')})`
+            )
+        } else {
+            query = query.ilike('body', `%${q}%`)
+        }
     }
 
     const { data, error, count } = await query
