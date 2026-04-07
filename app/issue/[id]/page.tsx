@@ -29,6 +29,7 @@ import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
 import ViewCounter from '@/components/issue/ViewCounter'
+import IssueStatBar from '@/components/issue/IssueStatBar'
 import { formatDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
@@ -237,6 +238,12 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                         </>
                     )}
                 </div>
+                <IssueStatBar
+                    issueId={id}
+                    userId={userId}
+                    initialVoteCount={voteCount ?? 0}
+                    initialDiscussionCount={discussionTopics?.length ?? 0}
+                />
                 {issue.description && (
                     <p className="text-content-secondary leading-relaxed">
                         {decodeHtml(issue.description)}
@@ -263,22 +270,29 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 투표 */}
             {voteCount !== null && voteCount > 0 && (
-                <VoteSection issueId={id} userId={userId} />
+                <div id="section-vote" style={{ scrollMarginTop: '80px' }}>
+                    <VoteSection issueId={id} userId={userId} />
+                </div>
             )}
 
             {/* 관련 토론 주제 */}
             {discussionTopics && discussionTopics.length > 0 && (
-                <div className="card overflow-hidden mb-6">
+                <div id="section-discussion" style={{ scrollMarginTop: '80px' }}>
+                    <div className="card overflow-hidden mb-6">
                     <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <span className="text-lg">💬</span>
                             <h2 className="text-sm font-bold text-content-primary">관련 토론 주제 ({discussionTopics.length})</h2>
                         </div>
                         <Link
-                            href={`/community?issue_id=${id}`}
+                            href={
+                                discussionTopics.length === 1
+                                    ? `/community/${discussionTopics[0].id}`
+                                    : `/community?issue_id=${id}`
+                            }
                             className="text-xs text-content-secondary hover:text-content-primary font-semibold"
                         >
-                            전체보기 →
+                            {discussionTopics.length === 1 ? '토론 참여하기 →' : '이 이슈 토론 전체보기 →'}
                         </Link>
                     </div>
                     <div className="divide-y divide-border-muted bg-surface">
@@ -305,17 +319,18 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                         ))}
                     </div>
                 </div>
+                </div>
             )}
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
             {(!discussionTopics || discussionTopics.length === 0) && (
-                <div className="card mb-6 p-4 flex items-center justify-between">
+                <div id="section-discussion" className="card mb-6 p-4 flex items-center justify-between" style={{ scrollMarginTop: '80px' }}>
                     <div>
                         <p className="text-sm font-semibold text-content-primary mb-0.5">이 이슈의 커뮤니티</p>
                         <p className="text-xs text-content-secondary">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
                     </div>
                     <Link
-                        href={`/community?issue_id=${id}`}
+                        href="/community"
                         className="shrink-0 btn-primary btn-sm"
                     >
                         토론 보기
@@ -334,7 +349,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 댓글 */}
-            <div className="card overflow-hidden">
+            <div id="section-comments" className="card overflow-hidden" style={{ scrollMarginTop: '80px' }}>
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">댓글</h2>
                 </div>

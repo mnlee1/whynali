@@ -43,3 +43,37 @@ export async function closeDiscussionsOnIssueClosed(issueId: string) {
     console.log(`[토론 마감 예약] 이슈 ${issueId} 종결 → ${topics.length}개 토론 7일 후 마감 예약`)
     return { success: true, count: topics.length }
 }
+
+/**
+ * 이슈가 재점화(종결 → 논란중)될 때 호출.
+ * 종결 시 예약된 auto_end_date를 null로 리셋하여 마감을 취소한다.
+ * 이미 마감된 토론은 건드리지 않는다.
+ */
+export async function cancelDiscussionScheduledClose(issueId: string) {
+    const { data: topics, error: selectError } = await supabaseAdmin
+        .from('discussion_topics')
+        .select('id')
+        .eq('issue_id', issueId)
+        .eq('approval_status', '진행중')
+        .not('auto_end_date', 'is', null)
+
+    if (selectError) {
+        console.error(`토론 조회 실패 (이슈: ${issueId}):`, selectError)
+        return { success: false, count: 0 }
+    }
+
+    if (!topics || topics.length === 0) return { success: true, count: 0 }
+
+    const { error: updateError } = await supabaseAdmin
+        .from('discussion_topics')
+        .update({ auto_end_date: null })
+        .in('id', topics.map((t) => t.id))
+
+    if (updateError) {
+        console.error(`토론 마감 취소 실패 (이슈: ${issueId}):`, updateError)
+        return { success: false, count: 0 }
+    }
+
+    console.log(`[토론 마감 취소] 이슈 ${issueId} 재점화 → ${topics.length}개 토론 마감 예약 취소`)
+    return { success: true, count: topics.length }
+}

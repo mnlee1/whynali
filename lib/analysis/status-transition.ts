@@ -42,6 +42,7 @@ const REIGNITE_MIN_RECENT_COUNT = parseInt(process.env.REIGNITE_MIN_RECENT_COUNT
 export interface IssueForTransition {
     id: string
     status: string
+    approval_status: string
     approved_at: string | null
     created_at: string
     heat_index: number | null
@@ -321,6 +322,18 @@ export function evaluateTransition(
     }
 
     if (issue.status === '종결') {
+        // 관리자가 승인한 이슈만 재점화 대상 (반려 이슈는 되살리지 않음)
+        if (issue.approval_status !== '승인') {
+            return {
+                newStatus: null,
+                reason: {
+                    code: 'WAITING',
+                    detail: {},
+                    message: `재점화 불가: approval_status=${issue.approval_status}`,
+                },
+            }
+        }
+
         const rapidCount = data.rapidNewsCount + data.rapidCommunityCount
         const ratePerMinute = rapidCount / REIGNITE_DURATION_MINUTES
 
