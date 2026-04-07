@@ -33,6 +33,45 @@ const REIGNITE_WINDOW_HOURS = parseInt(process.env.STATUS_CLOSED_IDLE_HOURS ?? '
 
 type TimelineStage = '발단' | '전개' | '파생' | '진정'
 
+// 한국어 불용어 — 조사·어미·접속사·시간 부사 등 의미 없는 단어
+const STOPWORDS = new Set([
+    '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과', '이나', '나',
+    '도', '만', '까지', '부터', '에서', '에게', '한테', '한', '하는', '하고', '하여', '해서',
+    '이다', '있다', '없다', '하다', '되다', '이고', '하며', '에도', '으로도', '이라', '라',
+    '것', '수', '등', '및', '또', '그', '더', '이후', '앞서', '관련', '대해', '위해', '따라',
+    '통해', '대한', '위한', '같은', '지난', '현재', '오늘', '내일', '어제', '해당', '기자',
+])
+
+/** 제목에서 의미 있는 키워드 추출 (2글자 이상, 불용어 제외) */
+function extractKeywords(title: string): Set<string> {
+    return new Set(
+        title
+            .split(/[\s\[\]()「」『』<>【】·,./…!?"']+/)
+            .map(t => t.trim())
+            .filter(t => t.length >= 2 && !STOPWORDS.has(t))
+    )
+}
+
+/**
+ * isSimilarTitle - 새 제목이 기존 제목 목록 중 하나와 유사한지 판단
+ *
+ * 핵심 키워드가 3개 이상 겹치면 같은 사건을 다룬 기사로 간주합니다.
+ */
+function isSimilarTitle(newTitle: string, existingTitles: string[]): boolean {
+    const newKeywords = extractKeywords(newTitle)
+    if (newKeywords.size === 0) return false
+
+    for (const existing of existingTitles) {
+        const existingKeywords = extractKeywords(existing)
+        let overlap = 0
+        for (const kw of newKeywords) {
+            if (existingKeywords.has(kw)) overlap++
+        }
+        if (overlap >= 3) return true
+    }
+    return false
+}
+
 /**
  * classifyNewStages - 새로 추가될 뉴스의 단계를 Groq으로 분류
  *
@@ -145,12 +184,18 @@ export async function GET(request: NextRequest) {
                 break
             }
 
-            // 2. 현재 타임라인 포인트 조회 (source_url 중복 방지용)
+            // 2. 현재 타임라인 포인트 조회 (URL 중복 방지 + 제목 유사도 비교용)
             const { data: existingPoints } = await supabaseAdmin
                 .from('timeline_points')
-                .select('source_url, stage')
+                .select('source_url, stage, title, occurred_at')
                 .eq('issue_id', issue.id)
                 .order('occurred_at', { ascending: true })
+
+            // 발단 포인트의 최초 시각 — 이 이전 뉴스는 추가하지 않음
+            const baldanAt = existingPoints
+                ?.filter(p => p.stage === '발단')
+                .map(p => p.occurred_at)
+                .sort()[0] ?? null
 
             const existingCount = existingPoints?.length ?? 0
 
@@ -163,6 +208,9 @@ export async function GET(request: NextRequest) {
             const existingUrls = new Set(
                 (existingPoints ?? []).map(p => p.source_url).filter(Boolean)
             )
+            const existingTitles = (existingPoints ?? [])
+                .map(p => p.title)
+                .filter(Boolean) as string[]
 
             // 3. 이슈에 연결된 뉴스 조회 (시간순)
             const { data: newsData } = await supabaseAdmin
@@ -176,8 +224,18 @@ export async function GET(request: NextRequest) {
                 continue
             }
 
-            // 4. 타임라인에 없는 새 뉴스만 필터링
-            const newNews = newsData.filter(n => n.link && !existingUrls.has(n.link))
+            // 4. URL 중복 제거 후, 제목 유사도로 동일 사건 기사 필터링
+            // 발단 이전 뉴스는 추가하지 않음 (발단보다 이른 파생 방지)
+            // 배치 내 중복도 방지하기 위해 추가된 제목을 누적하며 체크
+            const seenTitles: string[] = [...existingTitles]
+            const newNews = newsData.reduce<typeof newsData>((acc, n) => {
+                if (!n.link || existingUrls.has(n.link)) return acc
+                if (baldanAt && n.published_at && n.published_at < baldanAt) return acc
+                if (n.title && isSimilarTitle(n.title, seenTitles)) return acc
+                acc.push(n)
+                if (n.title) seenTitles.push(n.title)
+                return acc
+            }, [])
 
             if (newNews.length === 0) {
                 skippedCount++

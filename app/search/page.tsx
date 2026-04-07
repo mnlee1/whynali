@@ -26,34 +26,50 @@ async function SearchResults({ query }: { query: string }) {
         )
     }
 
+    // 1단계: 이슈 키워드 검색
     let issueQuery = admin
         .from('issues')
         .select('id, title, status, category, created_at')
         .eq('approval_status', '승인')
 
-    let discussionQuery = admin
-        .from('discussion_topics')
-        .select('id, body, issue_id, created_at, issues(id, title)')
-        .eq('approval_status', '승인')
-
     if (keywords.length === 1) {
         issueQuery = issueQuery.ilike('title', `%${keywords[0]}%`)
-        discussionQuery = discussionQuery.ilike('body', `%${keywords[0]}%`)
     } else {
-        const issueOrConditions = keywords.map((k) => `title.ilike.%${k}%`).join(',')
-        const discussionOrConditions = keywords.map((k) => `body.ilike.%${k}%`).join(',')
-        issueQuery = issueQuery.or(issueOrConditions)
-        discussionQuery = discussionQuery.or(discussionOrConditions)
+        issueQuery = issueQuery.or(keywords.map((k) => `title.ilike.%${k}%`).join(','))
     }
 
-    const [issueResult, discussionResult] = await Promise.all([
-        issueQuery.order('created_at', { ascending: false }).limit(10),
-        discussionQuery.order('created_at', { ascending: false }).limit(10),
+    const issueResult = await issueQuery.order('created_at', { ascending: false }).limit(10)
+    const issues = issueResult.data ?? []
+    const matchedIssueIds = issues.map((i) => i.id)
+
+    // 2단계: 토론/투표 — 키워드 직접 매칭 OR 매칭된 이슈에 속한 것
+    const buildOrFilter = (keywordField: string, ids: string[]) => {
+        const keywordConds = keywords.map((k) => `${keywordField}.ilike.%${k}%`).join(',')
+        if (ids.length === 0) return keywordConds
+        const issueConds = `issue_id.in.(${ids.join(',')})`
+        return `${keywordConds},${issueConds}`
+    }
+
+    const [discussionResult, voteResult] = await Promise.all([
+        admin
+            .from('discussion_topics')
+            .select('id, body, issue_id, created_at, issues(id, title)')
+            .in('approval_status', ['진행중', '마감'])
+            .or(buildOrFilter('body', matchedIssueIds))
+            .order('created_at', { ascending: false })
+            .limit(10),
+        admin
+            .from('votes')
+            .select('id, title, phase, issue_id, created_at, issues(id, title)')
+            .eq('approval_status', '승인')
+            .or(buildOrFilter('title', matchedIssueIds))
+            .order('created_at', { ascending: false })
+            .limit(10),
     ])
 
-    const issues = issueResult.data ?? []
     const discussions = discussionResult.data ?? []
-    const totalCount = issues.length + discussions.length
+    const votes = voteResult.data ?? []
+    const totalCount = issues.length + discussions.length + votes.length
 
     if (totalCount === 0) {
         return (
@@ -104,7 +120,7 @@ async function SearchResults({ query }: { query: string }) {
 
             {/* 토론 주제 결과 */}
             {discussions.length > 0 && (
-                <section>
+                <section className="mb-8">
                     <h2 className="text-base font-semibold text-content-secondary mb-3">
                         토론 주제 ({discussions.length})
                     </h2>
@@ -129,6 +145,44 @@ async function SearchResults({ query }: { query: string }) {
                                                 </>
                                             )}
                                             <span>{formatDate(topic.created_at)}</span>
+                                        </div>
+                                    </article>
+                                </Link>
+                            )
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {/* 투표 주제 결과 */}
+            {votes.length > 0 && (
+                <section>
+                    <h2 className="text-base font-semibold text-content-secondary mb-3">
+                        투표 ({votes.length})
+                    </h2>
+                    <div className="space-y-4">
+                        {votes.map((vote) => {
+                            const raw = vote.issues as { id: string; title: string }[] | { id: string; title: string } | null
+                            const issueData = Array.isArray(raw) ? raw[0] ?? null : raw
+                            return (
+                                <Link key={vote.id} href={`/issue/${vote.issue_id}`} className="block">
+                                    <article className="card-hover p-5">
+                                        {/* 투표 제목 */}
+                                        <p className="text-base font-semibold text-content-primary mb-3 line-clamp-2 leading-snug">
+                                            {decodeHtml(vote.title)}
+                                        </p>
+
+                                        {/* 연결된 이슈 · 상태 · 날짜 */}
+                                        <div className="flex items-center gap-2 text-xs text-content-muted">
+                                            {issueData && (
+                                                <>
+                                                    <span>{decodeHtml(issueData.title)}</span>
+                                                    <span>·</span>
+                                                </>
+                                            )}
+                                            <span>{vote.phase}</span>
+                                            <span>·</span>
+                                            <span>{formatDate(vote.created_at)}</span>
                                         </div>
                                     </article>
                                 </Link>

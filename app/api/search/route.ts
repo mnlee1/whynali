@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '검색어는 2자 이상 입력해 주세요.' }, { status: 400 })
     }
 
+    // 1단계: 이슈 키워드 검색
     let issueQuery = admin
         .from('issues')
         .select('id, title, status, category, created_at')
@@ -29,43 +30,62 @@ export async function GET(request: NextRequest) {
         .is('merged_into_id', null)
         .gte('heat_index', MIN_HEAT_TO_REGISTER)
 
-    let discussionQuery = admin
-        .from('discussion_topics')
-        .select('id, issue_id, body, created_at')
-        .eq('approval_status', '승인')
-
     if (keywords.length === 1) {
         issueQuery = issueQuery.ilike('title', `%${keywords[0]}%`)
-        discussionQuery = discussionQuery.ilike('body', `%${keywords[0]}%`)
     } else {
-        const issueOrConditions = keywords.map((k) => `title.ilike.%${k}%`).join(',')
-        const discussionOrConditions = keywords.map((k) => `body.ilike.%${k}%`).join(',')
-        issueQuery = issueQuery.or(issueOrConditions)
-        discussionQuery = discussionQuery.or(discussionOrConditions)
+        issueQuery = issueQuery.or(keywords.map((k) => `title.ilike.%${k}%`).join(','))
     }
 
-    const [issueResult, discussionResult] = await Promise.all([
-        issueQuery
+    const issueResult = await issueQuery
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
+
+    if (issueResult.error) {
+        return NextResponse.json({ error: issueResult.error.message }, { status: 500 })
+    }
+
+    const issues = (issueResult.data ?? []).map((item) => ({ ...item, _type: 'issue' }))
+    const matchedIssueIds = issues.map((i) => i.id)
+
+    // 2단계: 토론/투표 — 키워드 직접 매칭 OR 매칭된 이슈에 속한 것
+    const buildOrFilter = (keywordField: string, ids: string[]) => {
+        const keywordConds = keywords.map((k) => `${keywordField}.ilike.%${k}%`).join(',')
+        if (ids.length === 0) return keywordConds
+        const issueConds = `issue_id.in.(${ids.join(',')})`
+        return `${keywordConds},${issueConds}`
+    }
+
+    const [discussionResult, voteResult] = await Promise.all([
+        admin
+            .from('discussion_topics')
+            .select('id, issue_id, body, created_at')
+            .in('approval_status', ['진행중', '마감'])
+            .or(buildOrFilter('body', matchedIssueIds))
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1),
-        discussionQuery
+        admin
+            .from('votes')
+            .select('id, issue_id, title, phase, created_at')
+            .eq('approval_status', '승인')
+            .or(buildOrFilter('title', matchedIssueIds))
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1),
     ])
 
-    if (issueResult.error || discussionResult.error) {
-        const msg = issueResult.error?.message ?? discussionResult.error?.message
+    if (discussionResult.error || voteResult.error) {
+        const msg = discussionResult.error?.message ?? voteResult.error?.message
         return NextResponse.json({ error: msg }, { status: 500 })
     }
 
-    const issues = (issueResult.data ?? []).map((item) => ({ ...item, _type: 'issue' }))
     const discussions = (discussionResult.data ?? []).map((item) => ({ ...item, _type: 'discussion' }))
+    const votes = (voteResult.data ?? []).map((item) => ({ ...item, _type: 'vote' }))
 
     return NextResponse.json({
-        data: [...issues, ...discussions],
+        data: [...issues, ...discussions, ...votes],
         counts: {
             issues: issues.length,
             discussions: discussions.length,
+            votes: votes.length,
         },
     })
 }

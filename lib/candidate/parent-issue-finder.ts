@@ -52,7 +52,7 @@ export async function findParentIssue(
     const { data: activeIssues, error } = await supabaseAdmin
         .from('issues')
         .select('id, title')
-        .in('status', ['점화', '논란중'])
+        .in('status', ['점화', '논란중', '대기'])
         .eq('approval_status', '승인')
         .eq('category', category)
         .order('heat_index', { ascending: false })
