@@ -659,7 +659,7 @@ export default function AdminDiscussionsPage() {
                                                     target="_blank"
                                                     className="text-primary hover:underline line-clamp-2 break-words"
                                                 >
-                                                    {decodeHtml(topic.issues.title)}
+                                                    {decodeHtml(topic.issues?.title ?? '')}
                                                 </Link>
                                             ) : (
                                                 <span className="text-content-muted">연결 없음</span>

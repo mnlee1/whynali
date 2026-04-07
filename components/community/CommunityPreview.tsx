@@ -116,11 +116,12 @@ export default function CommunityPreview({ initialTopics }: Props) {
                                             onClick={(e) => {
                                                 e.preventDefault()
                                                 e.stopPropagation()
+                                                if (!topic.issues?.id) return
                                                 router.push(`/community?issue_id=${topic.issues.id}`)
                                             }}
                                             className="inline-block text-sm text-primary hover:underline mb-1 line-clamp-1 text-left transition-colors"
                                         >
-                                            {decodeHtml(topic.issues.title)} ({issueTopicCountMap[topic.issues.id] ?? 1}) →
+                                            {decodeHtml(topic.issues?.title ?? '')} ({issueTopicCountMap[topic.issues?.id ?? ''] ?? 1}) →
                                         </button>
                                     )}
                                     <p className="text-base font-medium text-content-primary line-clamp-2 leading-snug mb-2">
