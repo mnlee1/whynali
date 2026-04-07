@@ -412,21 +412,35 @@ export default function AdminVotesPage() {
                         {loadingIssues ? (
                             <p className="text-sm text-content-muted">이슈 목록 불러오는 중...</p>
                         ) : (
-                            <select
-                                value={selectedIssue?.id ?? ''}
-                                onChange={(e) => {
-                                    const issue = approvedIssues.find((i) => i.id === e.target.value)
-                                    setSelectedIssue(issue ?? null)
-                                }}
-                                className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
-                            >
-                                <option value="">이슈를 선택하세요</option>
-                                {approvedIssues.map((issue) => (
-                                    <option key={issue.id} value={issue.id}>
-                                        {issue.title}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="relative">
+                                <select
+                                    value={selectedIssue?.id ?? ''}
+                                    onChange={(e) => {
+                                        const issue = approvedIssues.find((i) => i.id === e.target.value)
+                                        setSelectedIssue(issue ?? null)
+                                        setVoteTitle('')
+                                        setVoteChoices(['찬성', '반대', '중립'])
+                                        setIsAiFilled(false)
+                                        setFormError(null)
+                                    }}
+                                    className="w-full pl-3 pr-8 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface appearance-none"
+                                >
+                                    <option value="">이슈를 선택하세요</option>
+                                    {approvedIssues.map((issue) => (
+                                        <option key={issue.id} value={issue.id}>
+                                            {issue.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                <svg
+                                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                >
+                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                </svg>
+                            </div>
                         )}
                     </div>
 
@@ -438,7 +452,7 @@ export default function AdminVotesPage() {
                                 type="button"
                                 onClick={handleAiFill}
                                 disabled={!selectedIssue || generating}
-                                className="text-xs px-2.5 py-1 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50"
+                                className="btn-primary text-xs px-2.5 py-1 rounded-full"
                             >
                                 {generating ? 'AI 생성 중...' : '✨ AI 생성'}
                             </button>

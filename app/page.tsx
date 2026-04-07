@@ -98,6 +98,25 @@ async function fetchPageData() {
             .limit(5),
     ])
 
+    // 토론 주제별 의견(댓글) 수 계산
+    const discussionsData = discussionsResult.data ?? []
+    const topicIds = discussionsData.map((t) => t.id)
+    const opinionCountMap: Record<string, number> = {}
+
+    if (topicIds.length > 0) {
+        const { data: commentRows } = await supabaseAdmin
+            .from('comments')
+            .select('discussion_topic_id')
+            .in('discussion_topic_id', topicIds)
+            .eq('visibility', 'public')
+
+        for (const row of commentRows ?? []) {
+            if (row.discussion_topic_id) {
+                opinionCountMap[row.discussion_topic_id] = (opinionCountMap[row.discussion_topic_id] ?? 0) + 1
+            }
+        }
+    }
+
     // 유효한 이슈와 연결된 투표만 노출 (votes API와 동일한 필터)
     type RawVote = Vote & {
         vote_choices: VoteChoice[]
@@ -127,6 +146,13 @@ async function fetchPageData() {
         .sort((a, b) => b.surgePct - a.surgePct)
         .slice(0, 10)
 
+    // 토론 주제에 opinionCount와 viewCount 추가
+    const discussionsWithStats = discussionsData.map((topic: any) => ({
+        ...topic,
+        opinionCount: opinionCountMap[topic.id] ?? 0,
+        viewCount: topic.view_count ?? 0,
+    }))
+
     return {
         hotIssues: (hotResult.data ?? []) as Issue[],
         surgingIssues,
@@ -135,7 +161,7 @@ async function fetchPageData() {
             total: latestResult.count ?? 0,
         },
         votes,
-        discussions: (discussionsResult.data ?? []) as TopicWithIssue[],
+        discussions: discussionsWithStats as TopicWithIssue[],
     }
 }
 

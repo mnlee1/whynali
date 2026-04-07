@@ -19,6 +19,7 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
     safety_rule: '금칙어',
     comment: '댓글',
     vote: '투표',
+    report: '신고',
 }
 
 const ACTION_BADGE: Record<string, string> = {
@@ -29,6 +30,8 @@ const ACTION_BADGE: Record<string, string> = {
     '수정': 'bg-blue-100 text-blue-700',
     '삭제': 'bg-red-100 text-red-700',
     '금칙어 추가': 'bg-orange-100 text-orange-700',
+    '금칙어 제외 처리': 'bg-orange-100 text-orange-700',
+    '금칙어 복원': 'bg-blue-100 text-blue-700',
     '금칙어 삭제': 'bg-red-100 text-red-700',
     '댓글 공개': 'bg-green-100 text-green-700',
     '댓글 삭제': 'bg-red-100 text-red-700',
@@ -37,6 +40,8 @@ const ACTION_BADGE: Record<string, string> = {
     '투표 반려': 'bg-red-100 text-red-700',
     '투표 수동 종료': 'bg-gray-200 text-gray-700',
     '투표 삭제': 'bg-red-100 text-red-700',
+    '신고 처리완료': 'bg-red-100 text-red-700',
+    '신고 무시': 'bg-gray-100 text-gray-600',
 }
 
 const PAGE_SIZE = 50
@@ -99,7 +104,7 @@ export default function AdminLogsPage() {
                     { value: 'discussion_topic', label: '토론 주제' },
                     { value: 'safety_rule', label: '금칙어' },
                     { value: 'comment', label: '댓글' },
-                    
+                    { value: 'report', label: '신고' },
                 ].map(({ value, label }) => (
                     <button
                         key={value}
