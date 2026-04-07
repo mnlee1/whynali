@@ -49,6 +49,9 @@ const AI_CONFIDENCE_THRESHOLD = parseInt(
 const CHECK_WINDOW_HOURS = parseInt(
     process.env.DUPLICATE_CHECK_WINDOW_HOURS ?? '1'
 )
+const CLOSED_CHECK_DAYS = parseInt(
+    process.env.DUPLICATE_CHECK_CLOSED_DAYS ?? '14'
+)
 
 /**
  * 단어 관계 정의
@@ -273,21 +276,48 @@ export async function checkDuplicateIssue(
         aiChecked: 0,
     }
     
-    const cutoffTime = new Date(
+    const recentCutoff = new Date(
         Date.now() - CHECK_WINDOW_HOURS * 60 * 60 * 1000
     ).toISOString()
-    
-    const { data: recentIssues } = await supabaseAdmin
-        .from('issues')
-        .select('id, title, created_at')
-        .gte('created_at', cutoffTime)
-        .order('created_at', { ascending: false })
-    
-    if (!recentIssues || recentIssues.length === 0) {
+    const closedCutoff = new Date(
+        Date.now() - CLOSED_CHECK_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString()
+
+    // 활성 이슈: 상태 기준 (기간 무관) — 점화/논란중 중인 이슈는 언제든 연결 대상
+    // 비활성 이슈: 생성 시각 기준 1시간 이내 (단순 중복 방지)
+    // 종결 이슈: 승인된 것만, 종결 후 14일 이내 (재점화 연결 대상)
+    const [activeResult, recentResult, closedResult] = await Promise.all([
+        supabaseAdmin
+            .from('issues')
+            .select('id, title, status, created_at')
+            .in('status', ['점화', '논란중'])
+            .eq('approval_status', '승인')
+            .order('updated_at', { ascending: false }),
+        supabaseAdmin
+            .from('issues')
+            .select('id, title, status, created_at')
+            .not('status', 'in', '(점화,논란중,종결)')
+            .gte('created_at', recentCutoff)
+            .order('created_at', { ascending: false }),
+        supabaseAdmin
+            .from('issues')
+            .select('id, title, status, created_at')
+            .eq('status', '종결')
+            .eq('approval_status', '승인')
+            .gte('updated_at', closedCutoff)
+            .order('updated_at', { ascending: false }),
+    ])
+
+    const issueMap = new Map<string, any>()
+    ;[...(activeResult.data ?? []), ...(recentResult.data ?? []), ...(closedResult.data ?? [])]
+        .forEach(i => { if (!issueMap.has(i.id)) issueMap.set(i.id, i) })
+    const recentIssues = Array.from(issueMap.values())
+
+    if (recentIssues.length === 0) {
         return { isDuplicate: false, filterStats }
     }
-    
-    console.log(`[중복 체크] "${newTitle}" vs 최근 ${recentIssues.length}건 이슈`)
+
+    console.log(`[중복 체크] "${newTitle}" vs ${recentIssues.length}건 (활성 ${activeResult.data?.length ?? 0} + 최근 ${recentResult.data?.length ?? 0} + 종결 ${closedResult.data?.length ?? 0})`)
     
     const exactMatch = recentIssues.find((i: any) => i.title === newTitle)
     if (exactMatch) {

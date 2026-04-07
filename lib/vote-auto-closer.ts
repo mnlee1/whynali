@@ -89,3 +89,37 @@ export async function closeVotesOnIssueClosed(issueId: string) {
 export async function closeVotesOnIssueDeleted(issueId: string) {
     return await closeVotesByIssue(issueId, '이슈 삭제')
 }
+
+/**
+ * 이슈가 재점화(종결 → 논란중)될 때 호출.
+ * 종결 시 예약된 auto_end_date를 null로 리셋하여 마감을 취소한다.
+ * 이미 phase='마감'인 투표는 건드리지 않는다.
+ */
+export async function cancelVoteScheduledClose(issueId: string) {
+    const { data: votes, error: selectError } = await supabaseAdmin
+        .from('votes')
+        .select('id')
+        .eq('issue_id', issueId)
+        .eq('phase', '진행중')
+        .not('auto_end_date', 'is', null)
+
+    if (selectError) {
+        console.error(`투표 조회 실패 (이슈: ${issueId}):`, selectError)
+        return { success: false, count: 0 }
+    }
+
+    if (!votes || votes.length === 0) return { success: true, count: 0 }
+
+    const { error: updateError } = await supabaseAdmin
+        .from('votes')
+        .update({ auto_end_date: null })
+        .in('id', votes.map((v) => v.id))
+
+    if (updateError) {
+        console.error(`투표 마감 취소 실패 (이슈: ${issueId}):`, updateError)
+        return { success: false, count: 0 }
+    }
+
+    console.log(`[투표 마감 취소] 이슈 ${issueId} 재점화 → ${votes.length}개 투표 마감 예약 취소`)
+    return { success: true, count: votes.length }
+}

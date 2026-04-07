@@ -3,8 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { parseLimitOffset, parseEnum } from '@/lib/parse-params'
 import type { IssueCategory, IssueStatus } from '@/types/issue'
 import { getCategoryIds } from '@/lib/config/categories'
-import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-thresholds'
-
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 
@@ -39,7 +37,6 @@ export async function GET(request: NextRequest) {
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .gte('heat_index', MIN_HEAT_TO_REGISTER)
 
         if (category) {
             query = query.eq('category', category)

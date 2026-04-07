@@ -25,6 +25,7 @@ import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject, parseJsonArray } from '@/lib/ai/parse-json-response'
 import { searchNaverNewsByKeyword } from '@/lib/collectors/naver-news'
 import { checkDuplicateIssue } from '@/lib/candidate/duplicate-checker'
+import { findParentIssue } from '@/lib/candidate/parent-issue-finder'
 import { calculateHeatIndex } from '@/lib/analysis/heat'
 import { tokenize } from '@/lib/candidate/tokenizer'
 import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
@@ -744,9 +745,10 @@ ${sampleTitlesText}
 2. 기업 비즈니스 관련 → "경제" (예: 두끼 마케팅은 경제)
 3. 연예인/드라마/영화 → "연예"
 4. 사건사고/법원/교육/생활/문화 → "사회"
-5. 정치인/정책 → "정치"
+5. 국내 정치인/국내 정책/국회 → "정치" (단, 해외 정치인·외국 정부는 "세계")
 6. IT/과학/기술/연구 → "기술"
-7. 불명확하면 → "사회"
+7. 해외에서 발생한 사건·분쟁·외교·외국 정치 → "세계" (예: 트럼프 관세, 북한 미사일, 우크라이나 전쟁)
+8. 불명확하면 → "사회"
 
 ## 4단계: 임시 제목 생성
 키워드 기반 임시 이슈 제목 (8~15자)
@@ -1039,6 +1041,73 @@ async function processTrackA(): Promise<{
                 newsCount: newsItems.length,
             })
             failedCount++
+            continue
+        }
+
+        // 4-3b. 파생 이벤트 체크 (Groq — Claude 비용 없음)
+        // 중복은 아니지만 기존 활성 이슈의 후속/파생 사건이면 새 이슈 대신 타임라인 포인트 추가
+        const parentResult = await findParentIssue(supabaseAdmin, tentativeTitle, category)
+
+        if (parentResult) {
+            console.log(`  → [파생 이벤트 감지] "${parentResult.parentIssueTitle}" (${parentResult.stage}, 신뢰도: ${parentResult.confidence}%)`)
+
+            try {
+                const { relevantCommunityIds: filteredCommunityIds, relevantNewsIds: filteredNewsIds } = await filterAndTitleByAI(
+                    burst.keyword,
+                    parentResult.parentIssueTitle,
+                    newsItems,
+                    burst.posts,
+                )
+
+                if (filteredCommunityIds.length > 0) {
+                    await supabaseAdmin
+                        .from('community_data')
+                        .update({ issue_id: parentResult.parentIssueId })
+                        .in('id', filteredCommunityIds)
+                    console.log(`  → 부모 이슈에 커뮤니티 ${filteredCommunityIds.length}건 연결`)
+                }
+
+                if (filteredNewsIds.length > 0) {
+                    await supabaseAdmin
+                        .from('news_data')
+                        .update({ issue_id: parentResult.parentIssueId })
+                        .in('id', filteredNewsIds)
+                        .is('issue_id', null)
+                    console.log(`  → 부모 이슈에 뉴스 ${filteredNewsIds.length}건 연결`)
+
+                    // 첫 번째 관련 뉴스를 타임라인 포인트로 추가
+                    const firstNews = newsItems.find(n => filteredNewsIds.includes(n.id))
+                    if (firstNews) {
+                        await supabaseAdmin
+                            .from('timeline_points')
+                            .insert({
+                                issue_id: parentResult.parentIssueId,
+                                title: firstNews.title,
+                                occurred_at: firstNews.published_at,
+                                source_url: firstNews.link,
+                                stage: parentResult.stage,
+                            })
+                        console.log(`  → 타임라인 포인트 추가 (${parentResult.stage}: "${firstNews.title}")`)
+                    }
+                }
+            } catch {
+                // AI 실패 시 폴백: 커뮤니티만 전체 연결
+                const postIds = burst.posts.map((p: { id: string }) => p.id)
+                await supabaseAdmin
+                    .from('community_data')
+                    .update({ issue_id: parentResult.parentIssueId })
+                    .in('id', postIds)
+                console.log(`  → [폴백] 부모 이슈에 커뮤니티 ${postIds.length}건 연결`)
+            }
+
+            await logTrackA(burst.keyword, burst.count, 'derivative_linked', {
+                parentIssueId: parentResult.parentIssueId,
+                parentIssueTitle: parentResult.parentIssueTitle,
+                stage: parentResult.stage,
+                confidence: parentResult.confidence,
+                reason: parentResult.reason,
+            })
+            successCount++
             continue
         }
 

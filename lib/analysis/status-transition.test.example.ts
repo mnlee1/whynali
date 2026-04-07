@@ -13,6 +13,7 @@ describe('evaluateTransition', () => {
         const baseIssue: IssueForTransition = {
             id: 'test-1',
             status: '점화',
+            approval_status: '승인',
             approved_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), // 7시간 전
             created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
             heat_index: 35,
@@ -99,6 +100,7 @@ describe('evaluateTransition', () => {
         const baseIssue: IssueForTransition = {
             id: 'test-2',
             status: '논란중',
+            approval_status: '승인',
             approved_at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
             created_at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
             heat_index: 25,
@@ -160,6 +162,7 @@ describe('evaluateTransition', () => {
         const baseIssue: IssueForTransition = {
             id: 'test-3',
             status: '종결',
+            approval_status: '승인',
             approved_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
             created_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
             heat_index: 35,
