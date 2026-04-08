@@ -43,7 +43,7 @@ export async function extractUnsplashKeywords(title: string): Promise<string[]> 
 
     try {
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             messages: [{
                 role: 'user',
                 content: `You are selecting Unsplash stock photo search terms for a Korean news headline.
@@ -137,7 +137,7 @@ JSON으로만 응답:
 
     try {
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.7,
             max_tokens: 400,
