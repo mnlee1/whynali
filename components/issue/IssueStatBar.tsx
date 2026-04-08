@@ -100,10 +100,15 @@ export default function IssueStatBar({ issueId, userId, initialVoteCount, initia
         }, 400)
     }
 
+    const leftStats = STATS_META.filter(({ key }) => key !== 'viewCount')
+    const viewStat = STATS_META.find(({ key }) => key === 'viewCount')
+
     return (
         <div className="flex items-center justify-between gap-2 py-2.5 border-y border-border-muted my-3">
+            {/* 좌측 그룹: 감정표현, 댓글, 투표, 토론 */}
             <div className="flex items-center gap-1 flex-wrap">
-                {STATS_META.map(({ key, label, scrollTo, icon }) => {
+                <ReactionDropdown issueId={issueId} userId={userId} />
+                {leftStats.map(({ key, label, scrollTo, icon }) => {
                     const count = stats[key]
                     const isClickable = !!scrollTo
 
@@ -115,7 +120,7 @@ export default function IssueStatBar({ issueId, userId, initialVoteCount, initia
                             className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
                         >
                             {icon}
-                            <span>{count.toLocaleString()}</span>
+                            <span>{count > 0 ? count.toLocaleString() : label}</span>
                         </button>
                     ) : (
                         <span
@@ -123,12 +128,19 @@ export default function IssueStatBar({ issueId, userId, initialVoteCount, initia
                             className="flex items-center gap-1 px-2.5 py-1 text-xs text-content-secondary"
                         >
                             {icon}
-                            <span>{count.toLocaleString()}</span>
+                            <span>{count > 0 ? count.toLocaleString() : label}</span>
                         </span>
                     )
                 })}
             </div>
-            <ReactionDropdown issueId={issueId} userId={userId} />
+
+            {/* 우측 그룹: 조회수 */}
+            {viewStat && (
+                <span className="flex items-center gap-1 px-2.5 py-1 text-xs text-content-secondary">
+                    {viewStat.icon}
+                    <span>{stats.viewCount.toLocaleString()}</span>
+                </span>
+            )}
         </div>
     )
 }

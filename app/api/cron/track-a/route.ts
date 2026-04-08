@@ -187,10 +187,31 @@ function simpleInferCategory(title: string): IssueCategory {
     return bestCategory
 }
 
+// 한국어 불용어 — 조사·어미·접속사·시간 부사 등 의미 없는 단어
+const STOPWORDS = new Set([
+    '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과', '이나', '나',
+    '도', '만', '까지', '부터', '에서', '에게', '한테', '한', '하는', '하고', '하여', '해서',
+    '이다', '있다', '없다', '하다', '되다', '이고', '하며', '에도', '으로도', '이라', '라',
+    '것', '수', '등', '및', '또', '그', '더', '이후', '앞서', '관련', '대해', '위해', '따라',
+    '통해', '대한', '위한', '같은', '지난', '현재', '오늘', '내일', '어제', '해당', '기자',
+])
+
+/** 제목에서 의미 있는 키워드 추출 (2글자 이상, 불용어 제외) */
+function extractKeywords(title: string): Set<string> {
+    return new Set(
+        title
+            .split(/[\s\[\]()「」『』<>【】·,./…!?"']+/)
+            .map(t => t.trim())
+            .filter(t => t.length >= 2 && !STOPWORDS.has(t))
+    )
+}
+
 /**
  * classifyTimelineStages - Groq으로 타임라인 기사 단계 분류
  *
- * 첫 번째 기사 = '발단', 마지막 기사 = 이슈 상태에 따라 '진정'/'전개'
+ * 발단 선택: 이슈 제목과 키워드가 1개 이상 겹치는 가장 오래된 기사.
+ *   겹치는 기사가 없으면 첫 번째 기사를 fallback으로 사용.
+ * 마지막 기사 = 이슈 상태에 따라 '진정'/'전개'
  * 중간 기사들만 Groq 배치 요청으로 '전개'/'파생' 분류.
  * 중간이 2개 이하이거나 Groq 실패 시 전부 '전개'로 fallback.
  */
@@ -203,13 +224,27 @@ async function classifyTimelineStages(
 
     if (news.length === 0) return result
 
-    // 기사 1개: 발단만
-    result.set(news[0].id, '발단')
+    // 발단: 이슈 제목과 키워드 1개 이상 겹치는 가장 오래된 기사 선택
+    // 없으면 첫 번째 기사 fallback
+    const issueTitleKeywords = extractKeywords(issueTitle)
+    const baldanIndex = news.findIndex(n => {
+        if (!n.title) return false
+        const articleKeywords = extractKeywords(n.title)
+        for (const kw of issueTitleKeywords) {
+            if (articleKeywords.has(kw)) return true
+        }
+        return false
+    })
+    const baldanIdx = baldanIndex === -1 ? 0 : baldanIndex
+    result.set(news[baldanIdx].id, '발단')
+
     if (news.length === 1) return result
 
     // 마지막: 종결이면 진정, 아니면 전개
     const lastStage = issueStatus === '종결' ? '진정' : '전개'
-    result.set(news[news.length - 1].id, lastStage)
+    const lastIdx = news.length - 1
+    // 발단과 마지막이 같은 기사면 마지막 단계 배정 스킵
+    if (baldanIdx !== lastIdx) result.set(news[lastIdx].id, lastStage)
 
     // 중간 기사 없으면 끝
     const middle = news.slice(1, -1)
@@ -240,7 +275,7 @@ ${listText}
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: 300 },
+            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 300 },
         )
 
         const parsed = parseJsonArray<{ index: number; stage: string }>(content)
@@ -298,10 +333,11 @@ ${newsTitlesText}
 ${postTitlesText}
 
 ## 작업 1: 관련 뉴스 선별
-키워드/임시 제목과 직접 관련된 뉴스만 선택 (무관한 뉴스 제외)
+임시 제목의 핵심 사건과 직접 관련된 뉴스만 선택. 인물/키워드가 겹쳐도 다른 사건이면 제외.
 예시:
-- "WBC 한국" → "WBC 이탈리아 경기" (X), "한국 8강 확정" (O)
-- "왕사남" → "왕과 사는 남자 영화" (O), "왕실 관련 뉴스" (X)
+- "장원영 우리은행 광고 공개" → "장원영 외모 화제" (X), "장원영 우리은행 CF 촬영" (O)
+- "WBC 한국 8강" → "WBC 이탈리아 경기" (X), "한국 8강 확정" (O)
+불확실하면 제외.
 
 ## 작업 2: 최종 이슈 제목 생성
 선별된 뉴스 제목들의 공통 핵심 내용으로 이슈 제목 작성
@@ -311,10 +347,10 @@ ${postTitlesText}
 - 나쁜 예: "WBC 관련 논란", "최태원 화제", "지수 충격"
 
 ## 작업 3: 관련 커뮤니티 글 선별
-이슈와 관련된 커뮤니티 글만 선택
-- 포함: 직접 관련 글, 반응글, 의견글, 정보 공유
-- 제외: 완전히 다른 주제, 스팸, 광고
-- 불확실하면 포함 (관대하게)
+임시 제목의 핵심 사건과 직접 관련된 글만 선택. 인물/키워드가 겹쳐도 다른 사건이면 제외.
+- 포함: 이슈 핵심 주제를 직접 다룬 글, 해당 사건에 대한 반응글
+- 제외: 같은 인물의 다른 사건, 외모·일상·SNS 등 무관한 주제, 스팸, 광고
+불확실하면 제외.
 
 응답 형식 (JSON만):
 {

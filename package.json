@@ -4,6 +4,8 @@
     "private": true,
     "scripts": {
         "dev": "next dev",
+        "dev:cron": "bash scripts/dev-cron.sh",
+        "dev:full": "bash scripts/dev-full.sh",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
