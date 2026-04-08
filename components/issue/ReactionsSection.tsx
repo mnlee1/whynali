@@ -58,6 +58,17 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
 
     useEffect(() => { loadReactions() }, [loadReactions])
 
+    useEffect(() => {
+        const handleReactionUpdate = (e: CustomEvent) => {
+            if (e.detail?.issueId === issueId) {
+                console.log('[ReactionsSection] Received reactionUpdated event')
+                loadReactions()
+            }
+        }
+        window.addEventListener('reactionUpdated', handleReactionUpdate as EventListener)
+        return () => window.removeEventListener('reactionUpdated', handleReactionUpdate as EventListener)
+    }, [issueId, loadReactions])
+
     const handleClick = async (type: ReactionType) => {
         if (!userId) {
             const currentPath = window.location.pathname
@@ -77,7 +88,10 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
+            console.log('[ReactionsSection] API success:', json)
             await loadReactions()
+            console.log('[ReactionsSection] loadReactions completed')
+            window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId } }))
         } catch (e) {
             setError(e instanceof Error ? e.message : '처리 실패')
         } finally {
