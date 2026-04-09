@@ -2,10 +2,14 @@
 
 # Supabase 프로젝트 상태 확인 및 복원 스크립트
 
-PROJECT_REF="daiwwuofyqjhknidkois"
-PROJECT_URL="https://${PROJECT_REF}.supabase.co"
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhaXd3dW9meXFqaGtuaWRrb2lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODI4NDIsImV4cCI6MjA5MTE1ODg0Mn0.9RHN8SnHH45IBWDYvAbz3LsvhUX4X4FSJzj6a8-50kY"
-SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhaXd3dW9meXFqaGtuaWRrb2lzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU4Mjg0MiwiZXhwIjoyMDkxMTU4ODQyfQ.UX4nEogflLOi303Qvr2qImkHfR6-TodB2oMfAByyUZ8"
+# .env.local 파일에서 환경변수 로드
+if [ -f .env.local ]; then
+    export $(grep -v '^#' .env.local | xargs)
+fi
+
+PROJECT_URL="${NEXT_PUBLIC_SUPABASE_URL}"
+ANON_KEY="${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+SERVICE_KEY="${SUPABASE_SERVICE_ROLE_KEY}"
 
 echo "=== Supabase 프로젝트 상태 확인 ==="
 echo ""

@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
+import * as dotenv from 'dotenv'
+
+// .env.local 파일 로드
+dotenv.config({ path: '.env.local' })
 
 const supabase = createClient(
-  'https://banhuygrqgezhlpyytyc.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhbmh1eWdycWdlemhscHl5dHljIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDYwMzQ0MSwiZXhwIjoyMDg2MTc5NDQxfQ.dMrfD0-TAl7fTfdBVQHNMQ0e5w8XCl7aT0oh7lmAVvY'
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 const { data: posts } = await supabase
