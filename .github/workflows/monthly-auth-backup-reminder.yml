@@ -1,0 +1,45 @@
+name: Monthly Auth Backup Reminder
+
+# 매월 1일 오전 10시에 두레이로 알림
+on:
+    schedule:
+        - cron: '0 1 1 * *'  # UTC 01:00, 매월 1일 = 한국 오전 10시
+    workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+    remind:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        
+        steps:
+            - name: 두레이 알림 전송
+              env:
+                  DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+              run: |
+                  if [ -z "$DOORAY_WEBHOOK_URL" ]; then
+                      echo "⚠️  DOORAY_WEBHOOK_URL이 설정되지 않았습니다."
+                      exit 0
+                  fi
+                  
+                  DATE=$(date +'%Y년 %m월')
+                  
+                  BODY=$(jq -n \
+                      --arg botName "왜난리 알림봇" \
+                      --arg text "📅 월간 Auth 백업 알림" \
+                      --arg date "$DATE" \
+                      '{
+                          botName: $botName,
+                          text: ($text + " — " + $date),
+                          attachments: [{
+                              title: "🔐 Auth 사용자 백업 실행 필요",
+                              text: "Supabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnode scripts/backup-auth-users.mjs\n```\n\n완료 후 Google Drive (nhnad.deflow@gmail.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분",
+                              color: "orange"
+                          }]
+                      }'
+                  )
+                  
+                  curl -s -X POST "$DOORAY_WEBHOOK_URL" \
+                      -H "Content-Type: application/json" \
+                      -d "$BODY"
+                  
+                  echo "✅ 두레이 알림 전송 완료"
