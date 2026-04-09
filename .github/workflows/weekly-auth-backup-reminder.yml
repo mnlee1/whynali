@@ -1,9 +1,9 @@
-name: Weekly Auth Backup Reminder
+name: Monthly Auth Backup Reminder
 
-# 매주 월요일 오전 10시에 두레이로 알림
+# 매월 1일 오전 10시에 두레이로 알림
 on:
     schedule:
-        - cron: '0 1 * * 1'  # UTC 01:00, 매주 월요일 = 한국 오전 10시
+        - cron: '0 1 1 * *'  # UTC 01:00, 매월 1일 = 한국 오전 10시
     workflow_dispatch:  # 수동 실행 가능
 
 jobs:
@@ -25,14 +25,14 @@ jobs:
                   
                   BODY=$(jq -n \
                       --arg botName "왜난리 알림봇" \
-                      --arg text "📅 월간 Auth 백업 알림" \
+                      --arg text "📅 주간 Auth 백업 알림" \
                       --arg date "$DATE" \
                       '{
                           botName: $botName,
                           text: ($text + " — " + $date),
                           attachments: [{
                               title: "🔐 Auth 사용자 백업 실행 필요",
-                              text: "Supabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnode scripts/backup-auth-users.mjs\n```\n\n완료 후 Google Drive (nhnad.deflow@gmail.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분",
+                              text: "Supabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnode scripts/backup-auth-users.mjs\n```\n\n완료 후 Google Drive (nhnad.deflow@gmail.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분\n📆 백업 빈도: 주 1회 (매주 월요일)",
                               color: "orange"
                           }]
                       }'

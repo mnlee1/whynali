@@ -26,12 +26,13 @@ npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
 
 ```bash
 node scripts/backup-db.mjs                      # 일반 데이터 백업
-node scripts/backup-auth-users.mjs              # Auth 사용자 백업 (월 1회)
+node scripts/backup-auth-users.mjs              # Auth 사용자 백업 (주 1회)
 node scripts/restore-db.mjs 2026-04-09          # 일반 데이터 복원
 node scripts/restore-auth-users.mjs 2026-04-09  # Auth 사용자 복원
 ```
 
 ⚠️ Auth 백업은 이메일 포함! 로컬에만 보관, GitHub 커밋 금지
+📅 매주 월요일 오전 10시 두레이 알림 전송
 
 자세한 내용: @docs/99_데이터베이스_백업_복구_가이드.md
 

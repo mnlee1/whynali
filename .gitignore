@@ -33,4 +33,5 @@ next-env.d.ts
 # Backups
 backups-full/  # 민감 정보 포함 전체 백업 (Private 전용)
 backups-auth/  # Auth 사용자 백업 (민감 정보, Private 전용)
-backups/*/     # 실제 백업 데이터 (README 제외)
+backups/20*/   # 실제 백업 데이터 (README 제외)
+!backups/README.md
