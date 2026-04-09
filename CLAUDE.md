@@ -25,10 +25,11 @@ npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
 자동 백업 시스템이 매일 오전 9시에 실행됩니다.
 
 ```bash
-node scripts/backup-db.mjs                      # 일반 데이터 백업
-node scripts/backup-auth-users.mjs              # Auth 사용자 백업 (주 1회)
-node scripts/restore-db.mjs 2026-04-09          # 일반 데이터 복원
-node scripts/restore-auth-users.mjs 2026-04-09  # Auth 사용자 복원
+npm run backup                              # 일반 데이터 백업
+npm run backup:auth                         # Auth 사용자 백업 (주 1회)
+npm run restore 2026-04-09                  # 일반 데이터 복원
+npm run restore:auth 2026-04-09             # Auth 사용자 복원
+npm run backup:cleanup                      # 오래된 백업 정리
 ```
 
 ⚠️ Auth 백업은 이메일 포함! 로컬에만 보관, GitHub 커밋 금지
