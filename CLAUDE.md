@@ -18,6 +18,7 @@ npm run build        # 프로덕션 빌드
 npm run lint         # ESLint 실행
 npm run test:e2e     # Playwright E2E 테스트 실행
 npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
+npm run check:api    # AI API 사용 현황 조회 (실서버)
 ```
 
 ## 백업 및 복원

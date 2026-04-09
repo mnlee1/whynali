@@ -211,8 +211,8 @@ export default function AdminDashboardPage() {
             const [issuesRes, discussionsRes, safetyRes, votesRes, logsRes, apiUsageRes, stats24hRes] =
                 await Promise.all([
                     fetch('/api/admin/issues?approval_status=대기'),
-                    fetch('/api/admin/discussions?status=대기'),
-                    fetch('/api/admin/safety/pending'),
+                    fetch('/api/admin/discussions?approval_status=대기'),
+                    fetch('/api/admin/reports?status=대기&limit=1'),
                     fetch('/api/admin/votes?approval_status=대기&limit=1'),
                     fetch('/api/admin/logs?limit=8'),
                     fetch('/api/admin/api-usage'),
@@ -590,17 +590,28 @@ export default function AdminDashboardPage() {
                                         const isNormal = total === 0 || apiCosts.claude.failures === 0
                                         const rate = total > 0 ? apiCosts.claude.successes / total : 1
                                         const isWarning = !isNormal && rate >= 0.9
+                                        const successRate = total > 0 ? ((rate * 100).toFixed(1)) : '0.0'
                                         return (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm text-content-secondary">AI 상태</span>
-                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                    isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
-                                                }`}>
-                                                    <span className={`w-2 h-2 rounded-full ${
-                                                        isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
-                                                    }`} />
-                                                    {isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.claude.failures}건)` : `오류 (${apiCosts.claude.failures}건)`}
-                                                </span>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm text-content-secondary">AI 상태 (4월 누적)</span>
+                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                        isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                        <span className={`w-2 h-2 rounded-full ${
+                                                            isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
+                                                        }`} />
+                                                        {isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.claude.failures}건)` : `오류 (${apiCosts.claude.failures}건)`}
+                                                    </span>
+                                                </div>
+                                                {total > 0 && (
+                                                    <div className="flex items-center justify-between text-xs text-content-muted">
+                                                        <span>성공률: {successRate}% ({apiCosts.claude.successes}/{total})</span>
+                                                        {!isNormal && rate < 0.9 && (
+                                                            <span className="text-orange-600 font-medium">모니터링 필요</span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     })()}
@@ -647,17 +658,25 @@ export default function AdminDashboardPage() {
                                         const isNormal = total === 0 || (apiCosts.groq?.failures ?? 0) === 0
                                         const rate = total > 0 ? (apiCosts.groq?.successes ?? 0) / total : 1
                                         const isWarning = !isNormal && rate >= 0.9
+                                        const successRate = total > 0 ? ((rate * 100).toFixed(1)) : '0.0'
                                         return (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm text-content-secondary">AI 상태</span>
-                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                    isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
-                                                }`}>
-                                                    <span className={`w-2 h-2 rounded-full ${
-                                                        isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
-                                                    }`} />
-                                                    {isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.groq?.failures}건)` : `오류 (${apiCosts.groq?.failures}건)`}
-                                                </span>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm text-content-secondary">AI 상태 (4월 누적)</span>
+                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                        isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                        <span className={`w-2 h-2 rounded-full ${
+                                                            isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
+                                                        }`} />
+                                                        {isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.groq?.failures}건)` : `오류 (${apiCosts.groq?.failures}건)`}
+                                                    </span>
+                                                </div>
+                                                {total > 0 && (
+                                                    <div className="flex items-center justify-between text-xs text-content-muted">
+                                                        <span>성공률: {successRate}% ({apiCosts.groq?.successes}/{total})</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     })()}

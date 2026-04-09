@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import AdminTabFilter from '@/components/admin/AdminTabFilter'
 
 interface Issue {
     id: string
@@ -84,7 +85,33 @@ export default function AdminDiscussionsPage() {
     const [submittingEdit, setSubmittingEdit] = useState(false)
     const [editError, setEditError] = useState<string | null>(null)
 
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
+
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '진행중': 1, '마감': 2 }
+
+    const loadTabCounts = useCallback(async () => {
+        const tabParams: { value: FilterStatus; params: Record<string, string> }[] = [
+            { value: '', params: {} },
+            { value: '대기', params: { approval_status: '대기' } },
+            { value: '진행중', params: { approval_status: '진행중' } },
+            { value: '마감', params: { approval_status: '마감' } },
+        ]
+        try {
+            const results = await Promise.all(
+                tabParams.map(({ params }) => {
+                    const p = new URLSearchParams({ limit: '1', offset: '0', ...params })
+                    return fetch(`/api/admin/discussions?${p}`).then(r => r.ok ? r.json() : null)
+                })
+            )
+            const counts: Record<string, number> = {}
+            tabParams.forEach(({ value }, i) => {
+                counts[value] = results[i]?.total ?? 0
+            })
+            setTabCounts(counts)
+        } catch {
+            // 카운트 로드 실패 시 무시
+        }
+    }, [])
 
     /* 승인된 이슈 목록 로드 */
     const loadApprovedIssues = useCallback(async () => {
@@ -161,6 +188,7 @@ export default function AdminDiscussionsPage() {
 
             handleCloseForm()
             loadTopics(filter)
+            loadTabCounts()
         } catch (e) {
             setFormError(e instanceof Error ? e.message : '생성 실패')
         } finally {
@@ -193,6 +221,10 @@ export default function AdminDiscussionsPage() {
             setLoading(false)
         }
     }, [])
+
+    useEffect(() => {
+        loadTabCounts()
+    }, [loadTabCounts])
 
     useEffect(() => {
         loadTopics(filter)
@@ -262,6 +294,7 @@ export default function AdminDiscussionsPage() {
             }
 
             loadTopics(filter)
+            loadTabCounts()
             setSelectedTopicIds(new Set())
         } catch (e) {
             alert(e instanceof Error ? e.message : '일괄 처리 실패')
@@ -326,8 +359,9 @@ export default function AdminDiscussionsPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            
+
             loadTopics(filter)
+            loadTabCounts()
             setSelectedTopicIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
@@ -349,8 +383,9 @@ export default function AdminDiscussionsPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            
+
             loadTopics(filter)
+            loadTabCounts()
             setSelectedTopicIds(prev => {
                 const next = new Set(prev)
                 next.delete(id)
@@ -484,25 +519,12 @@ export default function AdminDiscussionsPage() {
 
             {/* 필터 탭 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <div className="flex gap-2">
-                    {FILTER_LABELS.map(({ value, label }) => (
-                        <button
-                            key={value}
-                            onClick={() => setFilter(value)}
-                            className={[
-                                'px-4 py-1.5 text-sm rounded-full border transition-colors',
-                                filter === value
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                    <span className="ml-auto text-sm text-content-secondary self-center">
-                        총 {total}개
-                    </span>
-                </div>
+                <AdminTabFilter
+                    tabs={FILTER_LABELS}
+                    active={filter}
+                    counts={tabCounts}
+                    onChange={setFilter}
+                />
 
                 {/* 일괄 처리 버튼 */}
                 {selectedTopicIds.size > 0 && (
