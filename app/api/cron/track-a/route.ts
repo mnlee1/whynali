@@ -13,7 +13,7 @@
  * 4. 뉴스 1건 이상 발견 → 이슈 후보 등록 (approval_status='대기')
  * 5. 뉴스 0건 → 등록 보류 (루머 가능성)
  * 
- * 스케줄: 매 30분 (GitHub Actions: cron-track-a.yml)
+ * 스케줄: 매 정각 1시간 주기 (vercel.json: "0 * * * *")
  */
 
 import { NextRequest, NextResponse } from 'next/server'
