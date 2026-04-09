@@ -26,12 +26,29 @@ jobs:
               run: npm ci
             
             - name: DB 백업 실행
+              id: backup
               env:
                   NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
                   SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
               run: |
                   echo "🔄 백업 시작..."
-                  node scripts/backup-db.mjs
+                  OUTPUT=$(node scripts/backup-db.mjs 2>&1)
+                  echo "$OUTPUT"
+                  
+                  # 백업 통계 추출
+                  TABLES=$(echo "$OUTPUT" | grep "총.*개 테이블" | sed 's/.*총 //' | sed 's/개 테이블//')
+                  ROWS=$(echo "$OUTPUT" | grep "총.*개 행" | sed 's/.*총 //' | sed 's/개 행//')
+                  
+                  # DB 프로젝트 정보 추출
+                  DB_PROJECT=$(echo "$NEXT_PUBLIC_SUPABASE_URL" | sed 's|https://||' | sed 's|.supabase.co||')
+                  
+                  # 백업된 테이블 목록 추출
+                  TABLE_LIST=$(echo "$OUTPUT" | grep "백업 중:" | sed 's/.*백업 중: //' | sed 's/\.\.\.//' | tr '\n' ', ' | sed 's/, $//')
+                  
+                  echo "tables=$TABLES" >> $GITHUB_OUTPUT
+                  echo "rows=$ROWS" >> $GITHUB_OUTPUT
+                  echo "db_project=$DB_PROJECT" >> $GITHUB_OUTPUT
+                  echo "table_list=$TABLE_LIST" >> $GITHUB_OUTPUT
                   echo "✅ 백업 완료"
             
             - name: Git 설정
@@ -40,27 +57,98 @@ jobs:
                   git config user.email "github-actions[bot]@users.noreply.github.com"
             
             - name: 백업 파일 커밋
+              id: commit
               run: |
                   if [ -n "$(git status --porcelain backups/)" ]; then
                       git add backups/
                       git commit -m "chore: db backup $(date +'%Y-%m-%d')"
                       git push
+                      echo "status=committed" >> $GITHUB_OUTPUT
                       echo "✅ 백업 파일 저장 완료"
                   else
+                      echo "status=no_changes" >> $GITHUB_OUTPUT
                       echo "ℹ️  변경사항 없음"
                   fi
             
-            - name: 오래된 백업 삭제 (최근 7일만 유지)
+            - name: 오래된 백업 삭제 (최근 30일만 유지)
               run: |
                   cd backups/
-                  # 7일 이전 폴더 삭제
-                  find . -maxdepth 1 -type d -name "20*" -mtime +7 -exec rm -rf {} \;
+                  # 30일 이전 폴더 삭제
+                  find . -maxdepth 1 -type d -name "20*" -mtime +30 -exec rm -rf {} \;
                   
                   if [ -n "$(git status --porcelain)" ]; then
                       git add .
-                      git commit -m "chore: cleanup old backups (keep last 7 days)"
+                      git commit -m "chore: cleanup old backups (keep last 30 days)"
                       git push
                       echo "✅ 오래된 백업 삭제 완료"
                   else
                       echo "ℹ️  삭제할 백업 없음"
                   fi
+            
+            - name: 두레이 알림 (성공)
+              if: success()
+              env:
+                  DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+              run: |
+                  DATE=$(TZ=Asia/Seoul date +'%Y-%m-%d %H:%M')
+                  TABLES="${{ steps.backup.outputs.tables }}"
+                  ROWS="${{ steps.backup.outputs.rows }}"
+                  DB_PROJECT="${{ steps.backup.outputs.db_project }}"
+                  TABLE_LIST="${{ steps.backup.outputs.table_list }}"
+                  COMMIT_STATUS="${{ steps.commit.outputs.status }}"
+                  
+                  if [ "$COMMIT_STATUS" = "committed" ]; then
+                      COMMIT_MSG="✅ GitHub 커밋 완료"
+                  else
+                      COMMIT_MSG="ℹ️ 변경사항 없음"
+                  fi
+                  
+                  BODY=$(jq -n \
+                      --arg botName "왜난리 백업봇" \
+                      --arg text "✅ DB 백업 성공" \
+                      --arg date "$DATE" \
+                      --arg dbProject "$DB_PROJECT" \
+                      --arg tables "$TABLES" \
+                      --arg tableList "$TABLE_LIST" \
+                      --arg rows "$ROWS" \
+                      --arg commit "$COMMIT_MSG" \
+                      '{
+                          botName: $botName,
+                          text: ($text + " — " + $date),
+                          attachments: [{
+                              title: "백업 완료",
+                              text: ("📦 백업 대상\n• DB: " + $dbProject + " (whynali-main 실서버)\n\n📊 백업 통계\n• 테이블: " + $tables + " (" + $tableList + ")\n• 데이터: " + $rows + "\n• 커밋: " + $commit + "\n\n📁 저장: backups/" + (($date | split(" ")[0]) // "YYYY-MM-DD") + "/\n⏱️ 보관 기간: 30일"),
+                              color: "green"
+                          }]
+                      }'
+                  )
+                  
+                  curl -X POST "$DOORAY_WEBHOOK_URL" \
+                      -H "Content-Type: application/json" \
+                      -d "$BODY"
+            
+            - name: 두레이 알림 (실패)
+              if: failure()
+              env:
+                  DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+              run: |
+                  DATE=$(TZ=Asia/Seoul date +'%Y-%m-%d %H:%M')
+                  
+                  BODY=$(jq -n \
+                      --arg botName "왜난리 백업봇" \
+                      --arg text "❌ DB 백업 실패" \
+                      --arg date "$DATE" \
+                      '{
+                          botName: $botName,
+                          text: ($text + " — " + $date),
+                          attachments: [{
+                              title: "백업 실패",
+                              text: "DB 백업 중 오류가 발생했습니다.\n\nGitHub Actions 로그를 확인해주세요:\nhttps://github.com/mnlee1/whynali/actions",
+                              color: "red"
+                          }]
+                      }'
+                  )
+                  
+                  curl -X POST "$DOORAY_WEBHOOK_URL" \
+                      -H "Content-Type: application/json" \
+                      -d "$BODY"
