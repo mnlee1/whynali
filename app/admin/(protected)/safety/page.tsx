@@ -22,7 +22,7 @@ interface ReportItem {
     report_count: number
 }
 
-type LeftTab = 'ai_banned_word' | 'excluded_word'
+type LeftTab = 'banned_word' | 'ai_banned_word' | 'excluded_word'
 
 function formatDate(dateString: string): string {
     const d = new Date(dateString)
@@ -32,12 +32,18 @@ function formatDate(dateString: string): string {
 
 
 const LEFT_TABS: { key: LeftTab; label: string }[] = [
+    { key: 'banned_word', label: '기본 금칙어' },
     { key: 'ai_banned_word', label: 'AI 자동 생성' },
     { key: 'excluded_word', label: '제외 목록' },
 ]
 
 export default function AdminSafetyPage() {
-    const [leftTab, setLeftTab] = useState<LeftTab>('ai_banned_word')
+    const [leftTab, setLeftTab] = useState<LeftTab>('banned_word')
+
+    /* 기본 금칙어 */
+    const [bannedRules, setBannedRules] = useState<SafetyRule[]>([])
+    const [bannedLoading, setBannedLoading] = useState(true)
+    const [bannedError, setBannedError] = useState<string | null>(null)
 
     /* AI 생성 금칙어 */
     const [aiRules, setAiRules] = useState<SafetyRule[]>([])
@@ -62,6 +68,20 @@ export default function AdminSafetyPage() {
     const [processGuideOpen, setProcessGuideOpen] = useState(true)
 
     /* ── 로드 함수 ── */
+    const loadBannedRules = useCallback(async () => {
+        setBannedLoading(true); setBannedError(null)
+        try {
+            const res = await fetch('/api/admin/safety/rules?kind=banned_word')
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            setBannedRules(json.data ?? [])
+        } catch (e) {
+            setBannedError(e instanceof Error ? e.message : '조회 실패')
+        } finally {
+            setBannedLoading(false)
+        }
+    }, [])
+
     const loadAiRules = useCallback(async () => {
         setAiLoading(true); setAiError(null)
         try {
@@ -143,10 +163,11 @@ export default function AdminSafetyPage() {
     }, [])
 
     useEffect(() => {
+        loadBannedRules()
         loadAiRules()
         loadExcludedRules()
         loadReports()
-    }, [loadAiRules, loadExcludedRules, loadReports])
+    }, [loadBannedRules, loadAiRules, loadExcludedRules, loadReports])
 
     /* ── kind 변경 (제외 처리 / 복원) ── */
     const handleChangeKind = async (
@@ -278,11 +299,33 @@ export default function AdminSafetyPage() {
                                 current={leftTab}
                                 value={key}
                                 label={label}
-                                badge={key === 'ai_banned_word' ? aiRules.length : excludedRules.length}
+                                badge={
+                                    key === 'banned_word' ? bannedRules.length :
+                                    key === 'ai_banned_word' ? aiRules.length :
+                                    excludedRules.length
+                                }
                                 onClick={setLeftTab}
                             />
                         ))}
                     </div>
+
+                    {/* 탭: 기본 금칙어 */}
+                    {leftTab === 'banned_word' && (
+                        <div>
+                            {bannedError && <p className="text-sm text-red-500 mb-3">{bannedError}</p>}
+                            {bannedLoading ? <RuleListSkeleton /> : bannedRules.length === 0 ? (
+                                <p className="text-sm text-content-muted text-center py-8">기본 금칙어가 없습니다.</p>
+                            ) : (
+                                <ul className="space-y-2 max-h-[560px] overflow-y-auto">
+                                    {bannedRules.map((rule) => (
+                                        <li key={rule.id} className="flex items-center px-3 py-2 border border-border rounded-xl card">
+                                            <span className="text-sm font-medium text-content-primary">{rule.value}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    )}
 
                     {/* 탭: AI 자동 생성 목록 */}
                     {leftTab === 'ai_banned_word' && (

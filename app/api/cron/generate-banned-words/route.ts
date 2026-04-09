@@ -19,21 +19,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { generateBannedWords } from '@/lib/ai/banned-word-generator'
+import { verifyCronRequest } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
-    // Cron Secret 검증
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json(
-            { error: 'UNAUTHORIZED', message: '인증 실패' },
-            { status: 401 }
-        )
-    }
+    const authError = verifyCronRequest(request)
+    if (authError) return authError
 
     try {
         console.log('[Cron] AI 금칙어 자동 생성 시작')

@@ -12,9 +12,8 @@ jobs:
         steps:
             - name: Track A API 호출
               run: |
-                  response=$(curl -fsS -X POST \
+                  response=$(curl -fsS \
                     -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-                    -H "Content-Type: application/json" \
                     --max-time 540 \
                     https://whynali.vercel.app/api/cron/track-a 2>&1)
                   echo "$response"

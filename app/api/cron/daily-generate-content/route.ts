@@ -24,7 +24,7 @@ import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
-import { sendDoorayBatchGenerationAlert, sendDoorayDailyReportSummary, sendDoorayShortformBatchAlert } from '@/lib/dooray-notification'
+import { sendDoorayBatchGenerationAlert, sendDoorayShortformBatchAlert } from '@/lib/dooray-notification'
 import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT, SHORTFORM_COOLDOWN_HOURS, SHORTFORM_VIDEO_DURATION, SHORTFORM_VIDEO_EFFECT } from '@/lib/config/shortform-thresholds'
 import type { ShortformSourceCount } from '@/types/shortform'
 import { generateShortformImage } from '@/lib/shortform/generate-image'
@@ -43,67 +43,6 @@ function verifyCronRequest(req: NextRequest): boolean {
     const cronSecret = process.env.CRON_SECRET
     if (!cronSecret) return false
     return authHeader === `Bearer ${cronSecret}`
-}
-
-/**
- * 신고 일일 배치 — 욕설/혐오 외 신고를 우선순위별로 분류해 Dooray 전송
- *
- * 우선순위 기준:
- *   🟡 priority: 스팸/광고 3건+, 허위정보 2건+, 기타 3건+
- *   🟢 normal:   스팸/광고 2건, 허위정보 1건, 기타 2건
- *   ⚪ low:      스팸/광고 1건, 기타 1건
- */
-async function sendDailyReportSummary(): Promise<void> {
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-
-    const { data: reports } = await supabaseAdmin
-        .from('reports')
-        .select('comment_id, reason, comments!inner(id, body, visibility, issue_id, discussion_topic_id)')
-        .neq('reason', '욕설/혐오')
-        .eq('comments.visibility', 'public')
-        .gte('created_at', yesterday)
-
-    if (!reports || reports.length === 0) return
-
-    // comment_id 기준으로 reason별 건수 집계
-    type ReportMap = Record<string, { body: string; contextType: string; reasons: Record<string, number> }>
-    const commentMap: ReportMap = {}
-
-    for (const r of reports) {
-        const comment = r.comments as unknown as { id: string; body: string; visibility: string; issue_id: string | null; discussion_topic_id: string | null }
-        if (!commentMap[r.comment_id]) {
-            commentMap[r.comment_id] = {
-                body: comment.body,
-                contextType: comment.discussion_topic_id ? 'discussion' : 'issue',
-                reasons: {},
-            }
-        }
-        commentMap[r.comment_id].reasons[r.reason] = (commentMap[r.comment_id].reasons[r.reason] ?? 0) + 1
-    }
-
-    const priority = []
-    const normal = []
-    const low = []
-
-    for (const [commentId, info] of Object.entries(commentMap)) {
-        const spam = info.reasons['스팸/광고'] ?? 0
-        const false_ = info.reasons['허위정보'] ?? 0
-        const etc = info.reasons['기타'] ?? 0
-        const totalCount = spam + false_ + etc
-        const dominantReason = spam >= false_ && spam >= etc ? '스팸/광고' : false_ >= etc ? '허위정보' : '기타'
-
-        const item = { commentId, body: info.body, reason: dominantReason, reportCount: totalCount, contextType: info.contextType }
-
-        if (spam >= 3 || false_ >= 2 || etc >= 3) {
-            priority.push(item)
-        } else if (spam === 2 || false_ >= 1 || etc === 2) {
-            normal.push(item)
-        } else {
-            low.push(item)
-        }
-    }
-
-    await sendDoorayDailyReportSummary({ priority, normal, low })
 }
 
 /**
@@ -226,10 +165,9 @@ export async function GET(request: NextRequest) {
     const canVote = hasGroqKey
 
     if (!canDiscussion && !canVote) {
-        console.error('[daily-generate] GROQ_API_KEY 미설정 — 토론/투표 생성 불가. 신고 배치 알림만 처리합니다.')
-        await sendDailyReportSummary()
+        console.error('[daily-generate] GROQ_API_KEY 미설정 — 토론/투표 생성 불가.')
         return NextResponse.json(
-            { error: 'AI API 키 없음 (GROQ_API_KEY 필요)', reportNotified: true },
+            { error: 'AI API 키 없음 (GROQ_API_KEY 필요)' },
             { status: 500 }
         )
     }
@@ -352,10 +290,7 @@ export async function GET(request: NextRequest) {
         issueCount: targets.length,
     })
 
-    // 작업 2: 신고 일일 배치 알림 (욕설/혐오 외)
-    await sendDailyReportSummary()
-
-    // 작업 3: 숏폼 일일 배치
+    // 작업 2: 숏폼 일일 배치
     const shortformResult = await generateShortformBatch()
     if (shortformResult.jobsGenerated > 0) {
         await sendDoorayShortformBatchAlert(shortformResult)
