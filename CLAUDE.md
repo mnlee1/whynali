@@ -20,6 +20,23 @@ npm run test:e2e     # Playwright E2E 테스트 실행
 npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
 ```
 
+## 백업 및 복원
+
+자동 백업 시스템이 매일 오전 9시에 실행됩니다.
+
+```bash
+npm run backup                              # 일반 데이터 백업
+npm run backup:auth                         # Auth 사용자 백업 (주 1회)
+npm run restore 2026-04-09                  # 일반 데이터 복원
+npm run restore:auth 2026-04-09             # Auth 사용자 복원
+npm run backup:cleanup                      # 오래된 백업 정리
+```
+
+⚠️ Auth 백업은 이메일 포함! 로컬에만 보관, GitHub 커밋 금지
+📅 매주 월요일 오전 10시 두레이 알림 전송
+
+자세한 내용: @docs/99_데이터베이스_백업_복구_가이드.md
+
 ## 아키텍처 개요
 
 **왜난리 (WhyNali)** — 한국 이슈/논란 추적 서비스. 사용자가 트렌딩 이슈를 탐색하고, 반응하고, 투표하고, AI가 생성한 커뮤니티 토론에 참여하는 플랫폼.
@@ -112,6 +129,7 @@ CANDIDATE_NO_RESPONSE_HOURS=6
 ## 주요 문서
 
 @docs/기획서.md
+@docs/99_데이터베이스_백업_복구_가이드.md
 @docs/99_미구현_미흡_정리.md
 @docs/97_API규약.md
 
