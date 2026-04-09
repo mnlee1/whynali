@@ -1,0 +1,66 @@
+name: DB Backup
+
+# 매일 오전 9시에 자동 실행 + 수동 실행 가능
+on:
+    schedule:
+        - cron: '0 0 * * *'  # UTC 00:00 = 한국시간 오전 9시
+    workflow_dispatch:  # GitHub에서 수동 실행 버튼
+
+jobs:
+    backup:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        
+        steps:
+            - name: 코드 체크아웃
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Node.js 설치
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+            
+            - name: 패키지 설치
+              run: npm ci
+            
+            - name: DB 백업 실행
+              env:
+                  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+                  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+              run: |
+                  echo "🔄 백업 시작..."
+                  node scripts/backup-db.mjs
+                  echo "✅ 백업 완료"
+            
+            - name: Git 설정
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            - name: 백업 파일 커밋
+              run: |
+                  if [ -n "$(git status --porcelain backups/)" ]; then
+                      git add backups/
+                      git commit -m "chore: db backup $(date +'%Y-%m-%d')"
+                      git push
+                      echo "✅ 백업 파일 저장 완료"
+                  else
+                      echo "ℹ️  변경사항 없음"
+                  fi
+            
+            - name: 오래된 백업 삭제 (최근 7일만 유지)
+              run: |
+                  cd backups/
+                  # 7일 이전 폴더 삭제
+                  find . -maxdepth 1 -type d -name "20*" -mtime +7 -exec rm -rf {} \;
+                  
+                  if [ -n "$(git status --porcelain)" ]; then
+                      git add .
+                      git commit -m "chore: cleanup old backups (keep last 7 days)"
+                      git push
+                      echo "✅ 오래된 백업 삭제 완료"
+                  else
+                      echo "ℹ️  삭제할 백업 없음"
+                  fi
