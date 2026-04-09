@@ -269,7 +269,8 @@ CREATE TABLE IF NOT EXISTS shortform_jobs (
     video_path TEXT,
     approval_status TEXT NOT NULL DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
     upload_status JSONB,
-    trigger_type TEXT NOT NULL CHECK (trigger_type IN ('issue_created', 'status_changed')),
+    trigger_type TEXT NOT NULL CHECK (trigger_type IN ('issue_created', 'status_changed', 'daily_batch')),
+    ai_validation JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -385,7 +386,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS claude_credit_cycles_active_idx ON claude_cred
 
 -- Auth 신규 유저 → public.users 자동 생성 (최신 버전: 이메일 provider 차단)
 CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
     provider_name TEXT;
     provider_user_id TEXT;
@@ -409,7 +414,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -418,14 +423,17 @@ CREATE TRIGGER on_auth_user_created
 
 -- source_track NULL 방지 트리거
 CREATE OR REPLACE FUNCTION set_default_source_track()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     IF NEW.source_track IS NULL THEN
         NEW.source_track := 'track_a';
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trigger_set_default_source_track ON issues;
 CREATE TRIGGER trigger_set_default_source_track
@@ -434,14 +442,17 @@ CREATE TRIGGER trigger_set_default_source_track
 
 -- 화력 15점 미만 이슈 생성 방지 트리거
 CREATE OR REPLACE FUNCTION prevent_low_heat_creation()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     IF NEW.created_heat_index IS NOT NULL AND NEW.created_heat_index < 15 THEN
         RAISE EXCEPTION '화력 15점 미만 이슈는 생성할 수 없습니다. 현재 화력: %점', NEW.created_heat_index;
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trigger_prevent_low_heat_creation ON issues;
 CREATE TRIGGER trigger_prevent_low_heat_creation
@@ -450,12 +461,15 @@ CREATE TRIGGER trigger_prevent_low_heat_creation
 
 -- issue_candidates updated_at 자동 갱신
 CREATE OR REPLACE FUNCTION update_issue_candidates_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_issue_candidates_updated_at ON issue_candidates;
 CREATE TRIGGER trg_issue_candidates_updated_at
@@ -464,12 +478,15 @@ CREATE TRIGGER trg_issue_candidates_updated_at
 
 -- shortform_jobs updated_at 자동 갱신
 CREATE OR REPLACE FUNCTION update_shortform_jobs_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_shortform_jobs_updated_at ON shortform_jobs;
 CREATE TRIGGER trg_shortform_jobs_updated_at
@@ -478,14 +495,17 @@ CREATE TRIGGER trg_shortform_jobs_updated_at
 
 -- discussion_topics body 수정 시 updated_at 자동 갱신
 CREATE OR REPLACE FUNCTION update_discussion_topics_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     IF OLD.body IS DISTINCT FROM NEW.body THEN
         NEW.updated_at = NOW();
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_discussion_topics_updated_at ON discussion_topics;
 CREATE TRIGGER trg_discussion_topics_updated_at
@@ -498,7 +518,11 @@ CREATE OR REPLACE FUNCTION vote_participate(
     p_choice_id UUID,
     p_user_id UUID
 )
-RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS VOID 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM votes WHERE id = p_vote_id AND phase = '진행중') THEN
         RAISE EXCEPTION 'VOTE_NOT_ACTIVE' USING ERRCODE = 'P0001';
@@ -519,7 +543,11 @@ CREATE OR REPLACE FUNCTION vote_cancel(
     p_vote_id UUID,
     p_user_id UUID
 )
-RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS VOID 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
     v_choice_id UUID;
 BEGIN
@@ -534,13 +562,21 @@ $$;
 
 -- 이슈 조회수 원자 증가
 CREATE OR REPLACE FUNCTION increment_issue_view_count(p_issue_id UUID)
-RETURNS VOID LANGUAGE SQL SECURITY DEFINER AS $$
+RETURNS VOID 
+LANGUAGE SQL 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
     UPDATE issues SET view_count = view_count + 1 WHERE id = p_issue_id;
 $$;
 
 -- 토론 조회수 원자 증가
 CREATE OR REPLACE FUNCTION increment_discussion_view_count(p_topic_id UUID)
-RETURNS VOID LANGUAGE SQL SECURITY DEFINER AS $$
+RETURNS VOID 
+LANGUAGE SQL 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
     UPDATE discussion_topics SET view_count = view_count + 1 WHERE id = p_topic_id;
 $$;
 

@@ -168,8 +168,22 @@ async function fetchPageData() {
 export default async function HomePage() {
     const { hotIssues, surgingIssues, latestIssues, votes, discussions } = await fetchPageData()
 
+    // 디버그: 데이터 확인
+    console.log('🔍 [홈페이지 데이터]')
+    console.log('- MIN_HEAT:', MIN_HEAT)
+    console.log('- hotIssues 수:', hotIssues.length)
+    console.log('- surgingIssues 수:', surgingIssues.length)
+    console.log('- latestIssues 수:', latestIssues.data.length)
+    if (hotIssues.length > 0) {
+        console.log('- hotIssues 샘플:', hotIssues[0])
+    }
+    if (surgingIssues.length > 0) {
+        console.log('- surgingIssues 샘플:', surgingIssues[0])
+    }
+
     // HotIssueHighlight: 종결 제외 상위 5개
     const heroIssues = hotIssues.filter(i => i.status !== '종결').slice(0, 5)
+    console.log('- heroIssues 수 (종결 제외):', heroIssues.length)
 
     const websiteSchema = generateWebSiteSchema()
 

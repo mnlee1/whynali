@@ -244,11 +244,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     initialVoteCount={voteCount ?? 0}
                     initialDiscussionCount={discussionTopics?.length ?? 0}
                 />
-                {issue.description && (
-                    <p className="text-content-secondary leading-relaxed">
-                        {decodeHtml(issue.description)}
-                    </p>
-                )}
             </div>
 
             {/* 타임라인 */}

@@ -22,7 +22,7 @@ interface ReportItem {
     report_count: number
 }
 
-type LeftTab = 'ai_banned_word' | 'excluded_word'
+type LeftTab = 'active' | 'excluded'
 
 function formatDate(dateString: string): string {
     const d = new Date(dateString)
@@ -30,24 +30,13 @@ function formatDate(dateString: string): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-
-const LEFT_TABS: { key: LeftTab; label: string }[] = [
-    { key: 'ai_banned_word', label: 'AI 자동 생성' },
-    { key: 'excluded_word', label: '제외 목록' },
-]
-
 export default function AdminSafetyPage() {
-    const [leftTab, setLeftTab] = useState<LeftTab>('ai_banned_word')
+    const [leftTab, setLeftTab] = useState<LeftTab>('active')
 
-    /* AI 생성 금칙어 */
-    const [aiRules, setAiRules] = useState<SafetyRule[]>([])
-    const [aiLoading, setAiLoading] = useState(true)
-    const [aiError, setAiError] = useState<string | null>(null)
-
-    /* 제외 목록 */
-    const [excludedRules, setExcludedRules] = useState<SafetyRule[]>([])
-    const [excludedLoading, setExcludedLoading] = useState(true)
-    const [excludedError, setExcludedError] = useState<string | null>(null)
+    /* 금칙어 통합 목록 */
+    const [allRules, setAllRules] = useState<SafetyRule[]>([])
+    const [rulesLoading, setRulesLoading] = useState(true)
+    const [rulesError, setRulesError] = useState<string | null>(null)
 
     /* kind 변경 공통 로딩 */
     const [changingKindId, setChangingKindId] = useState<string | null>(null)
@@ -62,31 +51,24 @@ export default function AdminSafetyPage() {
     const [processGuideOpen, setProcessGuideOpen] = useState(true)
 
     /* ── 로드 함수 ── */
-    const loadAiRules = useCallback(async () => {
-        setAiLoading(true); setAiError(null)
+    const loadAllRules = useCallback(async () => {
+        setRulesLoading(true); setRulesError(null)
         try {
-            const res = await fetch('/api/admin/safety/rules?kind=ai_banned_word')
+            const res = await fetch('/api/admin/safety/rules')
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setAiRules(json.data ?? [])
+            // 순서: banned_word → ai_banned_word → excluded_word, 같은 kind 내에서는 최신순
+            const order = { banned_word: 0, ai_banned_word: 1, excluded_word: 2 }
+            const sorted = (json.data ?? []).sort((a: SafetyRule, b: SafetyRule) => {
+                const ko = (order[a.kind as keyof typeof order] ?? 9) - (order[b.kind as keyof typeof order] ?? 9)
+                if (ko !== 0) return ko
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            })
+            setAllRules(sorted)
         } catch (e) {
-            setAiError(e instanceof Error ? e.message : '조회 실패')
+            setRulesError(e instanceof Error ? e.message : '조회 실패')
         } finally {
-            setAiLoading(false)
-        }
-    }, [])
-
-    const loadExcludedRules = useCallback(async () => {
-        setExcludedLoading(true); setExcludedError(null)
-        try {
-            const res = await fetch('/api/admin/safety/rules?kind=excluded_word')
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-            setExcludedRules(json.data ?? [])
-        } catch (e) {
-            setExcludedError(e instanceof Error ? e.message : '조회 실패')
-        } finally {
-            setExcludedLoading(false)
+            setRulesLoading(false)
         }
     }, [])
 
@@ -143,17 +125,12 @@ export default function AdminSafetyPage() {
     }, [])
 
     useEffect(() => {
-        loadAiRules()
-        loadExcludedRules()
+        loadAllRules()
         loadReports()
-    }, [loadAiRules, loadExcludedRules, loadReports])
+    }, [loadAllRules, loadReports])
 
     /* ── kind 변경 (제외 처리 / 복원) ── */
-    const handleChangeKind = async (
-        id: string,
-        newKind: 'excluded_word' | 'ai_banned_word',
-        fromKind: 'ai_banned_word' | 'excluded_word'
-    ) => {
+    const handleChangeKind = async (id: string, newKind: 'excluded_word' | 'ai_banned_word') => {
         setChangingKindId(id)
         try {
             const res = await fetch(`/api/admin/safety/rules/${id}`, {
@@ -163,14 +140,8 @@ export default function AdminSafetyPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            const item: SafetyRule = json.data
-            if (fromKind === 'ai_banned_word') {
-                setAiRules((prev) => prev.filter((r) => r.id !== id))
-                setExcludedRules((prev) => [item, ...prev])
-            } else {
-                setExcludedRules((prev) => prev.filter((r) => r.id !== id))
-                setAiRules((prev) => [item, ...prev])
-            }
+            const updated: SafetyRule = json.data
+            setAllRules((prev) => prev.map((r) => r.id === id ? updated : r))
         } catch (e) {
             alert(e instanceof Error ? e.message : '변경 실패')
         } finally {
@@ -186,7 +157,7 @@ export default function AdminSafetyPage() {
             const res = await fetch(`/api/admin/safety/rules?id=${id}`, { method: 'DELETE' })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            setExcludedRules((prev) => prev.filter((r) => r.id !== id))
+            setAllRules((prev) => prev.filter((r) => r.id !== id))
         } catch (e) {
             alert(e instanceof Error ? e.message : '삭제 실패')
         } finally {
@@ -216,34 +187,6 @@ export default function AdminSafetyPage() {
     }
 
 
-    /* ── 탭 버튼 헬퍼 ── */
-    function TabBtn<T extends string>({
-        current, value, label, badge, onClick,
-    }: { current: T; value: T; label: string; badge?: number; onClick: (v: T) => void }) {
-        const active = current === value
-        return (
-            <button
-                onClick={() => onClick(value)}
-                className={[
-                    'px-3 py-1.5 text-sm rounded-full border transition-colors',
-                    active
-                        ? 'bg-primary text-white border-primary font-medium'
-                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                ].join(' ')}
-            >
-                {label}
-                {badge !== undefined && badge > 0 && (
-                    <span className={[
-                        'ml-1.5 text-xs px-1.5 py-0.5 rounded-full',
-                        active ? 'bg-white/20 text-white' : 'bg-surface-muted text-content-secondary',
-                    ].join(' ')}>
-                        {badge}
-                    </span>
-                )}
-            </button>
-        )
-    }
-
     function RuleListSkeleton() {
         return (
             <div className="space-y-2">
@@ -263,66 +206,83 @@ export default function AdminSafetyPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-                {/* ── 좌측: AI 금칙어 관리 패널 ── */}
+                {/* ── 좌측: 금칙어 관리 패널 ── */}
                 <div>
-                    <h2 className="text-lg font-semibold text-content-primary mb-3">
-                        금칙어 관리
-                        <span className="ml-2 text-sm font-normal text-content-muted">한국어 온라인 커뮤니티 기본 금칙어 목록</span>
-                    </h2>
+                    <h2 className="text-lg font-semibold text-content-primary mb-3">금칙어 관리</h2>
 
-                    {/* 좌측 탭 */}
+                    {/* 탭 */}
                     <div className="flex gap-1 mb-4 border-b border-border pb-2">
-                        {LEFT_TABS.map(({ key, label }) => (
-                            <TabBtn
-                                key={key}
-                                current={leftTab}
-                                value={key}
-                                label={label}
-                                badge={key === 'ai_banned_word' ? aiRules.length : excludedRules.length}
-                                onClick={setLeftTab}
-                            />
-                        ))}
+                        {([
+                            { key: 'active' as LeftTab, label: 'AI 자동 생성', count: allRules.filter(r => r.kind !== 'excluded_word').length },
+                            { key: 'excluded' as LeftTab, label: '제외 목록', count: allRules.filter(r => r.kind === 'excluded_word').length },
+                        ]).map(({ key, label, count }) => {
+                            const active = leftTab === key
+                            return (
+                                <button
+                                    key={key}
+                                    onClick={() => setLeftTab(key)}
+                                    className={[
+                                        'px-3 py-1.5 text-sm rounded-full border transition-colors',
+                                        active
+                                            ? 'bg-primary text-white border-primary font-medium'
+                                            : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                                    ].join(' ')}
+                                >
+                                    {label}
+                                    {!rulesLoading && count > 0 && (
+                                        <span className={[
+                                            'ml-1.5 text-xs px-1.5 py-0.5 rounded-full',
+                                            active ? 'bg-white/20 text-white' : 'bg-surface-muted text-content-secondary',
+                                        ].join(' ')}>
+                                            {count}
+                                        </span>
+                                    )}
+                                </button>
+                            )
+                        })}
                     </div>
 
-                    {/* 탭: AI 자동 생성 목록 */}
-                    {leftTab === 'ai_banned_word' && (
-                        <div>
-                            {aiError && <p className="text-sm text-red-500 mb-3">{aiError}</p>}
-                            {aiLoading ? <RuleListSkeleton /> : aiRules.length === 0 ? (
-                                <p className="text-sm text-content-muted text-center py-8">AI가 생성한 금칙어가 없습니다.</p>
+                    {rulesError && <p className="text-sm text-red-500 mb-3">{rulesError}</p>}
+
+                    {/* 탭: AI 자동 생성 (banned_word + ai_banned_word) */}
+                    {leftTab === 'active' && (
+                        rulesLoading ? <RuleListSkeleton /> : (() => {
+                            const list = allRules.filter(r => r.kind !== 'excluded_word')
+                            return list.length === 0 ? (
+                                <p className="text-sm text-content-muted text-center py-8">등록된 금칙어가 없습니다.</p>
                             ) : (
                                 <ul className="space-y-2 max-h-[560px] overflow-y-auto">
-                                    {aiRules.map((rule) => (
+                                    {list.map(rule => (
                                         <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-border rounded-xl card">
                                             <span className="text-sm font-medium text-content-primary">{rule.value}</span>
                                             <button
-                                                onClick={() => handleChangeKind(rule.id, 'excluded_word', 'ai_banned_word')}
+                                                onClick={() => handleChangeKind(rule.id, 'excluded_word')}
                                                 disabled={changingKindId === rule.id}
-                                                className="text-xs text-orange-500 hover:text-orange-700 disabled:opacity-50"
+                                                className="text-xs text-orange-500 hover:text-orange-700 disabled:opacity-50 shrink-0 ml-2"
                                             >
                                                 {changingKindId === rule.id ? '처리 중...' : '제외 처리'}
                                             </button>
                                         </li>
                                     ))}
                                 </ul>
-                            )}
-                        </div>
+                            )
+                        })()
                     )}
 
                     {/* 탭: 제외 목록 */}
-                    {leftTab === 'excluded_word' && (
-                        <div>
-                            {excludedError && <p className="text-sm text-red-500 mb-3">{excludedError}</p>}
-                            {excludedLoading ? <RuleListSkeleton /> : excludedRules.length === 0 ? (
+                    {leftTab === 'excluded' && (
+                        rulesLoading ? <RuleListSkeleton /> : (() => {
+                            const list = allRules.filter(r => r.kind === 'excluded_word')
+                            return list.length === 0 ? (
                                 <p className="text-sm text-content-muted text-center py-8">제외 처리된 단어가 없습니다.</p>
                             ) : (
                                 <ul className="space-y-2 max-h-[560px] overflow-y-auto">
-                                    {excludedRules.map((rule) => (
+                                    {list.map(rule => (
                                         <li key={rule.id} className="flex items-center justify-between px-3 py-2 border border-border rounded-xl card">
                                             <span className="text-sm font-medium text-content-secondary line-through">{rule.value}</span>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 shrink-0 ml-2">
                                                 <button
-                                                    onClick={() => handleChangeKind(rule.id, 'ai_banned_word', 'excluded_word')}
+                                                    onClick={() => handleChangeKind(rule.id, 'ai_banned_word')}
                                                     disabled={changingKindId === rule.id}
                                                     className="text-xs text-primary hover:text-primary-dark disabled:opacity-50"
                                                 >
@@ -339,13 +299,11 @@ export default function AdminSafetyPage() {
                                         </li>
                                     ))}
                                 </ul>
-                            )}
-                        </div>
+                            )
+                        })()
                     )}
 
-                    {/* 프로세스 안내 */}
                     <div className="mt-4 p-3 bg-surface-subtle border border-border rounded-xl text-sm text-content-secondary space-y-1">
-                        <p>AI가 자동으로 금칙어를 탐지합니다.</p>
                         <p>과도하게 차단되는 단어는 &apos;제외 처리&apos;로 필터에서 제외할 수 있습니다.</p>
                     </div>
                 </div>
