@@ -136,7 +136,7 @@ export default function IssueStatBar({ issueId, userId, initialVoteCount, initia
 
             {/* 우측 그룹: 조회수 */}
             {viewStat && (
-                <span className="flex items-center gap-1 px-2.5 py-1 text-xs text-content-secondary">
+                <span className="flex items-center gap-1 pl-2.5 py-1 text-xs text-content-secondary">
                     {viewStat.icon}
                     <span>{stats.viewCount.toLocaleString()}</span>
                 </span>
