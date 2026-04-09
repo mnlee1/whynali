@@ -163,7 +163,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                             {/* 왼쪽 dot + 세로선 */}
                             <div className="flex flex-col items-center">
                                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 ${style.dot}`} />
-                                {!isLast && (
+                                {(!isLast || isClosed) && (
                                     <div className={`w-px flex-1 mt-1 ${style.line}`} />
                                 )}
                             </div>
@@ -209,18 +209,26 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
 
             {/* 종결 표시 */}
             {isClosed && (
-                <div className="flex gap-3 mt-2">
-                    <div className="flex flex-col items-center">
-                        <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 bg-gray-400" />
+                <div>
+                    {/* 종결 단계 헤더 */}
+                    <div className="flex items-center gap-2 mb-3 mt-5">
+                        <div className="w-[3px] h-[0.8rem] rounded-full shrink-0 bg-gray-400" />
+                        <span className="text-sm font-semibold text-gray-500">종결</span>
+                        <div className="flex-1 h-px bg-gray-100" />
                     </div>
-                    <div className="flex-1 pb-3">
-                        <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
-                            <span className="text-xs text-gray-400 block mb-1">
-                                {issueUpdatedAt ? formatDateWithTime(issueUpdatedAt) : ''}
-                            </span>
-                            <p className="text-sm font-medium text-gray-500">
-                                이슈 종결
-                            </p>
+                    <div className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                            <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 bg-gray-400" />
+                        </div>
+                        <div className="flex-1 pb-3">
+                            <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
+                                <span className="text-xs text-gray-400 block mb-1">
+                                    {issueUpdatedAt ? formatDateWithTime(issueUpdatedAt) : ''}
+                                </span>
+                                <p className="text-sm font-medium text-gray-500">
+                                    이슈 종결
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>

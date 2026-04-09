@@ -116,7 +116,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex items-center py-1 text-xs transition-colors"
+                className="flex items-center pr-2.5 py-1 text-xs transition-colors"
             >
                 {/* 이모지 겹침 영역 */}
                 <span className="flex items-center">
