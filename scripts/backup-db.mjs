@@ -12,8 +12,9 @@ import fs from 'fs/promises'
 import path from 'path'
 import { config } from 'dotenv'
 
-// 환경 변수 로드 (.env.local)
-config({ path: '.env.local' })
+// 환경 변수 로드 (프로덕션 우선, 없으면 개발)
+// 실서버(whynali-main) 백업용
+config({ path: '.env.production.local' }) || config({ path: '.env.local' })
 
 // Supabase 연결
 const supabase = createClient(

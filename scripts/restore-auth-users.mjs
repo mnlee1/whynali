@@ -21,7 +21,9 @@ import readline from 'readline'
 import { config } from 'dotenv'
 
 // 환경 변수 로드
-config({ path: '.env.local' })
+// 환경 변수 로드 (프로덕션 우선, 없으면 개발)
+// 실서버(whynali-main) 복원용
+config({ path: '.env.production.local' }) || config({ path: '.env.local' })
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
