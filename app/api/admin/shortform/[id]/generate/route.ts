@@ -12,13 +12,13 @@ import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 import { generate3SceneShortform } from '@/lib/shortform/generate-image'
 import { validateShortformImage } from '@/lib/shortform/ai-validate'
-import type { ShortformJob } from '@/types/shortform'
 
 type Params = { params: Promise<{ id: string }> }
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
-export async function POST(request: NextRequest, { params }: Params) {
+export async function POST(_request: NextRequest, { params }: Params) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
