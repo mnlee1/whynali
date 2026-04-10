@@ -70,7 +70,18 @@ export default function VotePreview({ initialVotes }: Props) {
         )
     }
 
-    if (votes.length === 0) return null
+    if (votes.length === 0) {
+        return (
+            <section className="py-6 md:py-8">
+                <div className="container mx-auto">
+                    <h2 className="text-base font-bold text-content-primary mb-4">지금 어느 쪽이야?</h2>
+                    <div className="h-40 bg-border-muted rounded-xl flex items-center justify-center">
+                        <p className="text-content-muted text-sm">진행 중인 투표가 없습니다.</p>
+                    </div>
+                </div>
+            </section>
+        )
+    }
 
     const renderCard = (vote: VoteWithChoices, index: number) => {
         const choices = vote.vote_choices ?? []
@@ -90,10 +101,17 @@ export default function VotePreview({ initialVotes }: Props) {
                 <div className="bg-white border border-border rounded-xl shadow-card hover:shadow-lg hover:border-border-strong transition-all duration-200 h-full flex flex-col group">
                     <div className="p-4 space-y-4 flex-1 flex flex-col">
                         <div className="space-y-3">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-xs font-semibold text-primary">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                투표 진행중
-                            </span>
+                            {vote.phase === '진행중' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-xs font-semibold text-primary">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                    투표 진행중
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-surface-muted text-xs font-semibold text-content-muted">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-content-muted" />
+                                    투표 마감
+                                </span>
+                            )}
                             <h3 className="text-base font-bold text-content-primary line-clamp-2 leading-snug group-hover:text-primary transition-colors">
                                 {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
                             </h3>
@@ -157,7 +175,7 @@ export default function VotePreview({ initialVotes }: Props) {
         <section className="py-6 md:py-8">
             <div className="container mx-auto">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-content-primary">지금 투표 중</h2>
+                    <h2 className="text-base font-bold text-content-primary">지금 어느 쪽이야?</h2>
                     <Tooltip label="참여도순" text="투표 참여 수가 가장 많은 순으로 정렬됩니다." />
                 </div>
             </div>

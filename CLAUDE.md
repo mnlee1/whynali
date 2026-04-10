@@ -7,6 +7,10 @@ AI는 Claude api sonnet4.6(유료), groq(무료) 사용중.
 이슈의 신뢰도, 정확도 판별 중요.
 최대한 비용 덜 과금 되는 형태로 제안할 것.
 한국어로 응답.
+- Supabase DB (테스트서버, 실서버 DB 분리.)
+whynali-dev(테스트서버): 로컬에서 확인
+whynali-main(실서버): whynali.com에서 확인
+
 
 이 파일은 Claude Code(claude.ai/code)가 이 저장소에서 작업할 때 참고하는 가이드입니다.
 
@@ -18,6 +22,7 @@ npm run build        # 프로덕션 빌드
 npm run lint         # ESLint 실행
 npm run test:e2e     # Playwright E2E 테스트 실행
 npm run test:e2e:ui  # Playwright UI 모드 테스트 실행
+npm run check:api    # AI API 사용 현황 조회 (실서버)
 ```
 
 ## 백업 및 복원

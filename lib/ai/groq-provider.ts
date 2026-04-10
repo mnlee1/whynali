@@ -14,6 +14,7 @@
 
 import Groq from 'groq-sdk'
 import { supabaseAdmin } from '@/lib/supabase/server'
+import { incrementApiUsage } from '@/lib/api-usage-tracker'
 import type { AIProvider, AIOptions } from './ai-provider.interface'
 
 interface KeyStatus {
@@ -217,6 +218,12 @@ export class GroqProvider implements AIProvider {
                     throw new Error('Groq API 응답에 content가 없습니다')
                 }
 
+                // 사용량 추적 (fire-and-forget)
+                incrementApiUsage('groq', {
+                    calls: 1,
+                    successes: 1,
+                }).catch(() => {})
+
                 return content.trim()
             } catch (error: any) {
                 const isRateLimit =
@@ -225,6 +232,8 @@ export class GroqProvider implements AIProvider {
                     error.message?.includes('rate limit')
 
                 if (!isRateLimit) {
+                    // 사용량 추적 (실패)
+                    incrementApiUsage('groq', { calls: 1, failures: 1 }).catch(() => {})
                     throw error
                 }
 

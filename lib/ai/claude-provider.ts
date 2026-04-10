@@ -261,6 +261,15 @@ export class ClaudeProvider implements AIProvider {
 
                 if (!isRateLimit) {
                     // 사용량 추적 (실패)
+                    console.error(
+                        `[ClaudeProvider] API 호출 실패 (키: ...${keyStatus.keyHash}):`,
+                        {
+                            status: error.status,
+                            type: error.type,
+                            message: error.message?.slice(0, 200),
+                            model,
+                        }
+                    )
                     incrementApiUsage('claude', { calls: 1, failures: 1 }).catch(() => {})
                     throw error
                 }

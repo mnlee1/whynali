@@ -49,7 +49,7 @@ export default function CommunityPreview({ initialTopics }: Props) {
 
     const load = useCallback(async () => {
         try {
-            const res = await fetch(`/api/discussions?limit=${PREVIEW_LIMIT}&status=진행중`, { cache: 'no-store' })
+            const res = await fetch(`/api/discussions?limit=${PREVIEW_LIMIT}`, { cache: 'no-store' })
             if (!res.ok) return
             const json = await res.json()
             setTopics(json.data ?? [])
@@ -84,12 +84,24 @@ export default function CommunityPreview({ initialTopics }: Props) {
         )
     }
 
-    if (topics.length === 0) return null
+    if (topics.length === 0) {
+        return (
+            <section>
+                <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-base font-bold text-content-primary">이 토론, 어떻게 생각해?</h2>
+                    <Link href="/community" className="btn-neutral btn-sm">전체 보기</Link>
+                </div>
+                <div className="h-40 bg-border-muted rounded-xl flex items-center justify-center">
+                    <p className="text-content-muted text-sm">진행 중인 토론이 없습니다.</p>
+                </div>
+            </section>
+        )
+    }
 
     return (
         <section>
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-content-primary">커뮤니티 토론</h2>
+                <h2 className="text-base font-bold text-content-primary">이 토론, 어떻게 생각해?</h2>
                 <div className="flex items-center gap-3">
                     <Tooltip label="최신순" text="최신 등록순으로 정렬됩니다." />
                     <Link href="/community" className="btn-neutral btn-sm">
@@ -105,9 +117,15 @@ export default function CommunityPreview({ initialTopics }: Props) {
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
-                                            진행중
-                                        </span>
+                                        {topic.approval_status === '진행중' ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
+                                                진행중
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-surface-muted text-content-muted border-border text-xs font-medium">
+                                                마감
+                                            </span>
+                                        )}
                                     </div>
 
                                     {topic.issues?.id && topic.issues?.title && (

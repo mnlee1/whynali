@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
@@ -46,5 +47,6 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     await writeAdminLog('투표 승인', 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
+    revalidatePath('/')
     return NextResponse.json({ data }, { status: 200 })
 }

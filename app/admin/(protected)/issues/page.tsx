@@ -9,35 +9,46 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
 import CategoryBadge from '@/components/common/CategoryBadge'
+import AdminTabFilter from '@/components/admin/AdminTabFilter'
 
 type SortField = 'title' | 'status' | 'approval_status' | 'heat_index' | 'created_at'
 type SortOrder = 'asc' | 'desc'
+type FilterValue = '' | '대기' | '승인전체' | '자동승인' | '관리자승인' | '관리자반려'
+
+const FILTER_LABELS: { value: FilterValue; label: string }[] = [
+    { value: '', label: '전체' },
+    { value: '대기', label: '대기' },
+    { value: '승인전체', label: '승인 전체' },
+    { value: '자동승인', label: '자동 승인' },
+    { value: '관리자승인', label: '관리자 승인' },
+    { value: '관리자반려', label: '관리자 반려' },
+]
+
+const TAB_API_PARAMS: Record<FilterValue, Record<string, string>> = {
+    '': {},
+    '대기': { approval_status: '대기' },
+    '승인전체': { approval_status: '승인' },
+    '자동승인': { approval_status: '승인', approval_type: 'auto' },
+    '관리자승인': { approval_status: '승인', approval_type: 'manual' },
+    '관리자반려': { approval_status: '반려', approval_type: 'manual' },
+}
 
 export default function AdminIssuesPage() {
     const [issues, setIssues] = useState<Issue[]>([])
-    const [filter, setFilter] = useState<string>('대기')
+    const [filter, setFilter] = useState<FilterValue>('대기')
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
     const [criteriaOpen, setCriteriaOpen] = useState(false)
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-
-    useEffect(() => {
-        fetchIssues()
-    }, [filter])
-
-    useEffect(() => {
-        if (issues.length > 0) {
-            setIssues(sortIssues(issues))
-        }
-    }, [sortField, sortOrder])
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
 
@@ -75,6 +86,38 @@ export default function AdminIssuesPage() {
             return sortOrder === 'asc' ? compareResult : -compareResult
         })
     }
+
+    const loadTabCounts = useCallback(async () => {
+        try {
+            const results = await Promise.all(
+                FILTER_LABELS.map(({ value }) => {
+                    const p = new URLSearchParams({ limit: '1', offset: '0', ...TAB_API_PARAMS[value] })
+                    return fetch(`/api/admin/issues?${p}`).then(r => r.ok ? r.json() : null)
+                })
+            )
+            const counts: Record<string, number> = {}
+            FILTER_LABELS.forEach(({ value }, i) => {
+                counts[value] = results[i]?.total ?? 0
+            })
+            setTabCounts(counts)
+        } catch {
+            // 카운트 로드 실패 시 무시
+        }
+    }, [])
+
+    useEffect(() => {
+        loadTabCounts()
+    }, [loadTabCounts])
+
+    useEffect(() => {
+        fetchIssues()
+    }, [filter])
+
+    useEffect(() => {
+        if (issues.length > 0) {
+            setIssues(sortIssues(issues))
+        }
+    }, [sortField, sortOrder])
 
     const fetchIssues = async () => {
         try {
@@ -136,6 +179,7 @@ export default function AdminIssuesPage() {
             if (!response.ok) throw new Error('승인 실패')
             alert('승인되었습니다')
             fetchIssues()
+            loadTabCounts()
         } catch (err) {
             alert(err instanceof Error ? err.message : '승인 실패')
         }
@@ -151,6 +195,7 @@ export default function AdminIssuesPage() {
             if (!response.ok) throw new Error('거부 실패')
             alert('거부되었습니다')
             fetchIssues()
+            loadTabCounts()
         } catch (err) {
             alert(err instanceof Error ? err.message : '거부 실패')
         }
@@ -165,6 +210,7 @@ export default function AdminIssuesPage() {
             })
             if (!response.ok) throw new Error('복구 실패')
             fetchIssues()
+            loadTabCounts()
         } catch (err) {
             alert(err instanceof Error ? err.message : '복구 실패')
         }
@@ -412,28 +458,12 @@ export default function AdminIssuesPage() {
 
             {/* 필터 */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
-                <div className="flex flex-wrap gap-2">
-                    {[
-                        { value: '', label: '전체' },
-                        { value: '대기', label: '대기' },
-                        { value: '승인전체', label: '승인 전체' },
-                        { value: '자동승인', label: '자동 승인' },
-                        { value: '관리자승인', label: '관리자 승인' },
-                        { value: '관리자반려', label: '관리자 반려' },
-                    ].map(({ value, label }) => (
-                        <button
-                            key={label}
-                            onClick={() => setFilter(value)}
-                            className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                                filter === value
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
+                <AdminTabFilter
+                    tabs={FILTER_LABELS}
+                    active={filter}
+                    counts={tabCounts}
+                    onChange={setFilter}
+                />
             </div>
 
             {/* 이슈 목록 */}

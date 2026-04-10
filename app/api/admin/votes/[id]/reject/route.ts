@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
@@ -58,5 +59,6 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     await writeAdminLog('투표 반려', 'vote', id, auth.adminEmail, `"${vote.title ?? '제목없음'}"`)
+    revalidatePath('/')
     return NextResponse.json({ success: true }, { status: 200 })
 }

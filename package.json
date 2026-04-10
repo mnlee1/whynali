@@ -15,7 +15,8 @@
         "backup:auth": "node scripts/backup-auth-users.mjs",
         "restore": "node scripts/restore-db.mjs",
         "restore:auth": "node scripts/restore-auth-users.mjs",
-        "backup:cleanup": "node scripts/cleanup-old-backups.mjs"
+        "backup:cleanup": "node scripts/cleanup-old-backups.mjs",
+        "check:api": "node scripts/check-api-failures.mjs"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
