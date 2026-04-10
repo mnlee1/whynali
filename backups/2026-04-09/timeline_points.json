@@ -1,0 +1,380 @@
+[
+  {
+    "id": "f32e2b00-2db5-46b0-8a55-576ace6c6d67",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-04-09T03:14:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/001/0016011966?sid=100",
+    "stage": "파생",
+    "title": "李대통령 \"작업 넘어가면 안 돼\"…'하정우 차출론'에 공개 언급",
+    "created_at": "2026-04-09T05:00:23.624346+00:00"
+  },
+  {
+    "id": "d4bcb36d-e4b3-4d26-ab53-ba447ce739ee",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-09T00:58:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/005/0001842175?sid=100",
+    "stage": "파생",
+    "title": "[단독]한동훈, 부산북갑 서병수 회동…“韓과 연대, 당은 무공천해야”",
+    "created_at": "2026-04-09T04:00:37.025276+00:00"
+  },
+  {
+    "id": "2844c8c1-251e-4f83-8f50-071344ee8279",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-09T01:27:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/023/0003969798?sid=100",
+    "stage": "전개",
+    "title": "“후보 건강검증” “공관위 엽기·해괴”...국힘 최고위서 지선 갈등 ...",
+    "created_at": "2026-04-09T03:30:29.555561+00:00"
+  },
+  {
+    "id": "9f395976-1343-40d7-9ff3-5a5381a1defc",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-09T01:12:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/018/0006253431?sid=100",
+    "stage": "전개",
+    "title": "국힘, 최고위 갈등 폭발…김재원 \"이철우 검증하라\" 정점식 \"당원께 사...",
+    "created_at": "2026-04-09T03:30:29.555561+00:00"
+  },
+  {
+    "id": "a11976bd-5581-43fc-b3b5-86641f1b1fd6",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-09T01:10:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/277/0005747054?sid=162",
+    "stage": "전개",
+    "title": "공천갈등 표출된 국힘 최고위…張 \"절제·희생 필요\"",
+    "created_at": "2026-04-09T03:30:29.555561+00:00"
+  },
+  {
+    "id": "c0749869-579e-47ae-8c20-79e842331aed",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-09T02:01:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/079/0004134731?sid=100",
+    "stage": "전개",
+    "title": "\"설마 이런 사태가\"…서로가 서로 겨눈 국힘 최고위",
+    "created_at": "2026-04-09T03:30:29.555561+00:00"
+  },
+  {
+    "id": "bf07103a-f276-4c85-8afb-3acb00bbbb64",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-07T08:08:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/009/0005662414?sid=100",
+    "stage": "전개",
+    "title": "“두 달도 안 남았는데 뭐하나요”…국민의힘, 지방선거 앞두고 연일 ‘...",
+    "created_at": "2026-04-09T03:30:29.555561+00:00"
+  },
+  {
+    "id": "de33f108-b08a-4e93-8b83-9fa3c44d74c9",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T23:26:00+00:00",
+    "source_url": "http://www.joynews24.com/view/1958488",
+    "stage": "전개",
+    "title": "\"어리석은 행동, 스스로 실망+후회\"…알디원 김건우, 자필 사과문 후 활...",
+    "created_at": "2026-04-09T03:30:28.331614+00:00"
+  },
+  {
+    "id": "9f992c9b-35c9-460a-bd36-e02375b1b807",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T12:51:00+00:00",
+    "source_url": "https://m.entertain.naver.com/article/468/0001232456",
+    "stage": "전개",
+    "title": "‘알디원’ 김건우, 자필 사과 “어리석었다”…부적절 발언 논란에 활...",
+    "created_at": "2026-04-09T03:30:28.331614+00:00"
+  },
+  {
+    "id": "20d0cb7f-1ee1-4d7e-b978-5a8e161e9aed",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-04-09T02:25:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/020/0003711041?sid=100",
+    "stage": "전개",
+    "title": "李 지지율 69% 유지…“중동전 대응 잘하고 있다” 55%",
+    "created_at": "2026-04-09T03:30:27.46874+00:00"
+  },
+  {
+    "id": "39d7f637-2406-48c6-9de7-167be72f3a18",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-04-09T02:46:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/047/0002511357?sid=100",
+    "stage": "전개",
+    "title": "이 대통령 국정지지율 69%... TK서도 잘한다 59%",
+    "created_at": "2026-04-09T03:30:27.46874+00:00"
+  },
+  {
+    "id": "a9178cb6-400c-4f40-b6d1-1544e8d041c4",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-04-09T02:27:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/018/0006253523?sid=100",
+    "stage": "전개",
+    "title": "李대통령 국정지지율 69% 유지…여당 지지·개헌 찬성 ‘우세’[NBS]",
+    "created_at": "2026-04-09T03:30:27.46874+00:00"
+  },
+  {
+    "id": "8ef618d6-34e1-4230-ac31-97d3a731e817",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-04-05T06:40:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/029/0003019988?sid=100",
+    "stage": "전개",
+    "title": "계엄 직후보다 더 떨어진 지지율… ‘날개없는 추락’ 국힘, 野 기능 상...",
+    "created_at": "2026-04-09T03:30:27.46874+00:00"
+  },
+  {
+    "id": "1fef5941-5ba4-440f-baa5-15bd71f67991",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T08:34:00+00:00",
+    "source_url": "https://m.entertain.naver.com/article/144/0001108601",
+    "stage": "전개",
+    "title": "[전문] 알디원 김건우 활동 중단 “자기 성찰 시간 갖기로”",
+    "created_at": "2026-04-09T03:03:38.947749+00:00"
+  },
+  {
+    "id": "d76807a6-a7e8-4383-903f-cf1ee3b317bf",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T08:52:00+00:00",
+    "source_url": "https://m.entertain.naver.com/article/437/0000486537",
+    "stage": "전개",
+    "title": "알디원 김건우 활동 중단 \"자아성찰 시간 갖는다\"",
+    "created_at": "2026-04-09T03:03:38.947749+00:00"
+  },
+  {
+    "id": "eaa8d478-b327-4079-9874-b62fa8304aac",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T08:45:00+00:00",
+    "source_url": "https://m.entertain.naver.com/article/108/0003424531",
+    "stage": "전개",
+    "title": "[공식] 알디원 김건우, 활동 중단 \"깊이 반성..7인 체제 활동\"[전문]",
+    "created_at": "2026-04-09T03:03:38.947749+00:00"
+  },
+  {
+    "id": "7422ef6c-b765-4e12-8a3c-66274aed3d11",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T08:34:00+00:00",
+    "source_url": "https://m.entertain.naver.com/article/433/0000126555",
+    "stage": "전개",
+    "title": "김건우, 활동 잠정 중단…'알디원', 7인 체제 변경",
+    "created_at": "2026-04-09T03:03:38.947749+00:00"
+  },
+  {
+    "id": "b374b2e8-e6bb-4f02-9a9c-bb946b981271",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "occurred_at": "2026-04-08T08:30:00+00:00",
+    "source_url": "https://m.entertain.naver.com/article/241/0003504011",
+    "stage": "발단",
+    "title": "알디원 김건우, 활동중단…소속사 “관계자에 사과…심려끼쳐 죄송” [...",
+    "created_at": "2026-04-09T03:03:38.947749+00:00"
+  },
+  {
+    "id": "7eb92740-d341-4aa3-80a4-7d32998524f9",
+    "issue_id": "8616c522-98e2-4565-b0f0-d0af3172cd26",
+    "occurred_at": "2026-04-09T02:32:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/421/0008879818?sid=100",
+    "stage": "전개",
+    "title": "李대통령 \"소액주주 배당소득세 혜택 검토…손해 봐도 거래세 문제\"",
+    "created_at": "2026-04-09T03:03:26.949999+00:00"
+  },
+  {
+    "id": "a2385968-0e7f-492a-97e8-1898cc1abdff",
+    "issue_id": "8616c522-98e2-4565-b0f0-d0af3172cd26",
+    "occurred_at": "2026-04-09T02:30:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/277/0005747160?sid=100",
+    "stage": "발단",
+    "title": "李 \"소액주주 대상 장기보유 인센티브 검토…증권거래세 역진성 있다\"",
+    "created_at": "2026-04-09T03:03:26.949999+00:00"
+  },
+  {
+    "id": "3119a445-3f58-42c2-8551-f3c254453343",
+    "issue_id": "8616c522-98e2-4565-b0f0-d0af3172cd26",
+    "occurred_at": "2026-04-09T02:30:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/023/0003969810?sid=100",
+    "stage": "전개",
+    "title": "李 대통령 “소액주주 배당소득 분리과세 검토”",
+    "created_at": "2026-04-09T03:03:26.949999+00:00"
+  },
+  {
+    "id": "f1eafb3d-8038-44f6-9728-99a16957d75c",
+    "issue_id": "8616c522-98e2-4565-b0f0-d0af3172cd26",
+    "occurred_at": "2026-04-09T02:41:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/008/0005342009?sid=100",
+    "stage": "전개",
+    "title": "李대통령 \"주식 거래세와 양도세 바꿀 필요…장기보유 인센티브 검토\"",
+    "created_at": "2026-04-09T03:03:26.949999+00:00"
+  },
+  {
+    "id": "beceb52f-d733-48cb-b1ec-b4f08e8ba81c",
+    "issue_id": "8616c522-98e2-4565-b0f0-d0af3172cd26",
+    "occurred_at": "2026-04-09T02:58:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/028/0002799912?sid=100",
+    "stage": "전개",
+    "title": "이 대통령, 소액주주 배당세 혜택 검토 지시",
+    "created_at": "2026-04-09T03:03:26.949999+00:00"
+  },
+  {
+    "id": "6e3ae56a-5a0d-43b1-b8cf-5283ba859b21",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-04-09T02:53:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/021/0002783497?sid=100",
+    "stage": "파생",
+    "title": "[속보]李 지지율 69%…민주 47%·국힘 18%-NBS",
+    "created_at": "2026-04-09T03:03:08.384681+00:00"
+  },
+  {
+    "id": "399e29db-ff79-4e7c-944f-6f52b2dc64e2",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-09T00:45:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/023/0003969787?sid=104",
+    "stage": "파생",
+    "title": "이란, 호르무즈 제한 안 풀었다 “하루 12척만, 통행료도 부과”",
+    "created_at": "2026-04-09T03:00:56.666956+00:00"
+  },
+  {
+    "id": "04c65f09-d393-4658-aed5-dc620828186f",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-06T05:49:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/001/0016005115?sid=100",
+    "stage": "전개",
+    "title": "국힘 최고위 공개 충돌…윤상현, 장동혁 면전서 \"비상체제 전환\"(종합)",
+    "created_at": "2026-04-09T03:00:33.687572+00:00"
+  },
+  {
+    "id": "2aa6d07d-0c80-401a-9592-d9e93eb80711",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-06T02:56:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/448/0000601724?sid=100",
+    "stage": "전개",
+    "title": "장동혁 면전서 \"비상체제 전환하라\"…지도부 비판 쏟아진 국힘 현장 최...",
+    "created_at": "2026-04-09T03:00:33.687572+00:00"
+  },
+  {
+    "id": "2bd4d71b-56d5-432c-8922-b1827024f8f1",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-06T02:40:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/001/0016004622?sid=100",
+    "stage": "전개",
+    "title": "국힘 최고위 공개 충돌…윤상현, 장동혁 면전서 \"비상체제 전환\"",
+    "created_at": "2026-04-09T03:00:33.687572+00:00"
+  },
+  {
+    "id": "b9765190-6603-48d6-b170-830b52d2a38e",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-06T06:00:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/586/0000126157?sid=100",
+    "stage": "전개",
+    "title": "국힘 최고위 충돌…윤상현 \"비상체제 전환\" 장동혁 \"민주당 비판해야\"",
+    "created_at": "2026-04-09T03:00:33.687572+00:00"
+  },
+  {
+    "id": "b68bc6f8-6ac8-4028-8a24-9f4b3a3ea4f9",
+    "issue_id": "c46f3fc2-4be7-4b0f-acaf-3e8ac7c42e6a",
+    "occurred_at": "2026-04-05T21:17:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/214/0001490804?sid=162",
+    "stage": "발단",
+    "title": "국힘, 기초단체 공천도 곳곳서 '파열음'",
+    "created_at": "2026-04-09T03:00:33.687572+00:00"
+  },
+  {
+    "id": "d1cc99f4-febe-45e0-a887-504f296188b4",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-03-26T02:16:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/025/0003511807?sid=100",
+    "stage": "전개",
+    "title": "李지지율 69%, 취임 후 최고…민주 46% 국힘 18% [NBS]",
+    "created_at": "2026-04-09T02:34:34.926963+00:00"
+  },
+  {
+    "id": "6db05400-92c7-4a31-8904-1ffcb3861f78",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-03-26T03:58:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/015/0005267242?sid=100",
+    "stage": "전개",
+    "title": "李지지율 취임 후 '최고' 69%…민주 46%·국힘 18% [NBS]",
+    "created_at": "2026-04-09T02:34:34.926963+00:00"
+  },
+  {
+    "id": "256b8b8b-8729-43de-9490-631fe19d3005",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-03-26T02:50:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/001/0015983263?sid=100",
+    "stage": "전개",
+    "title": "李대통령 지지율 69%로 취임 후 최고치…민주 46%·국힘 18%[NBS](종합)",
+    "created_at": "2026-04-09T02:34:34.926963+00:00"
+  },
+  {
+    "id": "a18fdd1d-5701-4733-84cd-384e61ac6961",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-03-26T02:38:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/028/0002797703?sid=100",
+    "stage": "전개",
+    "title": "이 대통령 지지율 69% ‘취임 뒤 최고’…민주 46%·국힘 18% [NBS]",
+    "created_at": "2026-04-09T02:34:34.926963+00:00"
+  },
+  {
+    "id": "61e5a434-ee08-4ba5-9715-78977af65600",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "occurred_at": "2026-03-26T02:15:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/032/0003435819?sid=100",
+    "stage": "발단",
+    "title": "이 대통령 국정 지지율 69% 취임 후 최고치…민주 46%, 국힘 18%[NBS]",
+    "created_at": "2026-04-09T02:34:34.926963+00:00"
+  },
+  {
+    "id": "7c66b816-7588-4c80-8f48-8ac0dde9196b",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T21:09:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/056/0012158641?sid=104",
+    "stage": "전개",
+    "title": "호르무즈엔 탈출 대기 선박 2천 척…“통행료 공동 징수 검토”",
+    "created_at": "2026-04-09T01:30:49.308289+00:00"
+  },
+  {
+    "id": "53a7566e-39ae-4895-84d6-8034daa5f307",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T20:01:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/081/0003633604?sid=104",
+    "stage": "전개",
+    "title": "트럼프 “호르무즈서 공동 사업”… 통행료 묵인 가능성",
+    "created_at": "2026-04-09T01:30:49.308289+00:00"
+  },
+  {
+    "id": "632f93b4-53b6-406a-9abf-c912cd934242",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T15:35:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/001/0016010794?sid=104",
+    "stage": "전개",
+    "title": "美-이란, 호르무즈 통행료 공동징수?…트럼프 \"합작사업 생각중\"",
+    "created_at": "2026-04-09T01:00:14.483002+00:00"
+  },
+  {
+    "id": "5d826071-485b-4648-a260-593c332c8df4",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T17:49:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/003/0013876424?sid=104",
+    "stage": "전개",
+    "title": "美·이란, 호르무즈 통행료 걷나…트럼프 \"합작법인 구상중\"",
+    "created_at": "2026-04-09T01:00:14.483002+00:00"
+  },
+  {
+    "id": "c190f161-5b64-41c3-8117-de51d8192090",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T17:36:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/025/0003515007?sid=104",
+    "stage": "전개",
+    "title": "“불법”이라더니…트럼프 “이란과 호르무즈 통행료 합작사업”",
+    "created_at": "2026-04-09T01:00:14.483002+00:00"
+  },
+  {
+    "id": "0cc52525-5484-4e9a-8af8-8e15f9510f92",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T10:50:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/421/0008878606?sid=104",
+    "stage": "발단",
+    "title": "트럼프, 이란 호르무즈 통행료 용인했나…\"큰돈 벌 것\"(종합)",
+    "created_at": "2026-04-09T01:00:14.483002+00:00"
+  },
+  {
+    "id": "0e872fc6-c212-4aad-94eb-1dca2d81e979",
+    "issue_id": "721be643-0d50-4da8-bae1-434384f7679a",
+    "occurred_at": "2026-04-08T14:04:00+00:00",
+    "source_url": "https://n.news.naver.com/mnews/article/020/0003710894?sid=104",
+    "stage": "전개",
+    "title": "트럼프 “호르무즈 통행료 검토…이란과 조인트 벤처 추진할 수도”",
+    "created_at": "2026-04-09T01:00:14.483002+00:00"
+  }
+]

@@ -29,3 +29,6 @@ npm-debug.log*
 # Misc
 *.tsbuildinfo
 next-env.d.ts
+
+# Backups
+backups-auth/

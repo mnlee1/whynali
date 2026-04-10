@@ -45,7 +45,7 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('이슈 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 상태 변경: 대기 > 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         const categoryPath = CATEGORY_PATH_MAP[data.category]
         if (categoryPath) revalidatePath(categoryPath)

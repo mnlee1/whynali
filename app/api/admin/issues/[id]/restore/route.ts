@@ -1,6 +1,7 @@
 /** app/api/admin/issues/[id]/restore/route.ts — [관리자 - 이슈 대기 복구 API] */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
@@ -30,8 +31,9 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('이슈 복구', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 상태 변경: 반려 > 대기', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
+        revalidatePath('/')
         return NextResponse.json({ data })
     } catch (error) {
         console.error('이슈 복구 에러:', error)

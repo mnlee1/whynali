@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
@@ -33,8 +34,9 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('이슈 반려', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 상태 변경: 대기 > 반려', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
+        revalidatePath('/')
         return NextResponse.json({ data })
     } catch (error) {
         console.error('이슈 거부 에러:', error)

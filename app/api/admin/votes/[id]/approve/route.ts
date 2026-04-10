@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
@@ -22,6 +23,23 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { id } = await params
 
+    const { data: prev, error: prevError } = await supabaseAdmin
+        .from('votes')
+        .select('approval_status, title')
+        .eq('id', id)
+        .single()
+
+    if (prevError || !prev) {
+        return NextResponse.json({ error: '투표를 찾을 수 없습니다.' }, { status: 404 })
+    }
+
+    if (!['대기', '반려'].includes(prev.approval_status)) {
+        return NextResponse.json(
+            { error: '대기 또는 반려 상태의 투표가 아닙니다.' },
+            { status: 422 }
+        )
+    }
+
     const { data, error } = await supabaseAdmin
         .from('votes')
         .update({
@@ -30,7 +48,6 @@ export async function POST(request: NextRequest, { params }: Params) {
             started_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .in('approval_status', ['대기', '반려'])
         .select('id, title')
         .single()
 
@@ -40,11 +57,12 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     if (!data) {
         return NextResponse.json(
-            { error: '대기 또는 반려 상태의 투표가 아니거나 존재하지 않습니다.' },
-            { status: 404 }
+            { error: '투표 승인 처리에 실패했습니다.' },
+            { status: 500 }
         )
     }
 
-    await writeAdminLog('투표 승인', 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
+    await writeAdminLog(`투표 상태 변경: ${prev.approval_status} > 진행중`, 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
+    revalidatePath('/')
     return NextResponse.json({ data }, { status: 200 })
 }

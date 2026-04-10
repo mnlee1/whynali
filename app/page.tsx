@@ -29,7 +29,6 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
 import type { Vote, VoteChoice, DiscussionTopic } from '@/types/index'
 import { generateWebSiteSchema, createJsonLd } from '@/lib/seo/schema'
-import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT } from '@/lib/config/candidate-thresholds'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
@@ -52,7 +51,6 @@ async function fetchPageData() {
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .gte('heat_index', MIN_HEAT)
             .order('heat_index', { ascending: false, nullsFirst: false })
             .limit(30),
 
@@ -63,7 +61,6 @@ async function fetchPageData() {
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .gte('heat_index', MIN_HEAT)
             .not('heat_index_1h_ago', 'is', null)
             .neq('status', '종결')
             .order('heat_index', { ascending: false, nullsFirst: false })
@@ -76,7 +73,6 @@ async function fetchPageData() {
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .gte('heat_index', MIN_HEAT)
             .order('created_at', { ascending: false })
             .range(0, 9),
 
@@ -89,13 +85,13 @@ async function fetchPageData() {
             .order('created_at', { ascending: false })
             .limit(50),
 
-        // CommunityPreview 데이터
+        // CommunityPreview 데이터 (진행중 우선, 부족 시 마감으로 보충)
         supabaseAdmin
             .from('discussion_topics')
             .select('*, issues(id, title)')
-            .eq('approval_status', '진행중')
+            .in('approval_status', ['진행중', '마감'])
             .order('created_at', { ascending: false })
-            .limit(5),
+            .limit(10),
     ])
 
     // 토론 주제별 의견(댓글) 수 계산
@@ -117,14 +113,14 @@ async function fetchPageData() {
         }
     }
 
-    // 유효한 이슈와 연결된 투표만 노출 (votes API와 동일한 필터)
+    // 유효한 이슈와 연결된 투표만 노출
     type RawVote = Vote & {
         vote_choices: VoteChoice[]
         issues: { id: string; title: string; approval_status: string; visibility_status: string } | null
     }
     const votes: VoteWithChoices[] = ((votesResult.data ?? []) as RawVote[])
         .filter(v => {
-            if (!v.issue_id) return true
+            if (!v.issue_id) return false  // 이슈 연결 없는 투표 제외 (카드 렌더 불가)
             if (!v.issues) return false
             return v.issues.approval_status === '승인' && v.issues.visibility_status === 'visible'
         })
@@ -133,10 +129,23 @@ async function fetchPageData() {
             issues: v.issues ? { id: v.issues.id, title: v.issues.title } : null,
         }))
 
-    // 급상승 이슈 계산: 증가율 기준 정렬
+    // 슬라이드 이슈 확정 (종결 제외 상위 5개, 부족 시 종결으로 보충)
+    const hotIssues = (hotResult.data ?? []) as Issue[]
+    const nonClosedHero = hotIssues.filter(i => i.status !== '종결').slice(0, 5)
+    const heroIssues = nonClosedHero.length >= 5
+        ? nonClosedHero
+        : [
+            ...nonClosedHero,
+            ...hotIssues
+                .filter(i => i.status === '종결')
+                .slice(0, 5 - nonClosedHero.length),
+          ]
+    const heroIds = new Set(heroIssues.map(i => i.id))
+
+    // 급상승 이슈 계산: 증가율 기준 정렬 + 슬라이드 이슈 제외
     const surgingCandidates = (surgingResult.data ?? []) as Issue[]
-    const surgingIssues = surgingCandidates
-        .filter(issue => issue.heat_index_1h_ago && issue.heat_index_1h_ago > 0)
+    let surgingIssues = surgingCandidates
+        .filter(issue => !heroIds.has(issue.id) && issue.heat_index_1h_ago && issue.heat_index_1h_ago > 0)
         .map(issue => {
             const currentHeat = issue.heat_index ?? 0
             const previousHeat = issue.heat_index_1h_ago ?? 0
@@ -144,17 +153,32 @@ async function fetchPageData() {
             return { ...issue, surgePct }
         })
         .sort((a, b) => b.surgePct - a.surgePct)
-        .slice(0, 10)
+        .slice(0, 5)
 
-    // 토론 주제에 opinionCount와 viewCount 추가
-    const discussionsWithStats = discussionsData.map((topic: any) => ({
+    // 급상승 이슈 5개 미달 시 화력 상위 이슈로 보충 (슬라이드 이슈 제외)
+    if (surgingIssues.length < 5) {
+        const surgingIds = new Set(surgingIssues.map(i => i.id))
+        const fallback = hotIssues
+            .filter(i => i.status !== '종결' && !heroIds.has(i.id) && !surgingIds.has(i.id))
+            .map(i => ({ ...i, surgePct: 0 }))
+            .slice(0, 5 - surgingIssues.length)
+        surgingIssues = [...surgingIssues, ...fallback]
+    }
+
+    // 토론 주제: 진행중 우선으로 5개 선별, 부족 시 마감으로 보충
+    const sortedDiscussions = [
+        ...discussionsData.filter((t: any) => t.approval_status === '진행중'),
+        ...discussionsData.filter((t: any) => t.approval_status === '마감'),
+    ].slice(0, 5)
+
+    const discussionsWithStats = sortedDiscussions.map((topic: any) => ({
         ...topic,
         opinionCount: opinionCountMap[topic.id] ?? 0,
         viewCount: topic.view_count ?? 0,
     }))
 
     return {
-        hotIssues: (hotResult.data ?? []) as Issue[],
+        heroIssues,
         surgingIssues,
         latestIssues: {
             data: (latestResult.data ?? []) as Issue[],
@@ -166,24 +190,7 @@ async function fetchPageData() {
 }
 
 export default async function HomePage() {
-    const { hotIssues, surgingIssues, latestIssues, votes, discussions } = await fetchPageData()
-
-    // 디버그: 데이터 확인
-    console.log('🔍 [홈페이지 데이터]')
-    console.log('- MIN_HEAT:', MIN_HEAT)
-    console.log('- hotIssues 수:', hotIssues.length)
-    console.log('- surgingIssues 수:', surgingIssues.length)
-    console.log('- latestIssues 수:', latestIssues.data.length)
-    if (hotIssues.length > 0) {
-        console.log('- hotIssues 샘플:', hotIssues[0])
-    }
-    if (surgingIssues.length > 0) {
-        console.log('- surgingIssues 샘플:', surgingIssues[0])
-    }
-
-    // HotIssueHighlight: 종결 제외 상위 5개
-    const heroIssues = hotIssues.filter(i => i.status !== '종결').slice(0, 5)
-    console.log('- heroIssues 수 (종결 제외):', heroIssues.length)
+    const { heroIssues, surgingIssues, latestIssues, votes, discussions } = await fetchPageData()
 
     const websiteSchema = generateWebSiteSchema()
 

@@ -42,6 +42,11 @@ export async function sendDoorayUrgentAlert(issues: UrgentIssue[]): Promise<bool
         return false
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
+        return false
+    }
+
     if (issues.length === 0) {
         console.log('[Dooray] 긴급 이슈가 없어 알림을 건너뜁니다.')
         return false
@@ -104,6 +109,11 @@ export async function sendDoorayBatchGenerationAlert(result: BatchGenerationResu
         return false
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
+        return false
+    }
+
     if (result.discussionGenerated === 0 && result.voteGenerated === 0) {
         console.log('[Dooray] 생성된 토론/투표가 없어 알림을 건너뜁니다.')
         return false
@@ -116,14 +126,14 @@ export async function sendDoorayBatchGenerationAlert(result: BatchGenerationResu
         if (result.discussionGenerated > 0) {
             attachments.push({
                 title: `토론 주제 ${result.discussionGenerated}건 생성됨`,
-                text: `승인 대기 중 → ${siteUrl}/admin/discussions`,
+                text: `승인 대기 중 → [${siteUrl}/admin/discussions](${siteUrl}/admin/discussions)`,
                 color: 'yellow',
             })
         }
         if (result.voteGenerated > 0) {
             attachments.push({
                 title: `투표 ${result.voteGenerated}건 생성됨`,
-                text: `승인 대기 중 → ${siteUrl}/admin/votes`,
+                text: `승인 대기 중 → [${siteUrl}/admin/votes](${siteUrl}/admin/votes)`,
                 color: 'yellow',
             })
         }
@@ -173,6 +183,11 @@ export async function sendDoorayReportAlert(report: ReportedComment): Promise<bo
 
     if (!webhookUrl) {
         console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
         return false
     }
 
@@ -241,6 +256,11 @@ export async function sendDoorayDailyReportSummary(summary: DailyReportSummary):
 
     if (!webhookUrl) {
         console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
         return false
     }
 
@@ -320,6 +340,11 @@ export async function sendDoorayShortformBatchAlert(result: ShortformBatchResult
 
     if (!webhookUrl) {
         console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
         return false
     }
 

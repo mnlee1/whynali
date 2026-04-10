@@ -55,7 +55,13 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
         )
     }
 
-    if (issues.length === 0) return null
+    if (issues.length === 0) {
+        return (
+            <section className="relative h-[420px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl flex items-center justify-center">
+                <p className="text-content-muted text-sm">이슈를 불러오는 중입니다.</p>
+            </section>
+        )
+    }
 
     return (
         <section className="relative h-[420px] lg:h-full lg:min-h-[500px]">

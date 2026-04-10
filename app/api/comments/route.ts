@@ -40,10 +40,7 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') ?? 'latest'
     /* best=true: score(좋아요-싫어요) 상위 3개만 반환 (베스트 댓글 영역용) */
     const best = searchParams.get('best') === 'true'
-    /* includePending=true: 세이프티봇 OFF 시 클라이언트 요청으로 pending_review 포함 */
-    const includePending = searchParams.get('includePending') === 'true'
-
-    if (!issue_id && !discussion_topic_id) {
+if (!issue_id && !discussion_topic_id) {
         return NextResponse.json(
             { error: 'issue_id 또는 discussion_topic_id가 필요합니다.' },
             { status: 400 }
@@ -62,12 +59,8 @@ export async function GET(request: NextRequest) {
         .select('*, users(display_name)', { count: 'exact' })
         .order(orderColumn, { ascending: false })
 
-    /* includePending=true이면 public + pending_review 모두 조회, 기본은 public만 */
-    if (includePending) {
-        query = query.in('visibility', ['public', 'pending_review'])
-    } else {
-        query = query.eq('visibility', 'public')
-    }
+    /* public + pending_review + deleted 포함 — 프론트에서 상태별 처리 */
+    query = query.in('visibility', ['public', 'pending_review', 'deleted'])
 
     /* parent_id가 있으면 해당 댓글의 답글만, 없으면 최상위 댓글만 조회 */
     if (parent_id) {
@@ -199,20 +192,23 @@ export async function POST(request: NextRequest) {
             body: sanitizeText(content),
             visibility: pendingReview ? 'pending_review' : 'public',
         })
-        .select()
+        .select('*, users(display_name)')
         .single()
 
     if (error) {
         return NextResponse.json({ error: toUserMessage(error.message, 'comment') }, { status: 500 })
     }
 
+    const { users, ...rest } = data as typeof data & { users?: { display_name: string | null } | null }
+    const normalized = { ...rest, display_name: users?.display_name ?? null }
+
     if (pendingReview) {
         return NextResponse.json({
-            data,
+            data: normalized,
             message: '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.',
             pending: true,
         }, { status: 201 })
     }
 
-    return NextResponse.json({ data }, { status: 201 })
+    return NextResponse.json({ data: normalized }, { status: 201 })
 }

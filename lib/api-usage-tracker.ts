@@ -304,6 +304,34 @@ async function getClaudeCreditCycleSummary() {
 }
 
 /**
+ * AI 키 차단 상태 조회 (Rate Limit 감지용)
+ */
+async function getAiKeyStatus(provider: 'claude' | 'groq') {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('ai_key_status')
+            .select('is_blocked, blocked_until, fail_count, updated_at')
+            .eq('provider', provider)
+            .eq('is_blocked', true)
+            .limit(1)
+            .maybeSingle()
+
+        if (error || !data) return null
+
+        // 차단 시간이 지났으면 null 반환
+        if (data.blocked_until && new Date(data.blocked_until) <= new Date()) return null
+
+        return {
+            isBlocked: true,
+            blockedUntil: data.blocked_until as string | null,
+            failCount: data.fail_count as number,
+        }
+    } catch {
+        return null
+    }
+}
+
+/**
  * 전체 API 비용 요약 조회
  *
  * 달력 월 기준 통계 + 현재 충전 주기 기준 통계를 함께 반환한다.
@@ -318,13 +346,15 @@ export async function getAllApiCostsSummary() {
 
         console.log('[getAllApiCostsSummary] 조회 기간:', { today, yesterday, monthStart })
 
-        const [monthlyResult, creditCycle] = await Promise.all([
+        const [monthlyResult, creditCycle, claudeKeyStatus, groqKeyStatus] = await Promise.all([
             supabaseAdmin
                 .from('api_usage')
                 .select('*')
                 .gte('date', monthStart)
                 .order('date', { ascending: true }),
             getClaudeCreditCycleSummary(),
+            getAiKeyStatus('claude'),
+            getAiKeyStatus('groq'),
         ])
 
         if (monthlyResult.error) {
@@ -396,6 +426,7 @@ export async function getAllApiCostsSummary() {
                 monthly: groqCallsMonthly,
                 successes: groqSuccesses,
                 failures: groqFailures,
+                keyStatus: groqKeyStatus,
             },
             claude: {
                 today: claudeCostToday,
@@ -420,6 +451,8 @@ export async function getAllApiCostsSummary() {
                 failures: claudeFailures,
                 // 충전 주기별 현황 (충전 이력이 있을 때만)
                 creditCycle: creditCycle ?? null,
+                // 현재 키 차단 상태 (Rate Limit 감지용)
+                keyStatus: claudeKeyStatus,
             },
             total: {
                 monthly: claudeCostMonthly, // Groq는 무료

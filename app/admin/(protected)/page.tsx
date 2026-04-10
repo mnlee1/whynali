@@ -9,7 +9,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
 // ─── 타입 ────────────────────────────────────────────────
@@ -31,24 +31,10 @@ interface RecentLog {
     created_at: string
 }
 
-interface ClaudeCreditCycle {
-    id: string
-    chargedAt: string           // 충전일 (YYYY-MM-DD)
-    amountUsd: number           // 충전액
-    usedUsd: number             // 충전 이후 사용액
-    remainingUsd: number        // 잔액
-    usedPercent: number         // 소진율 (0~100)
-    elapsedDays: number         // 충전 후 경과 일수
-    dailyAvgUsd: number         // 일평균 사용액
-    estimatedDepletionDate: string | null  // 소진 예상일
-    memo: string | null
-    calls: number               // 충전 이후 총 호출 수
-    tokens: {
-        input: number
-        output: number
-        total: number
-    }
-    todayCost: number           // 오늘 사용액
+interface AiKeyStatus {
+    isBlocked: boolean
+    blockedUntil: string | null
+    failCount: number
 }
 
 interface ApiCostsSummary {
@@ -61,6 +47,7 @@ interface ApiCostsSummary {
         monthly: number
         successes: number
         failures: number
+        keyStatus: AiKeyStatus | null
     }
     claude: {
         today: number
@@ -83,7 +70,7 @@ interface ApiCostsSummary {
         }
         successes: number
         failures: number
-        creditCycle: ClaudeCreditCycle | null
+        keyStatus: AiKeyStatus | null
     }
     total: {
         monthly: number
@@ -188,18 +175,9 @@ export default function AdminDashboardPage() {
     const [stats24hLoading, setStats24hLoading] = useState(true)
     const [actionTooltip, setActionTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
 
-    // 충전 등록 폼 상태
-    const [showCreditForm, setShowCreditForm] = useState(false)
     const [showAiFeatures, setShowAiFeatures] = useState(false)
-    const [creditFormData, setCreditFormData] = useState({
-        charged_at: new Date().toISOString().split('T')[0],
-        amount_usd: '',
-        memo: '',
-    })
-    const [creditSubmitting, setCreditSubmitting] = useState(false)
-    const [creditFormError, setCreditFormError] = useState<string | null>(null)
 
-    const fetchAll = async () => {
+    const fetchAll = useCallback(async () => {
         console.log('[Admin Dashboard] fetchAll 시작')
         setStatsLoading(true)
         setLogsLoading(true)
@@ -211,8 +189,8 @@ export default function AdminDashboardPage() {
             const [issuesRes, discussionsRes, safetyRes, votesRes, logsRes, apiUsageRes, stats24hRes] =
                 await Promise.all([
                     fetch('/api/admin/issues?approval_status=대기'),
-                    fetch('/api/admin/discussions?status=대기'),
-                    fetch('/api/admin/safety/pending'),
+                    fetch('/api/admin/discussions?approval_status=대기'),
+                    fetch('/api/admin/reports?status=대기&limit=1'),
                     fetch('/api/admin/votes?approval_status=대기&limit=1'),
                     fetch('/api/admin/logs?limit=8'),
                     fetch('/api/admin/api-usage'),
@@ -250,51 +228,18 @@ export default function AdminDashboardPage() {
             setCostsLoading(false)
             setStats24hLoading(false)
         }
-    }
+    }, [])
 
+    // 마운트 시 1회 + 탭 재활성화 시 자동 갱신 (불필요한 API 호출 없음)
     useEffect(() => {
         console.log('[Admin Dashboard] 컴포넌트 마운트, fetchAll 호출')
         fetchAll()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
-    const handleCreditSubmit = async () => {
-        setCreditFormError(null)
-        if (!creditFormData.amount_usd || Number(creditFormData.amount_usd) <= 0) {
-            setCreditFormError('충전액을 올바르게 입력해주세요')
-            return
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') fetchAll()
         }
-        setCreditSubmitting(true)
-        try {
-            const res = await fetch('/api/admin/claude-credits', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    charged_at: creditFormData.charged_at,
-                    amount_usd: Number(creditFormData.amount_usd),
-                    memo: creditFormData.memo || null,
-                }),
-            })
-            if (!res.ok) {
-                const data = await res.json()
-                throw new Error(data.message ?? '충전 등록 실패')
-            }
-            setShowCreditForm(false)
-            setCreditFormData({
-                charged_at: new Date().toISOString().split('T')[0],
-                amount_usd: '',
-                memo: '',
-            })
-            // 대시보드 데이터 새로고침
-            setCostsLoading(true)
-            const apiUsageRes = await fetch('/api/admin/api-usage')
-            if (apiUsageRes.ok) setApiCosts(await apiUsageRes.json())
-        } catch (err) {
-            setCreditFormError(err instanceof Error ? err.message : '충전 등록 실패')
-        } finally {
-            setCreditSubmitting(false)
-        }
-    }
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }, [fetchAll])
 
     const fmt = (d: string) => {
         const date = new Date(d)
@@ -409,180 +354,46 @@ export default function AdminDashboardPage() {
                             {/* Claude AI (1순위) */}
                             <div className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-200">
                                 <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div>
-                                            <p className="text-base font-semibold text-content-primary">Claude AI</p>
-                                            <p className="text-xs text-content-secondary mt-0.5">claude-sonnet-4-6</p>
-                                        </div>
+                                    <div>
+                                        <p className="text-base font-semibold text-content-primary">Claude AI</p>
+                                        <p className="text-xs text-content-secondary mt-0.5">claude-sonnet-4-6</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setShowCreditForm((v) => !v)}
-                                            className="px-3 py-1 text-xs font-semibold border border-orange-500 text-orange-600 rounded-full hover:bg-orange-50 transition-colors cursor-pointer"
+                                        <a
+                                            href="https://console.anthropic.com/settings/billing"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-3 py-1 text-xs font-semibold border border-orange-500 text-orange-600 rounded-full hover:bg-orange-50 transition-colors"
                                         >
-                                            {showCreditForm ? '취소' : '클로드 크레딧 충전 금액 입력'}
-                                        </button>
+                                            Anthropic 콘솔 →
+                                        </a>
                                         <span className="px-2.5 py-1 text-xs font-semibold bg-orange-500 text-white rounded-full">
                                             1순위
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* 충전 등록 폼 */}
-                                {showCreditForm && (
-                                    <div className="mb-4 p-4 bg-white/80 rounded-xl border border-orange-200 space-y-3">
-                                        <p className="text-sm font-semibold text-orange-700">Anthropic 충전 금액 입력</p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="block text-sm text-content-secondary mb-1">충전일</label>
-                                                <input
-                                                    type="date"
-                                                    value={creditFormData.charged_at}
-                                                    onChange={(e) => setCreditFormData((d) => ({ ...d, charged_at: e.target.value }))}
-                                                    className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm text-content-secondary mb-1">충전액 (USD)</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    step="0.01"
-                                                    placeholder="예: 10.00"
-                                                    value={creditFormData.amount_usd}
-                                                    onChange={(e) => setCreditFormData((d) => ({ ...d, amount_usd: e.target.value }))}
-                                                    className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm text-content-secondary mb-1">메모 (선택)</label>
-                                            <input
-                                                type="text"
-                                                placeholder="예: Anthropic 4월 충전"
-                                                value={creditFormData.memo}
-                                                onChange={(e) => setCreditFormData((d) => ({ ...d, memo: e.target.value }))}
-                                                className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-                                            />
-                                        </div>
-                                        {creditFormError && (
-                                            <p className="text-sm text-red-600">{creditFormError}</p>
-                                        )}
-                                        <button
-                                            onClick={handleCreditSubmit}
-                                            disabled={creditSubmitting}
-                                            className="w-full py-2 text-sm font-semibold bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 transition-colors"
-                                        >
-                                            {creditSubmitting ? '등록 중...' : '충전 등록'}
-                                        </button>
-                                        <p className="text-xs text-content-muted">
-                                            등록하면 기존 충전 주기가 종료되고 새 주기가 시작됩니다.
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-white/60 rounded-xl p-3 flex flex-col justify-between">
+                                        <p className="text-sm text-content-secondary mb-1">
+                                            오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
                                         </p>
-                                    </div>
-                                )}
-
-                                {/* 충전 주기 현황 + 오늘 통계 나란히 */}
-                                <div className="grid grid-cols-[7fr_3fr] gap-4 mb-4">
-
-                                {/* 충전 주기 현황 (충전 이력이 있을 때) */}
-                                {apiCosts.claude.creditCycle ? (
-                                    <div className="p-4 bg-white/70 rounded-xl border border-orange-200 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="text-sm font-semibold text-orange-700">클로드 크레딧 현황</p>
-                                                        {apiCosts.claude.creditCycle.memo && (
-                                                            <p className="text-xs font-normal text-content-muted mt-0.5">
-                                                                {apiCosts.claude.creditCycle.memo}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-sm text-content-muted">
-                                                        {apiCosts.claude.creditCycle.chargedAt} 충전 · {apiCosts.claude.creditCycle.elapsedDays}일 경과
-                                                    </p>
-                                        </div>
-
-                                        {/* 프로그레스 바 */}
                                         <div>
-                                                            <div className="flex items-center justify-between mb-1">
-                                                                <span className="text-sm text-content-secondary">
-                                                                    ${ apiCosts.claude.creditCycle.usedUsd.toFixed(4) } 사용
-                                                                </span>
-                                                                <span className="text-sm font-semibold text-orange-700">
-                                                                    {apiCosts.claude.creditCycle.usedPercent.toFixed(1)}% 소진
-                                                                </span>
-                                                            </div>
-                                            <div className="h-2.5 bg-orange-100 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full transition-all ${
-                                                        apiCosts.claude.creditCycle.usedPercent >= 90
-                                                            ? 'bg-red-500'
-                                                            : apiCosts.claude.creditCycle.usedPercent >= 70
-                                                            ? 'bg-orange-500'
-                                                            : 'bg-orange-400'
-                                                    }`}
-                                                    style={{ width: `${apiCosts.claude.creditCycle.usedPercent}%` }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* 충전액 / 잔액 */}
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <div className="text-center">
-                                                <p className="text-xs text-content-muted mb-0.5">충전액</p>
-                                                <p className="text-base font-bold text-content-primary">
-                                                    ${apiCosts.claude.creditCycle.amountUsd.toFixed(4)}
-                                                </p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-xs text-content-muted mb-0.5">사용액</p>
-                                                <p className="text-base font-bold text-orange-600">
-                                                    ${apiCosts.claude.creditCycle.usedUsd.toFixed(4)}
-                                                </p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-xs text-content-muted mb-0.5">잔액</p>
-                                                <p className={`text-base font-bold ${
-                                                    apiCosts.claude.creditCycle.remainingUsd < apiCosts.claude.creditCycle.amountUsd * 0.2
-                                                        ? 'text-red-600'
-                                                        : 'text-green-600'
-                                                }`}>
-                                                    ${apiCosts.claude.creditCycle.remainingUsd.toFixed(4)}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* 소진 예상일 / 일평균 */}
-                                        <div className="flex items-center justify-between pt-2 border-t border-orange-100 text-sm">
-                                            <span className="text-content-secondary">
-                                                일평균 ${apiCosts.claude.creditCycle.dailyAvgUsd.toFixed(4)}
-                                            </span>
-                                            {apiCosts.claude.creditCycle.estimatedDepletionDate ? (
-                                                <span className={`font-medium ${
-                                                    apiCosts.claude.creditCycle.usedPercent >= 80 ? 'text-red-600' : 'text-content-secondary'
-                                                }`}>
-                                                    예상 소진일: {apiCosts.claude.creditCycle.estimatedDepletionDate}
-                                                </span>
-                                            ) : (
-                                                <span className="text-green-600 font-medium">소진까지 여유 있음</span>
-                                            )}
+                                            <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.today}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
+                                            <p className="text-sm font-semibold text-orange-600 mt-1">${apiCosts.claude.today.toFixed(4)}</p>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="p-3 bg-orange-50 rounded-xl border border-dashed border-orange-300 text-center">
-                                        <p className="text-sm text-orange-600">충전 이력이 없습니다. 위의 충전 금액 입력 버튼으로 첫 충전을 등록하세요.</p>
+                                    <div className="bg-white/60 rounded-xl p-3 flex flex-col justify-between">
+                                        <div>
+                                            <p className="text-sm text-content-secondary">이번 달</p>
+                                            <p className="text-xs text-content-muted mt-0.5">{new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.monthly}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
+                                            <p className="text-sm font-semibold text-orange-600 mt-1">${apiCosts.claude.monthly.toFixed(4)}</p>
+                                        </div>
                                     </div>
-                                )}
-
-                                {/* 오늘 통계 */}
-                                <div className="bg-white/60 rounded-xl p-3 flex flex-col justify-between h-full">
-                                    <p className="text-sm text-content-secondary mb-1">
-                                        오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
-                                    </p>
-                                    <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.today}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
-                                    <p className="text-sm font-semibold text-orange-600 mt-1">${apiCosts.claude.today.toFixed(4)}</p>
                                 </div>
-
-                                </div> {/* grid 끝 */}
 
                                 <div className="pt-3 border-t border-orange-200">
                                     {(() => {
@@ -590,17 +401,44 @@ export default function AdminDashboardPage() {
                                         const isNormal = total === 0 || apiCosts.claude.failures === 0
                                         const rate = total > 0 ? apiCosts.claude.successes / total : 1
                                         const isWarning = !isNormal && rate >= 0.9
+                                        const successRate = total > 0 ? ((rate * 100).toFixed(1)) : '0.0'
+                                        const keyStatus = apiCosts.claude.keyStatus
+                                        const blockedUntil = keyStatus?.blockedUntil
+                                            ? new Date(keyStatus.blockedUntil)
+                                            : null
+                                        const secsLeft = blockedUntil
+                                            ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / 1000))
+                                            : 0
                                         return (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm text-content-secondary">AI 상태</span>
-                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                    isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
-                                                }`}>
-                                                    <span className={`w-2 h-2 rounded-full ${
-                                                        isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
-                                                    }`} />
-                                                    {isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.claude.failures}건)` : `오류 (${apiCosts.claude.failures}건)`}
-                                                </span>
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm text-content-secondary">AI 상태</span>
+                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                        keyStatus ? 'text-red-600' : isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                        <span className={`w-2 h-2 rounded-full ${
+                                                            keyStatus ? 'bg-red-500' : isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
+                                                        }`} />
+                                                        {keyStatus
+                                                            ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
+                                                            : isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.claude.failures}건)` : `오류 (${apiCosts.claude.failures}건)`}
+                                                    </span>
+                                                </div>
+                                                {!isNormal && total > 0 && (
+                                                    <div className="flex items-center justify-between text-xs text-content-muted">
+                                                        <span>성공률: {successRate}% ({apiCosts.claude.successes}/{total})</span>
+                                                        {!keyStatus && (
+                                                            <a
+                                                                href="https://vercel.com/dashboard"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-orange-600 font-medium hover:underline"
+                                                            >
+                                                                Vercel 로그 확인 →
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     })()}
@@ -647,17 +485,44 @@ export default function AdminDashboardPage() {
                                         const isNormal = total === 0 || (apiCosts.groq?.failures ?? 0) === 0
                                         const rate = total > 0 ? (apiCosts.groq?.successes ?? 0) / total : 1
                                         const isWarning = !isNormal && rate >= 0.9
+                                        const successRate = total > 0 ? ((rate * 100).toFixed(1)) : '0.0'
+                                        const keyStatus = apiCosts.groq?.keyStatus
+                                        const blockedUntil = keyStatus?.blockedUntil
+                                            ? new Date(keyStatus.blockedUntil)
+                                            : null
+                                        const secsLeft = blockedUntil
+                                            ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / 1000))
+                                            : 0
                                         return (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm text-content-secondary">AI 상태</span>
-                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                    isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
-                                                }`}>
-                                                    <span className={`w-2 h-2 rounded-full ${
-                                                        isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
-                                                    }`} />
-                                                    {isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.groq?.failures}건)` : `오류 (${apiCosts.groq?.failures}건)`}
-                                                </span>
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm text-content-secondary">AI 상태</span>
+                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                        keyStatus ? 'text-red-600' : isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                        <span className={`w-2 h-2 rounded-full ${
+                                                            keyStatus ? 'bg-red-500' : isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
+                                                        }`} />
+                                                        {keyStatus
+                                                            ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
+                                                            : isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.groq?.failures}건)` : `오류 (${apiCosts.groq?.failures}건)`}
+                                                    </span>
+                                                </div>
+                                                {!isNormal && total > 0 && (
+                                                    <div className="flex items-center justify-between text-xs text-content-muted">
+                                                        <span>성공률: {successRate}% ({apiCosts.groq?.successes}/{total})</span>
+                                                        {!keyStatus && (
+                                                            <a
+                                                                href="https://vercel.com/dashboard"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-orange-600 font-medium hover:underline"
+                                                            >
+                                                                Vercel 로그 확인 →
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     })()}

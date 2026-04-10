@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import AdminPagination from '@/components/admin/AdminPagination'
+import AdminTabFilter from '@/components/admin/AdminTabFilter'
 
 interface AiValidation {
     status: 'passed' | 'flagged'
@@ -96,12 +97,37 @@ export default function AdminShortformPage() {
     const [processingId, setProcessingId] = useState<string | null>(null)
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [manualCreate, setManualCreate] = useState<ManualCreateModal>({
         open: false,
         issueId: '',
         loading: false,
         error: null,
     })
+
+    const loadTabCounts = useCallback(async () => {
+        const tabParams: { value: FilterStatus; params: Record<string, string> }[] = [
+            { value: '', params: {} },
+            { value: 'pending', params: { approval_status: 'pending' } },
+            { value: 'approved', params: { approval_status: 'approved' } },
+            { value: 'rejected', params: { approval_status: 'rejected' } },
+        ]
+        try {
+            const results = await Promise.all(
+                tabParams.map(({ params }) => {
+                    const p = new URLSearchParams({ limit: '1', offset: '0', ...params })
+                    return fetch(`/api/admin/shortform?${p}`).then(r => r.ok ? r.json() : null)
+                })
+            )
+            const counts: Record<string, number> = {}
+            tabParams.forEach(({ value }, i) => {
+                counts[value] = results[i]?.total ?? 0
+            })
+            setTabCounts(counts)
+        } catch {
+            // 카운트 로드 실패 시 무시
+        }
+    }, [])
 
     const loadJobs = useCallback(async (status: FilterStatus, targetPage: number = 1) => {
         setLoading(true)
@@ -132,6 +158,10 @@ export default function AdminShortformPage() {
     }, [])
 
     useEffect(() => {
+        loadTabCounts()
+    }, [loadTabCounts])
+
+    useEffect(() => {
         setPage(1)
         loadJobs(filter, 1)
     }, [filter, loadJobs])
@@ -150,7 +180,7 @@ export default function AdminShortformPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            await loadJobs(filter, page)
+            await Promise.all([loadJobs(filter, page), loadTabCounts()])
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
@@ -269,21 +299,13 @@ export default function AdminShortformPage() {
             </div>
 
             {/* 필터 탭 */}
-            <div className="flex gap-2 mb-4">
-                {FILTER_LABELS.map(({ value, label }) => (
-                    <button
-                        key={value}
-                        onClick={() => setFilter(value)}
-                        className={[
-                            'px-4 py-1.5 text-sm rounded-full border transition-colors',
-                            filter === value
-                                ? 'bg-primary text-white border-primary'
-                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                        ].join(' ')}
-                    >
-                        {label}
-                    </button>
-                ))}
+            <div className="mb-4">
+                <AdminTabFilter
+                    tabs={FILTER_LABELS}
+                    active={filter}
+                    counts={tabCounts}
+                    onChange={setFilter}
+                />
             </div>
 
             {error && (

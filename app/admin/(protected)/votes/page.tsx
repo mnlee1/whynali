@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import AdminPagination from '@/components/admin/AdminPagination'
+import AdminTabFilter from '@/components/admin/AdminTabFilter'
 
 interface Issue {
     id: string
@@ -88,6 +89,7 @@ export default function AdminVotesPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
 
     /* 다중 선택 */
     const [selectedVoteIds, setSelectedVoteIds] = useState<Set<string>>(new Set())
@@ -213,6 +215,31 @@ export default function AdminVotesPage() {
         }
     }
 
+    const loadTabCounts = useCallback(async () => {
+        const tabParams: { value: FilterPhase; params: Record<string, string> }[] = [
+            { value: '', params: {} },
+            { value: '대기', params: { phase: '대기', approval_status: '대기' } },
+            { value: '진행중', params: { phase: '진행중', approval_status: '승인' } },
+            { value: '마감', params: { phase: '마감', approval_status: '승인' } },
+            { value: '반려', params: { approval_status: '반려' } },
+        ]
+        try {
+            const results = await Promise.all(
+                tabParams.map(({ params }) => {
+                    const p = new URLSearchParams({ limit: '1', offset: '0', ...params })
+                    return fetch(`/api/admin/votes?${p}`).then(r => r.ok ? r.json() : null)
+                })
+            )
+            const counts: Record<string, number> = {}
+            tabParams.forEach(({ value }, i) => {
+                counts[value] = results[i]?.total ?? 0
+            })
+            setTabCounts(counts)
+        } catch {
+            // 카운트 로드 실패 시 무시
+        }
+    }, [])
+
     const loadVotes = useCallback(async (phase: FilterPhase, targetPage: number = 1) => {
         setLoading(true)
         setError(null)
@@ -247,6 +274,10 @@ export default function AdminVotesPage() {
             setLoading(false)
         }
     }, [])
+
+    useEffect(() => {
+        loadTabCounts()
+    }, [loadTabCounts])
 
     useEffect(() => {
         setPage(1)
@@ -296,7 +327,7 @@ export default function AdminVotesPage() {
                 next.delete(id)
                 return next
             })
-            await loadVotes(filter, page)
+            await Promise.all([loadVotes(filter, page), loadTabCounts()])
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
@@ -365,6 +396,7 @@ export default function AdminVotesPage() {
             }
 
             loadVotes(filter, page)
+            loadTabCounts()
             setSelectedVoteIds(new Set())
         } catch (e) {
             alert(e instanceof Error ? e.message : '일괄 처리 실패')
@@ -534,22 +566,12 @@ export default function AdminVotesPage() {
 
             {/* 필터 탭 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <div className="flex gap-2">
-                    {FILTER_LABELS.map(({ value, label }) => (
-                        <button
-                            key={value}
-                            onClick={() => setFilter(value)}
-                            className={[
-                                'px-4 py-1.5 text-sm rounded-full border transition-colors',
-                                filter === value
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
+                <AdminTabFilter
+                    tabs={FILTER_LABELS}
+                    active={filter}
+                    counts={tabCounts}
+                    onChange={setFilter}
+                />
 
                 {/* 일괄 처리 버튼 */}
                 {selectedVoteIds.size > 0 && (

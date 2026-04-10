@@ -141,7 +141,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .from('discussion_topics')
             .select('id, body, created_at')
             .eq('issue_id', id)
-            .in('approval_status', ['진행중', '마감'])
+            .eq('approval_status', '진행중')
             .order('created_at', { ascending: false })
             .limit(5),
         adminClient
@@ -283,7 +283,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                             href={
                                 discussionTopics.length === 1
                                     ? `/community/${discussionTopics[0].id}`
-                                    : `/community?issue_id=${id}`
+                                    : `/community?issue_id=${id}&status=진행중`
                             }
                             className="text-xs text-content-secondary hover:text-content-primary font-semibold"
                         >
@@ -295,7 +295,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                             <Link
                                 key={topic.id}
                                 href={`/community/${topic.id}`}
-                                className="block p-4 hover:bg-surface-subtle transition-colors group"
+                                className="block p-4 hover:bg-surface-muted transition-colors group"
                             >
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-content-primary leading-relaxed line-clamp-2 group-hover:text-primary">
@@ -314,16 +314,21 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
             {(!discussionTopics || discussionTopics.length === 0) && (
-                <div id="section-discussion" className="card mb-6" style={{ scrollMarginTop: '80px' }}>
+                <div id="section-discussion" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '80px' }}>
                     <div className="px-4 py-3 border-b border-border-muted">
                         <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
                     </div>
-                    <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-content-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                        </svg>
-                        <p className="text-sm font-semibold text-content-primary">등록된 토론 주제가 없습니다</p>
-                        <p className="text-xs text-content-secondary">이슈가 활발해지면 토론 주제가 자동으로 생성됩니다.</p>
+                    <div className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-content-primary mb-0.5">이 이슈의 커뮤니티</p>
+                            <p className="text-xs text-content-secondary">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+                        </div>
+                        <Link
+                            href="/community"
+                            className="shrink-0 btn-primary btn-sm"
+                        >
+                            토론 보기
+                        </Link>
                     </div>
                 </div>
             )}
