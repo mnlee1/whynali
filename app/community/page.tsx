@@ -38,7 +38,7 @@ function CommunityContent() {
     const [error, setError] = useState<string | null>(null)
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState<FilterStatus>('')
+    const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
     /* 연결 이슈 제목 (issue_id 필터 시 헤더에 표시) */
     const [issueTitle, setIssueTitle] = useState<string | null>(null)
 

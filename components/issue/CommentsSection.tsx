@@ -35,16 +35,12 @@ type CommentWithLike = Comment & {
 const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
 
-const SORT_LABELS: Record<SortOption, string> = {
-    latest: '최신순',
-    likes: '좋아요순',
-    dislikes: '싫어요순',
-}
 
 function authorLabel(comment: Comment): string {
     if (comment.display_name?.trim()) return comment.display_name.trim()
     return `사용자 …${comment.user_id.slice(-4)}`
 }
+
 
 export default function CommentsSection({
     issueId,
@@ -59,7 +55,7 @@ export default function CommentsSection({
     const [comments, setComments] = useState<CommentWithLike[]>([])
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
-    const [sort, setSort] = useState<SortOption>('latest')
+    const sort: SortOption = 'latest'
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -70,6 +66,7 @@ export default function CommentsSection({
     const [writeError, setWriteError] = useState<string | null>(null)
     const [writeErrorType, setWriteErrorType] = useState<'rate_limit' | 'validation' | null>(null)
     const [pendingNotice, setPendingNotice] = useState<string | null>(null)
+    const [pendingVisible, setPendingVisible] = useState(false)
     const [rateLimitCountdown, setRateLimitCountdown] = useState(0)
     const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -87,7 +84,6 @@ export default function CommentsSection({
     const [replyError, setReplyError] = useState<string | null>(null)
     const [repliesMap, setRepliesMap] = useState<Record<string, CommentWithLike[]>>({})
     const [expandedRepliesIds, setExpandedRepliesIds] = useState<Set<string>>(new Set())
-    const [loadingRepliesIds, setLoadingRepliesIds] = useState<Set<string>>(new Set())
 
     /* 신고 상태 */
     const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
@@ -113,15 +109,26 @@ export default function CommentsSection({
         setSafetyBotEnabled(stored !== 'false')
     }, [])
 
+    /* 내가 신고한 댓글 ID 초기화 */
+    useEffect(() => {
+        if (!userId) return
+        const param = issueId ? `issue_id=${issueId}` : `discussion_topic_id=${discussionTopicId}`
+        fetch(`/api/comments/reported?${param}`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((d) => {
+                if (d?.data?.length) setReportedIds(new Set(d.data))
+            })
+            .catch(() => {})
+    }, [userId, issueId, discussionTopicId])
+
     const contextParam = issueId
         ? `issue_id=${issueId}`
         : `discussion_topic_id=${discussionTopicId}`
 
     /* 베스트 댓글 조회 */
-    const loadBest = useCallback(async (includePending: boolean) => {
+    const loadBest = useCallback(async () => {
         try {
-            const pending = includePending ? '&includePending=true' : ''
-            const res = await fetch(`/api/comments?${contextParam}&best=true${pending}`)
+            const res = await fetch(`/api/comments?${contextParam}&best=true`)
             const json = await res.json()
             if (res.ok) setBestComments(json.data ?? [])
         } catch { /* 베스트 조회 실패는 무시 */ }
@@ -132,12 +139,10 @@ export default function CommentsSection({
         currentOffset: number,
         append: boolean,
         currentSort: SortOption,
-        includePending: boolean
     ) => {
         try {
-            const pending = includePending ? '&includePending=true' : ''
             const res = await fetch(
-                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=${currentSort}${pending}`
+                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=${currentSort}`
             )
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -153,32 +158,23 @@ export default function CommentsSection({
 
     useEffect(() => {
         setLoading(true)
-        const includePending = !safetyBotEnabled
-        loadBest(includePending)
-        loadComments(0, false, sort, includePending)
-    }, [loadBest, loadComments, sort, safetyBotEnabled])
-
-    const handleSortChange = (newSort: SortOption) => {
-        if (newSort === sort) return
-        setSort(newSort)
-        setOffset(0)
-        setLoading(true)
-        loadComments(0, false, newSort, !safetyBotEnabled)
-    }
+        loadBest()
+        loadComments(0, false, sort)
+    }, [loadBest, loadComments, sort])
 
     const handleLoadMore = () => {
         const next = offset + PAGE_SIZE
         setOffset(next)
         setLoadingMore(true)
-        loadComments(next, true, sort, !safetyBotEnabled)
+        loadComments(next, true, sort)
     }
 
     const handleSafetyBotConfirm = (enabled: boolean) => {
         setSafetyBotEnabled(enabled)
         setOffset(0)
         setLoading(true)
-        loadBest(!enabled)
-        loadComments(0, false, sort, !enabled)
+        loadBest()
+        loadComments(0, false, sort)
     }
 
     /* Rate Limit 카운트다운 */
@@ -201,6 +197,15 @@ export default function CommentsSection({
     useEffect(() => () => {
         if (countdownRef.current) clearInterval(countdownRef.current)
     }, [])
+
+    /* pendingNotice 4초 후 페이드아웃, 0.5초 트랜지션 후 DOM에서 제거 */
+    useEffect(() => {
+        if (!pendingNotice) return
+        setPendingVisible(true)
+        const fadeTimer = setTimeout(() => setPendingVisible(false), 4000)
+        const removeTimer = setTimeout(() => setPendingNotice(null), 4500)
+        return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer) }
+    }, [pendingNotice])
 
     const redirectToLogin = () => {
         const currentPath = window.location.pathname
@@ -243,11 +248,15 @@ export default function CommentsSection({
             setDraft('')
             if (json.pending) {
                 setPendingNotice(json.message ?? '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.')
+                if (json.data) {
+                    setComments((prev) => [json.data, ...prev])
+                    setTotal((t) => t + 1)
+                }
                 return
             }
             setOffset(0)
-            loadBest(!safetyBotEnabled)
-            await loadComments(0, false, sort, !safetyBotEnabled)
+            loadBest()
+            await loadComments(0, false, sort)
         } catch {
             setWriteError('네트워크 오류가 발생했습니다. 다시 시도해 주세요.')
         } finally {
@@ -451,14 +460,11 @@ export default function CommentsSection({
             return
         }
         if (!repliesMap[commentId]) {
-            setLoadingRepliesIds((prev) => new Set([...prev, commentId]))
             try {
                 const res = await fetch(`/api/comments?${contextParam}&parent_id=${commentId}&limit=50&offset=0`)
                 const json = await res.json()
                 if (res.ok) setRepliesMap((prev) => ({ ...prev, [commentId]: json.data ?? [] }))
-            } finally {
-                setLoadingRepliesIds((prev) => new Set([...prev].filter((id) => id !== commentId)))
-            }
+            } catch { /* 답글 조회 실패 무시 */ }
         }
         setExpandedRepliesIds((prev) => new Set([...prev, commentId]))
     }
@@ -470,6 +476,8 @@ export default function CommentsSection({
             body: comment.body,
             authorNickname: authorLabel(comment),
         })
+        setReplyToId(null)
+        setReplyDraft('')
         setShowReportModal(true)
     }
 
@@ -509,39 +517,6 @@ export default function CommentsSection({
             <div>
                 {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
-                {/* 베스트 댓글 */}
-                {bestComments.length > 0 && (
-                    <div className="mb-6">
-                        <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wide">
-                            베스트 댓글
-                        </p>
-                        <ul className="space-y-2">
-                            {bestComments.map((comment) => (
-                                <CommentItem
-                                    key={`best-${comment.id}`}
-                                    comment={comment}
-                                    userId={userId}
-                                    isBest
-                                    editingId={editingId}
-                                    editDraft={editDraft}
-                                    submittingEdit={submittingEdit}
-                                    deletingId={deletingId}
-                                    likingId={likingId}
-                                    reportedIds={reportedIds}
-                                    onEditStart={handleEditStart}
-                                    onEditCancel={handleEditCancel}
-                                    onEditSave={handleEditSave}
-                                    onDelete={handleDelete}
-                                    onLike={handleLike}
-                                    onOpenReportModal={handleOpenReportModal}
-                                    setEditDraft={setEditDraft}
-                                />
-                            ))}
-                        </ul>
-                        <hr className="mt-4 border-border-muted" />
-                    </div>
-                )}
-
                 {/* 작성 폼 */}
                 <div className="pb-4 border-b border-border-muted mb-4">
                     {isClosed ? (
@@ -564,9 +539,15 @@ export default function CommentsSection({
                                 <p className="text-sm text-red-500">{writeError}</p>
                             )}
                             {pendingNotice && (
-                                <p className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-300 rounded px-3 py-2">
-                                    {pendingNotice}
-                                </p>
+                                <div className={[
+                                    'flex items-center gap-2 px-3 py-2.5 rounded-xl border border-amber-200 bg-amber-50 transition-all duration-500',
+                                    pendingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none',
+                                ].join(' ')}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                    </svg>
+                                    <p className="text-xs text-amber-700">{pendingNotice}</p>
+                                </div>
                             )}
                             <textarea
                                 value={draft}
@@ -578,7 +559,8 @@ export default function CommentsSection({
                                     }
                                 }}
                                 onClick={() => { if (!userId) redirectToLogin() }}
-                                placeholder={userId ? '댓글을 입력하세요...' : '댓글을 작성하려면 로그인하세요'}
+                                placeholder={userId ? '이 이슈에 대한 생각이나 반응을 자유롭게 남겨주세요.' : '댓글을 작성하려면 로그인 해주세요'}
+                                maxLength={500}
                                 rows={3}
                                 className={[
                                     'w-full px-3 py-2 text-sm border rounded-xl resize-none focus:outline-none transition-colors',
@@ -588,7 +570,7 @@ export default function CommentsSection({
                                 ].join(' ')}
                             />
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-content-muted">{draft.length} / 1000</span>
+                                <span className="text-xs text-content-muted">{draft.length} / 500</span>
                                 <button
                                     onClick={handleWrite}
                                     disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
@@ -601,31 +583,18 @@ export default function CommentsSection({
                     )}
                 </div>
 
-                {/* 정렬 옵션 + 총 댓글 수 */}
+                {/* 총 댓글 수 + 정렬 표시 */}
                 <div className="flex items-center justify-between mb-3">
                     <p className="text-sm text-content-secondary">댓글 {total.toLocaleString()}개</p>
-                    <div className="flex gap-1">
-                        {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
-                            <button
-                                key={s}
-                                onClick={() => handleSortChange(s)}
-                                className={[
-                                    'text-xs px-2.5 py-1 rounded-full border transition-colors',
-                                    sort === s
-                                        ? 'border-border-strong text-content-primary font-medium'
-                                        : 'border-border text-content-secondary hover:border-border-strong',
-                                ].join(' ')}
-                            >
-                                {SORT_LABELS[s]}
-                            </button>
-                        ))}
-                    </div>
+                    <p className="text-xs text-content-muted">최신순</p>
                 </div>
 
                 {/* 세이프티봇 안내 바 */}
                 <div className="flex items-center justify-between px-3 py-2 mb-3 bg-surface-muted border border-border rounded-xl">
-                    <p className="text-xs text-content-secondary">
-                        <span className="mr-1">🤖</span>
+                    <p className="text-xs text-content-secondary flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                        </svg>
                         {safetyBotEnabled ? (
                             <><span className="text-green-500 font-medium">세이프티봇</span>이 악성 댓글로부터 보호합니다.</>
                         ) : (
@@ -636,7 +605,10 @@ export default function CommentsSection({
                         onClick={() => setSafetyModalOpen(true)}
                         className="flex items-center gap-1 text-xs text-content-secondary shrink-0 ml-2"
                     >
-                        <span>⚙️</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
                         <span>설정</span>
                     </button>
                 </div>
@@ -648,6 +620,51 @@ export default function CommentsSection({
                     />
                 )}
 
+                {/* 베스트 댓글 */}
+                {bestComments.length > 0 && (
+                    <div className="mt-6 mb-4">
+                        <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wide">
+                            베스트 댓글
+                        </p>
+                        <ul className="space-y-2">
+                            {bestComments.map((comment) => (
+                                <CommentItem
+                                    key={`best-${comment.id}`}
+                                    comment={comment}
+                                    userId={userId}
+                                    isBest
+                                    safetyBotEnabled={safetyBotEnabled}
+                                    editingId={editingId}
+                                    editDraft={editDraft}
+                                    submittingEdit={submittingEdit}
+                                    deletingId={deletingId}
+                                    likingId={likingId}
+                                    replyToId={replyToId}
+                                    replyDraft={replyDraft}
+                                    submittingReply={submittingReply}
+                                    replyError={replyError}
+                                    rateLimitCountdown={rateLimitCountdown}
+                                    replies={repliesMap[comment.id]}
+                                    repliesExpanded={expandedRepliesIds.has(comment.id)}
+                                    reportedIds={reportedIds}
+                                    onEditStart={handleEditStart}
+                                    onEditCancel={handleEditCancel}
+                                    onEditSave={handleEditSave}
+                                    onDelete={handleDelete}
+                                    onLike={handleLike}
+                                    onReplyToggle={handleReplyToggle}
+                                    onReplyDraftChange={setReplyDraft}
+                                    onReplySubmit={handleReplySubmit}
+                                    onToggleReplies={handleToggleReplies}
+                                    onOpenReportModal={handleOpenReportModal}
+                                    setEditDraft={setEditDraft}
+                                />
+                            ))}
+                        </ul>
+                        <hr className="mt-4 border-border-muted" />
+                    </div>
+                )}
+
                 {/* 댓글 목록 */}
                 {comments.length === 0 ? (
                     <p className="text-sm text-content-muted py-4 text-center">
@@ -655,11 +672,12 @@ export default function CommentsSection({
                     </p>
                 ) : (
                     <ul className="divide-y divide-border-muted mb-4">
-                        {comments.map((comment) => (
+                        {comments.filter((c) => !bestComments.some((b) => b.id === c.id)).map((comment) => (
                             <CommentItem
                                 key={comment.id}
                                 comment={comment}
                                 userId={userId}
+                                safetyBotEnabled={safetyBotEnabled}
                                 editingId={editingId}
                                 editDraft={editDraft}
                                 submittingEdit={submittingEdit}
@@ -672,7 +690,6 @@ export default function CommentsSection({
                                 rateLimitCountdown={rateLimitCountdown}
                                 replies={repliesMap[comment.id]}
                                 repliesExpanded={expandedRepliesIds.has(comment.id)}
-                                repliesLoading={loadingRepliesIds.has(comment.id)}
                                 reportedIds={reportedIds}
                                 onEditStart={handleEditStart}
                                 onEditCancel={handleEditCancel}
@@ -692,7 +709,7 @@ export default function CommentsSection({
 
                 {/* 더보기 */}
                 {hasMore && (
-                    <div className="text-center mb-6">
+                    <div className="text-center mb-6 pt-4 border-t border-border-muted">
                         <button
                             onClick={handleLoadMore}
                             disabled={loadingMore}
@@ -724,6 +741,7 @@ interface CommentItemProps {
     userId: string | null
     isBest?: boolean
     isReply?: boolean
+    safetyBotEnabled: boolean
     editingId: string | null
     editDraft: string
     submittingEdit: boolean
@@ -737,7 +755,6 @@ interface CommentItemProps {
     rateLimitCountdown?: number
     replies?: CommentWithLike[]
     repliesExpanded?: boolean
-    repliesLoading?: boolean
     /* 신고 */
     reportedIds: Set<string>
     onEditStart: (c: Comment) => void
@@ -754,10 +771,10 @@ interface CommentItemProps {
 }
 
 function CommentItem({
-    comment, userId, isBest, isReply,
+    comment, userId, isBest, isReply, safetyBotEnabled,
     editingId, editDraft, submittingEdit, deletingId, likingId,
     replyToId, replyDraft, submittingReply, replyError, rateLimitCountdown,
-    replies, repliesExpanded, repliesLoading,
+    replies, repliesExpanded,
     reportedIds,
     onEditStart, onEditCancel, onEditSave, onDelete, onLike,
     onReplyToggle, onReplyDraftChange, onReplySubmit, onToggleReplies,
@@ -795,13 +812,16 @@ function CommentItem({
             isReply ? 'py-3' : '',
         ].join(' ')}>
             {/* 작성자 + 시간 + 본인 액션 + ... 메뉴 */}
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-1.5">
                     <NicknameAvatar name={authorLabel(comment)} />
                     <span className="text-xs text-content-secondary">{authorLabel(comment)}</span>
+                    <span className="text-xs text-content-muted">· {formatDate(comment.created_at)}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs text-content-muted">{formatDate(comment.created_at)}</span>
+                    {isReported && (
+                        <span className="text-xs text-red-500 border border-red-300 px-1.5 py-0.5 rounded-full">신고완료</span>
+                    )}
                     {isMine && !isEditing && (
                         <div className="flex gap-2">
                             <button
@@ -820,11 +840,9 @@ function CommentItem({
                         </div>
                     )}
                     {/* 더보기 메뉴 (타인 댓글·답글 + 로그인 시) */}
-                    {!isMine && userId && (
+                    {!isMine && userId && comment.visibility !== 'deleted' && (comment.visibility !== 'pending_review' || !safetyBotEnabled) && (
                         <div className="relative" ref={menuRef}>
-                            {isReported ? (
-                                <span className="text-xs text-content-muted px-1">신고완료</span>
-                            ) : (
+                            {!isReported && (
                                 <button
                                     onClick={() => setMenuOpen((prev) => !prev)}
                                     className="text-xs text-content-muted hover:text-content-secondary px-1 leading-none transition-colors"
@@ -849,7 +867,21 @@ function CommentItem({
             </div>
 
             {/* 본문 또는 수정 폼 */}
-            {isEditing ? (
+            {isReported ? (
+                <div className="flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-content-muted shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                    <p className="text-sm text-content-muted">검토 중인 댓글입니다.</p>
+                </div>
+            ) : comment.visibility === 'deleted' ? (
+                <div className="flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-content-muted shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                    <p className="text-sm text-content-muted">작성자에 의해 삭제된 댓글입니다.</p>
+                </div>
+            ) : isEditing ? (
                 <div className="mt-2 space-y-2">
                     <textarea
                         value={editDraft}
@@ -873,55 +905,79 @@ function CommentItem({
                         </button>
                     </div>
                 </div>
+            ) : comment.visibility === 'pending_review' && !isMine && safetyBotEnabled ? (
+                <div className="flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-content-muted shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                    <p className="text-sm text-content-muted">세이프티봇이 부적절한 표현을 감지한 댓글입니다.</p>
+                </div>
+            ) : comment.visibility === 'pending_review' && isMine ? (
+                <p className={['text-content-primary leading-relaxed', 'text-sm'].join(' ')}>
+                    {comment.body}
+                </p>
             ) : (
-                <p className={['text-content-primary leading-relaxed', isReply ? 'text-xs' : 'text-sm'].join(' ')}>
+                <p className={['text-content-primary leading-relaxed', 'text-sm'].join(' ')}>
                     {comment.body}
                 </p>
             )}
 
-            {/* 답글 달기(좌) + 좋아요/싫어요(우) */}
-            {!isEditing && (
+            {/* 답글(좌) + 좋아요/싫어요(우) */}
+            {!isEditing && !isReported && comment.visibility !== 'deleted' && (isMine || comment.visibility !== 'pending_review' || !safetyBotEnabled) && (
                 <div className="flex items-center justify-between mt-2">
-                    {/* 답글 달기 버튼 (로그인 + 최상위 댓글만) */}
+                    {/* 답글 버튼 */}
                     <div>
-                        {!isReply && userId && onReplyToggle && (
+                        {!isReply && userId && isMine && hasReplies && onToggleReplies && (
+                            /* 본인 댓글: 답글 있을 때만 펼치기 */
                             <button
-                                onClick={() => onReplyToggle(comment.id)}
+                                onClick={() => onToggleReplies(comment.id)}
                                 className="text-xs text-content-muted hover:text-content-secondary transition-colors"
                             >
-                                {isReplyFormOpen ? '취소' : '답글 달기'}
+                                {`답글 ${replyCount}`}
+                            </button>
+                        )}
+                        {!isReply && userId && !isMine && (
+                            /* 타인 댓글: 항상 답글 버튼 */
+                            <button
+                                onClick={() => hasReplies && onToggleReplies
+                                    ? onToggleReplies(comment.id)
+                                    : onReplyToggle?.(comment.id)
+                                }
+                                className="text-xs text-content-muted hover:text-content-secondary transition-colors"
+                            >
+                                {hasReplies ? `답글 ${replyCount}` : '답글'}
                             </button>
                         )}
                     </div>
-                    {/* 좋아요/싫어요 우측 정렬 */}
+                    {/* 좋아요/싫어요 — 본인 댓글은 숫자만, 타인은 클릭 가능 */}
                     <div className="flex items-center gap-1.5">
                         <button
-                            onClick={() => onLike(comment.id, 'like')}
-                            disabled={isLiking}
+                            onClick={() => !isMine && onLike(comment.id, 'like')}
+                            disabled={isMine || isLiking}
                             className={[
                                 'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors bg-surface',
                                 myType === 'like'
                                     ? 'border-primary-muted text-primary font-semibold'
                                     : 'border-border text-content-secondary hover:border-border-strong',
-                                isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                                isMine ? 'cursor-default' : isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                             ].join(' ')}
                         >
                             <span>👍</span>
-                            <span>좋아요 {comment.like_count}</span>
+                            <span>{comment.like_count}</span>
                         </button>
                         <button
-                            onClick={() => onLike(comment.id, 'dislike')}
-                            disabled={isLiking}
+                            onClick={() => !isMine && onLike(comment.id, 'dislike')}
+                            disabled={isMine || isLiking}
                             className={[
                                 'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors bg-surface',
                                 myType === 'dislike'
                                     ? 'border-border-strong text-content-secondary font-semibold'
                                     : 'border-border text-content-secondary hover:border-border-strong',
-                                isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                                isMine ? 'cursor-default' : isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                             ].join(' ')}
                         >
                             <span>👎</span>
-                            <span>싫어요 {comment.dislike_count}</span>
+                            <span>{comment.dislike_count}</span>
                         </button>
                     </div>
                 </div>
@@ -934,12 +990,13 @@ function CommentItem({
                     <textarea
                         value={replyDraft ?? ''}
                         onChange={(e) => onReplyDraftChange(e.target.value)}
-                        placeholder="답글을 입력하세요..."
+                        placeholder="답글을 입력하세요"
                         rows={2}
+                        maxLength={500}
                         className="w-full px-3 py-2 text-sm border border-border rounded-xl resize-none focus:outline-none focus:border-primary transition-colors"
                     />
                     <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs text-content-muted">{(replyDraft ?? '').length} / 1000</span>
+                        <span className="text-xs text-content-muted">{(replyDraft ?? '').length} / 500</span>
                         <button
                             onClick={() => onReplySubmit(comment.id)}
                             disabled={!replyDraft?.trim() || submittingReply || (rateLimitCountdown ?? 0) > 0}
@@ -951,20 +1008,6 @@ function CommentItem({
                 </div>
             )}
 
-            {/* 답글 펼치기/접기 버튼 */}
-            {!isReply && hasReplies && onToggleReplies && (
-                <button
-                    onClick={() => onToggleReplies(comment.id)}
-                    className="mt-2 text-xs text-primary hover:text-primary-dark transition-colors"
-                >
-                    {repliesLoading
-                        ? '불러오는 중...'
-                        : repliesExpanded
-                            ? '답글 접기'
-                            : `답글 ${replyCount}개 보기`}
-                </button>
-            )}
-
             {/* 답글 목록 */}
             {!isReply && repliesExpanded && replies && replies.length > 0 && (
                 <ul className="mt-2 pl-8 border-l border-border-muted divide-y divide-border-muted">
@@ -974,6 +1017,7 @@ function CommentItem({
                             comment={reply}
                             userId={userId}
                             isReply
+                            safetyBotEnabled={safetyBotEnabled}
                             editingId={editingId}
                             editDraft={editDraft}
                             submittingEdit={submittingEdit}

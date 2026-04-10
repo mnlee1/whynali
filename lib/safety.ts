@@ -16,8 +16,8 @@ const BANNED_WORDS: string[] = [
 
 /* ── 2. 입력 길이 제한 기준 ── */
 const LENGTH_LIMITS = {
-    comment: 1000,
-    discussion: 500,
+    comment: 500,
+    discussion: 300,
     vote_option: 50,
 } as const
 
@@ -95,7 +95,7 @@ export function sanitizeText(text: string): string {
  */
 function createWordBoundaryRegex(word: string): RegExp {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`(?:^|\\s|[^\\w가-힣])${escaped}(?:$|\\s|[^\\w가-힣])`, 'i')
+    return new RegExp(escaped, 'i')
 }
 
 /* ── 5. validate: 길이·금칙어 검사 ──
