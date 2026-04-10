@@ -42,15 +42,27 @@ export async function PATCH(
 
         if (reportError) throw reportError
 
-        /* 처리완료: 해당 댓글 visibility → deleted */
+        /* 처리완료: 댓글 내용 조회 후 visibility → deleted */
+        let logAction = `신고 ${action}`
+        let logDetails: string | null = null
+
         if (action === '처리완료') {
+            const { data: comment } = await supabaseAdmin
+                .from('comments')
+                .select('content')
+                .eq('id', report.comment_id)
+                .single()
+
             await supabaseAdmin
                 .from('comments')
                 .update({ visibility: 'deleted', updated_at: new Date().toISOString() })
                 .eq('id', report.comment_id)
+
+            logAction = '신고 댓글 삭제'
+            logDetails = comment?.content ? `삭제된 댓글: "${comment.content}"` : null
         }
 
-        await writeAdminLog(`신고 ${action}`, 'report', id, auth.adminEmail)
+        await writeAdminLog(logAction, 'report', id, auth.adminEmail, logDetails)
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: '신고 처리 실패' }, { status: 500 })
