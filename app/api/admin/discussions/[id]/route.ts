@@ -82,8 +82,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: '토론 주제를 찾을 수 없습니다.' }, { status: 404 })
         }
 
+        const fromStatus = action === '진행중' ? '대기' : action === '마감' ? '진행중' : '마감'
         const details = data.body ? data.body.slice(0, 200) : null
-        await writeAdminLog(`토론 주제 ${action}`, 'discussion_topic', id, auth.adminEmail, details)
+        await writeAdminLog(`토론 주제 상태 변경: ${fromStatus} > ${action === '복구' ? '대기' : action}`, 'discussion_topic', id, auth.adminEmail, details)
         revalidatePath('/')
         return NextResponse.json({ data })
     } catch {

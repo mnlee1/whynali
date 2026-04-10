@@ -31,7 +31,7 @@ export async function POST(
 
         if (error) throw error
 
-        await writeAdminLog('이슈 복구', 'issue', id, auth.adminEmail, `"${data.title}"`)
+        await writeAdminLog('이슈 상태 변경: 반려 > 대기', 'issue', id, auth.adminEmail, `"${data.title}"`)
 
         revalidatePath('/')
         return NextResponse.json({ data })

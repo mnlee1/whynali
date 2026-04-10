@@ -55,7 +55,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    await writeAdminLog('투표 수동 종료', 'vote', id, auth.adminEmail, `"${vote.title ?? '제목없음'}"`)
+    await writeAdminLog('투표 상태 변경: 진행중 > 마감', 'vote', id, auth.adminEmail, `"${vote.title ?? '제목없음'}"`)
     revalidatePath('/')
     return NextResponse.json({ success: true }, { status: 200 })
 }
