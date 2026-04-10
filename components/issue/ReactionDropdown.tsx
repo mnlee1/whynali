@@ -34,11 +34,26 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             if (res.ok) {
                 setCounts(json.counts ?? {})
                 setUserReaction(json.userReaction ?? null)
+            } else {
+                console.error('[ReactionDropdown] loadReactions failed:', res.status, json)
             }
-        } catch {}
+        } catch (err) {
+            console.error('[ReactionDropdown] loadReactions error:', err)
+        }
     }, [issueId])
 
     useEffect(() => { loadReactions() }, [loadReactions])
+
+    useEffect(() => {
+        const handleReactionUpdate = (e: CustomEvent) => {
+            if (e.detail?.issueId === issueId) {
+                console.log('[ReactionDropdown] Received reactionUpdated event')
+                loadReactions()
+            }
+        }
+        window.addEventListener('reactionUpdated', handleReactionUpdate as EventListener)
+        return () => window.removeEventListener('reactionUpdated', handleReactionUpdate as EventListener)
+    }, [issueId, loadReactions])
 
     /* 외부 클릭 시 닫기 */
     useEffect(() => {
@@ -47,7 +62,11 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
                 setOpen(false)
             }
         }
-        if (open) document.addEventListener('mousedown', handleOutside)
+        if (open) {
+            setTimeout(() => {
+                document.addEventListener('mousedown', handleOutside)
+            }, 0)
+        }
         return () => document.removeEventListener('mousedown', handleOutside)
     }, [open])
 
@@ -68,18 +87,28 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             })
             const json = await res.json()
             if (res.ok) {
-                setCounts(json.counts ?? {})
-                setUserReaction(json.userReaction ?? null)
+                console.log('[ReactionDropdown] API success:', json)
+                await loadReactions()
+                console.log('[ReactionDropdown] loadReactions completed')
+                window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId } }))
+            } else {
+                console.error('[ReactionDropdown] handleClick API failed:', res.status, json)
             }
-        } catch {}
+        } catch (err) {
+            console.error('[ReactionDropdown] handleClick error:', err)
+        }
         finally {
             setSubmitting(false)
             setOpen(false)
         }
     }
 
-    const selectedMeta = REACTION_META.find((r) => r.type === userReaction)
     const totalCount = Object.values(counts).reduce((s, c) => s + (c ?? 0), 0)
+    const topReactions = REACTION_META
+        .map((r) => ({ ...r, count: counts[r.type] ?? 0 }))
+        .filter((r) => r.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 2)
 
     return (
         <div className="relative" ref={ref}>
@@ -87,54 +116,112 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className={[
-                    'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors',
-                    userReaction
-                        ? 'border-primary-muted bg-primary-light text-primary font-medium'
-                        : 'border-border bg-surface text-content-secondary hover:bg-surface-subtle hover:text-content-primary',
-                ].join(' ')}
+                className="flex items-center pr-2.5 py-1 text-xs transition-colors"
             >
-                <span>{selectedMeta ? selectedMeta.emoji : '😊'}</span>
-                <span>{userReaction ? selectedMeta?.label : '감정표현'}</span>
+                {/* 이모지 겹침 영역 */}
+                <span className="flex items-center">
+                    {topReactions.length > 0 ? (
+                        topReactions.map((r, i) => (
+                            <span
+                                key={r.type}
+                                className="text-lg leading-tight inline-block"
+                                style={{ marginLeft: i > 0 ? '-6px' : 0, zIndex: topReactions.length - i, position: 'relative', lineHeight: '1.3' }}
+                            >
+                                {r.emoji}
+                            </span>
+                        ))
+                    ) : (
+                        <span className="text-lg leading-tight inline-block" style={{ lineHeight: '1.3' }}>😊</span>
+                    )}
+                </span>
+                {/* 총 수치 */}
                 {totalCount > 0 && (
-                    <span className="text-content-muted">{totalCount.toLocaleString()}</span>
+                    <span className={[
+                        'tabular-nums',
+                        userReaction ? 'text-primary font-semibold' : 'text-content-secondary font-normal',
+                    ].join(' ')}>{totalCount.toLocaleString()}</span>
                 )}
-                <svg xmlns="http://www.w3.org/2000/svg" className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
             </button>
 
             {/* 드롭다운 */}
             {open && (
-                <div className="absolute left-0 top-full mt-1.5 z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 flex gap-1 flex-wrap w-max max-w-[260px]">
-                    {REACTION_META.map(({ type, emoji, label }) => {
-                        const count = counts[type] ?? 0
-                        const selected = userReaction === type
-                        return (
-                            <button
-                                key={type}
-                                type="button"
-                                onClick={() => handleClick(type)}
-                                disabled={submitting}
-                                title={label}
-                                className={[
-                                    'flex flex-col items-center px-2.5 py-2 rounded-xl border transition-all min-w-[52px]',
-                                    selected
-                                        ? 'border-primary-muted bg-primary-light scale-105'
-                                        : 'border-border bg-surface hover:border-border-strong hover:scale-105',
-                                    submitting ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
-                                ].join(' ')}
-                            >
-                                <span className="text-xl leading-none">{emoji}</span>
-                                <span className={`text-xs mt-0.5 ${selected ? 'text-primary font-semibold' : 'text-content-secondary'}`}>
-                                    {label}
-                                </span>
-                                <span className={`text-xs tabular-nums ${selected ? 'text-primary font-medium' : 'text-content-muted'}`}>
-                                    {count.toLocaleString()}
-                                </span>
-                            </button>
-                        )
-                    })}
+                <div className="absolute left-0 top-full z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px]">
+                    <div className="grid grid-cols-4 gap-1.5">
+                        {REACTION_META.slice(0, 4).map(({ type, emoji, label }) => {
+                            const count = counts[type] ?? 0
+                            const selected = userReaction === type
+                            return (
+                                <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => handleClick(type)}
+                                    disabled={submitting}
+                                    title={label}
+                                    className={[
+                                        'flex flex-col items-center px-3 py-2 rounded-xl border transition-all w-full',
+                                        selected
+                                            ? 'border-primary-muted scale-105'
+                                            : 'border-border bg-surface',
+                                        submitting
+                                            ? 'opacity-60 cursor-not-allowed'
+                                            : 'hover:border-border-strong hover:scale-105 cursor-pointer',
+                                    ].join(' ')}
+                                >
+                                    <span className="text-xl leading-none">{emoji}</span>
+                                    <span className={[
+                                        'text-xs mt-1',
+                                        selected ? 'text-primary font-semibold' : 'text-content-secondary',
+                                    ].join(' ')}>
+                                        {label}
+                                    </span>
+                                    <span className={[
+                                        'text-xs tabular-nums',
+                                        selected ? 'text-primary font-medium' : 'text-content-muted',
+                                    ].join(' ')}>
+                                        {count.toLocaleString()}
+                                    </span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 mt-1.5">
+                        {REACTION_META.slice(4).map(({ type, emoji, label }) => {
+                            const count = counts[type] ?? 0
+                            const selected = userReaction === type
+                            return (
+                                <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => handleClick(type)}
+                                    disabled={submitting}
+                                    title={label}
+                                    className={[
+                                        'flex flex-col items-center px-3 py-2 rounded-xl border transition-all w-full',
+                                        selected
+                                            ? 'border-primary-muted scale-105'
+                                            : 'border-border bg-surface',
+                                        submitting
+                                            ? 'opacity-60 cursor-not-allowed'
+                                            : 'hover:border-border-strong hover:scale-105 cursor-pointer',
+                                    ].join(' ')}
+                                >
+                                    <span className="text-xl leading-none">{emoji}</span>
+                                    <span className={[
+                                        'text-xs mt-1',
+                                        selected ? 'text-primary font-semibold' : 'text-content-secondary',
+                                    ].join(' ')}>
+                                        {label}
+                                    </span>
+                                    <span className={[
+                                        'text-xs tabular-nums',
+                                        selected ? 'text-primary font-medium' : 'text-content-muted',
+                                    ].join(' ')}>
+                                        {count.toLocaleString()}
+                                    </span>
+                                </button>
+                            )
+                        })}
+                    </div>
                 </div>
             )}
         </div>

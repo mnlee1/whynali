@@ -244,11 +244,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     initialVoteCount={voteCount ?? 0}
                     initialDiscussionCount={discussionTopics?.length ?? 0}
                 />
-                {issue.description && (
-                    <p className="text-content-secondary leading-relaxed">
-                        {decodeHtml(issue.description)}
-                    </p>
-                )}
             </div>
 
             {/* 타임라인 */}
@@ -269,11 +264,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             <SourcesSection issueId={id} />
 
             {/* 투표 */}
-            {voteCount !== null && voteCount > 0 && (
-                <div id="section-vote" style={{ scrollMarginTop: '80px' }}>
-                    <VoteSection issueId={id} userId={userId} />
-                </div>
-            )}
+            <div id="section-vote" style={{ scrollMarginTop: '80px' }}>
+                <VoteSection issueId={id} userId={userId} />
+            </div>
 
             {/* 관련 토론 주제 */}
             {discussionTopics && discussionTopics.length > 0 && (
@@ -281,8 +274,10 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <div className="card overflow-hidden mb-6">
                     <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <span className="text-lg">💬</span>
-                            <h2 className="text-sm font-bold text-content-primary">관련 토론 주제 ({discussionTopics.length})</h2>
+                            <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
+                            {discussionTopics.length >= 1 && (
+                                <span className="text-xs text-content-muted">{discussionTopics.length}</span>
+                            )}
                         </div>
                         <Link
                             href={
@@ -296,24 +291,19 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                         </Link>
                     </div>
                     <div className="divide-y divide-border-muted bg-surface">
-                        {discussionTopics.map((topic, index) => (
+                        {discussionTopics.map((topic) => (
                             <Link
                                 key={topic.id}
                                 href={`/community/${topic.id}`}
                                 className="block p-4 hover:bg-surface-subtle transition-colors group"
                             >
-                                <div className="flex items-start gap-3">
-                                    <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-surface-subtle text-content-secondary text-xs font-bold group-hover:bg-border">
-                                        {index + 1}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-content-primary leading-relaxed line-clamp-2 group-hover:text-primary">
-                                            {topic.body}
-                                        </p>
-                                        <p className="text-xs text-content-muted mt-1.5">
-                                            {formatDate(topic.created_at)}
-                                        </p>
-                                    </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-content-primary leading-relaxed line-clamp-2 group-hover:text-primary">
+                                        {topic.body}
+                                    </p>
+                                    <p className="text-xs text-content-muted mt-1.5">
+                                        {formatDate(topic.created_at)}
+                                    </p>
                                 </div>
                             </Link>
                         ))}
@@ -324,17 +314,17 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
             {(!discussionTopics || discussionTopics.length === 0) && (
-                <div id="section-discussion" className="card mb-6 p-4 flex items-center justify-between" style={{ scrollMarginTop: '80px' }}>
-                    <div>
-                        <p className="text-sm font-semibold text-content-primary mb-0.5">이 이슈의 커뮤니티</p>
-                        <p className="text-xs text-content-secondary">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+                <div id="section-discussion" className="card mb-6" style={{ scrollMarginTop: '80px' }}>
+                    <div className="px-4 py-3 border-b border-border-muted">
+                        <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
                     </div>
-                    <Link
-                        href="/community"
-                        className="shrink-0 btn-primary btn-sm"
-                    >
-                        토론 보기
-                    </Link>
+                    <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-content-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                        </svg>
+                        <p className="text-sm font-semibold text-content-primary">등록된 토론 주제가 없습니다</p>
+                        <p className="text-xs text-content-secondary">이슈가 활발해지면 토론 주제가 자동으로 생성됩니다.</p>
+                    </div>
                 </div>
             )}
 
