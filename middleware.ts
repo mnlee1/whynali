@@ -85,7 +85,7 @@ export async function middleware(request: NextRequest) {
                     { status: 403 }
                 )
             }
-            return NextResponse.redirect(new URL('/', request.url))
+            return NextResponse.redirect(new URL('/admin/login', request.url))
         }
 
         return supabaseResponse
@@ -105,9 +105,15 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
+    /* ── /mypage: 세션 토큰 갱신 (만료 시 서버사이드 getUser 실패 방지) ── */
+    if (pathname === '/mypage') {
+        const { supabaseResponse } = await getSessionUser(request)
+        return supabaseResponse
+    }
+
     return NextResponse.next()
 }
 
 export const config = {
-    matcher: ['/admin/:path*', '/api/:path*'],
+    matcher: ['/admin/:path*', '/api/:path*', '/mypage'],
 }

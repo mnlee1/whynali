@@ -138,7 +138,8 @@ export default function Header() {
         if (userInfoLoading) return null
 
         // 온보딩 미완료(terms_agreed_at 없음) 상태에서는 로그인 버튼으로 표시
-        // 관리자는 termsAgreedAt 없어도 통과
+        // 관리자는 온보딩 체크 없이 통과
+        // displayName은 체크하지 않음 (OAuth 실명 감지로 null 반환되어도 드롭다운 표시)
         if (!user || (!termsAgreedAt && !isAdmin)) {
             return (
                 <Link
@@ -260,12 +261,6 @@ export default function Header() {
                             <SearchBar />
                             <div className="flex items-center gap-1.5">
                                 <AuthButton />
-                                <Link
-                                    href={isAdmin ? '/admin' : '/admin/login'}
-                                    className="btn-neutral btn-sm"
-                                >
-                                    관리자
-                                </Link>
                             </div>
                         </div>
                     </div>
