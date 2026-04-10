@@ -74,7 +74,7 @@ export default function VotePreview({ initialVotes }: Props) {
         return (
             <section className="py-6 md:py-8">
                 <div className="container mx-auto">
-                    <h2 className="text-base font-bold text-content-primary mb-4">지금 어느 쪽이야?</h2>
+                    <h2 className="text-base font-bold text-content-primary mb-4">지금 뜨는 투표</h2>
                     <div className="h-40 bg-border-muted rounded-xl flex items-center justify-center">
                         <p className="text-content-muted text-sm">진행 중인 투표가 없습니다.</p>
                     </div>
@@ -97,7 +97,7 @@ export default function VotePreview({ initialVotes }: Props) {
         const secondRatio = totalCount > 0 && second ? Math.round((second.count / totalCount) * 100) : 0
 
         return (
-            <Link href={`/issue/${issueId}`}>
+            <Link href={`/issue/${issueId}#section-vote`}>
                 <div className="bg-white border border-border rounded-xl shadow-card hover:shadow-lg hover:border-border-strong transition-all duration-200 h-full flex flex-col group">
                     <div className="p-4 space-y-4 flex-1 flex flex-col">
                         <div className="space-y-3">
@@ -162,7 +162,7 @@ export default function VotePreview({ initialVotes }: Props) {
                                 {totalCount.toLocaleString()}명 참여
                             </span>
                             <span className="text-xs font-semibold text-primary group-hover:underline">
-                                참여하기
+                                {vote.phase === '진행중' ? '참여하기' : '결과 보기'}
                             </span>
                         </div>
                     </div>
@@ -175,7 +175,7 @@ export default function VotePreview({ initialVotes }: Props) {
         <section className="py-6 md:py-8">
             <div className="container mx-auto">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-content-primary">지금 어느 쪽이야?</h2>
+                    <h2 className="text-base font-bold text-content-primary">지금 뜨는 투표</h2>
                     <Tooltip label="참여도순" text="투표 참여 수가 가장 많은 순으로 정렬됩니다." />
                 </div>
             </div>
