@@ -103,11 +103,6 @@ export default function IssuePreviewDrawer({
                             <span>·</span>
                             <span>{formatDate(issue.created_at)}</span>
                         </div>
-                        {issue.description && (
-                            <p className="text-content-secondary leading-relaxed">
-                                {decodeHtml(issue.description)}
-                            </p>
-                        )}
                     </div>
 
                     {/* 타임라인 편집 */}

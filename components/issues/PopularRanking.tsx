@@ -122,14 +122,6 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                                                 <span>{issue.category}</span>
                                                 <span>·</span>
                                                 <span>{formatDate(issue.created_at)}</span>
-                                                {isSurging && issue.surgePct !== undefined && issue.surgePct > 0 && (
-                                                    <>
-                                                        <span>·</span>
-                                                        <span className="text-red-500 font-semibold">
-                                                            ↑{issue.surgePct.toFixed(0)}%
-                                                        </span>
-                                                    </>
-                                                )}
                                             </div>
                                         </div>
                                     </article>

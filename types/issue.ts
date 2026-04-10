@@ -21,6 +21,7 @@ export interface Issue {
     approval_heat_index: number | null
     approved_at: string | null
     merged_into_id: string | null
+    visibility_status?: 'visible' | 'hidden'
     created_at: string
     updated_at: string
     is_urgent?: boolean
