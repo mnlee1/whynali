@@ -162,6 +162,14 @@ export default function AdminIssuesPage() {
                 })
             }
             setIssues(sortIssues(list))
+            
+            // 미리보기 중인 이슈가 있으면 업데이트
+            if (previewIssue) {
+                const updated = list.find(i => i.id === previewIssue.id)
+                if (updated) {
+                    setPreviewIssue(updated)
+                }
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : '오류 발생')
         } finally {
@@ -655,6 +663,7 @@ export default function AdminIssuesPage() {
                 onClose={() => setPreviewIssue(null)}
                 onApprove={handleApprove}
                 onReject={handleReject}
+                onIssueUpdate={fetchIssues}
             />
         </div>
     )

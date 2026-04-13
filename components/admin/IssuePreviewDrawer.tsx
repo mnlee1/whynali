@@ -13,7 +13,7 @@
 
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { Issue } from '@/types/issue'
 import TimelineEditor from '@/components/admin/TimelineEditor'
 import SourcesSection from '@/components/issue/SourcesSection'
@@ -26,6 +26,7 @@ interface IssuePreviewDrawerProps {
     onClose: () => void
     onApprove: (id: string) => void
     onReject: (id: string) => void
+    onIssueUpdate?: () => void
 }
 
 
@@ -34,7 +35,16 @@ export default function IssuePreviewDrawer({
     onClose,
     onApprove,
     onReject,
+    onIssueUpdate,
 }: IssuePreviewDrawerProps) {
+    const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState<number>(0)
+    const [isRefreshing, setIsRefreshing] = useState(false)
+    useEffect(() => {
+        if (issue) {
+            setSelectedThumbnailIndex(issue.primary_thumbnail_index ?? 0)
+        }
+    }, [issue])
+
     /* ESC 키로 닫기 */
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -55,6 +65,78 @@ export default function IssuePreviewDrawer({
             document.body.style.overflow = ''
         }
     }, [issue])
+
+    const handlePrimaryThumbnailChange = async (index: number) => {
+        if (!issue) return
+        setSelectedThumbnailIndex(index)
+
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}/primary-thumbnail`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index }),
+            })
+
+            if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.message || '대표 이미지 설정 실패')
+            }
+
+            onIssueUpdate?.()
+        } catch (error) {
+            console.error('대표 이미지 설정 에러:', error)
+            alert(error instanceof Error ? error.message : '대표 이미지 설정에 실패했습니다')
+            setSelectedThumbnailIndex(issue.primary_thumbnail_index ?? 0)
+        }
+    }
+
+    const handleRefreshThumbnails = async () => {
+        if (!issue) return
+        setIsRefreshing(true)
+
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}/refresh-thumbnails`, {
+                method: 'POST',
+            })
+
+            if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.message || '이미지 재검색 실패')
+            }
+
+            const data = await res.json()
+            setSelectedThumbnailIndex(0)
+            alert('이미지가 재검색되었습니다')
+            onIssueUpdate?.()
+        } catch (error) {
+            console.error('이미지 재검색 에러:', error)
+            alert(error instanceof Error ? error.message : '이미지 재검색에 실패했습니다')
+        } finally {
+            setIsRefreshing(false)
+        }
+    }
+
+    const handleRemoveThumbnails = async () => {
+        if (!issue) return
+        if (!confirm('이미지를 제거하시겠습니까?\n슬라이드에서 그라디언트 배경이 표시됩니다.')) return
+
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}/remove-thumbnails`, {
+                method: 'POST',
+            })
+
+            if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.message || '이미지 제거 실패')
+            }
+
+            alert('이미지가 제거되었습니다')
+            onIssueUpdate?.()
+        } catch (error) {
+            console.error('이미지 제거 에러:', error)
+            alert(error instanceof Error ? error.message : '이미지 제거에 실패했습니다')
+        }
+    }
 
     if (!issue) return null
 
@@ -108,18 +190,54 @@ export default function IssuePreviewDrawer({
                     {/* Unsplash 이미지 미리보기 */}
                     {issue.thumbnail_urls && issue.thumbnail_urls.length > 0 && (
                         <div className="card overflow-hidden">
-                            <div className="px-4 py-3 border-b border-border-muted">
+                            <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                                 <h2 className="text-sm font-bold text-content-primary">
                                     대표 이미지
                                     <span className="ml-2 text-xs font-normal text-content-muted">({issue.thumbnail_urls.length}개)</span>
                                 </h2>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleRefreshThumbnails}
+                                        disabled={isRefreshing}
+                                        className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg disabled:opacity-50"
+                                    >
+                                        {isRefreshing ? '검색 중...' : '이미지 재검색'}
+                                    </button>
+                                    <button
+                                        onClick={handleRemoveThumbnails}
+                                        className="px-3 py-1.5 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 rounded-lg"
+                                    >
+                                        이미지 제거
+                                    </button>
+                                </div>
                             </div>
-                            <div className="p-4 grid grid-cols-3 gap-2">
-                                {issue.thumbnail_urls.map((url, i) => (
-                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-lg overflow-hidden hover:opacity-80 transition-opacity">
-                                        <img src={url} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
-                                    </a>
-                                ))}
+                            <div className="p-4 space-y-3">
+                                <p className="text-xs text-content-muted">
+                                    슬라이드에 표시할 대표 이미지를 선택하세요
+                                </p>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {issue.thumbnail_urls.map((url, i) => (
+                                        <label key={i} className="block cursor-pointer group">
+                                            <div className={`relative aspect-video rounded-lg overflow-hidden ring-2 transition-all ${selectedThumbnailIndex === i ? 'ring-primary shadow-lg' : 'ring-transparent hover:ring-border'}`}>
+                                                <img src={url} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
+                                                <input
+                                                    type="radio"
+                                                    name="thumbnail"
+                                                    checked={selectedThumbnailIndex === i}
+                                                    onChange={() => handlePrimaryThumbnailChange(i)}
+                                                    className="absolute top-2 left-2 w-4 h-4 accent-primary"
+                                                />
+                                                {selectedThumbnailIndex === i && (
+                                                    <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                                                        <span className="px-2 py-1 bg-primary text-white text-xs font-bold rounded">
+                                                            대표
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}

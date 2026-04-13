@@ -1261,6 +1261,29 @@ async function processTrackA(): Promise<{
             continue
         }
         
+        // 4-7-1. 이미지 자동 생성 (Unsplash)
+        try {
+            const { fetchUnsplashImages } = await import('@/lib/unsplash')
+            const thumbnailUrls = await fetchUnsplashImages(finalIssueTitle, category)
+            
+            if (thumbnailUrls.length > 0) {
+                await supabaseAdmin
+                    .from('issues')
+                    .update({
+                        thumbnail_urls: thumbnailUrls,
+                        primary_thumbnail_index: 0,
+                    })
+                    .eq('id', newIssue.id)
+                
+                console.log(`  ✓ [이미지 생성] ${thumbnailUrls.length}개 이미지 자동 생성 완료`)
+            } else {
+                console.log(`  ℹ [이미지 생성] 이미지 없음 (그라디언트 배경 사용)`)
+            }
+        } catch (imageError) {
+            // 이미지 생성 실패해도 이슈는 계속 진행
+            console.warn(`  ⚠ [이미지 생성 실패] ${imageError instanceof Error ? imageError.message : '알 수 없는 오류'}`)
+        }
+        
         // 4-8. 타임라인 준비 (실제 연결된 뉴스 기준)
         console.log(`  → [타임라인 생성 시작] 연결된 뉴스 ${linkedNewsCount}건 기준`)
         
