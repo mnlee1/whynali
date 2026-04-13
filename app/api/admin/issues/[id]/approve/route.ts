@@ -49,7 +49,10 @@ export async function POST(
         // Unsplash 이미지 검색 (UNSPLASH_ACCESS_KEY 없으면 자동 스킵)
         const thumbnailUrls = await fetchUnsplashImages(data.title, data.category)
         if (thumbnailUrls.length > 0) {
-            await supabaseAdmin.from('issues').update({ thumbnail_urls: thumbnailUrls }).eq('id', id)
+            await supabaseAdmin.from('issues').update({ 
+                thumbnail_urls: thumbnailUrls,
+                primary_thumbnail_index: 0,
+            }).eq('id', id)
         }
 
         await writeAdminLog('이슈 상태 변경: 대기 > 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)

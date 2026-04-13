@@ -138,17 +138,17 @@ export async function searchNaverNewsByKeyword(keyword: string, category: string
         return []
     }
 
-    // 최근 30일 이내 뉴스만 필터링 (오래된 뉴스 제외)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    // 최근 7일 이내 뉴스만 필터링 (오래된 뉴스 제외 - 동음이의어 오매칭 방지)
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     
     const recentItems = items.filter(item => {
         const publishedDate = new Date(item.pubDate)
-        return publishedDate >= thirtyDaysAgo
+        return publishedDate >= sevenDaysAgo
     })
 
     if (recentItems.length === 0) {
-        console.log(`  ℹ️  최근 30일 이내 뉴스 없음 (전체 ${items.length}건 중 0건)`)
+        console.log(`  ℹ️  최근 7일 이내 뉴스 없음 (전체 ${items.length}건 중 0건)`)
         return []
     }
 
