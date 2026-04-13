@@ -105,6 +105,25 @@ export default function IssuePreviewDrawer({
                         </div>
                     </div>
 
+                    {/* Unsplash 이미지 미리보기 */}
+                    {issue.thumbnail_urls && issue.thumbnail_urls.length > 0 && (
+                        <div className="card overflow-hidden">
+                            <div className="px-4 py-3 border-b border-border-muted">
+                                <h2 className="text-sm font-bold text-content-primary">
+                                    대표 이미지
+                                    <span className="ml-2 text-xs font-normal text-content-muted">({issue.thumbnail_urls.length}개)</span>
+                                </h2>
+                            </div>
+                            <div className="p-4 grid grid-cols-3 gap-2">
+                                {issue.thumbnail_urls.map((url, i) => (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-lg overflow-hidden hover:opacity-80 transition-opacity">
+                                        <img src={url} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* 타임라인 편집 */}
                     <div className="card overflow-hidden">
                         <div className="px-4 py-3 border-b border-border-muted">
