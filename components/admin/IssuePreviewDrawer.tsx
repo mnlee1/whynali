@@ -116,6 +116,28 @@ export default function IssuePreviewDrawer({
         }
     }
 
+    const handleRemoveThumbnails = async () => {
+        if (!issue) return
+        if (!confirm('이미지를 제거하시겠습니까?\n슬라이드에서 그라디언트 배경이 표시됩니다.')) return
+
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}/remove-thumbnails`, {
+                method: 'POST',
+            })
+
+            if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.message || '이미지 제거 실패')
+            }
+
+            alert('이미지가 제거되었습니다')
+            onIssueUpdate?.()
+        } catch (error) {
+            console.error('이미지 제거 에러:', error)
+            alert(error instanceof Error ? error.message : '이미지 제거에 실패했습니다')
+        }
+    }
+
     if (!issue) return null
 
     const isPending = issue.approval_status === '대기'
@@ -173,13 +195,21 @@ export default function IssuePreviewDrawer({
                                     대표 이미지
                                     <span className="ml-2 text-xs font-normal text-content-muted">({issue.thumbnail_urls.length}개)</span>
                                 </h2>
-                                <button
-                                    onClick={handleRefreshThumbnails}
-                                    disabled={isRefreshing}
-                                    className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg disabled:opacity-50"
-                                >
-                                    {isRefreshing ? '검색 중...' : '이미지 재검색'}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleRefreshThumbnails}
+                                        disabled={isRefreshing}
+                                        className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg disabled:opacity-50"
+                                    >
+                                        {isRefreshing ? '검색 중...' : '이미지 재검색'}
+                                    </button>
+                                    <button
+                                        onClick={handleRemoveThumbnails}
+                                        className="px-3 py-1.5 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 rounded-lg"
+                                    >
+                                        이미지 제거
+                                    </button>
+                                </div>
                             </div>
                             <div className="p-4 space-y-3">
                                 <p className="text-xs text-content-muted">
