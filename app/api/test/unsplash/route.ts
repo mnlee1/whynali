@@ -6,12 +6,12 @@
  *
  * 사용법:
  * GET /api/test/unsplash?issueId=xxx
- * → 해당 이슈 제목으로 Unsplash 검색 → thumbnail_url 저장 → 결과 반환
+ * → 해당 이슈 제목으로 Unsplash 검색 → thumbnail_urls 저장 → 결과 반환
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { fetchUnsplashImage } from '@/lib/unsplash'
+import { fetchUnsplashImages } from '@/lib/unsplash'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const { data: issue, error } = await supabaseAdmin
         .from('issues')
-        .select('id, title, category, thumbnail_url')
+        .select('id, title, category, thumbnail_urls')
         .eq('id', issueId)
         .single()
 
@@ -31,19 +31,23 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '이슈를 찾을 수 없습니다' }, { status: 404 })
     }
 
-    const thumbnailUrl = await fetchUnsplashImage(issue.title, issue.category)
+    const result = await fetchUnsplashImages(issue.title, issue.category, true)
 
-    if (thumbnailUrl) {
+    if (result.urls.length > 0) {
         await supabaseAdmin
             .from('issues')
-            .update({ thumbnail_url: thumbnailUrl })
+            .update({ thumbnail_urls: result.urls })
             .eq('id', issueId)
     }
 
     return NextResponse.json({
         issue: { id: issue.id, title: issue.title, category: issue.category },
-        before: issue.thumbnail_url,
-        after: thumbnailUrl,
-        saved: !!thumbnailUrl,
+        debug: {
+            keyword: result.keyword,       // Groq가 추출한 키워드 or 카테고리 폴백
+            source: result.source,         // 'groq' or 'fallback'
+        },
+        before: issue.thumbnail_urls,
+        after: result.urls,
+        saved: result.urls.length > 0,
     })
 }

@@ -95,21 +95,23 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                 ]
                 const gradient = gradients[index % gradients.length]
 
+                const heroImage = issue.thumbnail_urls?.[0] ?? null
+
                 return (
                     <SwiperSlide key={issue.id}>
                         <Link href={`/issue/${issue.id}`}>
-                            <article className={`relative h-full ${issue.thumbnail_url ? '' : `bg-gradient-to-br ${gradient}`} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all overflow-hidden`}>
+                            <article className={`relative h-full ${heroImage ? '' : `bg-gradient-to-br ${gradient}`} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all overflow-hidden`}>
                                 {/* Unsplash 이미지 배경 (있을 때만) */}
-                                {issue.thumbnail_url && (
+                                {heroImage && (
                                     <img
-                                        src={issue.thumbnail_url}
+                                        src={heroImage}
                                         alt=""
                                         className="absolute inset-0 w-full h-full object-cover"
                                     />
                                 )}
 
                                 {/* 그라디언트 배경일 때만: 애니메이션 블롭 */}
-                                {!issue.thumbnail_url && (
+                                {!heroImage && (
                                     <div className="absolute inset-0 opacity-40">
                                         <div className={`absolute top-0 right-0 w-96 h-96 bg-white/20 rounded-full blur-3xl animate-blob`} />
                                         <div className={`absolute bottom-0 left-0 w-80 h-80 bg-white/15 rounded-full blur-3xl animate-blob animation-delay-2000`} />
@@ -121,7 +123,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                                 <div className="absolute inset-0 bg-noise opacity-30 mix-blend-overlay" />
 
                                 {/* 그리드 패턴 */}
-                                {!issue.thumbnail_url && (
+                                {!heroImage && (
                                     <div className="absolute inset-0 opacity-10" style={{
                                         backgroundImage: `
                                             linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent),

@@ -9,7 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
-import { fetchUnsplashImage } from '@/lib/unsplash'
+import { fetchUnsplashImages } from '@/lib/unsplash'
 
 const CATEGORY_PATH_MAP: Record<string, string> = {
     '사회': '/society',
@@ -47,9 +47,9 @@ export async function POST(
         if (error) throw error
 
         // Unsplash 이미지 검색 (UNSPLASH_ACCESS_KEY 없으면 자동 스킵)
-        const thumbnailUrl = await fetchUnsplashImage(data.title, data.category)
-        if (thumbnailUrl) {
-            await supabaseAdmin.from('issues').update({ thumbnail_url: thumbnailUrl }).eq('id', id)
+        const thumbnailUrls = await fetchUnsplashImages(data.title, data.category)
+        if (thumbnailUrls.length > 0) {
+            await supabaseAdmin.from('issues').update({ thumbnail_urls: thumbnailUrls }).eq('id', id)
         }
 
         await writeAdminLog('이슈 상태 변경: 대기 > 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
