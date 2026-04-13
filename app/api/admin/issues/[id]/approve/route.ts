@@ -41,18 +41,23 @@ export async function POST(
                 approved_at: new Date().toISOString(),
             })
             .eq('id', id)
-            .select('id, title, category, status, heat_index')
+            .select('id, title, category, status, heat_index, thumbnail_urls')
             .single()
 
         if (error) throw error
 
-        // Unsplash 이미지 검색 (UNSPLASH_ACCESS_KEY 없으면 자동 스킵)
-        const thumbnailUrls = await fetchUnsplashImages(data.title, data.category)
-        if (thumbnailUrls.length > 0) {
-            await supabaseAdmin.from('issues').update({ 
-                thumbnail_urls: thumbnailUrls,
-                primary_thumbnail_index: 0,
-            }).eq('id', id)
+        // Unsplash 이미지 검색 (이미지가 없을 때만)
+        // 트랙 A에서 이미 이미지가 생성되었으면 건너뜀
+        const hasThumbnails = data.thumbnail_urls && Array.isArray(data.thumbnail_urls) && data.thumbnail_urls.length > 0
+        
+        if (!hasThumbnails) {
+            const thumbnailUrls = await fetchUnsplashImages(data.title, data.category)
+            if (thumbnailUrls.length > 0) {
+                await supabaseAdmin.from('issues').update({ 
+                    thumbnail_urls: thumbnailUrls,
+                    primary_thumbnail_index: 0,
+                }).eq('id', id)
+            }
         }
 
         await writeAdminLog('이슈 상태 변경: 대기 > 승인', 'issue', id, auth.adminEmail, `"${data.title}"`)
