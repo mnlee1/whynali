@@ -98,28 +98,41 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                 return (
                     <SwiperSlide key={issue.id}>
                         <Link href={`/issue/${issue.id}`}>
-                            <article className={`relative h-full bg-gradient-to-br ${gradient} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all overflow-hidden`}>
-                                {/* 애니메이션 메쉬 그라디언트 블롭 */}
-                                <div className="absolute inset-0 opacity-40">
-                                    <div className={`absolute top-0 right-0 w-96 h-96 bg-white/20 rounded-full blur-3xl animate-blob`} />
-                                    <div className={`absolute bottom-0 left-0 w-80 h-80 bg-white/15 rounded-full blur-3xl animate-blob animation-delay-2000`} />
-                                    <div className={`absolute top-1/2 left-1/2 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-blob animation-delay-4000`} />
-                                </div>
+                            <article className={`relative h-full ${issue.thumbnail_url ? '' : `bg-gradient-to-br ${gradient}`} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all overflow-hidden`}>
+                                {/* Unsplash 이미지 배경 (있을 때만) */}
+                                {issue.thumbnail_url && (
+                                    <img
+                                        src={issue.thumbnail_url}
+                                        alt=""
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                    />
+                                )}
+
+                                {/* 그라디언트 배경일 때만: 애니메이션 블롭 */}
+                                {!issue.thumbnail_url && (
+                                    <div className="absolute inset-0 opacity-40">
+                                        <div className={`absolute top-0 right-0 w-96 h-96 bg-white/20 rounded-full blur-3xl animate-blob`} />
+                                        <div className={`absolute bottom-0 left-0 w-80 h-80 bg-white/15 rounded-full blur-3xl animate-blob animation-delay-2000`} />
+                                        <div className={`absolute top-1/2 left-1/2 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-blob animation-delay-4000`} />
+                                    </div>
+                                )}
 
                                 {/* 노이즈 텍스처 오버레이 */}
                                 <div className="absolute inset-0 bg-noise opacity-30 mix-blend-overlay" />
 
                                 {/* 그리드 패턴 */}
-                                <div className="absolute inset-0 opacity-10" style={{
-                                    backgroundImage: `
-                                        linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent),
-                                        linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent)
-                                    `,
-                                    backgroundSize: '50px 50px'
-                                }} />
+                                {!issue.thumbnail_url && (
+                                    <div className="absolute inset-0 opacity-10" style={{
+                                        backgroundImage: `
+                                            linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent),
+                                            linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent)
+                                        `,
+                                        backgroundSize: '50px 50px'
+                                    }} />
+                                )}
 
-                                {/* 다크 오버레이 */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent group-hover:from-black/50 group-hover:via-black/20 transition-all duration-500" />
+                                {/* 다크 오버레이 (이미지 위 텍스트 가독성) */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent group-hover:from-black/60 group-hover:via-black/20 transition-all duration-500" />
 
                                 {/* 콘텐츠 */}
                                 <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-14">
