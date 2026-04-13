@@ -44,7 +44,10 @@ export async function GET(request: NextRequest) {
         if (thumbnailUrls.length > 0) {
             await supabaseAdmin
                 .from('issues')
-                .update({ thumbnail_urls: thumbnailUrls })
+                .update({ 
+                    thumbnail_urls: thumbnailUrls,
+                    primary_thumbnail_index: 0,
+                })
                 .eq('id', issue.id)
         }
 

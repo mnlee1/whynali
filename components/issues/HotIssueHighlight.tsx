@@ -95,7 +95,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                 ]
                 const gradient = gradients[index % gradients.length]
 
-                const heroImage = issue.thumbnail_urls?.[0] ?? null
+                const heroImage = issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0] ?? null
 
                 return (
                     <SwiperSlide key={issue.id}>
