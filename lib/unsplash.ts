@@ -61,7 +61,8 @@ async function extractEnglishKeywords(title: string): Promise<string | null> {
 }
 
 /**
- * Unsplash 검색 후 결과 중 앞 3개 URL 반환
+ * Unsplash 검색 후 결과 중 랜덤 3개 URL 반환
+ * 매번 다른 이미지를 제공하기 위해 10개 중 랜덤 선택
  */
 async function searchUnsplash(query: string, accessKey: string): Promise<string[]> {
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape`
@@ -71,8 +72,13 @@ async function searchUnsplash(query: string, accessKey: string): Promise<string[
     if (!res.ok) return []
     const data = await res.json()
     const results: Array<{ urls: { regular: string } }> = data.results ?? []
-    return results
-        .slice(0, 3)
+    
+    if (results.length === 0) return []
+    
+    // 10개 중 랜덤하게 3개 선택
+    const shuffled = [...results].sort(() => Math.random() - 0.5)
+    return shuffled
+        .slice(0, Math.min(3, shuffled.length))
         .map(r => r.urls?.regular)
         .filter(Boolean)
 }
