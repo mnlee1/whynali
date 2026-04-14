@@ -40,11 +40,13 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('shortform_jobs')
             .select('*', { count: 'exact' })
-            .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
         if (approvalStatus) {
-            query = query.eq('approval_status', approvalStatus)
+            query = query.eq('approval_status', approvalStatus).order('created_at', { ascending: false })
+        } else {
+            // 전체 목록: 대기(0) → 승인(1) → 반려(2) 순, 같은 상태 내에서는 최신순
+            query = query.order('status_priority', { ascending: true }).order('created_at', { ascending: false })
         }
 
         if (triggerType) {

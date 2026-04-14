@@ -60,8 +60,11 @@ export async function POST(
             )
         }
 
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
-        const imageUrl = `${siteUrl}${job.video_path}`
+        const { data: urlData } = supabaseAdmin
+            .storage
+            .from('shortform')
+            .getPublicUrl(job.video_path)
+        const imageUrl = urlData.publicUrl
 
         const validationResult = await validateShortformImage(imageUrl, job.issue_title)
 

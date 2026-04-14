@@ -63,7 +63,7 @@ function titlePickOffset(title: string): number {
     return hash % 8  // 최대 8번째 결과까지
 }
 
-export async function fetch3StockImages(category: string, issueTitle?: string): Promise<string[]> {
+export async function fetch3StockImages(category: string, issueTitle?: string, seed?: number): Promise<string[]> {
     const apiKey = process.env.UNSPLASH_ACCESS_KEY
 
     if (!apiKey) {
@@ -74,8 +74,8 @@ export async function fetch3StockImages(category: string, issueTitle?: string): 
     const unsplash = createApi({ accessKey: apiKey })
     const categoryKeywords = CATEGORY_KEYWORDS[category] ?? ['news', 'media', 'information']
 
-    // 이슈 제목 해시로 pickIndex 오프셋 결정 → 같은 쿼리도 이슈마다 다른 이미지
-    const offset = issueTitle ? titlePickOffset(issueTitle) : 0
+    // seed가 있으면 seed 기반, 없으면 이슈 제목 해시로 pickIndex 오프셋 결정
+    const offset = seed !== undefined ? (seed % 20) : (issueTitle ? titlePickOffset(issueTitle) : 0)
 
     // 1순위: 이슈 제목에서 추출한 영문 키워드
     let titleKeywords: string[] = []
