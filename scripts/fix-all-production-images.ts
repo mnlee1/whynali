@@ -47,11 +47,10 @@ async function main() {
     console.log(`모드: ${isDryRun ? '미리보기 (수정 안 함)' : '실제 수정'}`)
     console.log(`최대 처리: ${limit}개\n`)
     
-    // 이미지가 있는 모든 이슈 조회
-    const { data: issues, error } = await supabase
+    // 이미지가 없는 모든 이슈 조회 (빈 배열 또는 null)
+    const { data: allIssues, error } = await supabase
         .from('issues')
         .select('id, title, category, thumbnail_urls')
-        .not('thumbnail_urls', 'is', null)
         .order('created_at', { ascending: false })
         .limit(limit)
     
@@ -60,30 +59,34 @@ async function main() {
         return
     }
     
-    if (!issues || issues.length === 0) {
-        console.log('이미지가 있는 이슈가 없습니다.')
+    if (!allIssues || allIssues.length === 0) {
+        console.log('이슈가 없습니다.')
         return
     }
     
-    // 빈 배열 제외
-    const issuesWithImages = (issues as Issue[]).filter(issue => {
-        return Array.isArray(issue.thumbnail_urls) && issue.thumbnail_urls.length > 0
+    // 이미지가 없는 이슈만 필터링 (null 또는 빈 배열)
+    const issuesWithoutImages = (allIssues as Issue[]).filter(issue => {
+        return !issue.thumbnail_urls || 
+               !Array.isArray(issue.thumbnail_urls) || 
+               issue.thumbnail_urls.length === 0
     })
     
-    if (issuesWithImages.length === 0) {
-        console.log('처리할 이슈가 없습니다.')
+    if (issuesWithoutImages.length === 0) {
+        console.log('이미지가 필요한 이슈가 없습니다. 모든 이슈에 이미지가 있습니다.')
         return
     }
     
-    console.log(`총 ${issuesWithImages.length}개 이슈를 처리합니다...\n`)
+    console.log(`총 ${issuesWithoutImages.length}개 이슈에 이미지를 추가합니다...\n`)
+    
+    const issues = issuesWithoutImages
     
     let successCount = 0
     let removedCount = 0
     let failedCount = 0
     
-    for (let i = 0; i < issuesWithImages.length; i++) {
-        const issue = issuesWithImages[i]
-        const progress = `[${i + 1}/${issuesWithImages.length}]`
+    for (let i = 0; i < issues.length; i++) {
+        const issue = issues[i]
+        const progress = `[${i + 1}/${issues.length}]`
         
         console.log(`${progress} ${issue.title.substring(0, 40)}...`)
         
@@ -98,8 +101,7 @@ async function main() {
                     const { error: updateError } = await supabase
                         .from('issues')
                         .update({
-                            thumbnail_urls: newUrls,
-                            primary_thumbnail_index: 0
+                            thumbnail_urls: newUrls
                         })
                         .eq('id', issue.id)
                     
@@ -119,8 +121,7 @@ async function main() {
                     const { error: updateError } = await supabase
                         .from('issues')
                         .update({
-                            thumbnail_urls: [],
-                            primary_thumbnail_index: 0
+                            thumbnail_urls: []
                         })
                         .eq('id', issue.id)
                     
@@ -145,7 +146,7 @@ async function main() {
     }
     
     console.log('\n=== 처리 완료 ===')
-    console.log(`처리한 이슈: ${issuesWithImages.length}개`)
+    console.log(`처리한 이슈: ${issues.length}개`)
     console.log(`새 이미지로 교체: ${successCount}개`)
     console.log(`이미지 제거: ${removedCount}개`)
     console.log(`실패: ${failedCount}개`)

@@ -166,14 +166,20 @@ export async function POST(request: NextRequest) {
                     continue
                 }
                 
-                // 방법2: 핵심 키워드 포함
+                // 방법2: 핵심 키워드 포함 (4자 이상 키워드 2개 이상 매칭)
                 if (coreKeywords.length > 0) {
                     const titleLower = community.title.toLowerCase()
-                    const matchedKeywords = coreKeywords.filter(k => 
-                        titleLower.includes(k.toLowerCase())
-                    )
-                    if (matchedKeywords.length > 0) {
-                        matched.push(community.id)
+                    const strongKeywords = coreKeywords.filter(k => k.length >= 4)
+                    if (strongKeywords.length > 0) {
+                        const matchedKeywords = strongKeywords.filter(k =>
+                            titleLower.includes(k.toLowerCase())
+                        )
+                        // 4자 이상 핵심 키워드가 2개 이상 매칭되거나,
+                        // 6자 이상의 고유한 키워드가 1개라도 매칭되면 연결
+                        const strongMatch = matchedKeywords.some(k => k.length >= 6)
+                        if (matchedKeywords.length >= 2 || strongMatch) {
+                            matched.push(community.id)
+                        }
                     }
                 }
             }

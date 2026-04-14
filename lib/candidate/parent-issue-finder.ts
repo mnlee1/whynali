@@ -26,7 +26,7 @@ export interface ParentIssueResult {
     reason: string
 }
 
-const PARENT_CONFIDENCE_THRESHOLD = 70
+const PARENT_CONFIDENCE_THRESHOLD = 85
 const MAX_CANDIDATE_ISSUES = 15
 
 // 인스턴스 재사용 (호출마다 키 로딩 방지)
