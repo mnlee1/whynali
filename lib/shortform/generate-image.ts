@@ -221,7 +221,8 @@ export function generateImageFilename(jobId: string): string {
  */
 export async function generate3SceneShortform(
     input: GenerateImageInput,
-    duration: number = 10
+    duration: number = 10,
+    previewImages?: string[]
 ): Promise<Buffer> {
     // 1. Groq Scene별 자막 생성 (이슈 제목 기반)
     const generatedText = await generateShortformText({
@@ -232,11 +233,13 @@ export async function generate3SceneShortform(
         newsCount: input.newsCount,
         communityCount: input.communityCount,
     })
-    
+
     console.log('[생성된 Scene 자막]', generatedText)
-    
-    // 2. 스톡 이미지 3장 가져오기 (제목 키워드 우선, 카테고리 폴백)
-    const stockImages = await fetch3StockImages(input.issueCategory, input.issueTitle)
+
+    // 2. 스톡 이미지 3장 가져오기 (미리보기 이미지 있으면 재사용, 없으면 새로 검색)
+    const stockImages = (previewImages && previewImages.length >= 3)
+        ? previewImages
+        : await fetch3StockImages(input.issueCategory, input.issueTitle)
     
     // Fallback: API 실패 시 단색 배경 사용
     if (stockImages.length === 0) {

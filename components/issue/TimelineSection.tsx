@@ -163,7 +163,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                             {/* 왼쪽 dot + 세로선 */}
                             <div className="flex flex-col items-center">
                                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 ${style.dot}`} />
-                                {(!isLast || isClosed) && (
+                                {!isLast && (
                                     <div className={`w-px flex-1 mt-1 ${style.line}`} />
                                 )}
                             </div>
