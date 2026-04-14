@@ -30,7 +30,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { incrementApiUsage } from '@/lib/api-usage-tracker'
+import { incrementApiUsage, getTodayUsage, calculateClaudeCost } from '@/lib/api-usage-tracker'
 import type { AIProvider, AIOptions } from './ai-provider.interface'
 
 interface KeyStatus {
@@ -192,6 +192,19 @@ export class ClaudeProvider implements AIProvider {
     }
 
     async complete(userPrompt: string, options?: AIOptions): Promise<string> {
+        // 일별 예산 체크 (환경변수 CLAUDE_DAILY_BUDGET_USD, 기본 $1.0)
+        const dailyBudget = parseFloat(process.env.CLAUDE_DAILY_BUDGET_USD ?? '1.0')
+        const todayUsage = await getTodayUsage('claude')
+        const todayCost = calculateClaudeCost(
+            todayUsage?.input_tokens ?? 0,
+            todayUsage?.output_tokens ?? 0,
+        )
+        if (todayCost >= dailyBudget) {
+            throw new Error(
+                `Claude 일별 예산 초과 ($${todayCost.toFixed(3)} / $${dailyBudget}) — Groq으로 전환`
+            )
+        }
+
         // Claude 모델 선택
         // haiku: 빠르고 저렴 (권장)
         // sonnet: 균형잡힌 성능
