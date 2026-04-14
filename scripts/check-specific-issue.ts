@@ -1,7 +1,7 @@
 /**
  * scripts/check-specific-issue.ts
  * 
- * 특정 이슈를 제목으로 검색하여 상세 정보 확인
+ * 특정 이슈의 이미지 URL과 설명을 확인합니다.
  */
 
 import { config } from 'dotenv'
@@ -9,108 +9,80 @@ config({ path: '.env.local' })
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const prodUrl = process.env.NEXT_PUBLIC_SUPABASE_PRODUCTION_URL
+const prodKey = process.env.SUPABASE_PRODUCTION_SERVICE_ROLE_KEY
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false }
-})
+if (!prodUrl || !prodKey) {
+    console.error('프로덕션 DB 정보가 .env.local에 설정되지 않았습니다.')
+    process.exit(1)
+}
 
-async function checkIssueByTitle(searchTitle: string) {
-    console.log(`\n🔍 이슈 검색: "${searchTitle}"\n`)
+const supabase = createClient(prodUrl, prodKey)
+
+async function main() {
+    const searchTitle = process.argv[2] || '대장동 논란'
     
-    // 이슈 검색
+    console.log(`=== "${searchTitle}" 이슈 이미지 확인 ===\n`)
+    
     const { data: issues, error } = await supabase
         .from('issues')
-        .select('*')
+        .select('id, title, category, thumbnail_urls')
         .ilike('title', `%${searchTitle}%`)
-        .order('created_at', { ascending: false })
     
     if (error) {
-        console.error('❌ 이슈 조회 에러:', error)
+        console.error('이슈 조회 실패:', error)
         return
     }
     
     if (!issues || issues.length === 0) {
-        console.log('❌ 해당 제목의 이슈를 찾을 수 없습니다.\n')
+        console.log('해당 이슈를 찾을 수 없습니다.')
         return
     }
     
     for (const issue of issues) {
-        console.log('━'.repeat(80))
-        console.log(`\n📌 이슈: "${issue.title}"`)
-        console.log(`   ID: ${issue.id}`)
-        console.log(`   카테고리: ${issue.category}`)
-        console.log(`   상태: ${issue.status} / ${issue.approval_status}`)
-        console.log(`   출처: ${issue.source_track || 'N/A'}`)
-        console.log(`   화력: ${issue.heat_index || 0}점`)
-        console.log(`   생성: ${new Date(issue.created_at).toLocaleString('ko-KR')}\n`)
+        console.log(`ID: ${issue.id}`)
+        console.log(`제목: ${issue.title}`)
+        console.log(`카테고리: ${issue.category}`)
+        console.log(`\n이미지 URL:`)
         
-        // 연결된 뉴스 조회
-        const { data: news, count: newsCount } = await supabase
-            .from('news_data')
-            .select('id, title, source, link, published_at', { count: 'exact' })
-            .eq('issue_id', issue.id)
-            .order('published_at', { ascending: false })
-        
-        console.log(`   📰 연결된 뉴스: ${newsCount || 0}건`)
-        if (news && news.length > 0) {
-            for (const n of news.slice(0, 5)) {
-                const timeAgo = Math.floor((Date.now() - new Date(n.published_at).getTime()) / 60000)
-                console.log(`      • [${n.source}] ${n.title.substring(0, 60)}... (${timeAgo}분 전)`)
-            }
-            if (news.length > 5) {
-                console.log(`      ... 외 ${news.length - 5}건`)
-            }
+        const urls = issue.thumbnail_urls as string[]
+        if (!urls || urls.length === 0) {
+            console.log('  이미지 없음')
+            continue
         }
         
-        // 연결된 커뮤니티 조회
-        const { data: community, count: communityCount } = await supabase
-            .from('community_data')
-            .select('id, title, source_site, created_at', { count: 'exact' })
-            .eq('issue_id', issue.id)
-            .order('created_at', { ascending: false })
-        
-        console.log(`\n   💬 연결된 커뮤니티: ${communityCount || 0}건`)
-        if (community && community.length > 0) {
-            for (const c of community.slice(0, 3)) {
-                const timeAgo = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000)
-                console.log(`      • [${c.source_site}] ${c.title.substring(0, 60)}... (${timeAgo}분 전)`)
-            }
-            if (community.length > 3) {
-                console.log(`      ... 외 ${community.length - 3}건`)
-            }
-        }
-        
-        // 타임라인 조회
-        const { data: timeline, count: timelineCount } = await supabase
-            .from('timeline_points')
-            .select('id, stage, title, source_url, occurred_at', { count: 'exact' })
-            .eq('issue_id', issue.id)
-            .order('occurred_at', { ascending: false })
-        
-        console.log(`\n   📅 타임라인: ${timelineCount || 0}개`)
-        if (timeline && timeline.length > 0) {
-            for (const t of timeline) {
-                const timeStr = new Date(t.occurred_at).toLocaleString('ko-KR')
-                if (t.title) {
-                    console.log(`      • [${t.stage}] ${timeStr}`)
-                    console.log(`        ${t.title.substring(0, 60)}...`)
-                } else {
-                    console.log(`      • [${t.stage}] ${timeStr}`)
+        for (let i = 0; i < urls.length; i++) {
+            const url = urls[i]
+            console.log(`\n[${i}] ${url}`)
+            
+            // Unsplash API로 상세 정보 조회
+            const match = url.match(/photo-([^?]+)/)
+            if (match) {
+                const photoId = match[1]
+                
+                try {
+                    const res = await fetch(`https://api.unsplash.com/photos/${photoId}`, {
+                        headers: {
+                            Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`
+                        }
+                    })
+                    
+                    if (res.ok) {
+                        const data = await res.json()
+                        console.log(`    설명: ${data.description || data.alt_description || '(없음)'}`)
+                        console.log(`    작가: ${data.user.name}`)
+                        console.log(`    태그: ${data.tags?.map((t: any) => t.title).join(', ') || '(없음)'}`)
+                    }
+                } catch (error) {
+                    console.log('    설명 조회 실패')
                 }
+                
+                await new Promise(resolve => setTimeout(resolve, 100))
             }
-        } else {
-            console.log(`      ❌ 타임라인이 없습니다!`)
         }
         
-        console.log('\n')
+        console.log('\n' + '='.repeat(80) + '\n')
     }
 }
 
-// 실행
-const searchTitle = process.argv[2] || '잠실'
-checkIssueByTitle(searchTitle).then(() => {
-    console.log('✅ 검색 완료\n')
-    process.exit(0)
-})
+main().catch(console.error)

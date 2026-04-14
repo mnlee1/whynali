@@ -162,7 +162,7 @@ export default function AdminLogsPage() {
                                     <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                         {formatDate(log.created_at)}
                                     </td>
-                                    <td className="px-4 py-3 w-44 max-w-[11rem]">
+                                    <td className="px-4 py-3 w-56 max-w-[14rem]">
                                         <span
                                             className={[
                                                 'text-xs px-2 py-0.5 rounded-full font-medium inline-block max-w-full truncate cursor-default',
