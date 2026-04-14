@@ -10,6 +10,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
+import NextTopLoader from 'nextjs-toploader'
 
 export const metadata: Metadata = {
     title: '왜난리 - 요즘 난리, 한눈에',
@@ -27,6 +28,7 @@ export default function RootLayout({
     return (
         <html lang="ko">
             <body className="min-h-screen bg-surface-muted text-content-primary antialiased font-pretendard">
+                <NextTopLoader color="#a202e3" showSpinner={false} />
                 <Header />
                 <main className="min-h-screen flex flex-col pb-8 md:pb-14 xl:pb-24">
                     {children}
