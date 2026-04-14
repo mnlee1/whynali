@@ -18,11 +18,20 @@ type Params = { params: Promise<{ id: string }> }
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-export async function POST(_request: NextRequest, { params }: Params) {
+export async function POST(request: NextRequest, { params }: Params) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
     const { id } = await params
+
+    // 미리보기 이미지 URL 배열 (있으면 Pexels 재검색 없이 재사용)
+    let previewImages: string[] | undefined
+    try {
+        const body = await request.json()
+        if (Array.isArray(body?.images) && body.images.length > 0) {
+            previewImages = body.images
+        }
+    } catch { /* body 없거나 파싱 실패 시 무시 */ }
 
     try {
         // 1. Job 조회 (issues 테이블의 category도 함께)
@@ -62,7 +71,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
             newsCount: job.source_count?.news ?? 0,
             communityCount: job.source_count?.community ?? 0,
             issueUrl: job.issue_url,
-        })
+        }, 10, previewImages)
         const filename = `shortform-${job.id}-${Date.now()}.mp4`
 
         // 3. Supabase Storage에 업로드

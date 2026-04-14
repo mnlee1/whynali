@@ -17,7 +17,7 @@ type Params = { params: Promise<{ id: string }> }
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-export async function POST(request: NextRequest, { params }: Params) {
+export async function POST(_request: NextRequest, { params }: Params) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
@@ -80,12 +80,16 @@ export async function POST(request: NextRequest, { params }: Params) {
 
         const videoBuffer = Buffer.from(await videoData.arrayBuffer())
 
-        // 4. YouTube 업로드
+        // 4. YouTube 업로드 (issue_url에서 issue ID 추출 후 실서버 URL로 재조합)
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
+        const issueId = job.issue_url.split('/issue/')[1]?.split('?')[0] ?? ''
+        const publicIssueUrl = issueId ? `${siteUrl}/issue/${issueId}` : siteUrl
+
         const videoId = await uploadToYouTube(videoBuffer, {
             title: job.issue_title,
             description: `지금 뜨거운 이슈! ${job.issue_title}\n\n` +
                 `📌 왜난리에서 실시간 여론·토론·타임라인 확인하기\n` +
-                `${job.issue_url}\n\n` +
+                `${publicIssueUrl}\n\n` +
                 `#왜난리 #이슈 #논란 #${job.issue_status}`,
             tags: ['왜난리', '이슈', '논란', job.issue_status],
         })
