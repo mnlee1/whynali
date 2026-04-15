@@ -11,7 +11,7 @@ import Link from 'next/link'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import DiscussionComments from '@/components/issue/DiscussionComments'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { formatDate } from '@/lib/utils/format-date'
+import { formatFullDate } from '@/lib/utils/format-date'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,7 +84,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
                 </p>
 
                 <p className="text-xs text-content-muted">
-                    {formatDate(topic.created_at)}
+                    {formatFullDate(topic.created_at)}
                 </p>
             </div>
 

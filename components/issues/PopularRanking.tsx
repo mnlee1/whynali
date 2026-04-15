@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { formatDate } from '@/lib/utils/format-date'
+
 import Tooltip from '@/components/common/Tooltip'
 
 interface IssueWithSurge extends Issue {
@@ -118,11 +118,6 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                                             }`}>
                                                 {decodeHtml(issue.title)}
                                             </p>
-                                            <div className="flex items-center gap-2 text-xs text-content-muted">
-                                                <span>{issue.category}</span>
-                                                <span>·</span>
-                                                <span>{formatDate(issue.created_at)}</span>
-                                            </div>
                                         </div>
                                     </article>
                                 </Link>
