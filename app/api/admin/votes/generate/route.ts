@@ -60,12 +60,30 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        // 관련 뉴스 헤드라인 조회 (최신 5개, 제목만)
+        const { data: newsData } = await supabaseAdmin
+            .from('news_data')
+            .select('title')
+            .eq('issue_id', issue_id)
+            .order('published_at', { ascending: false })
+            .limit(5)
+
+        const newsTitles = (newsData ?? []).map((n) => n.title).filter(Boolean) as string[]
+
+        if (newsTitles.length === 0) {
+            return NextResponse.json(
+                { error: '이슈에 연결된 뉴스가 없습니다. 뉴스를 먼저 연결해주세요.' },
+                { status: 422 }
+            )
+        }
+
         const metadata: IssueMetadata = {
             id: issue.id,
             title: issue.title,
             category: issue.category ?? '기타',
             status: issue.status ?? '점화',
             heat_index: issue.heat_index ?? undefined,
+            news_titles: newsTitles,
         }
 
         const votes = await generateVoteOptions(metadata, count)

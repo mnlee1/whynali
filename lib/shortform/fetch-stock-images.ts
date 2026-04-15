@@ -20,7 +20,7 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 }
 
 /**
- * 단일 키워드로 Unsplash 세로형 이미지 1장 검색.
+ * 단일 키워드로 Unsplash 가로형 이미지 1장 검색.
  * pickIndex로 결과 목록 중 어떤 항목을 선택할지 지정해 이슈마다 다른 이미지를 반환한다.
  * 결과 없으면 null 반환.
  */
@@ -32,7 +32,7 @@ async function searchOneImage(
     try {
         const result = await unsplash.search.getPhotos({
             query,
-            orientation: 'portrait',
+            orientation: 'landscape',
             perPage: 10,
             orderBy: 'relevant',
         })

@@ -3,6 +3,10 @@
  *
  * [Cron - 매일 오후 12시(KST) 실행]
  *
+ * 작업 0: 대기 상태 콘텐츠 정리
+ *   - 3일 이상 대기 중인 투표(phase='대기') 삭제
+ *   - 3일 이상 대기 중인 토론 주제(approval_status='대기') 삭제
+ *
  * 작업 1: 토론/투표 일일 자동생성
  *   - 승인된 이슈 중 heat ≥ 15 + 토론/투표 없는 것
  *   - AI로 토론 주제(3개)·투표(1개) 생성 → approval_status='대기' 저장
@@ -172,6 +176,31 @@ export async function GET(request: NextRequest) {
         )
     }
 
+    /* 작업 0: 3일 이상 대기 중인 투표·토론 주제 정리 */
+    const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+
+    const [staleVotesResult, staleDiscussionsResult] = await Promise.all([
+        supabaseAdmin
+            .from('votes')
+            .delete()
+            .eq('phase', '대기')
+            .neq('approval_status', '반려')
+            .lt('created_at', staleThreshold)
+            .select('id'),
+        supabaseAdmin
+            .from('discussion_topics')
+            .delete()
+            .eq('approval_status', '대기')
+            .lt('created_at', staleThreshold)
+            .select('id'),
+    ])
+
+    const deletedVotes = staleVotesResult.data?.length ?? 0
+    const deletedDiscussions = staleDiscussionsResult.data?.length ?? 0
+    if (staleVotesResult.error) console.error('[daily-generate] 대기 투표 정리 에러:', staleVotesResult.error)
+    if (staleDiscussionsResult.error) console.error('[daily-generate] 대기 토론 정리 에러:', staleDiscussionsResult.error)
+    console.log(`[daily-generate] 대기 콘텐츠 정리 — 투표 ${deletedVotes}개, 토론 ${deletedDiscussions}개 삭제`)
+
     // 대상 이슈 조회: 승인 + heat ≥ MIN_HEAT + (토론 없음 OR 투표 없음)
     const { data: issues, error } = await supabaseAdmin
         .from('issues')
@@ -298,6 +327,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
         success: true,
+        deletedStaleVotes: deletedVotes,
+        deletedStaleDiscussions: deletedDiscussions,
         discussionGenerated,
         voteGenerated,
         issueCount: targets.length,

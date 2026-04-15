@@ -35,9 +35,10 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
             )
         }
 
-        if (job.approval_status !== 'rejected') {
+        // pending 상태는 삭제 불가 (실수 방지)
+        if (job.approval_status === 'pending') {
             return NextResponse.json(
-                { error: 'INVALID_STATUS', message: '반려된 job만 삭제할 수 있습니다' },
+                { error: 'INVALID_STATUS', message: '대기 중인 job은 삭제할 수 없습니다. 반려 후 삭제해주세요.' },
                 { status: 422 }
             )
         }

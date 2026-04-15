@@ -366,6 +366,24 @@ export default function AdminShortformPage() {
         }
     }
 
+    const handleInstagramUpload = async (id: string) => {
+        if (!window.confirm('이 숏폼을 Instagram Reels에 업로드하시겠습니까?')) return
+
+        setProcessingId(id)
+        try {
+            const res = await fetch(`/api/admin/shortform/${id}/upload-instagram`, { method: 'POST' })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+
+            alert(`Instagram 업로드 완료!\n프로필에서 확인하세요: ${json.profileUrl}`)
+            await loadJobs(filter, page)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Instagram 업로드 실패')
+        } finally {
+            setProcessingId(null)
+        }
+    }
+
     return (
         <div>
             {/* 헤더 */}
@@ -554,22 +572,13 @@ export default function AdminShortformPage() {
                                             {job.approval_status === 'pending' && (
                                                 <div className="flex flex-col gap-1.5 min-w-max">
                                                     {!job.video_path && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handlePreviewImages(job)}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
-                                                            >
-                                                                이미지 확인
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleGenerate(job.id)}
-                                                                disabled={isProcessing}
-                                                                className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50 whitespace-nowrap"
-                                                            >
-                                                                동영상 생성
-                                                            </button>
-                                                        </>
+                                                        <button
+                                                            onClick={() => handlePreviewImages(job)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+                                                        >
+                                                            이미지 확인
+                                                        </button>
                                                     )}
                                                     {job.video_path && (() => {
                                                         const isFlagged = job.ai_validation?.status === 'flagged'
@@ -646,7 +655,9 @@ export default function AdminShortformPage() {
                                                     const tiktokProfileUrl = (job.upload_status as any)?.tiktok?.profileUrl
                                                     const isTiktokUploaded = tiktokStatus === 'success'
 
-                                                    const allUploaded = isYoutubeUploaded && isTiktokUploaded
+                                                    const instagramStatus = (job.upload_status as any)?.instagram?.status
+                                                    const instagramProfileUrl = (job.upload_status as any)?.instagram?.profileUrl
+                                                    const isInstagramUploaded = instagramStatus === 'success'
 
                                                     return (
                                                         <div className="flex flex-col gap-1.5 min-w-max">
@@ -690,17 +701,36 @@ export default function AdminShortformPage() {
                                                                 </button>
                                                             )}
 
-                                                            {/* Instagram (준비 중) */}
-                                                            <button
-                                                                disabled
-                                                                title="Instagram 연동 준비 중"
-                                                                className="text-xs px-2.5 py-1.5 bg-pink-100 text-pink-400 rounded-full cursor-not-allowed opacity-60 whitespace-nowrap"
-                                                            >
-                                                                Instagram (준비 중)
-                                                            </button>
+                                                            {/* Instagram */}
+                                                            {isInstagramUploaded ? (
+                                                                <a
+                                                                    href={instagramProfileUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
+                                                                >
+                                                                    Instagram 완료 ✓
+                                                                </a>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => handleInstagramUpload(job.id)}
+                                                                    disabled={isProcessing}
+                                                                    className="text-xs px-2.5 py-1.5 bg-pink-500 text-white rounded-full hover:bg-pink-600 disabled:opacity-50 whitespace-nowrap"
+                                                                >
+                                                                    Instagram 업로드
+                                                                </button>
+                                                            )}
 
-                                                            {/* 승인 취소 (YouTube 업로드 전까지만) */}
-                                                            {!isYoutubeUploaded && (
+                                                            {/* 업로드 전: 승인 취소 / 업로드 후: 삭제 */}
+                                                            {isYoutubeUploaded || isTiktokUploaded || isInstagramUploaded ? (
+                                                                <button
+                                                                    onClick={() => handleDelete(job.id)}
+                                                                    disabled={isProcessing}
+                                                                    className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            ) : (
                                                                 <button
                                                                     onClick={() => handleUnapprove(job.id)}
                                                                     disabled={isProcessing}

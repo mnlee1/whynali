@@ -1,9 +1,10 @@
 /**
- * app/api/admin/shortform/[id]/upload-tiktok/route.ts
- * 
- * POST /api/admin/shortform/:id/upload-tiktok
- * 
- * Supabase Storage에 저장된 MP4를 TikTok에 업로드
+ * app/api/admin/shortform/[id]/upload-instagram/route.ts
+ *
+ * POST /api/admin/shortform/:id/upload-instagram
+ *
+ * Supabase Storage의 MP4를 Instagram Reels에 업로드
+ * Instagram Graph API는 공개 URL을 사용하므로 파일 다운로드 불필요
  * 어드민 전용 엔드포인트
  */
 
@@ -11,11 +12,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { writeAdminLog } from '@/lib/admin-log'
-import { uploadToTikTok, getTikTokProfileUrl } from '@/lib/shortform/tiktok-upload'
+import { uploadToInstagram, getInstagramPostUrl } from '@/lib/shortform/instagram-upload'
 import { extractYoutubeHashtags } from '@/lib/shortform/generate-text'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 300
+
 /**
- * POST /api/admin/shortform/:id/upload-tiktok
+ * POST /api/admin/shortform/:id/upload-instagram
  */
 export async function POST(
     _request: NextRequest,
@@ -42,7 +46,7 @@ export async function POST(
 
         if (job.approval_status !== 'approved') {
             return NextResponse.json(
-                { error: 'NOT_APPROVED', message: '승인된 job만 TikTok에 업로드할 수 있습니다' },
+                { error: 'NOT_APPROVED', message: '승인된 job만 Instagram에 업로드할 수 있습니다' },
                 { status: 400 }
             )
         }
@@ -54,37 +58,28 @@ export async function POST(
             )
         }
 
-        // TikTok 업로드 중복 체크
+        // Instagram 업로드 중복 체크
         const currentUploadStatus = job.upload_status as any
-        if (currentUploadStatus?.tiktok?.status === 'success') {
+        if (currentUploadStatus?.instagram?.status === 'success') {
             return NextResponse.json(
-                { error: 'ALREADY_UPLOADED', message: '이미 TikTok에 업로드되었습니다' },
+                { error: 'ALREADY_UPLOADED', message: '이미 Instagram에 업로드되었습니다' },
                 { status: 400 }
             )
         }
 
-        // 2. Supabase Storage에서 동영상 다운로드
-        const fileName = job.video_path.split('/').pop()
-        if (!fileName) {
-            return NextResponse.json(
-                { error: 'INVALID_VIDEO_PATH', message: '동영상 경로가 올바르지 않습니다' },
-                { status: 400 }
-            )
-        }
-
-        const { data: videoData, error: downloadError } = await supabaseAdmin.storage
+        // 2. Supabase Storage 공개 URL 생성 (Instagram은 파일 다운로드 불필요)
+        const { data: urlData } = supabaseAdmin.storage
             .from('shortform')
-            .download(fileName)
+            .getPublicUrl(job.video_path)
 
-        if (downloadError || !videoData) {
-            console.error('[upload-tiktok] Storage 다운로드 실패:', downloadError)
+        if (!urlData?.publicUrl) {
             return NextResponse.json(
-                { error: 'DOWNLOAD_FAILED', message: 'Storage에서 동영상을 가져올 수 없습니다' },
+                { error: 'URL_FAILED', message: 'Storage 공개 URL을 가져올 수 없습니다' },
                 { status: 500 }
             )
         }
 
-        const videoBuffer = Buffer.from(await videoData.arrayBuffer())
+        const videoPublicUrl = urlData.publicUrl
 
         // 카테고리별 해시태그 매핑
         const CATEGORY_HASHTAGS: Record<string, string> = {
@@ -100,31 +95,39 @@ export async function POST(
         const issueCategory = (job.issues as any)?.[0]?.category ?? (job.issues as any)?.category ?? ''
         const categoryTag = CATEGORY_HASHTAGS[issueCategory] ?? ''
 
-        // 이슈 제목 파생 키워드 (Groq) — YouTube와 동일 로직
+        // 이슈 제목 파생 키워드 (Groq)
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
         const titleTags = titleKeywords.map((k: string) => `#${k}`).join(' ')
 
-        const tiktokTitle = `${job.issue_title} | 왜난리 #왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
+        const publicIssueUrl = issueId ? `https://whynali.com/issue/${issueId}` : 'https://whynali.com'
 
-        // 3. TikTok 업로드
-        let publishId: string
+        const caption = [
+            `${job.issue_title} | 왜난리`,
+            '',
+            `📌 실시간 여론·토론·타임라인 확인하기`,
+            publicIssueUrl,
+            '',
+            `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim(),
+        ].join('\n')
+
+        // 3. Instagram 업로드
+        let mediaId: string
         try {
-            publishId = await uploadToTikTok(videoBuffer, {
-                title: tiktokTitle,
-                disableComment: false,
-                disableDuet: true,
-                disableStitch: true,
+            mediaId = await uploadToInstagram(videoPublicUrl, {
+                caption,
+                shareToFeed: true,
             })
 
-            const tiktokUsername = process.env.TIKTOK_USERNAME || 'whynali'
-            const profileUrl = getTikTokProfileUrl(tiktokUsername)
+            const instagramUsername = process.env.INSTAGRAM_USERNAME || 'whynali'
+            const profileUrl = getInstagramPostUrl(instagramUsername)
 
             // 4. upload_status 업데이트
             const newUploadStatus = {
                 ...currentUploadStatus,
-                tiktok: {
+                instagram: {
                     status: 'success',
-                    publishId,
+                    mediaId,
                     profileUrl,
                     uploadedAt: new Date().toISOString(),
                 },
@@ -136,37 +139,37 @@ export async function POST(
                 .eq('id', jobId)
 
             if (updateError) {
-                console.error('[upload-tiktok] upload_status 업데이트 실패:', updateError)
+                console.error('[upload-instagram] upload_status 업데이트 실패:', updateError)
             }
 
             // 5. 어드민 로그
             await writeAdminLog(
-                'shortform_tiktok_upload',
+                'shortform_instagram_upload',
                 'shortform_job',
                 jobId,
                 auth.adminEmail,
                 JSON.stringify({
                     issueId: job.issue_id,
                     issueTitle: job.issue_title,
-                    tiktokPublishId: publishId,
-                    tiktokProfileUrl: profileUrl,
+                    instagramMediaId: mediaId,
+                    instagramProfileUrl: profileUrl,
                 })
             )
 
             return NextResponse.json({
                 success: true,
-                platform: 'tiktok',
-                publishId,
+                platform: 'instagram',
+                mediaId,
                 profileUrl,
-                message: 'TikTok 업로드 성공! 프로필에서 확인할 수 있습니다.',
+                message: 'Instagram 업로드 성공! 프로필에서 확인할 수 있습니다.',
             })
         } catch (uploadError: any) {
-            console.error('[upload-tiktok] TikTok 업로드 실패:', uploadError)
+            console.error('[upload-instagram] Instagram 업로드 실패:', uploadError)
 
             // 실패 상태 기록
             const failedUploadStatus = {
                 ...currentUploadStatus,
-                tiktok: {
+                instagram: {
                     status: 'failed',
                     error: uploadError.message || '알 수 없는 오류',
                     failedAt: new Date().toISOString(),
@@ -179,15 +182,15 @@ export async function POST(
                 .eq('id', jobId)
 
             return NextResponse.json(
-                { 
-                    error: 'TIKTOK_UPLOAD_FAILED', 
-                    message: `TikTok 업로드 실패: ${uploadError.message}` 
+                {
+                    error: 'INSTAGRAM_UPLOAD_FAILED',
+                    message: `Instagram 업로드 실패: ${uploadError.message}`,
                 },
                 { status: 500 }
             )
         }
     } catch (error) {
-        console.error('[upload-tiktok] 예상치 못한 오류:', error)
+        console.error('[upload-instagram] 예상치 못한 오류:', error)
         return NextResponse.json(
             { error: 'INTERNAL_ERROR', message: '서버 오류가 발생했습니다' },
             { status: 500 }
