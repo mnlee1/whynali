@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { formatDate } from '@/lib/utils/format-date'
+
 import SearchBar from '@/components/common/SearchBar'
 import type { DiscussionTopic } from '@/types'
 
@@ -241,9 +241,6 @@ function CommunityContent() {
                                                 )}
                                             </div>
                                         </div>
-                                        <span className="text-xs text-content-muted shrink-0 mt-0.5">
-                                            {formatDate(topic.created_at)}
-                                        </span>
                                     </div>
                                 </article>
                             </Link>

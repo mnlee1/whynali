@@ -30,7 +30,7 @@ import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
 import ViewCounter from '@/components/issue/ViewCounter'
 import IssueStatBar from '@/components/issue/IssueStatBar'
-import { formatDate } from '@/lib/utils/format-date'
+import { formatFullDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
 // ISR: 15분(900초)마다 페이지 재생성
@@ -230,13 +230,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
                     <span>{issue.category}</span>
                     <span>·</span>
-                    <span>시작: {formatDate(issue.created_at)}</span>
-                    {issue.updated_at !== issue.created_at && (
-                        <>
-                            <span>·</span>
-                            <span className="text-primary font-medium">업데이트: {formatDate(issue.updated_at)}</span>
-                        </>
-                    )}
+                    <span>{formatFullDate(issue.approved_at ?? issue.created_at)}</span>
                 </div>
                 <IssueStatBar
                     issueId={id}
