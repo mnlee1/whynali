@@ -33,7 +33,7 @@ import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT, SHORTFORM_COOLDOWN_HOURS, SHORTF
 import type { ShortformSourceCount } from '@/types/shortform'
 import { generateShortformImage } from '@/lib/shortform/generate-image'
 import { validateShortformImage } from '@/lib/shortform/ai-validate'
-import { convertImageToVideo } from '@/lib/shortform/image-to-video'
+import { convertImageToVideoViaCloudinary } from '@/lib/shortform/cloudinary-video'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -367,8 +367,8 @@ async function autoGenerateAndValidate(
         issueUrl: job.issue_url,
     })
 
-    // 3. 이미지 → 동영상 변환 (FFmpeg)
-    const videoBuffer = await convertImageToVideo(imageBuffer, {
+    // 3. 이미지 → 동영상 변환 (Cloudinary)
+    const videoBuffer = await convertImageToVideoViaCloudinary(imageBuffer, {
         duration: SHORTFORM_VIDEO_DURATION,
         effect: SHORTFORM_VIDEO_EFFECT,
     })

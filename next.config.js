@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    serverExternalPackages: ['googleapis', 'sharp'],
+    serverExternalPackages: ['googleapis', 'sharp', 'ffmpeg-static'],
+    experimental: {
+        outputFileTracingIncludes: {
+            '/api/admin/shortform/[id]/generate': ['./node_modules/ffmpeg-static/ffmpeg'],
+        },
+    },
     webpack: (config, { isServer }) => {
         if (!isServer) {
             config.optimization = {
