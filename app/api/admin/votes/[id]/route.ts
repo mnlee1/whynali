@@ -4,7 +4,6 @@
  * [관리자 - 투표 삭제 API]
  *
  * 투표와 연결된 선택지를 모두 삭제.
- * 대기/반려 상태만 삭제 가능 (진행중/마감은 삭제 불가).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -32,14 +31,6 @@ export async function DELETE(request: NextRequest, { params }: Params) {
         return NextResponse.json(
             { error: '투표를 찾을 수 없습니다.' },
             { status: 404 }
-        )
-    }
-
-    // 진행중이나 마감된 투표는 삭제 불가 (단, 반려 처리된 경우는 삭제 허용)
-    if ((vote.phase === '진행중' || vote.phase === '마감') && vote.approval_status !== '반려') {
-        return NextResponse.json(
-            { error: '진행중이거나 마감된 투표는 삭제할 수 없습니다.' },
-            { status: 422 }
         )
     }
 

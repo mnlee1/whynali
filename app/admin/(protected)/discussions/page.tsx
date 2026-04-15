@@ -253,15 +253,15 @@ export default function AdminDiscussionsPage() {
     }
 
     /* 일괄 처리 */
-    const handleBulkAction = async (action: '진행중' | '마감' | '삭제') => {
+    const handleBulkAction = async (action: '진행중' | '복구' | '마감' | '재개' | '삭제') => {
         if (selectedTopicIds.size === 0) return
 
         const confirmMsg =
-            action === '진행중'
-                ? `선택한 ${selectedTopicIds.size}개 토론 주제를 승인하시겠습니까?`
-                : action === '마감'
-                ? `선택한 ${selectedTopicIds.size}개 토론 주제를 종료하시겠습니까?`
-                : `선택한 ${selectedTopicIds.size}개 토론 주제를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+            action === '진행중' ? `선택한 ${selectedTopicIds.size}개 토론 주제를 승인하시겠습니까?`
+            : action === '복구' ? `선택한 ${selectedTopicIds.size}개 토론 주제를 대기 상태로 되돌리시겠습니까?`
+            : action === '마감' ? `선택한 ${selectedTopicIds.size}개 토론 주제를 종료하시겠습니까?`
+            : action === '재개' ? `선택한 ${selectedTopicIds.size}개 토론 주제를 재개하시겠습니까?`
+            : `선택한 ${selectedTopicIds.size}개 토론 주제를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
 
         if (!window.confirm(confirmMsg)) return
 
@@ -276,10 +276,12 @@ export default function AdminDiscussionsPage() {
                     if (action === '삭제') {
                         res = await fetch(`/api/admin/discussions/${id}`, { method: 'DELETE' })
                     } else {
+                        // '재개'는 API에 '진행중'으로 전달 (마감 → 진행중)
+                        const apiAction = action === '재개' ? '진행중' : action
                         res = await fetch(`/api/admin/discussions/${id}`, {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action }),
+                            body: JSON.stringify({ action: apiAction }),
                         })
                     }
                     const json = await res.json()
@@ -403,14 +405,14 @@ export default function AdminDiscussionsPage() {
             {/* 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-content-primary">토론 주제 관리</h1>
+                    <h1 className="text-2xl font-bold text-content-primary">토론 관리</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleOpenForm}
                         className="btn-primary btn-md"
                     >
-                        + 토론 주제 생성
+                        + 토론 생성
                     </button>
                 </div>
             </div>
@@ -419,7 +421,7 @@ export default function AdminDiscussionsPage() {
             {showCreateForm && (
                 <div className="mb-6 p-4 border border-primary-muted bg-primary-light/20 rounded-xl space-y-4">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-semibold text-primary-dark">토론 주제 생성</h2>
+                        <h2 className="text-sm font-semibold text-primary-dark">토론 생성</h2>
                         <button
                             onClick={handleCloseForm}
                             className="text-content-muted hover:text-content-secondary text-lg leading-none"
@@ -532,6 +534,7 @@ export default function AdminDiscussionsPage() {
                         <span className="text-sm text-content-secondary">
                             {selectedTopicIds.size}개 선택
                         </span>
+                        {/* 승인: 대기 탭 */}
                         {filter === '대기' && (
                             <button
                                 onClick={() => handleBulkAction('진행중')}
@@ -541,6 +544,17 @@ export default function AdminDiscussionsPage() {
                                 일괄 승인
                             </button>
                         )}
+                        {/* 복구: 진행중 탭 */}
+                        {filter === '진행중' && (
+                            <button
+                                onClick={() => handleBulkAction('복구')}
+                                disabled={bulkProcessing}
+                                className="px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-full hover:bg-yellow-600 disabled:opacity-50 whitespace-nowrap"
+                            >
+                                일괄 복구
+                            </button>
+                        )}
+                        {/* 마감: 진행중 탭 */}
                         {filter === '진행중' && (
                             <button
                                 onClick={() => handleBulkAction('마감')}
@@ -550,18 +564,27 @@ export default function AdminDiscussionsPage() {
                                 일괄 마감
                             </button>
                         )}
-                        {filter === '대기' && (
+                        {/* 재개: 마감 탭 */}
+                        {filter === '마감' && (
                             <button
-                                onClick={() => handleBulkAction('삭제')}
+                                onClick={() => handleBulkAction('재개')}
                                 disabled={bulkProcessing}
-                                className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
                             >
-                                일괄 삭제
+                                일괄 재개
                             </button>
                         )}
+                        {/* 삭제: 모든 탭 */}
+                        <button
+                            onClick={() => handleBulkAction('삭제')}
+                            disabled={bulkProcessing}
+                            className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                        >
+                            일괄 삭제
+                        </button>
                         <button
                             onClick={() => setSelectedTopicIds(new Set())}
-                            className="btn-neutral btn-sm"
+                            className="px-3 py-1.5 text-sm bg-surface border border-border text-content-secondary rounded-full hover:bg-surface-subtle whitespace-nowrap"
                         >
                             선택 해제
                         </button>
@@ -654,14 +677,14 @@ export default function AdminDiscussionsPage() {
                                                         <button
                                                             onClick={() => handleEditSave(topic.id)}
                                                             disabled={!editDraft.trim() || submittingEdit}
-                                                            className="btn-primary btn-sm text-xs disabled:opacity-50"
+                                                            className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50 whitespace-nowrap"
                                                         >
                                                             {submittingEdit ? '저장 중...' : '저장'}
                                                         </button>
                                                         <button
                                                             onClick={handleEditCancel}
                                                             disabled={submittingEdit}
-                                                            className="btn-neutral btn-sm text-xs disabled:opacity-50"
+                                                            className="text-xs px-2.5 py-1.5 bg-surface border border-border text-content-secondary rounded-full hover:bg-surface-subtle disabled:opacity-50 whitespace-nowrap"
                                                         >
                                                             취소
                                                         </button>
@@ -718,7 +741,7 @@ export default function AdminDiscussionsPage() {
                                                     <button
                                                         onClick={() => handleEditStart(topic)}
                                                         disabled={isProcessing}
-                                                        className="btn-neutral btn-sm text-xs disabled:opacity-50"
+                                                        className="text-xs px-2.5 py-1.5 bg-surface border border-border text-content-secondary rounded-full hover:bg-surface-subtle disabled:opacity-50 whitespace-nowrap"
                                                     >
                                                         수정
                                                     </button>
@@ -732,40 +755,56 @@ export default function AdminDiscussionsPage() {
                                                                 승인
                                                             </button>
                                                             <button
+                                                                onClick={() => handleDelete(topic.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                삭제
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {topic.approval_status === '진행중' && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '복구')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                복구
+                                                            </button>
+                                                            <button
                                                                 onClick={() => handleAction(topic.id, '마감')}
                                                                 disabled={isProcessing}
                                                                 className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
                                                             >
                                                                 마감
                                                             </button>
+                                                            <button
+                                                                onClick={() => handleDelete(topic.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                삭제
+                                                            </button>
                                                         </>
                                                     )}
-                                                    {topic.approval_status === '진행중' && (
-                                                        <button
-                                                            onClick={() => handleAction(topic.id, '마감')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
-                                                        >
-                                                            마감
-                                                        </button>
-                                                    )}
                                                     {topic.approval_status === '마감' && (
-                                                        <button
-                                                            onClick={() => handleAction(topic.id, '진행중')}
-                                                            disabled={isProcessing}
-                                                            className="btn-primary btn-sm text-xs disabled:opacity-50 whitespace-nowrap"
-                                                        >
-                                                            재개
-                                                        </button>
-                                                    )}
-                                                    {topic.approval_status === '대기' && (
-                                                        <button
-                                                            onClick={() => handleDelete(topic.id)}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
-                                                        >
-                                                            삭제
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleAction(topic.id, '진행중')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                재개
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(topic.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                삭제
+                                                            </button>
+                                                        </>
                                                     )}
                                                 </div>
                                             )}

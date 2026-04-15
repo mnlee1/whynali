@@ -50,6 +50,7 @@ export default function AdminIssuesPage() {
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
 
+
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
 
     const handleSort = (field: SortField) => {
