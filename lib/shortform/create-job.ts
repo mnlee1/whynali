@@ -19,6 +19,7 @@ import type { ShortformTriggerType, HeatGrade, ShortformSourceCount } from '@/ty
 export interface CreateShortformJobInput {
     issueId: string
     triggerType: ShortformTriggerType
+    skipFilters?: boolean
 }
 
 /**
@@ -59,7 +60,7 @@ function isHeatGradeAboveOrEqual(gradeA: HeatGrade, gradeB: HeatGrade): boolean 
  * @throws 이슈가 존재하지 않거나 DB 에러 발생 시
  */
 export async function createShortformJob(input: CreateShortformJobInput): Promise<string | null> {
-    const { issueId, triggerType } = input
+    const { issueId, triggerType, skipFilters = false } = input
 
     // 1-1. 하루 최대 개수 체크
     const todayStart = new Date()
@@ -89,29 +90,31 @@ export async function createShortformJob(input: CreateShortformJobInput): Promis
         throw new Error(`이슈를 찾을 수 없습니다: ${issueId}`)
     }
 
-    // 1-3. 화력 등급 필터
+    // 1-3. 화력 등급 필터 (수동 생성 시 스킵)
     const heatGrade = convertHeatGrade(issue.heat_index)
-    if (!isHeatGradeAboveOrEqual(heatGrade, SHORTFORM_MIN_HEAT_GRADE)) {
+    if (!skipFilters && !isHeatGradeAboveOrEqual(heatGrade, SHORTFORM_MIN_HEAT_GRADE)) {
         return null
     }
 
-    // 1-4. 동일 이슈 쿨다운 체크
-    const cooldownStart = new Date()
-    cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
+    // 1-4. 동일 이슈 쿨다운 체크 (수동 생성 시 스킵)
+    if (!skipFilters) {
+        const cooldownStart = new Date()
+        cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
 
-    const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
-        .from('shortform_jobs')
-        .select('*', { count: 'exact', head: true })
-        .eq('issue_id', issueId)
-        .in('approval_status', ['pending', 'approved'])
-        .gte('created_at', cooldownStart.toISOString())
+        const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
+            .from('shortform_jobs')
+            .select('*', { count: 'exact', head: true })
+            .eq('issue_id', issueId)
+            .in('approval_status', ['pending', 'approved'])
+            .gte('created_at', cooldownStart.toISOString())
 
-    if (recentJobError) {
-        throw new Error('최근 job 조회 실패')
-    }
+        if (recentJobError) {
+            throw new Error('최근 job 조회 실패')
+        }
 
-    if ((recentJobCount ?? 0) > 0) {
-        return null
+        if ((recentJobCount ?? 0) > 0) {
+            return null
+        }
     }
 
     // 2. 출처 개수 조회

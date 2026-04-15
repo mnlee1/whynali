@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const jobId = await createShortformJob({ issueId, triggerType })
+        const jobId = await createShortformJob({ issueId, triggerType, skipFilters: true })
 
         await writeAdminLog(
             '숏폼 job 수동 생성',
