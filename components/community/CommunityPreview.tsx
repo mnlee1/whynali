@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { DiscussionTopic } from '@/types/index'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { formatDate } from '@/lib/utils/format-date'
+
 import Tooltip from '@/components/common/Tooltip'
 
 interface TopicWithIssue extends DiscussionTopic {
@@ -165,9 +165,6 @@ export default function CommunityPreview({ initialTopics }: Props) {
                                         )}
                                     </div>
                                 </div>
-                                <span className="text-xs text-content-muted shrink-0 mt-0.5">
-                                    {formatDate(topic.created_at)}
-                                </span>
                             </div>
                         </article>
                     </Link>

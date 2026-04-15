@@ -34,6 +34,8 @@ import { AUTO_APPROVE_CATEGORIES } from '@/lib/config/candidate-thresholds'
 import { shouldSkipDueToRateLimit, recordRateLimitFailure, recordRateLimitSuccess } from '@/lib/ai/rate-limit-priority'
 import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
+import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
+import { generateVoteOptions } from '@/lib/ai/vote-generator'
 
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '3')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
@@ -1415,6 +1417,64 @@ async function processTrackA(): Promise<{
             },
             newIssue.id,
         )
+
+        // 자동 승인된 이슈: 투표·토론 주제 즉시 생성
+        if (shouldAutoApprove) {
+            try {
+                const metadata = {
+                    id: newIssue.id,
+                    title: finalIssueTitle,
+                    category,
+                    status: '점화',
+                    heat_index: heatIndex,
+                }
+
+                const [topics, votes] = await Promise.all([
+                    generateDiscussionTopics(metadata, 3).catch(() => []),
+                    generateVoteOptions(metadata, 1).catch(() => []),
+                ])
+
+                if (topics.length > 0) {
+                    await supabaseAdmin.from('discussion_topics').insert(
+                        topics.map(t => ({
+                            issue_id: newIssue.id,
+                            body: t.content,
+                            is_ai_generated: true,
+                            approval_status: '대기',
+                        }))
+                    )
+                    console.log(`  ✓ [토론 생성] "${finalIssueTitle}" — ${topics.length}건`)
+                }
+
+                if (votes.length > 0) {
+                    const vote = votes[0]
+                    const { data: newVote } = await supabaseAdmin
+                        .from('votes')
+                        .insert({
+                            issue_id: newIssue.id,
+                            title: vote.title,
+                            phase: '대기',
+                            approval_status: '대기',
+                            is_ai_generated: true,
+                            issue_status_snapshot: '점화',
+                        })
+                        .select('id')
+                        .single()
+
+                    if (newVote) {
+                        await supabaseAdmin.from('vote_choices').insert(
+                            vote.choices.map(label => ({
+                                vote_id: newVote.id,
+                                label,
+                            }))
+                        )
+                        console.log(`  ✓ [투표 생성] "${finalIssueTitle}" — "${vote.title}"`)
+                    }
+                }
+            } catch (e) {
+                console.error(`  ✗ [투표·토론 자동 생성 실패] "${finalIssueTitle}":`, e)
+            }
+        }
 
         // 연예/정치 + 화력 30 이상 → 관리자 즉시 Dooray 알림
         if (requiresManualReview && heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD) {

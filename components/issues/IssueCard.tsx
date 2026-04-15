@@ -17,7 +17,7 @@ import Link from 'next/link'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
-import { formatDate } from '@/lib/utils/format-date'
+
 
 interface IssueCardProps {
     issue: Issue
@@ -61,12 +61,6 @@ export default function IssueCard({ issue }: IssueCardProps) {
                     {decodeHtml(issue.title)}
                 </h3>
 
-                {/* 하단: 카테고리 · 날짜 */}
-                <div className="flex items-center gap-2 text-xs text-content-muted mb-3">
-                    <span>{issue.category}</span>
-                    <span>·</span>
-                    <span>{formatDate(issue.created_at)}</span>
-                </div>
 
                 {/* 통계 정보 */}
                 <div className="flex items-center gap-4 text-xs text-content-secondary pt-3 border-t border-border-muted">

@@ -21,7 +21,7 @@ import { getIssues } from '@/lib/api/issues'
 import StatusBadge from '@/components/common/StatusBadge'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { formatDate } from '@/lib/utils/format-date'
+
 
 import 'swiper/css'
 import 'swiper/css/pagination'
@@ -137,11 +137,11 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent group-hover:from-black/60 group-hover:via-black/20 transition-all duration-500" />
 
                                 {/* 콘텐츠 */}
-                                <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-14">
+                                <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-20">
                                     <div />
 
                                     {/* 하단: 이슈 정보 */}
-                                    <div className="space-y-3">
+                                    <div className="space-y-3 pb-8">
                                         <div>
                                             <StatusBadge status={issue.status} size="sm" />
                                         </div>
@@ -150,11 +150,6 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                                             {decodeHtml(issue.title)}
                                         </h2>
 
-                                        <div className="flex items-center gap-2 text-sm text-white/90 font-medium drop-shadow-md">
-                                            <span>{issue.category}</span>
-                                            <span>·</span>
-                                            <span>{formatDate(issue.created_at)}</span>
-                                        </div>
                                     </div>
                                 </div>
                             </article>
