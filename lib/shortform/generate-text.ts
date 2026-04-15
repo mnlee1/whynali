@@ -100,6 +100,55 @@ Respond with JSON only: {"keywords":["query1","query2","query3"]}`,
 }
 
 /**
+ * 이슈 제목에서 YouTube 해시태그용 한국어 키워드 2~3개 추출
+ */
+export async function extractYoutubeHashtags(title: string): Promise<string[]> {
+    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
+    if (!apiKey) return []
+
+    const groq = new Groq({ apiKey })
+    const cleanTitle = title.replace(/^\[.*?\]\s*/, '').trim()
+
+    try {
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.1-8b-instant',
+            messages: [{
+                role: 'user',
+                content: `한국어 뉴스 이슈 제목에서 YouTube 해시태그에 쓸 핵심 키워드 2~3개를 추출하세요.
+
+제목: "${cleanTitle}"
+
+규칙:
+- 제목에서 가장 핵심이 되는 명사 위주로 추출
+- 인물명, 브랜드명, 사건명 등 구체적인 단어 우선
+- 너무 일반적인 단어(뉴스, 이슈, 한국 등) 제외
+- 해시태그 기호(#) 없이 단어만 반환
+
+예시:
+- "삼성 갤럭시 신제품 출시 예고" → ["삼성", "갤럭시", "신제품"]
+- "아이유 콘서트 매진 사태" → ["아이유", "콘서트", "매진"]
+- "여자 배구 국가대표 감독 선임 논란" → ["배구", "국가대표", "감독논란"]
+
+JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
+            }],
+            temperature: 0.2,
+            max_tokens: 100,
+        })
+
+        const text = completion.choices[0]?.message?.content?.trim() ?? ''
+        const jsonMatch = text.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) return []
+
+        const parsed = JSON.parse(jsonMatch[0])
+        const keywords: string[] = parsed.keywords ?? []
+        return keywords.filter((k: unknown) => typeof k === 'string' && k.length > 0).slice(0, 3)
+    } catch (e) {
+        console.error('[Groq] YouTube 해시태그 추출 실패:', e)
+        return []
+    }
+}
+
+/**
  * 숏폼 텍스트 자동 생성
  *
  * @param input - 이슈 메타데이터
