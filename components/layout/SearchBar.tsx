@@ -232,7 +232,7 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
     }
 
     return (
-        <div ref={wrapperRef} className="relative w-full md:w-auto">
+        <div ref={wrapperRef} className={`relative ${mobile ? 'w-full' : 'w-full md:w-auto'}`}>
             <div className="relative">
                 <input
                     type="text"
@@ -241,7 +241,7 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
                     onFocus={() => setShowSuggestions(true)}
                     onKeyDown={handleKeyDown}
                     placeholder="지금 이슈 검색"
-                    className="w-full md:w-64 pl-3 pr-10 py-1.5 text-sm border border-border rounded-lg bg-white text-content-primary placeholder:text-content-muted focus:outline-none focus:border-primary transition-colors"
+                    className={`${mobile ? 'w-full' : 'w-full md:w-64'} pl-3 pr-10 py-1.5 text-sm border border-border rounded-lg bg-white text-content-primary placeholder:text-content-muted focus:outline-none focus:border-primary transition-colors`}
                 />
                 <button
                     type="button"

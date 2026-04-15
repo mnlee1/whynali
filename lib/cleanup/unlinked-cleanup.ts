@@ -17,11 +17,14 @@
 import { supabaseAdmin } from '@/lib/supabase/server'
 
 const RETAIN_DAYS = parseInt(process.env.CLEANUP_RETAIN_DAYS ?? '7')
+const STALE_PENDING_HOURS = parseInt(process.env.STALE_PENDING_HOURS ?? '168')
+const STALE_PENDING_MAX_HEAT = parseInt(process.env.STALE_PENDING_MAX_HEAT ?? '15')
 
 export interface CleanupResult {
     deletedNews: number
     deletedCommunity: number
     retainDays: number
+    deletedStalePending?: number
 }
 
 /**
@@ -63,4 +66,41 @@ export async function cleanupUnlinkedData(): Promise<CleanupResult> {
         deletedCommunity: communityResult.data?.length ?? 0,
         retainDays: RETAIN_DAYS,
     }
+}
+
+/**
+ * cleanupStalePendingIssues - 오래된 대기 이슈 삭제
+ *
+ * 생성 후 STALE_PENDING_HOURS 시간이 지났는데도 대기 상태이고
+ * 화력이 STALE_PENDING_MAX_HEAT 미만인 이슈를 DB에서 삭제한다.
+ *
+ * - news_data, community_data의 issue_id는 ON DELETE SET NULL로 자동 처리
+ * - 댓글·반응·투표 등은 ON DELETE CASCADE로 자동 삭제
+ *
+ * 환경변수:
+ * - STALE_PENDING_HOURS: 경과 시간 임계값 (기본 48시간)
+ * - STALE_PENDING_MAX_HEAT: 화력 상한 (기본 15점)
+ */
+export async function cleanupStalePendingIssues(): Promise<number> {
+    const cutoff = new Date(Date.now() - STALE_PENDING_HOURS * 60 * 60 * 1000).toISOString()
+
+    const { data, error } = await supabaseAdmin
+        .from('issues')
+        .delete()
+        .eq('approval_status', '대기')
+        .lt('created_at', cutoff)
+        .lt('heat_index', STALE_PENDING_MAX_HEAT)
+        .select('id, title')
+
+    if (error) {
+        console.error('대기 이슈 정리 에러:', error)
+        return 0
+    }
+
+    if (data && data.length > 0) {
+        console.log(`[대기 이슈 정리] ${data.length}개 삭제:`)
+        data.forEach(issue => console.log(`  - "${issue.title}" (${issue.id})`))
+    }
+
+    return data?.length ?? 0
 }
