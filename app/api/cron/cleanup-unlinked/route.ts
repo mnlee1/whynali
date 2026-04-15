@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cleanupUnlinkedData } from '@/lib/cleanup/unlinked-cleanup'
+import { cleanupUnlinkedData, cleanupStalePendingIssues } from '@/lib/cleanup/unlinked-cleanup'
 import { verifyCronRequest } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
 
     try {
         const startTime = Date.now()
-        const result = await cleanupUnlinkedData()
+        const [result, deletedStalePending] = await Promise.all([
+            cleanupUnlinkedData(),
+            cleanupStalePendingIssues(),
+        ])
         const elapsed = Date.now() - startTime
 
         return NextResponse.json({
@@ -30,6 +33,7 @@ export async function GET(request: NextRequest) {
             deletedNews: result.deletedNews,
             deletedCommunity: result.deletedCommunity,
             retainDays: result.retainDays,
+            deletedStalePending,
             elapsed: `${elapsed}ms`,
             timestamp: new Date().toISOString(),
         })
