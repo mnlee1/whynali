@@ -1,0 +1,54 @@
+[
+  {
+    "id": "802b6b0b-6971-4eb9-bafc-8be640dd271b",
+    "issue_id": "7719c0ae-b9bf-40c5-bf26-7321d105f447",
+    "discussion_topic_id": null,
+    "user_id": "0f5ffc2b-6825-4767-81d7-2ece8649ff1d",
+    "body": "AI보안 대응을 잘 해야 되겠네요!",
+    "like_count": 0,
+    "dislike_count": 0,
+    "visibility": "public",
+    "parent_id": null,
+    "created_at": "2026-04-14T00:47:18.064105+00:00",
+    "updated_at": "2026-04-14T00:47:18.064105+00:00"
+  },
+  {
+    "id": "1a7a1dbb-04dc-4fe9-b968-165558680a05",
+    "issue_id": "feddd571-ea5d-4ffa-a23b-44e15cc3ef93",
+    "discussion_topic_id": null,
+    "user_id": "1dc4cd3d-fbd5-4781-a76e-1f7125ebdbe0",
+    "body": "하하하하",
+    "like_count": 0,
+    "dislike_count": 0,
+    "visibility": "deleted",
+    "parent_id": null,
+    "created_at": "2026-04-10T07:32:48.464813+00:00",
+    "updated_at": "2026-04-10T07:40:22.142+00:00"
+  },
+  {
+    "id": "5c8beeab-b673-4efc-b848-23f8095ce8fc",
+    "issue_id": "46a1662b-cefe-4601-b57b-eb7a3e0cf974",
+    "discussion_topic_id": null,
+    "user_id": "0457f020-34d5-4a60-bba6-5184c2574ccb",
+    "body": "ㅇㄹㄴㅇㄹㅇㄴㄹㄴㅇㄹ",
+    "like_count": 0,
+    "dislike_count": 0,
+    "visibility": "deleted",
+    "parent_id": null,
+    "created_at": "2026-04-10T06:10:28.513982+00:00",
+    "updated_at": "2026-04-10T06:10:41.693+00:00"
+  },
+  {
+    "id": "e5c2bbd1-30c5-4787-946f-e430d1b5db32",
+    "issue_id": "67880440-b906-4c48-94be-75485a9843f5",
+    "discussion_topic_id": null,
+    "user_id": "1240323a-f089-4106-87ac-2a25d574217f",
+    "body": "댓글 테스트 입니다.",
+    "like_count": 0,
+    "dislike_count": 0,
+    "visibility": "public",
+    "parent_id": null,
+    "created_at": "2026-04-09T06:43:58.980184+00:00",
+    "updated_at": "2026-04-09T06:43:58.980184+00:00"
+  }
+]
