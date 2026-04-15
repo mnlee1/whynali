@@ -11,6 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 import { uploadToYouTube, getYoutubeShortsUrl } from '@/lib/shortform/youtube-upload'
+import { extractYoutubeHashtags } from '@/lib/shortform/generate-text'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -80,18 +81,37 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
         const videoBuffer = Buffer.from(await videoData.arrayBuffer())
 
-        // 4. YouTube 업로드 (issue_url에서 issue ID 추출 후 실서버 URL로 재조합)
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
+        // 4. YouTube 업로드 (항상 실서버 URL 사용 — 로컬 개발환경에서도 동일)
+        const siteUrl = 'https://whynali.com'
         const issueId = job.issue_url.split('/issue/')[1]?.split('?')[0] ?? ''
         const publicIssueUrl = issueId ? `${siteUrl}/issue/${issueId}` : siteUrl
+
+        // 카테고리별 고정 해시태그
+        const CATEGORY_HASHTAGS: Record<string, string> = {
+            '연예': '#연예 #연예이슈 #셀럽',
+            '정치': '#정치 #정치이슈',
+            '스포츠': '#스포츠 #스포츠이슈',
+            '사회': '#사회 #사회이슈',
+            '경제': '#경제 #경제이슈',
+            '기술': '#기술 #IT #테크',
+            '세계': '#세계 #해외이슈 #글로벌',
+            '생활문화': '#생활 #문화 #라이프',
+        }
+        const categoryTag = CATEGORY_HASHTAGS[job.issue_category ?? ''] ?? ''
+
+        // 이슈 제목 파생 키워드 (Groq)
+        const titleKeywords = await extractYoutubeHashtags(job.issue_title)
+        const titleTags = titleKeywords.map((k: string) => `#${k}`).join(' ')
+
+        const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags} #Shorts`.replace(/\s+/g, ' ').trim()
 
         const videoId = await uploadToYouTube(videoBuffer, {
             title: job.issue_title,
             description: `지금 뜨거운 이슈! ${job.issue_title}\n\n` +
                 `📌 왜난리에서 실시간 여론·토론·타임라인 확인하기\n` +
                 `${publicIssueUrl}\n\n` +
-                `#왜난리 #이슈 #논란 #${job.issue_status}`,
-            tags: ['왜난리', '이슈', '논란', job.issue_status],
+                hashtagLine,
+            tags: ['왜난리', '이슈', '뉴스', '한국뉴스', ...titleKeywords],
         })
 
         const youtubeUrl = getYoutubeShortsUrl(videoId)
