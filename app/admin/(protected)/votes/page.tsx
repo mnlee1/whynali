@@ -35,7 +35,7 @@ interface Vote {
     issue_id: string
     title: string | null
     phase: '대기' | '진행중' | '마감'
-    approval_status: '대기' | '승인' | '반려'
+    approval_status: '대기' | '승인'
     issue_status_snapshot: string | null
     started_at: string | null
     ended_at: string | null
@@ -47,26 +47,19 @@ interface Vote {
     vote_choices: VoteChoice[]
 }
 
-type FilterPhase = '' | '대기' | '진행중' | '마감' | '반려'
+type FilterPhase = '' | '대기' | '진행중' | '마감'
 
 const FILTER_LABELS: { value: FilterPhase; label: string }[] = [
     { value: '', label: '전체' },
     { value: '대기', label: '대기' },
     { value: '진행중', label: '진행중' },
     { value: '마감', label: '마감' },
-    { value: '반려', label: '반려' },
 ]
 
 const PHASE_STYLE: Record<string, string> = {
     '대기': 'bg-yellow-100 text-yellow-700',
     '진행중': 'bg-green-100 text-green-700',
     '마감': 'bg-gray-100 text-gray-600',
-}
-
-const APPROVAL_STATUS_STYLE: Record<string, string> = {
-    '대기': 'bg-yellow-100 text-yellow-700',
-    '승인': 'bg-green-100 text-green-700',
-    '반려': 'bg-red-100 text-red-700',
 }
 
 function formatDate(dateString: string): string {
@@ -107,12 +100,10 @@ export default function AdminVotesPage() {
     const [generating, setGenerating] = useState(false)
     const [isAiFilled, setIsAiFilled] = useState(false)
 
-    /* 전체 탭 정렬: 대기(0) → 진행중(1) → 반려(2) → 마감(3) */
-    const SORT_ORDER = (vote: Vote): number => {
-        if (vote.approval_status === '반려') return 2
-        if (vote.phase === '마감') return 3
-        return { '대기': 0, '진행중': 1 }[vote.phase] ?? 9
-    }
+
+    /* 전체 탭 정렬: 대기(0) → 진행중(1) → 마감(2) */
+    const SORT_ORDER = (vote: Vote): number =>
+        ({ '대기': 0, '진행중': 1, '마감': 2 }[vote.phase] ?? 9)
 
     /* 승인된 이슈 목록 로드 */
     const loadApprovedIssues = useCallback(async () => {
@@ -218,10 +209,9 @@ export default function AdminVotesPage() {
     const loadTabCounts = useCallback(async () => {
         const tabParams: { value: FilterPhase; params: Record<string, string> }[] = [
             { value: '', params: {} },
-            { value: '대기', params: { phase: '대기', approval_status: '대기' } },
-            { value: '진행중', params: { phase: '진행중', approval_status: '승인' } },
-            { value: '마감', params: { phase: '마감', approval_status: '승인' } },
-            { value: '반려', params: { approval_status: '반려' } },
+            { value: '대기', params: { phase: '대기' } },
+            { value: '진행중', params: { phase: '진행중' } },
+            { value: '마감', params: { phase: '마감' } },
         ]
         try {
             const results = await Promise.all(
@@ -248,16 +238,9 @@ export default function AdminVotesPage() {
             const offset = (targetPage - 1) * PAGE_SIZE
             const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
 
-            if (phase === '반려') {
-                params.set('approval_status', '반려')
-            } else if (phase === '대기') {
-                params.set('phase', '대기')
-                params.set('approval_status', '대기')
-            } else if (phase) {
+            if (phase) {
                 params.set('phase', phase)
-                params.set('approval_status', '승인')
             }
-            /* 전체 탭: approval_status 조건 없음 — 반려 포함 전체 조회 */
             
             const res = await fetch(`/api/admin/votes?${params}`)
             const json = await res.json()
@@ -284,38 +267,31 @@ export default function AdminVotesPage() {
         loadVotes(filter, 1)
     }, [filter, loadVotes])
 
-    const handleAction = async (id: string, action: '승인' | '반려' | '삭제' | '종료' | '재개') => {
-        let confirmMsg = ''
-        
-        if (action === '승인') {
-            confirmMsg = '이 투표를 승인하여 진행중 상태로 전환하시겠습니까?'
-        } else if (action === '반려') {
-            confirmMsg = '이 투표를 반려 처리하시겠습니까? (대기 상태로 유지되며 삭제되지 않습니다)'
-        } else if (action === '삭제') {
-            confirmMsg = '이 투표를 영구 삭제하시겠습니까? 투표와 선택지가 모두 삭제됩니다.'
-        } else if (action === '종료') {
-            confirmMsg = '이 투표를 즉시 종료하시겠습니까?'
-        } else if (action === '재개') {
-            confirmMsg = '이 투표를 다시 진행중 상태로 재개하시겠습니까? 자동 마감 조건(날짜/참여자 수)이 초기화됩니다.'
-        }
-        
+    const handleAction = async (id: string, action: '승인' | '복구' | '마감' | '재개' | '삭제') => {
+        const confirmMsg =
+            action === '승인' ? '이 투표를 승인하여 진행중 상태로 전환하시겠습니까?'
+            : action === '복구' ? '이 투표를 대기 상태로 되돌리시겠습니까?'
+            : action === '마감' ? '이 투표를 즉시 마감하시겠습니까?'
+            : action === '재개' ? '이 투표를 다시 진행중 상태로 재개하시겠습니까? 자동 마감 조건이 초기화됩니다.'
+            : '이 투표를 영구 삭제하시겠습니까? 투표와 선택지가 모두 삭제됩니다.'
+
         if (!window.confirm(confirmMsg)) return
         setProcessingId(id)
         try {
             let endpoint = ''
             let method = 'POST'
-            
+
             if (action === '승인') {
                 endpoint = `/api/admin/votes/${id}/approve`
-            } else if (action === '반려') {
-                endpoint = `/api/admin/votes/${id}/reject`
-            } else if (action === '삭제') {
-                endpoint = `/api/admin/votes/${id}`
-                method = 'DELETE'
-            } else if (action === '종료') {
+            } else if (action === '복구') {
+                endpoint = `/api/admin/votes/${id}/restore`
+            } else if (action === '마감') {
                 endpoint = `/api/admin/votes/${id}/close`
             } else if (action === '재개') {
                 endpoint = `/api/admin/votes/${id}/reopen`
+            } else {
+                endpoint = `/api/admin/votes/${id}`
+                method = 'DELETE'
             }
             
             const res = await fetch(endpoint, { method })
@@ -358,15 +334,15 @@ export default function AdminVotesPage() {
     }
 
     /* 일괄 처리 */
-    const handleBulkAction = async (action: '승인' | '반려' | '삭제') => {
+    const handleBulkAction = async (action: '승인' | '복구' | '마감' | '재개' | '삭제') => {
         if (selectedVoteIds.size === 0) return
 
         const confirmMsg =
-            action === '승인'
-                ? `선택한 ${selectedVoteIds.size}개 투표를 승인하시겠습니까?`
-                : action === '반려'
-                ? `선택한 ${selectedVoteIds.size}개 투표를 반려 처리하시겠습니까? (삭제되지 않으며 반려 상태로 유지됩니다)`
-                : `선택한 ${selectedVoteIds.size}개 투표를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+            action === '승인' ? `선택한 ${selectedVoteIds.size}개 투표를 승인하시겠습니까?`
+            : action === '복구' ? `선택한 ${selectedVoteIds.size}개 투표를 대기 상태로 되돌리시겠습니까?`
+            : action === '마감' ? `선택한 ${selectedVoteIds.size}개 투표를 마감하시겠습니까?`
+            : action === '재개' ? `선택한 ${selectedVoteIds.size}개 투표를 재개하시겠습니까?`
+            : `선택한 ${selectedVoteIds.size}개 투표를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
 
         if (!window.confirm(confirmMsg)) return
 
@@ -381,7 +357,11 @@ export default function AdminVotesPage() {
                     if (action === '삭제') {
                         res = await fetch(`/api/admin/votes/${id}`, { method: 'DELETE' })
                     } else {
-                        const endpoint = action === '승인' ? `/api/admin/votes/${id}/approve` : `/api/admin/votes/${id}/reject`
+                        const endpoint =
+                            action === '승인' ? `/api/admin/votes/${id}/approve`
+                            : action === '복구' ? `/api/admin/votes/${id}/restore`
+                            : action === '마감' ? `/api/admin/votes/${id}/close`
+                            : `/api/admin/votes/${id}/reopen`
                         res = await fetch(endpoint, { method: 'POST' })
                     }
                     const json = await res.json()
@@ -579,7 +559,8 @@ export default function AdminVotesPage() {
                         <span className="text-sm text-content-secondary">
                             {selectedVoteIds.size}개 선택
                         </span>
-                        {(filter === '대기' || filter === '반려') && (
+                        {/* 승인: 대기 탭 */}
+                        {filter === '대기' && (
                             <button
                                 onClick={() => handleBulkAction('승인')}
                                 disabled={bulkProcessing}
@@ -588,15 +569,37 @@ export default function AdminVotesPage() {
                                 일괄 승인
                             </button>
                         )}
-                        {(filter === '대기' || filter === '진행중') && (
+                        {/* 복구: 진행중 탭 */}
+                        {filter === '진행중' && (
                             <button
-                                onClick={() => handleBulkAction('반려')}
+                                onClick={() => handleBulkAction('복구')}
                                 disabled={bulkProcessing}
-                                className="px-3 py-1.5 text-sm bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
+                                className="px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-full hover:bg-yellow-600 disabled:opacity-50 whitespace-nowrap"
                             >
-                                일괄 반려
+                                일괄 복구
                             </button>
                         )}
+                        {/* 마감: 진행중 탭 */}
+                        {filter === '진행중' && (
+                            <button
+                                onClick={() => handleBulkAction('마감')}
+                                disabled={bulkProcessing}
+                                className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
+                            >
+                                일괄 마감
+                            </button>
+                        )}
+                        {/* 재개: 마감 탭 */}
+                        {filter === '마감' && (
+                            <button
+                                onClick={() => handleBulkAction('재개')}
+                                disabled={bulkProcessing}
+                                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+                            >
+                                일괄 재개
+                            </button>
+                        )}
+                        {/* 삭제: 모든 탭 */}
                         <button
                             onClick={() => handleBulkAction('삭제')}
                             disabled={bulkProcessing}
@@ -606,7 +609,7 @@ export default function AdminVotesPage() {
                         </button>
                         <button
                             onClick={() => setSelectedVoteIds(new Set())}
-                            className="btn-neutral btn-sm"
+                            className="px-3 py-1.5 text-sm bg-surface border border-border text-content-secondary rounded-full hover:bg-surface-subtle whitespace-nowrap"
                         >
                             선택 해제
                         </button>
@@ -745,17 +748,9 @@ export default function AdminVotesPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <div className="space-y-1">
-                                                {filter !== '대기' && vote.approval_status === '반려' ? (
-                                                    <span className={`inline-block px-2 py-1 text-xs rounded-full ${APPROVAL_STATUS_STYLE[vote.approval_status]}`}>
-                                                        {vote.approval_status}
-                                                    </span>
-                                                ) : (
-                                                    <span className={`inline-block px-2 py-1 text-xs rounded-full ${PHASE_STYLE[vote.phase]}`}>
-                                                        {vote.phase}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${PHASE_STYLE[vote.phase]}`}>
+                                                {vote.phase}
+                                            </span>
                                             {vote.phase !== '대기' && (
                                                 <div className="text-sm text-content-muted mt-1">
                                                     {totalVotes.toLocaleString()}표
@@ -766,7 +761,7 @@ export default function AdminVotesPage() {
                                             {formatDate(vote.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            {vote.phase === '대기' && vote.approval_status !== '반려' && (
+                                            {vote.phase === '대기' && (
                                                 <div className="flex flex-nowrap gap-1.5 min-w-max">
                                                     <button
                                                         onClick={() => handleAction(vote.id, '승인')}
@@ -775,15 +770,6 @@ export default function AdminVotesPage() {
                                                     >
                                                         승인
                                                     </button>
-                                                    {filter !== '반려' && (
-                                                        <button
-                                                            onClick={() => handleAction(vote.id, '반려')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
-                                                        >
-                                                            반려
-                                                        </button>
-                                                    )}
                                                     <button
                                                         onClick={() => handleAction(vote.id, '삭제')}
                                                         disabled={isProcessing}
@@ -796,40 +782,45 @@ export default function AdminVotesPage() {
                                             {vote.phase === '진행중' && (
                                                 <div className="flex flex-nowrap gap-1.5 min-w-max">
                                                     <button
-                                                        onClick={() => handleAction(vote.id, '종료')}
+                                                        onClick={() => handleAction(vote.id, '복구')}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-2.5 py-1.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 disabled:opacity-50 whitespace-nowrap"
+                                                    >
+                                                        복구
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleAction(vote.id, '마감')}
                                                         disabled={isProcessing}
                                                         className="text-xs px-2.5 py-1.5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
                                                     >
                                                         마감
                                                     </button>
-                                                    {filter !== '반려' && (
-                                                        <button
-                                                            onClick={() => handleAction(vote.id, '반려')}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
-                                                        >
-                                                            반려
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => handleAction(vote.id, '삭제')}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                    >
+                                                        삭제
+                                                    </button>
                                                 </div>
                                             )}
-                                            {vote.phase === '마감' && vote.approval_status !== '반려' && (
-                                                <button
-                                                    onClick={() => handleAction(vote.id, '재개')}
-                                                    disabled={isProcessing}
-                                                    className="btn-primary btn-sm text-xs disabled:opacity-50"
-                                                >
-                                                    재개
-                                                </button>
-                                            )}
-                                            {vote.approval_status === '반려' && (
-                                                <button
-                                                    onClick={() => handleAction(vote.id, '삭제')}
-                                                    disabled={isProcessing}
-                                                    className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
-                                                >
-                                                    삭제
-                                                </button>
+                                            {vote.phase === '마감' && (
+                                                <div className="flex flex-nowrap gap-1.5 min-w-max">
+                                                    <button
+                                                        onClick={() => handleAction(vote.id, '재개')}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+                                                    >
+                                                        재개
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleAction(vote.id, '삭제')}
+                                                        disabled={isProcessing}
+                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                    >
+                                                        삭제
+                                                    </button>
+                                                </div>
                                             )}
                                         </td>
                                     </tr>

@@ -42,7 +42,7 @@ const NAV_ITEMS = [
         ),
     },
     {
-        label: '토론 주제',
+        label: '토론 관리',
         href: '/admin/discussions',
         icon: (
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

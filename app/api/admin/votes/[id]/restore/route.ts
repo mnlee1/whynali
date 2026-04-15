@@ -1,10 +1,10 @@
 /**
- * app/api/admin/votes/[id]/approve/route.ts
+ * app/api/admin/votes/[id]/restore/route.ts
  *
- * [관리자 - 투표 승인 API]
+ * [관리자 - 투표 복구 API]
  *
- * 대기 상태의 투표를 승인하여 진행중 상태로 전환.
- * 승인 시 started_at을 현재 시각으로 설정.
+ * 진행중 상태의 투표를 대기 상태로 되돌린다.
+ * started_at을 초기화하여 재승인 시 새로 설정되도록 함.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: prev, error: prevError } = await supabaseAdmin
         .from('votes')
-        .select('phase, approval_status, title')
+        .select('phase, title')
         .eq('id', id)
         .single()
 
@@ -33,9 +33,9 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: '투표를 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    if (prev.phase !== '대기') {
+    if (prev.phase !== '진행중') {
         return NextResponse.json(
-            { error: '대기 상태의 투표가 아닙니다.' },
+            { error: '진행중 상태의 투표가 아닙니다.' },
             { status: 422 }
         )
     }
@@ -43,9 +43,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     const { data, error } = await supabaseAdmin
         .from('votes')
         .update({
-            phase: '진행중',
-            approval_status: '승인',
-            started_at: new Date().toISOString(),
+            phase: '대기',
+            approval_status: '대기',
+            started_at: null,
         })
         .eq('id', id)
         .select('id, title')
@@ -55,14 +55,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    if (!data) {
-        return NextResponse.json(
-            { error: '투표 승인 처리에 실패했습니다.' },
-            { status: 500 }
-        )
-    }
-
-    await writeAdminLog(`투표 상태 변경: ${prev.approval_status} > 진행중`, 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
+    await writeAdminLog('투표 상태 변경: 진행중 > 대기', 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
     revalidatePath('/')
     return NextResponse.json({ data }, { status: 200 })
 }

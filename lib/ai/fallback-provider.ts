@@ -32,6 +32,7 @@ function shouldFallback(error: any): boolean {
     if (FALLBACK_ERROR_TYPES.includes(error?.type)) return true
     if (error?.message?.includes('credit balance')) return true
     if (error?.message?.includes('insufficient')) return true
+    if (error?.message?.includes('일별 예산 초과')) return true
     return false
 }
 
