@@ -4,12 +4,14 @@
  * [관리자 - 이슈 승인 API]
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 import { fetchUnsplashImages } from '@/lib/unsplash'
+import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
+import { generateVoteOptions } from '@/lib/ai/vote-generator'
 
 const CATEGORY_PATH_MAP: Record<string, string> = {
     '사회': '/society',
@@ -66,15 +68,65 @@ export async function POST(
         if (categoryPath) revalidatePath(categoryPath)
         revalidatePath('/')
 
-        return NextResponse.json({
-            data,
-            aiGeneration: {
-                status: process.env.PERPLEXITY_API_KEY ? 'triggered' : 'skipped',
-                message: process.env.PERPLEXITY_API_KEY
-                    ? '토론 주제 생성 요청됨 (백그라운드)'
-                    : 'PERPLEXITY_API_KEY 없음 — 토론 주제 자동 생성 스킵',
-            },
+        // 승인 후 투표·토론 주제 자동 생성 (백그라운드)
+        after(async () => {
+            try {
+                const metadata = {
+                    id: data.id,
+                    title: data.title,
+                    category: data.category ?? '사회',
+                    status: data.status ?? '점화',
+                    heat_index: data.heat_index ?? undefined,
+                }
+
+                const [topics, votes] = await Promise.all([
+                    generateDiscussionTopics(metadata, 3).catch(() => []),
+                    generateVoteOptions(metadata, 1).catch(() => []),
+                ])
+
+                if (topics.length > 0) {
+                    await supabaseAdmin.from('discussion_topics').insert(
+                        topics.map(t => ({
+                            issue_id: data.id,
+                            body: t.content,
+                            is_ai_generated: true,
+                            approval_status: '대기',
+                        }))
+                    )
+                }
+
+                if (votes.length > 0) {
+                    const vote = votes[0]
+                    const { data: newVote } = await supabaseAdmin
+                        .from('votes')
+                        .insert({
+                            issue_id: data.id,
+                            title: vote.title,
+                            phase: '대기',
+                            approval_status: '대기',
+                            is_ai_generated: true,
+                            issue_status_snapshot: data.status ?? null,
+                        })
+                        .select('id')
+                        .single()
+
+                    if (newVote) {
+                        await supabaseAdmin.from('vote_choices').insert(
+                            vote.choices.map(label => ({
+                                vote_id: newVote.id,
+                                label,
+                            }))
+                        )
+                    }
+                }
+
+                console.log(`[approve] 투표·토론 자동 생성 완료 — 토론 ${topics.length}건, 투표 ${votes.length}건 (이슈: "${data.title}")`)
+            } catch (e) {
+                console.error('[approve] 투표·토론 자동 생성 실패:', e)
+            }
         })
+
+        return NextResponse.json({ data })
     } catch (error) {
         console.error('이슈 승인 에러:', error)
         return NextResponse.json(

@@ -30,7 +30,7 @@ import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
 import ViewCounter from '@/components/issue/ViewCounter'
 import IssueStatBar from '@/components/issue/IssueStatBar'
-import { formatFullDate } from '@/lib/utils/format-date'
+import { formatFullDate, formatDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
 // ISR: 15분(900초)마다 페이지 재생성
