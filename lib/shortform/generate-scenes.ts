@@ -96,111 +96,101 @@ function getLogoBase64(): string {
     }
 }
 
-// 폰트 파일 경로 캐시 (최초 1회만 체크)
-let _fontPathCache: string | null = null
+// opentype.js 폰트 캐시 (최초 1회만 로드)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _otFontCache: any = null
 
-function getFontPath(): string {
-    if (_fontPathCache !== null) return _fontPathCache
-    const fs = require('fs') as typeof import('fs')
-    const candidate = join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
-    _fontPathCache = fs.existsSync(candidate) ? candidate : ''
-    if (!_fontPathCache) console.warn('[generate-scenes] Pretendard-Bold.ttf 없음 — 시스템 폰트 사용')
-    return _fontPathCache
-}
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const opentype = require('opentype.js') as any
 
-/**
- * Pango 마크업용 텍스트 이스케이프 (& < > 처리)
- */
-function escapePango(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-/**
- * Sharp 네이티브 text 입력으로 한 줄 텍스트 이미지 렌더링.
- * Pango 기반 → fontfile로 직접 폰트 로드 → 한국어 확실히 렌더링.
- */
-async function renderTextLine(
-    text: string,
-    fontSize: number,
-    color: string,
-    fontPath: string
-): Promise<{ buffer: Buffer; width: number; height: number }> {
-    const markup = `<span foreground="${color}">${escapePango(text)}</span>`
-    const textOptions: Record<string, unknown> = {
-        text: markup,
-        rgba: true,
-        dpi: 72,
-        width: 950,
-        align: 'centre' as const,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getOTFont(): any {
+    if (_otFontCache) return _otFontCache
+    try {
+        const fontPath = join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
+        _otFontCache = opentype.loadSync(fontPath)
+        return _otFontCache
+    } catch {
+        console.warn('[generate-scenes] opentype 폰트 로드 실패')
+        return null
     }
-    if (fontPath) {
-        textOptions.fontfile = fontPath
-        textOptions.font = `Pretendard Bold ${fontSize}`
-    } else {
-        textOptions.font = `Sans Bold ${fontSize}`
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, info } = await (sharp as any)({ text: textOptions })
-        .png()
-        .toBuffer({ resolveWithObject: true })
-    return { buffer: data, width: info.width, height: info.height }
 }
 
 /**
  * 타이핑 애니메이션 한 프레임 렌더링.
- * Sharp 네이티브 text 입력 사용 (SVG @font-face 대신) → 한국어 렌더링 보장.
+ * opentype.js로 텍스트를 SVG path로 변환 → Sharp 렌더링.
+ * fontconfig 불필요, 한국어 100% 보장.
  */
 async function renderTypingStatePNG(
     titleVisible: string,
     descVisible: string,
     sceneNumber: number,
-    layout: SceneLayout,
-    fontPath: string
+    layout: SceneLayout
 ): Promise<Buffer> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const composites: any[] = []
-
+    const font = getOTFont()
     const titleLines = titleVisible ? wordWrapLines(titleVisible, 13) : []
     const descLines = descVisible ? wordWrapLines(descVisible, 16) : []
+    const svgPaths: string[] = []
 
-    // 타이틀 라인
-    for (let i = 0; i < titleLines.length; i++) {
-        if (!titleLines[i].trim()) continue
-        const { buffer, width } = await renderTextLine(titleLines[i], TITLE_FONTSIZE, 'white', fontPath)
-        composites.push({
-            input: buffer,
-            top: layout.titleStartY + i * TITLE_LINE_HEIGHT,
-            left: Math.max(0, Math.floor((WIDTH - width) / 2)),
-        })
+    if (font) {
+        // 한 줄 텍스트를 SVG path 2개로 변환 (검은 테두리 → 흰 fill)
+        function addLinePaths(
+            line: string, x: number, y: number,
+            fontSize: number, fillColor: string, strokeW: number
+        ) {
+            if (strokeW > 0) {
+                const sp = font.getPath(line, x, y, fontSize)
+                sp.fill = 'none'
+                sp.stroke = '#000000'
+                sp.strokeWidth = strokeW
+                svgPaths.push(sp.toSVG(2))
+            }
+            const fp = font.getPath(line, x, y, fontSize)
+            fp.fill = fillColor
+            fp.stroke = null
+            svgPaths.push(fp.toSVG(2))
+        }
+
+        // 폰트 ascender → 베이스라인 Y 계산 (top → baseline 변환)
+        const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
+        const ascD = Math.round(font.ascender * DESC_FONTSIZE / font.unitsPerEm)
+
+        // 타이틀 라인
+        for (let i = 0; i < titleLines.length; i++) {
+            if (!titleLines[i].trim()) continue
+            const w = font.getAdvanceWidth(titleLines[i], TITLE_FONTSIZE)
+            const x = Math.floor((WIDTH - w) / 2)
+            const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
+            addLinePaths(titleLines[i], x, y, TITLE_FONTSIZE, '#ffffff', 8)
+        }
+
+        // 설명 라인
+        for (let i = 0; i < descLines.length; i++) {
+            if (!descLines[i].trim()) continue
+            const w = font.getAdvanceWidth(descLines[i], DESC_FONTSIZE)
+            const x = Math.floor((WIDTH - w) / 2)
+            const y = layout.descStartY + i * DESC_LINE_HEIGHT + ascD
+            addLinePaths(descLines[i], x, y, DESC_FONTSIZE, '#E5E7EB', 5)
+        }
+
+        // CTA 버튼 텍스트 (씬 3만)
+        if (sceneNumber === 3 && layout.buttonY > 0) {
+            const CTA_SIZE = 58
+            const ctaText = '지금 바로 확인하기'
+            const ascC = Math.round(font.ascender * CTA_SIZE / font.unitsPerEm)
+            const w = font.getAdvanceWidth(ctaText, CTA_SIZE)
+            const x = Math.floor((WIDTH - w) / 2)
+            const y = layout.buttonY + Math.floor(BUTTON_H / 2) + Math.floor(ascC / 2)
+            addLinePaths(ctaText, x, y, CTA_SIZE, '#ffffff', 0)
+        }
     }
 
-    // 설명 라인
-    for (let i = 0; i < descLines.length; i++) {
-        if (!descLines[i].trim()) continue
-        const { buffer, width } = await renderTextLine(descLines[i], DESC_FONTSIZE, '#E5E7EB', fontPath)
-        composites.push({
-            input: buffer,
-            top: layout.descStartY + i * DESC_LINE_HEIGHT,
-            left: Math.max(0, Math.floor((WIDTH - width) / 2)),
-        })
-    }
+    const svg =
+        `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">` +
+        svgPaths.join('') +
+        `</svg>`
 
-    // CTA 버튼 텍스트 (씬 3만)
-    if (sceneNumber === 3 && layout.buttonY > 0) {
-        const { buffer, width } = await renderTextLine('지금 바로 확인하기', 58, 'white', fontPath)
-        composites.push({
-            input: buffer,
-            top: layout.buttonY + Math.floor((BUTTON_H - 58) / 2),
-            left: Math.max(0, Math.floor((WIDTH - width) / 2)),
-        })
-    }
-
-    const base = sharp({
-        create: { width: WIDTH, height: HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
-    })
-
-    if (composites.length === 0) return base.png().toBuffer()
-    return base.composite(composites).png().toBuffer()
+    return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
 /**
@@ -216,14 +206,13 @@ export async function createTypingFrames(
     sceneDuration: number
 ): Promise<{ buffer: Buffer; duration: number }[]> {
     const layout = computeLayout(title, desc, sceneNumber)
-    const fontPath = getFontPath()
 
     const titleWords = title.split(' ').filter(w => w.length > 0)
     const descWords = desc.split(' ').filter(w => w.length > 0)
     const totalWords = titleWords.length + descWords.length
 
     if (totalWords === 0) {
-        const empty = await renderTypingStatePNG('', '', sceneNumber, layout, fontPath)
+        const empty = await renderTypingStatePNG('', '', sceneNumber, layout)
         return [{ buffer: empty, duration: sceneDuration }]
     }
 
@@ -236,7 +225,7 @@ export async function createTypingFrames(
             ? descWords.slice(0, n - titleWords.length).join(' ')
             : ''
 
-        const buffer = await renderTypingStatePNG(titleVisible, descVisible, sceneNumber, layout, fontPath)
+        const buffer = await renderTypingStatePNG(titleVisible, descVisible, sceneNumber, layout)
         const isLast = n === totalWords
         const duration = isLast
             ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
