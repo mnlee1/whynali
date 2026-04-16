@@ -73,6 +73,9 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
     const cooldownStart = new Date()
     cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
 
+    // 한 번에 처리할 최대 숏폼 수 (타임아웃 방지, 기본 3개)
+    const SHORTFORM_BATCH_SIZE = parseInt(process.env.SHORTFORM_BATCH_SIZE ?? '3')
+
     const { data: issues, error: issuesError } = await supabaseAdmin
         .from('issues')
         .select('id, title, category, status, heat_index')
@@ -80,6 +83,7 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
         .eq('visibility_status', 'visible')
         .gte('heat_index', SHORTFORM_MIN_HEAT)
         .order('heat_index', { ascending: false })
+        .limit(SHORTFORM_BATCH_SIZE)
 
     if (issuesError || !issues) {
         console.error('[숏폼 배치] 이슈 조회 실패:', issuesError)
