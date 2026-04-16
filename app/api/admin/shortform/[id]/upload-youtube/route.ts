@@ -84,7 +84,8 @@ export async function POST(_request: NextRequest, { params }: Params) {
         // 4. YouTube 업로드 (항상 실서버 URL 사용 — 로컬 개발환경에서도 동일)
         const siteUrl = 'https://whynali.com'
         const issueId = job.issue_url.split('/issue/')[1]?.split('?')[0] ?? ''
-        const publicIssueUrl = issueId ? `${siteUrl}/issue/${issueId}` : siteUrl
+        const shortId = issueId.substring(0, 8)
+        const publicIssueUrl = shortId ? `${siteUrl}/i/${shortId}` : siteUrl
 
         // 카테고리별 고정 해시태그
         const CATEGORY_HASHTAGS: Record<string, string> = {

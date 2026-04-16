@@ -104,7 +104,11 @@ export async function POST(
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
         const titleTags = titleKeywords.map((k: string) => `#${k}`).join(' ')
 
-        const tiktokTitle = `${job.issue_title} | 왜난리 #왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
+        const shortId = issueId.substring(0, 8)
+        const shortUrl = shortId ? ` whynali.com/i/${shortId}` : ''
+
+        const tiktokTitle = `${job.issue_title} | 왜난리${shortUrl} #왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
 
         // 3. TikTok 업로드
         let publishId: string
