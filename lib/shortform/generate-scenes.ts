@@ -86,14 +86,6 @@ function escapeDrawtext(text: string): string {
         .replace(/:/g, '\\:')
 }
 
-function escapeXml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;')
-}
 
 function getLogoBase64(): string {
     try {
@@ -104,89 +96,111 @@ function getLogoBase64(): string {
     }
 }
 
-// 폰트 data URI 캐시 (최초 1회만 읽음)
-let _fontDataUriCache: string | null = null
+// 폰트 파일 경로 캐시 (최초 1회만 체크)
+let _fontPathCache: string | null = null
 
-function getFontDataUri(): string {
-    if (_fontDataUriCache !== null) return _fontDataUriCache
-    try {
-        const fontPath = join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
-        _fontDataUriCache = `data:font/truetype;base64,${readFileSync(fontPath).toString('base64')}`
-    } catch {
-        console.warn('[generate-scenes] Pretendard-Bold.ttf 없음 — 시스템 폰트 사용')
-        _fontDataUriCache = ''
-    }
-    return _fontDataUriCache
+function getFontPath(): string {
+    if (_fontPathCache !== null) return _fontPathCache
+    const fs = require('fs') as typeof import('fs')
+    const candidate = join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
+    _fontPathCache = fs.existsSync(candidate) ? candidate : ''
+    if (!_fontPathCache) console.warn('[generate-scenes] Pretendard-Bold.ttf 없음 — 시스템 폰트 사용')
+    return _fontPathCache
 }
 
 /**
- * 타이핑 애니메이션 한 프레임 렌더링 (Sharp + SVG).
- * drawtext 없이 텍스트 오버레이 PNG 생성.
+ * Pango 마크업용 텍스트 이스케이프 (& < > 처리)
+ */
+function escapePango(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Sharp 네이티브 text 입력으로 한 줄 텍스트 이미지 렌더링.
+ * Pango 기반 → fontfile로 직접 폰트 로드 → 한국어 확실히 렌더링.
+ */
+async function renderTextLine(
+    text: string,
+    fontSize: number,
+    color: string,
+    fontPath: string
+): Promise<{ buffer: Buffer; width: number; height: number }> {
+    const markup = `<span foreground="${color}">${escapePango(text)}</span>`
+    const textOptions: Record<string, unknown> = {
+        text: markup,
+        rgba: true,
+        dpi: 72,
+        width: 950,
+        align: 'centre' as const,
+    }
+    if (fontPath) {
+        textOptions.fontfile = fontPath
+        textOptions.font = `Pretendard Bold ${fontSize}`
+    } else {
+        textOptions.font = `Sans Bold ${fontSize}`
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, info } = await (sharp as any)({ text: textOptions })
+        .png()
+        .toBuffer({ resolveWithObject: true })
+    return { buffer: data, width: info.width, height: info.height }
+}
+
+/**
+ * 타이핑 애니메이션 한 프레임 렌더링.
+ * Sharp 네이티브 text 입력 사용 (SVG @font-face 대신) → 한국어 렌더링 보장.
  */
 async function renderTypingStatePNG(
     titleVisible: string,
     descVisible: string,
     sceneNumber: number,
     layout: SceneLayout,
-    fontDataUri: string
+    fontPath: string
 ): Promise<Buffer> {
-    const fontFamily = fontDataUri ? 'Pretendard' : 'Arial, sans-serif'
-    const fontFaceStyle = fontDataUri
-        ? `@font-face { font-family: 'Pretendard'; src: url('${fontDataUri}') format('truetype'); }`
-        : ''
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const composites: any[] = []
 
     const titleLines = titleVisible ? wordWrapLines(titleVisible, 13) : []
     const descLines = descVisible ? wordWrapLines(descVisible, 16) : []
 
-    const elements: string[] = []
-
-    // 타이틀 라인 (스트로크 먼저 → 위에 fill 렌더링)
+    // 타이틀 라인
     for (let i = 0; i < titleLines.length; i++) {
-        const x = WIDTH / 2
-        const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + TITLE_FONTSIZE
-        const esc = escapeXml(titleLines[i])
-        elements.push(
-            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
-            `font-size="${TITLE_FONTSIZE}" fill="none" stroke="black" stroke-width="8" stroke-linejoin="round">${esc}</text>`
-        )
-        elements.push(
-            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
-            `font-size="${TITLE_FONTSIZE}" fill="white">${esc}</text>`
-        )
+        if (!titleLines[i].trim()) continue
+        const { buffer, width } = await renderTextLine(titleLines[i], TITLE_FONTSIZE, 'white', fontPath)
+        composites.push({
+            input: buffer,
+            top: layout.titleStartY + i * TITLE_LINE_HEIGHT,
+            left: Math.max(0, Math.floor((WIDTH - width) / 2)),
+        })
     }
 
-    // 설명 라인 (스트로크 먼저 → 위에 fill 렌더링)
+    // 설명 라인
     for (let i = 0; i < descLines.length; i++) {
-        const x = WIDTH / 2
-        const y = layout.descStartY + i * DESC_LINE_HEIGHT + DESC_FONTSIZE
-        const esc = escapeXml(descLines[i])
-        elements.push(
-            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
-            `font-size="${DESC_FONTSIZE}" fill="none" stroke="black" stroke-width="5" stroke-linejoin="round">${esc}</text>`
-        )
-        elements.push(
-            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
-            `font-size="${DESC_FONTSIZE}" fill="#E5E7EB">${esc}</text>`
-        )
+        if (!descLines[i].trim()) continue
+        const { buffer, width } = await renderTextLine(descLines[i], DESC_FONTSIZE, '#E5E7EB', fontPath)
+        composites.push({
+            input: buffer,
+            top: layout.descStartY + i * DESC_LINE_HEIGHT,
+            left: Math.max(0, Math.floor((WIDTH - width) / 2)),
+        })
     }
 
-    // CTA 버튼 텍스트 (씬 3만, 항상 표시)
+    // CTA 버튼 텍스트 (씬 3만)
     if (sceneNumber === 3 && layout.buttonY > 0) {
-        const x = WIDTH / 2
-        const y = layout.buttonY + Math.floor(BUTTON_H / 2) + 20
-        elements.push(
-            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
-            `font-size="58" fill="white">${escapeXml('지금 바로 확인하기')}</text>`
-        )
+        const { buffer, width } = await renderTextLine('지금 바로 확인하기', 58, 'white', fontPath)
+        composites.push({
+            input: buffer,
+            top: layout.buttonY + Math.floor((BUTTON_H - 58) / 2),
+            left: Math.max(0, Math.floor((WIDTH - width) / 2)),
+        })
     }
 
-    const svg =
-        `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">` +
-        (fontFaceStyle ? `<defs><style>${fontFaceStyle}</style></defs>` : '') +
-        elements.join('') +
-        `</svg>`
+    const base = sharp({
+        create: { width: WIDTH, height: HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    })
 
-    return sharp(Buffer.from(svg)).png().toBuffer()
+    if (composites.length === 0) return base.png().toBuffer()
+    return base.composite(composites).png().toBuffer()
 }
 
 /**
@@ -202,14 +216,14 @@ export async function createTypingFrames(
     sceneDuration: number
 ): Promise<{ buffer: Buffer; duration: number }[]> {
     const layout = computeLayout(title, desc, sceneNumber)
-    const fontDataUri = getFontDataUri()
+    const fontPath = getFontPath()
 
     const titleWords = title.split(' ').filter(w => w.length > 0)
     const descWords = desc.split(' ').filter(w => w.length > 0)
     const totalWords = titleWords.length + descWords.length
 
     if (totalWords === 0) {
-        const empty = await renderTypingStatePNG('', '', sceneNumber, layout, fontDataUri)
+        const empty = await renderTypingStatePNG('', '', sceneNumber, layout, fontPath)
         return [{ buffer: empty, duration: sceneDuration }]
     }
 
@@ -222,7 +236,7 @@ export async function createTypingFrames(
             ? descWords.slice(0, n - titleWords.length).join(' ')
             : ''
 
-        const buffer = await renderTypingStatePNG(titleVisible, descVisible, sceneNumber, layout, fontDataUri)
+        const buffer = await renderTypingStatePNG(titleVisible, descVisible, sceneNumber, layout, fontPath)
         const isLast = n === totalWords
         const duration = isLast
             ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
