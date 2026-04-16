@@ -3,7 +3,11 @@ const nextConfig = {
     serverExternalPackages: ['googleapis', 'sharp', 'ffmpeg-static'],
     experimental: {
         outputFileTracingIncludes: {
-            '/api/admin/shortform/[id]/generate': ['./node_modules/ffmpeg-static/ffmpeg'],
+            '/api/admin/shortform/[id]/generate': [
+                './node_modules/ffmpeg-static/ffmpeg',
+                './public/fonts/Pretendard-Bold.ttf',
+                './public/whynali-logo.png',
+            ],
         },
     },
     webpack: (config, { isServer }) => {
