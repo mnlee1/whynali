@@ -234,8 +234,21 @@ export async function GET(request: NextRequest) {
         .slice(0, MAX_ISSUES_PER_RUN)
 
     if (targets.length === 0) {
-        console.log('[daily-generate] 생성 대상 이슈 없음')
-        return NextResponse.json({ success: true, discussionGenerated: 0, voteGenerated: 0, issueCount: 0 })
+        console.log('[daily-generate] 토론/투표 생성 대상 이슈 없음 — 숏폼 배치는 계속 진행')
+        const shortformResult = await generateShortformBatch()
+        if (shortformResult.jobsGenerated > 0) {
+            await sendDoorayShortformBatchAlert(shortformResult)
+        }
+        return NextResponse.json({
+            success: true,
+            deletedStaleVotes: deletedVotes,
+            deletedStaleDiscussions: deletedDiscussions,
+            discussionGenerated: 0,
+            voteGenerated: 0,
+            issueCount: 0,
+            shortformGenerated: shortformResult.jobsGenerated,
+            shortformIssueCount: shortformResult.issueCount,
+        })
     }
 
     console.log(`[daily-generate] 대상 이슈 ${targets.length}건 처리 시작`)
