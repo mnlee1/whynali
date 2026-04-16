@@ -29,11 +29,8 @@ import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
 import { sendDoorayBatchGenerationAlert, sendDoorayShortformBatchAlert } from '@/lib/dooray-notification'
-import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT, SHORTFORM_COOLDOWN_HOURS, SHORTFORM_VIDEO_DURATION, SHORTFORM_VIDEO_EFFECT } from '@/lib/config/shortform-thresholds'
+import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT, SHORTFORM_COOLDOWN_HOURS } from '@/lib/config/shortform-thresholds'
 import type { ShortformSourceCount } from '@/types/shortform'
-import { generateShortformImage } from '@/lib/shortform/generate-image'
-import { validateShortformImage } from '@/lib/shortform/ai-validate'
-import { convertImageToVideoViaCloudinary } from '@/lib/shortform/cloudinary-video'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -146,14 +143,7 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
         if (!insertError && job) {
             jobsGenerated++
             console.log(`  ✓ [숏폼] "${issue.title}" — job 생성 (화력: ${issue.heat_index})`)
-
-            // 이미지 자동 생성 + AI 판별
-            try {
-                await autoGenerateAndValidate(job.id, issue)
-            } catch (e) {
-                console.error(`  ✗ [숏폼 이미지/AI 판별 실패] "${issue.title}":`, e)
-                // 실패해도 job은 유지
-            }
+            // 영상 생성은 어드민이 이미지 확인 후 직접 진행
         } else {
             console.error(`  ✗ [숏폼 생성 실패] "${issue.title}":`, insertError)
         }
@@ -234,8 +224,21 @@ export async function GET(request: NextRequest) {
         .slice(0, MAX_ISSUES_PER_RUN)
 
     if (targets.length === 0) {
-        console.log('[daily-generate] 생성 대상 이슈 없음')
-        return NextResponse.json({ success: true, discussionGenerated: 0, voteGenerated: 0, issueCount: 0 })
+        console.log('[daily-generate] 토론/투표 생성 대상 이슈 없음 — 숏폼 배치는 계속 진행')
+        const shortformResult = await generateShortformBatch()
+        if (shortformResult.jobsGenerated > 0) {
+            await sendDoorayShortformBatchAlert(shortformResult)
+        }
+        return NextResponse.json({
+            success: true,
+            deletedStaleVotes: deletedVotes,
+            deletedStaleDiscussions: deletedDiscussions,
+            discussionGenerated: 0,
+            voteGenerated: 0,
+            issueCount: 0,
+            shortformGenerated: shortformResult.jobsGenerated,
+            shortformIssueCount: shortformResult.issueCount,
+        })
     }
 
     console.log(`[daily-generate] 대상 이슈 ${targets.length}건 처리 시작`)
@@ -341,82 +344,3 @@ export async function GET(request: NextRequest) {
     })
 }
 
-/**
- * 숏폼 이미지 생성 → 동영상 변환 → AI 판별
- * 
- * @param jobId - 생성된 job ID
- * @param issue - 이슈 정보 (category 포함)
- */
-async function autoGenerateAndValidate(
-    jobId: string,
-    issue: { id: string; title: string; category: string | null; heat_index: number | null; status: string }
-): Promise<void> {
-    // 1. job 상세 조회
-    const { data: job } = await supabaseAdmin
-        .from('shortform_jobs')
-        .select('issue_status, heat_grade, source_count, issue_url, issue_title')
-        .eq('id', jobId)
-        .single()
-    
-    if (!job) throw new Error('job 조회 실패')
-
-    // 2. 이미지 생성 (Gemini 텍스트 포함)
-    const imageBuffer = await generateShortformImage({
-        issueTitle: job.issue_title,
-        issueCategory: issue.category ?? '사회',
-        issueStatus: job.issue_status,
-        heatGrade: job.heat_grade,
-        newsCount: (job.source_count as any)?.news ?? 0,
-        communityCount: (job.source_count as any)?.community ?? 0,
-        issueUrl: job.issue_url,
-    })
-
-    // 3. 이미지 → 동영상 변환 (Cloudinary)
-    const videoBuffer = await convertImageToVideoViaCloudinary(imageBuffer, {
-        duration: SHORTFORM_VIDEO_DURATION,
-        effect: SHORTFORM_VIDEO_EFFECT,
-    })
-
-    // 4. 동영상을 Supabase Storage에 업로드
-    await supabaseAdmin.storage
-        .from('shortform-assets')
-        .upload(`videos/${jobId}.mp4`, videoBuffer, {
-            contentType: 'video/mp4',
-            upsert: true,
-        })
-
-    const { data: { publicUrl } } = supabaseAdmin.storage
-        .from('shortform-assets')
-        .getPublicUrl(`videos/${jobId}.mp4`)
-
-    // 5. video_path 업데이트
-    await supabaseAdmin
-        .from('shortform_jobs')
-        .update({ video_path: publicUrl })
-        .eq('id', jobId)
-
-    console.log(`  ✓ [동영상 생성] "${job.issue_title}" — ${publicUrl}`)
-
-    // 6. AI 이미지 판별 (GEMINI_API_KEY 없으면 스킵)
-    // 주의: 동영상이 아닌 이미지를 검수합니다 (텍스트 가독성 검증을 위해)
-    if (process.env.GEMINI_API_KEY) {
-        const imagePath = `images/${jobId}.png`
-        await supabaseAdmin.storage
-            .from('shortform-assets')
-            .upload(imagePath, imageBuffer, {
-                contentType: 'image/png',
-                upsert: true,
-            })
-
-        const { data: { publicUrl: imageUrl } } = supabaseAdmin.storage
-            .from('shortform-assets')
-            .getPublicUrl(imagePath)
-
-        const validation = await validateShortformImage(imageUrl, job.issue_title)
-        await supabaseAdmin
-            .from('shortform_jobs')
-            .update({ ai_validation: validation })
-            .eq('id', jobId)
-        console.log(`  ✓ [AI 판별] "${job.issue_title}" — ${validation.status}`)
-    }
-}

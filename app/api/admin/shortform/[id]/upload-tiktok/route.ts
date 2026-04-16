@@ -63,28 +63,37 @@ export async function POST(
             )
         }
 
-        // 2. Supabase Storage에서 동영상 다운로드
-        const fileName = job.video_path.split('/').pop()
-        if (!fileName) {
-            return NextResponse.json(
-                { error: 'INVALID_VIDEO_PATH', message: '동영상 경로가 올바르지 않습니다' },
-                { status: 400 }
-            )
+        // 2. 동영상 버퍼 가져오기 (URL 또는 Supabase Storage 경로 모두 지원)
+        let videoBuffer: Buffer
+        if (job.video_path.startsWith('http')) {
+            const res = await fetch(job.video_path)
+            if (!res.ok) {
+                return NextResponse.json(
+                    { error: 'DOWNLOAD_ERROR', message: 'Storage에서 동영상 다운로드 실패' },
+                    { status: 500 }
+                )
+            }
+            videoBuffer = Buffer.from(await res.arrayBuffer())
+        } else {
+            const fileName = job.video_path.split('/').pop()
+            if (!fileName) {
+                return NextResponse.json(
+                    { error: 'INVALID_VIDEO_PATH', message: '동영상 경로가 올바르지 않습니다' },
+                    { status: 400 }
+                )
+            }
+            const { data: videoData, error: downloadError } = await supabaseAdmin.storage
+                .from('shortform')
+                .download(fileName)
+            if (downloadError || !videoData) {
+                console.error('[upload-tiktok] Storage 다운로드 실패:', downloadError)
+                return NextResponse.json(
+                    { error: 'DOWNLOAD_FAILED', message: 'Storage에서 동영상을 가져올 수 없습니다' },
+                    { status: 500 }
+                )
+            }
+            videoBuffer = Buffer.from(await videoData.arrayBuffer())
         }
-
-        const { data: videoData, error: downloadError } = await supabaseAdmin.storage
-            .from('shortform')
-            .download(fileName)
-
-        if (downloadError || !videoData) {
-            console.error('[upload-tiktok] Storage 다운로드 실패:', downloadError)
-            return NextResponse.json(
-                { error: 'DOWNLOAD_FAILED', message: 'Storage에서 동영상을 가져올 수 없습니다' },
-                { status: 500 }
-            )
-        }
-
-        const videoBuffer = Buffer.from(await videoData.arrayBuffer())
 
         // 카테고리별 해시태그 매핑
         const CATEGORY_HASHTAGS: Record<string, string> = {

@@ -67,19 +67,22 @@ export async function POST(
             )
         }
 
-        // 2. Supabase Storage 공개 URL 생성 (Instagram은 파일 다운로드 불필요)
-        const { data: urlData } = supabaseAdmin.storage
-            .from('shortform')
-            .getPublicUrl(job.video_path)
-
-        if (!urlData?.publicUrl) {
-            return NextResponse.json(
-                { error: 'URL_FAILED', message: 'Storage 공개 URL을 가져올 수 없습니다' },
-                { status: 500 }
-            )
+        // 2. 동영상 공개 URL 가져오기 (URL 또는 Supabase Storage 경로 모두 지원)
+        let videoPublicUrl: string
+        if (job.video_path.startsWith('http')) {
+            videoPublicUrl = job.video_path
+        } else {
+            const { data: urlData } = supabaseAdmin.storage
+                .from('shortform')
+                .getPublicUrl(job.video_path)
+            if (!urlData?.publicUrl) {
+                return NextResponse.json(
+                    { error: 'URL_FAILED', message: 'Storage 공개 URL을 가져올 수 없습니다' },
+                    { status: 500 }
+                )
+            }
+            videoPublicUrl = urlData.publicUrl
         }
-
-        const videoPublicUrl = urlData.publicUrl
 
         // 카테고리별 해시태그 매핑
         const CATEGORY_HASHTAGS: Record<string, string> = {
