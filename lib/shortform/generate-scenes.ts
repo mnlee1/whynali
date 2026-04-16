@@ -86,6 +86,15 @@ function escapeDrawtext(text: string): string {
         .replace(/:/g, '\\:')
 }
 
+function escapeXml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+}
+
 function getLogoBase64(): string {
     try {
         const logoPath = join(process.cwd(), 'public', 'whynali-logo.png')
@@ -93,6 +102,136 @@ function getLogoBase64(): string {
     } catch {
         return ''
     }
+}
+
+// 폰트 data URI 캐시 (최초 1회만 읽음)
+let _fontDataUriCache: string | null = null
+
+function getFontDataUri(): string {
+    if (_fontDataUriCache !== null) return _fontDataUriCache
+    try {
+        const fontPath = join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
+        _fontDataUriCache = `data:font/truetype;base64,${readFileSync(fontPath).toString('base64')}`
+    } catch {
+        console.warn('[generate-scenes] Pretendard-Bold.ttf 없음 — 시스템 폰트 사용')
+        _fontDataUriCache = ''
+    }
+    return _fontDataUriCache
+}
+
+/**
+ * 타이핑 애니메이션 한 프레임 렌더링 (Sharp + SVG).
+ * drawtext 없이 텍스트 오버레이 PNG 생성.
+ */
+async function renderTypingStatePNG(
+    titleVisible: string,
+    descVisible: string,
+    sceneNumber: number,
+    layout: SceneLayout,
+    fontDataUri: string
+): Promise<Buffer> {
+    const fontFamily = fontDataUri ? 'Pretendard' : 'Arial, sans-serif'
+    const fontFaceStyle = fontDataUri
+        ? `@font-face { font-family: 'Pretendard'; src: url('${fontDataUri}') format('truetype'); }`
+        : ''
+
+    const titleLines = titleVisible ? wordWrapLines(titleVisible, 13) : []
+    const descLines = descVisible ? wordWrapLines(descVisible, 16) : []
+
+    const elements: string[] = []
+
+    // 타이틀 라인 (스트로크 먼저 → 위에 fill 렌더링)
+    for (let i = 0; i < titleLines.length; i++) {
+        const x = WIDTH / 2
+        const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + TITLE_FONTSIZE
+        const esc = escapeXml(titleLines[i])
+        elements.push(
+            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
+            `font-size="${TITLE_FONTSIZE}" fill="none" stroke="black" stroke-width="8" stroke-linejoin="round">${esc}</text>`
+        )
+        elements.push(
+            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
+            `font-size="${TITLE_FONTSIZE}" fill="white">${esc}</text>`
+        )
+    }
+
+    // 설명 라인 (스트로크 먼저 → 위에 fill 렌더링)
+    for (let i = 0; i < descLines.length; i++) {
+        const x = WIDTH / 2
+        const y = layout.descStartY + i * DESC_LINE_HEIGHT + DESC_FONTSIZE
+        const esc = escapeXml(descLines[i])
+        elements.push(
+            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
+            `font-size="${DESC_FONTSIZE}" fill="none" stroke="black" stroke-width="5" stroke-linejoin="round">${esc}</text>`
+        )
+        elements.push(
+            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
+            `font-size="${DESC_FONTSIZE}" fill="#E5E7EB">${esc}</text>`
+        )
+    }
+
+    // CTA 버튼 텍스트 (씬 3만, 항상 표시)
+    if (sceneNumber === 3 && layout.buttonY > 0) {
+        const x = WIDTH / 2
+        const y = layout.buttonY + Math.floor(BUTTON_H / 2) + 20
+        elements.push(
+            `<text x="${x}" y="${y}" text-anchor="middle" font-family="${fontFamily}" ` +
+            `font-size="58" fill="white">${escapeXml('지금 바로 확인하기')}</text>`
+        )
+    }
+
+    const svg =
+        `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">` +
+        (fontFaceStyle ? `<defs><style>${fontFaceStyle}</style></defs>` : '') +
+        elements.join('') +
+        `</svg>`
+
+    return sharp(Buffer.from(svg)).png().toBuffer()
+}
+
+/**
+ * 씬별 타이핑 애니메이션 프레임 배열 생성 (drawtext 대체).
+ * 단어 하나씩 누적해서 보여주는 PNG 시퀀스 반환.
+ *
+ * @returns { buffer, duration }[] — 각 프레임 PNG와 표시 시간(초)
+ */
+export async function createTypingFrames(
+    title: string,
+    desc: string,
+    sceneNumber: number,
+    sceneDuration: number
+): Promise<{ buffer: Buffer; duration: number }[]> {
+    const layout = computeLayout(title, desc, sceneNumber)
+    const fontDataUri = getFontDataUri()
+
+    const titleWords = title.split(' ').filter(w => w.length > 0)
+    const descWords = desc.split(' ').filter(w => w.length > 0)
+    const totalWords = titleWords.length + descWords.length
+
+    if (totalWords === 0) {
+        const empty = await renderTypingStatePNG('', '', sceneNumber, layout, fontDataUri)
+        return [{ buffer: empty, duration: sceneDuration }]
+    }
+
+    const wordDelay = Math.min(0.4, (sceneDuration * 0.78) / totalWords)
+    const frames: { buffer: Buffer; duration: number }[] = []
+
+    for (let n = 1; n <= totalWords; n++) {
+        const titleVisible = titleWords.slice(0, Math.min(n, titleWords.length)).join(' ')
+        const descVisible = n > titleWords.length
+            ? descWords.slice(0, n - titleWords.length).join(' ')
+            : ''
+
+        const buffer = await renderTypingStatePNG(titleVisible, descVisible, sceneNumber, layout, fontDataUri)
+        const isLast = n === totalWords
+        const duration = isLast
+            ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
+            : wordDelay
+
+        frames.push({ buffer, duration })
+    }
+
+    return frames
 }
 
 /**
