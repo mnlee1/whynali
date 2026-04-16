@@ -66,20 +66,25 @@ export async function POST(_request: NextRequest, { params }: Params) {
             )
         }
 
-        // 3. Supabase Storage에서 동영상 다운로드
-        const { data: videoData, error: downloadError } = await supabaseAdmin
-            .storage
-            .from('shortform')
-            .download(job.video_path)
-
-        if (downloadError || !videoData) {
-            return NextResponse.json(
-                { error: 'DOWNLOAD_ERROR', message: 'Storage에서 동영상 다운로드 실패' },
-                { status: 500 }
-            )
+        // 3. 동영상 버퍼 가져오기 (URL 또는 Supabase Storage 경로 모두 지원)
+        let videoBuffer: Buffer
+        if (job.video_path.startsWith('http')) {
+            const res = await fetch(job.video_path)
+            if (!res.ok) throw new Error('Storage에서 동영상 다운로드 실패')
+            videoBuffer = Buffer.from(await res.arrayBuffer())
+        } else {
+            const { data: videoData, error: downloadError } = await supabaseAdmin
+                .storage
+                .from('shortform')
+                .download(job.video_path)
+            if (downloadError || !videoData) {
+                return NextResponse.json(
+                    { error: 'DOWNLOAD_ERROR', message: 'Storage에서 동영상 다운로드 실패' },
+                    { status: 500 }
+                )
+            }
+            videoBuffer = Buffer.from(await videoData.arrayBuffer())
         }
-
-        const videoBuffer = Buffer.from(await videoData.arrayBuffer())
 
         // 4. YouTube 업로드 (항상 실서버 URL 사용 — 로컬 개발환경에서도 동일)
         const siteUrl = 'https://whynali.com'
