@@ -9,6 +9,7 @@
 @layer base {
     * {
         word-break: keep-all;
+        overflow-wrap: break-word;
     }
 
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),

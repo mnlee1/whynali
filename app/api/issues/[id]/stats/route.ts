@@ -30,18 +30,18 @@ export async function GET(
                 .from('votes')
                 .select('*', { count: 'exact', head: true })
                 .eq('issue_id', id)
-                .eq('phase', '진행중'),
+                .in('phase', ['진행중', '마감']),
             supabaseAdmin
                 .from('comments')
                 .select('*', { count: 'exact', head: true })
                 .eq('issue_id', id)
                 .is('parent_id', null)
-                .eq('visibility', 'public'),
+                .in('visibility', ['public', 'pending_review']),
             supabaseAdmin
                 .from('discussion_topics')
                 .select('*', { count: 'exact', head: true })
                 .eq('issue_id', id)
-                .eq('approval_status', '진행중'),
+                .in('approval_status', ['진행중', '마감']),
             supabaseAdmin
                 .from('issues')
                 .select('view_count')

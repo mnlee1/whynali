@@ -114,50 +114,60 @@ export default function CommunityPreview({ initialTopics }: Props) {
             <div className="space-y-3">
                 {topics.map((topic) => (
                     <Link key={topic.id} href={`/community/${topic.id}`} className="block">
-                        <article className="card-hover p-4">
+                        <article className="card-hover p-5">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2">
+                                    <div className="flex items-center gap-2 mb-2.5">
                                         {topic.approval_status === '진행중' ? (
                                             <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
-                                                진행중
+                                                토론 진행중
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-surface-muted text-content-muted border-border text-xs font-medium">
-                                                마감
+                                                토론 마감
                                             </span>
                                         )}
                                     </div>
 
-                                    {topic.issues?.id && topic.issues?.title && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault()
-                                                e.stopPropagation()
-                                                if (!topic.issues?.id) return
-                                                router.push(`/community?issue_id=${topic.issues.id}`)
-                                            }}
-                                            className="inline-block text-sm text-primary hover:underline mb-1 line-clamp-1 text-left transition-colors"
-                                        >
-                                            {decodeHtml(topic.issues?.title ?? '')} ({issueTopicCountMap[topic.issues?.id ?? ''] ?? 1}) →
-                                        </button>
-                                    )}
                                     <p className="text-base font-medium text-content-primary line-clamp-2 leading-snug mb-2">
                                         {decodeHtml(topic.body)}
                                     </p>
-                                    <div className="flex items-center gap-3 text-xs text-content-secondary">
-                                        {topic.viewCount !== undefined && (
-                                            <span className="flex items-center gap-1">
-                                                <Eye className="w-4 h-4" strokeWidth={1.8} />
-                                                <span>{topic.viewCount.toLocaleString()}</span>
-                                            </span>
-                                        )}
-                                        {topic.opinionCount !== undefined && (
-                                            <span className="flex items-center gap-1">
-                                                <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
-                                                <span>{topic.opinionCount.toLocaleString()}</span>
-                                            </span>
+
+                                    {topic.issues?.id && topic.issues?.title && (
+                                        <p className="text-xs text-content-muted mb-3 line-clamp-1">
+                                            연결 이슈 · {decodeHtml(topic.issues?.title ?? '')}
+                                        </p>
+                                    )}
+
+                                    <div className="flex items-center justify-between gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
+                                        <div className="flex items-center gap-3">
+                                            {topic.viewCount !== undefined && (
+                                                <span className="flex items-center gap-1">
+                                                    <Eye className="w-4 h-4" strokeWidth={1.8} />
+                                                    <span>{topic.viewCount.toLocaleString()}</span>
+                                                </span>
+                                            )}
+                                            {topic.opinionCount !== undefined && (
+                                                <span className="flex items-center gap-1">
+                                                    <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
+                                                    <span>{topic.opinionCount.toLocaleString()}</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                        {topic.issues?.id && (issueTopicCountMap[topic.issues?.id ?? ''] ?? 1) > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault()
+                                                    e.stopPropagation()
+                                                    if (!topic.issues?.id) return
+                                                    router.push(`/community?issue_id=${topic.issues.id}`)
+                                                }}
+                                                className="flex items-center gap-1 text-xs text-content-secondary hover:text-primary hover:underline transition-colors shrink-0"
+                                            >
+                                                <span>연결 이슈의 토론 {issueTopicCountMap[topic.issues?.id ?? ''] ?? 1}개 더보기</span>
+                                                <span>→</span>
+                                            </button>
                                         )}
                                     </div>
                                 </div>

@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, CSSProperties } from 'react'
-import { CheckCircle2, ChevronDown, Calendar } from 'lucide-react'
+import { CheckCircle2, Calendar, ChevronDown, Check } from 'lucide-react'
 import type { Vote, VoteChoice } from '@/types'
 
 interface VoteSectionProps {
@@ -27,7 +27,6 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState<string | null>(null)
     const [, setError] = useState<string | null>(null)
-    const [showPast, setShowPast] = useState(false)
 
 
     useEffect(() => {
@@ -45,12 +44,6 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
             if (!res.ok) throw new Error(json.error)
             setVotes(json.data ?? [])
             setUserVotes(json.userVotes ?? {})
-            
-            const active = (json.data ?? []).filter((v: VoteWithChoices) => v.phase === '진행중')
-            const past = (json.data ?? []).filter((v: VoteWithChoices) => v.phase === '마감')
-            if (active.length === 0 && past.length > 0) {
-                setShowPast(true)
-            }
         } catch (e) {
             setError(e instanceof Error ? e.message : '투표 조회 실패')
         } finally {
@@ -138,7 +131,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 </div>
                 <div className="p-4 space-y-4">
                     {[1, 2].map((i) => (
-                        <div key={i} className="card p-4 space-y-3">
+                        <div key={i} className="rounded-xl p-4 bg-surface-muted/40 space-y-3">
                             <div className="h-4 w-40 bg-border-muted rounded-full animate-pulse" />
                             <div className="h-8 w-full bg-border-muted rounded-xl animate-pulse" />
                             <div className="h-8 w-full bg-border-muted rounded-xl animate-pulse" />
@@ -155,7 +148,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">투표</h2>
                 </div>
-                <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
+                <div className="p-4 flex flex-col items-center justify-center text-center gap-2">
                     <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
                     <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
                     <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
@@ -178,12 +171,13 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                     )}
                 </div>
             </div>
+
             <div className="p-4 space-y-4">
 
 
                 {/* 진행중 투표 */}
                 {activeVotes.length > 0 ? (
-                    <div className="space-y-4">
+                    <>
                         {activeVotes.map((vote) => (
                             <VoteCard
                                 key={vote.id}
@@ -194,47 +188,45 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                                 highlight
                             />
                         ))}
-                    </div>
+                    </>
                 ) : pastVotes.length > 0 ? (
-                    <div className="flex flex-col items-center justify-center text-center gap-2 py-6">
+                    <div className="flex flex-col items-center justify-center text-center gap-2">
                         <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
                         <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
                         <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
                     </div>
                 ) : null}
 
-                {/* 이전 투표 (접이식, 상태별 블록) */}
-                {pastVotes.length > 0 && (
-                    <div>
-                        {activeVotes.length > 0 && (
-                            <button
-                                onClick={() => setShowPast((p) => !p)}
-                                className="text-sm text-content-muted hover:text-content-secondary flex items-center gap-1.5 transition-colors"
-                            >
-                                <span>{showPast ? '▲' : '▼'}</span>
-                                <span>이전 투표 {pastVotes.length}개 {showPast ? '접기' : '보기'}</span>
-                            </button>
-                        )}
-
-                        {showPast && (
-                            <div className={activeVotes.length > 0 ? "mt-3 space-y-4" : "space-y-4"}>
-                                <div className="opacity-80">
-                                    <h4 className="text-xs font-semibold text-content-muted mb-2">종료된 투표</h4>
-                                    <div className="space-y-3">
-                                        {pastVotes.map((vote) => (
-                                            <VoteCard
-                                                key={vote.id}
-                                                vote={vote}
-                                                myChoiceId={userVotes[vote.id] ?? null}
-                                                isProcessing={false}
-                                                onVote={handleVote}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                {/* 이전 투표 */}
+                {pastVotes.length > 0 && activeVotes.length > 0 && (
+                    <div className="pt-4 border-t border-border-muted">
+                        <div className="space-y-4 opacity-80">
+                            {pastVotes.map((vote) => (
+                                <VoteCard
+                                    key={vote.id}
+                                    vote={vote}
+                                    myChoiceId={userVotes[vote.id] ?? null}
+                                    isProcessing={false}
+                                    onVote={handleVote}
+                                />
+                            ))}
+                        </div>
                     </div>
+                )}
+
+                {/* 진행중 투표가 없고 종료된 투표만 있을 때 */}
+                {pastVotes.length > 0 && activeVotes.length === 0 && (
+                    <>
+                        {pastVotes.map((vote) => (
+                            <VoteCard
+                                key={vote.id}
+                                vote={vote}
+                                myChoiceId={userVotes[vote.id] ?? null}
+                                isProcessing={false}
+                                onVote={handleVote}
+                            />
+                        ))}
+                    </>
                 )}
             </div>
         </div>
@@ -257,6 +249,13 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
     const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
     const isClosed = vote.phase === '마감'
 
+    // 진행중인 투표는 항상 펼쳐진 상태로 유지
+    useEffect(() => {
+        if (!isClosed) {
+            setIsExpanded(true)
+        }
+    }, [isClosed])
+
     // 자동 종료 정보 계산
     const autoEndDate = vote.auto_end_date ? new Date(vote.auto_end_date) : null
     const autoEndParticipants = vote.auto_end_participants
@@ -265,15 +264,6 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
     const participantProgress = autoEndParticipants
         ? Math.min(Math.round((totalCount / autoEndParticipants) * 100), 100)
         : null
-
-    // 종료 날짜 포맷
-    const formatEndDate = () => {
-        if (!vote.ended_at) return null
-        const date = new Date(vote.ended_at)
-        const month = date.getMonth() + 1
-        const day = date.getDate()
-        return `${month}월 ${day}일`
-    }
 
     // 남은 시간 표시
     const getTimeRemainingText = () => {
@@ -287,146 +277,130 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
     }
 
     return (
-        <div className={[
-            'border rounded-xl transition-all',
-            highlight && !isClosed
-                ? 'border-primary-muted bg-primary-light/30 shadow-sm'
-                : 'border-border bg-surface',
-            isEndingSoon && !isClosed ? 'ring-2 ring-orange-200' : '',
-        ].join(' ')}>
-            {/* 제목 + 상태 배지 (종료된 투표는 클릭 가능) */}
-            {isClosed ? (
-                <button
-                    type="button"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left"
+        <div className="rounded-xl transition-all p-4 border border-border">
+            {/* 제목 + 상태 배지 */}
+            <div className={isClosed && !isExpanded ? '' : 'mb-3'}>
+                <div 
+                    className={`flex items-center justify-between gap-2 ${isClosed ? 'cursor-pointer' : ''}`}
+                    onClick={() => isClosed && setIsExpanded(!isExpanded)}
                 >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {vote.phase && (
-                            <span className="inline-block text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 bg-surface-muted text-content-muted border-border">
-                                {formatEndDate() ? `종료됨 · ${formatEndDate()}` : '종료됨'}
+                    <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                            {vote.phase && (
+                                <span className={[
+                                    'inline-flex items-center px-2 py-0.5 rounded-full border font-medium shrink-0 text-xs',
+                                    isClosed
+                                        ? 'bg-surface-muted text-content-muted border-border'
+                                        : 'bg-purple-50 text-purple-700 border-purple-200'
+                                ].join(' ')}>
+                                    {isClosed ? '투표 마감' : '투표 진행중'}
+                                </span>
+                            )}
+                            {vote.title && (
+                                <p className="font-semibold text-sm">{vote.title}</p>
+                            )}
+                        </div>
+                        {!isClosed && isEndingSoon && (
+                            <span className="inline-block text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-medium animate-pulse">
+                                🔥 {getTimeRemainingText()}
                             </span>
-                        )}
-                        {vote.title && (
-                            <p className="font-semibold text-sm truncate">{vote.title}</p>
                         )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                         {totalCount > 0 && (
-                            <span className="text-xs text-content-muted">
+                            <span className="text-xs text-content-primary font-medium">
                                 {totalCount.toLocaleString()}표
                             </span>
                         )}
-                        <ChevronDown 
-                            className={`w-4 h-4 text-content-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            strokeWidth={2}
-                        />
-                    </div>
-                </button>
-            ) : (
-                <div className="p-4">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                                {vote.phase && (
-                                    <span className="inline-block text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 bg-primary-light text-primary border-primary-muted">
-                                        진행중
-                                    </span>
-                                )}
-                                {vote.title && (
-                                    <p className="font-semibold text-sm">{vote.title}</p>
-                                )}
-                            </div>
-                            <p className="text-xs text-content-muted mt-2 mb-0.5">선택지를 클릭하여 투표하세요. 다시 클릭하면 취소할 수 있습니다.</p>
-                            {isEndingSoon && (
-                                <span className="inline-block text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-medium animate-pulse">
-                                    🔥 {getTimeRemainingText()}
-                                </span>
-                            )}
-                        </div>
-                        {totalCount > 0 && (
-                            <span className="text-xs text-content-primary font-medium shrink-0">
-                                {totalCount.toLocaleString()}표
-                            </span>
+                        {isClosed && (
+                            <ChevronDown 
+                                className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                strokeWidth={2}
+                            />
                         )}
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* 선택지 영역 (종료된 투표는 펼쳤을 때만 표시) */}
-            {(!isClosed || isExpanded) && (
-                <div className="px-4 pb-4">
+            {/* 선택지 영역 - 조건부 렌더링 */}
+            {(isExpanded || !isClosed) && (
+                <div>
                     {/* 선택지 */}
                     <div className="space-y-2">
-                        {choices.map((choice) => {
-                            const pct = totalCount > 0
-                                ? Math.round((choice.count / totalCount) * 100)
-                                : 0
-                            const isSelected = myChoiceId === choice.id
-                            const disabled = isProcessing || isClosed
+                    {choices.map((choice) => {
+                        const pct = totalCount > 0
+                            ? Math.round((choice.count / totalCount) * 100)
+                            : 0
+                        const isSelected = myChoiceId === choice.id
+                        const disabled = isProcessing || isClosed
 
-                            return (
-                                <button
-                                    key={choice.id}
-                                    onClick={() => onVote(vote.id, choice.id)}
-                                    disabled={disabled}
+                        return (
+                            <button
+                                key={choice.id}
+                                onClick={() => onVote(vote.id, choice.id)}
+                                disabled={disabled}
+                                className={[
+                                    'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors overflow-hidden relative',
+                                    isSelected
+                                        ? 'bg-purple-100 text-purple-800 font-medium'
+                                        : 'bg-gray-50 text-content-primary',
+                                    disabled
+                                        ? 'cursor-not-allowed opacity-60'
+                                        : isSelected 
+                                            ? 'hover:bg-purple-200 cursor-pointer'
+                                            : 'hover:bg-gray-100 cursor-pointer',
+                                ].join(' ')}
+                            >
+                                <span
                                     className={[
-                                        'w-full text-left px-3 py-2 rounded-xl border text-sm transition-colors overflow-hidden relative',
-                                        isSelected
-                                            ? 'border-purple-400 bg-primary-light text-primary font-medium'
-                                            : 'border-gray-300 bg-surface text-content-primary',
-                                        disabled
-                                            ? 'cursor-not-allowed opacity-60'
-                                            : isSelected ? 'hover:border-purple-500 cursor-pointer' : 'hover:border-gray-400 cursor-pointer',
+                                        'vote-bar absolute inset-y-0 left-0 rounded-xl transition-all',
+                                        isSelected ? 'bg-purple-300/60' : 'bg-purple-100',
                                     ].join(' ')}
-                                >
-                                    <span
-                                        className={[
-                                            'vote-bar absolute inset-y-0 left-0 rounded-xl transition-all',
-                                            isSelected ? 'bg-primary-light' : 'bg-gray-100',
-                                        ].join(' ')}
-                                        style={{ '--vote-pct': `${pct}%` } as CSSProperties}
-                                    />
-                                    <span className="relative flex items-center justify-between">
+                                    style={{ '--vote-pct': `${pct}%` } as CSSProperties}
+                                />
+                                <span className="relative flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                        {isSelected && <Check className="w-4 h-4" strokeWidth={2.5} />}
                                         <span>{choice.label}</span>
-                                        {totalCount > 0 && (
-                                            <span className={`text-xs ml-2 shrink-0 ${isSelected ? 'text-primary font-medium' : 'text-content-secondary'}`}>
-                                                {pct}%
-                                            </span>
-                                        )}
                                     </span>
-                                </button>
-                            )
-                        })}
-                    </div>
+                                    {totalCount > 0 && (
+                                        <span className={`text-xs ml-2 shrink-0 ${isSelected ? 'text-purple-800 font-medium' : 'text-content-secondary'}`}>
+                                            {pct}%
+                                        </span>
+                                    )}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
 
-                    {/* 카드 하단 — 자동 종료 안내 */}
-                    {!isClosed && (autoEndDate || autoEndParticipants) && (
-                        <div className="mt-3 text-xs text-primary/70">
-                            {autoEndDate && !isEndingSoon && (
-                                <div className="flex justify-end">
-                                    <span className="flex items-center gap-1">
-                                        <Calendar className="w-3 h-3 shrink-0" strokeWidth={1.8} />
-                                        {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료
-                                    </span>
+                {/* 카드 하단 — 자동 종료 안내 */}
+                {!isClosed && (autoEndDate || autoEndParticipants) && (
+                    <div className="mt-3 text-xs text-content-secondary">
+                        {autoEndDate && !isEndingSoon && (
+                            <div className="flex justify-end">
+                                <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3 shrink-0" strokeWidth={1.8} />
+                                    {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료
+                                </span>
+                            </div>
+                        )}
+                        {autoEndParticipants && (
+                            <div className="mt-2">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span>목표 {autoEndParticipants.toLocaleString()}명</span>
+                                    <span className="font-semibold">{participantProgress}%</span>
                                 </div>
-                            )}
-                            {autoEndParticipants && (
-                                <div className="mt-2">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span>목표 {autoEndParticipants.toLocaleString()}명</span>
-                                        <span className="font-semibold">{participantProgress}%</span>
-                                    </div>
-                                    <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-primary rounded-full transition-all duration-500"
-                                            style={{ width: `${participantProgress}%` }}
-                                        />
-                                    </div>
+                                <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gray-400 rounded-full transition-all duration-500"
+                                        style={{ width: `${participantProgress}%` }}
+                                    />
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        )}
+                    </div>
+                )}
                 </div>
             )}
         </div>

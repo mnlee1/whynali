@@ -44,7 +44,7 @@ interface TopicWithIssue extends DiscussionTopic {
 
 async function fetchPageData() {
     const [hotResult, surgingResult, latestResult, votesResult, discussionsResult] = await Promise.all([
-        // HotIssueHighlight용 (heat 상위 30개)
+        // HotIssueHighlight용 (heat 상위 100개, 급상승 보충용으로도 사용)
         supabaseAdmin
             .from('issues')
             .select('*')
@@ -52,7 +52,7 @@ async function fetchPageData() {
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
             .order('heat_index', { ascending: false, nullsFirst: false })
-            .limit(30),
+            .limit(100),
 
         // PopularRanking용 급상승 이슈 (heat_index_1h_ago가 있는 이슈만, 종결 제외)
         supabaseAdmin
@@ -153,15 +153,15 @@ async function fetchPageData() {
             return { ...issue, surgePct }
         })
         .sort((a, b) => b.surgePct - a.surgePct)
-        .slice(0, 5)
+        .slice(0, 6)
 
-    // 급상승 이슈 5개 미달 시 화력 상위 이슈로 보충 (슬라이드 이슈 제외)
-    if (surgingIssues.length < 5) {
+    // 급상승 이슈 6개 미달 시 화력 상위 이슈로 보충 (슬라이드 이슈 제외, 종결 포함)
+    if (surgingIssues.length < 6) {
         const surgingIds = new Set(surgingIssues.map(i => i.id))
         const fallback = hotIssues
-            .filter(i => i.status !== '종결' && !heroIds.has(i.id) && !surgingIds.has(i.id))
+            .filter(i => !heroIds.has(i.id) && !surgingIds.has(i.id))
             .map(i => ({ ...i, surgePct: 0 }))
-            .slice(0, 5 - surgingIssues.length)
+            .slice(0, 6 - surgingIssues.length)
         surgingIssues = [...surgingIssues, ...fallback]
     }
 

@@ -51,20 +51,20 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
 
     if (loading) {
         return (
-            <div className="h-[420px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl animate-pulse" />
+            <div className="h-[300px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl animate-pulse" />
         )
     }
 
     if (issues.length === 0) {
         return (
-            <section className="relative h-[420px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl flex items-center justify-center">
+            <section className="relative h-[300px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl flex items-center justify-center">
                 <p className="text-content-muted text-sm">이슈를 불러오는 중입니다.</p>
             </section>
         )
     }
 
     return (
-        <section className="relative h-[420px] lg:h-full lg:min-h-[500px]">
+        <section className="relative h-[300px] lg:h-full lg:min-h-[500px]">
             {/* 왜난리 이슈 뱃지 */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-primary text-white text-xs font-bold shadow-lg">
@@ -137,11 +137,11 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent group-hover:from-black/60 group-hover:via-black/20 transition-all duration-500" />
 
                                 {/* 콘텐츠 */}
-                                <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-20">
+                                <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-12 lg:pb-18">
                                     <div />
 
                                     {/* 하단: 이슈 정보 */}
-                                    <div className="space-y-3 pb-8">
+                                    <div className="space-y-3 pb-2 lg:pb-8">
                                         <div>
                                             <StatusBadge status={issue.status} size="sm" />
                                         </div>

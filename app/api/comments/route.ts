@@ -54,9 +54,28 @@ if (!issue_id && !discussion_topic_id) {
         sort === 'dislikes' ? 'dislike_count' :
         'created_at'
 
+    /* 댓글 수 카운트 쿼리 (삭제된 댓글 제외) */
+    let countQuery = admin
+        .from('comments')
+        .select('*', { count: 'exact', head: true })
+        .in('visibility', ['public', 'pending_review'])
+
+    if (parent_id) {
+        countQuery = countQuery.eq('parent_id', parent_id)
+    } else {
+        countQuery = countQuery.is('parent_id', null)
+    }
+
+    if (issue_id) {
+        countQuery = countQuery.eq('issue_id', issue_id)
+    } else {
+        countQuery = countQuery.eq('discussion_topic_id', discussion_topic_id!)
+    }
+
+    /* 댓글 데이터 조회 쿼리 (tombstone 표시를 위해 삭제된 댓글 포함) */
     let query = admin
         .from('comments')
-        .select('*, users(display_name)', { count: 'exact' })
+        .select('*, users(display_name)')
 
     /* 베스트 댓글이 아닐 때만 기본 정렬 적용 */
     if (!best) {
@@ -95,7 +114,10 @@ if (!issue_id && !discussion_topic_id) {
         query = query.range(offset, offset + limit - 1)
     }
 
-    const { data: rawData, error, count } = await query
+    const [{ data: rawData, error }, { count }] = await Promise.all([
+        query,
+        countQuery,
+    ])
 
     if (error) {
         return NextResponse.json({ error: toUserMessage(error.message) }, { status: 500 })
@@ -115,7 +137,7 @@ if (!issue_id && !discussion_topic_id) {
         userLikes = await getUserLikesMap(admin, user.id, baseData.map((c) => c.id))
     }
 
-    /* 최상위 댓글 조회 시 답글 수 집계 */
+    /* 최상위 댓글 조회 시 답글 수 집계 (삭제된 답글 제외) */
     let replyCountMap: Record<string, number> = {}
     if (!parent_id && !best && baseData.length > 0) {
         const ids = baseData.map((c) => c.id)
@@ -123,7 +145,7 @@ if (!issue_id && !discussion_topic_id) {
             .from('comments')
             .select('parent_id')
             .in('parent_id', ids)
-            .in('visibility', ['public', 'pending_review', 'deleted', 'deleted_by_admin'])
+            .in('visibility', ['public', 'pending_review'])
         for (const r of replyCounts ?? []) {
             if (r.parent_id) replyCountMap[r.parent_id] = (replyCountMap[r.parent_id] ?? 0) + 1
         }
