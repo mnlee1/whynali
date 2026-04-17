@@ -13,7 +13,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { AlertTriangle, ShieldCheck, Settings, AlertCircle, MoreVertical, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { AlertTriangle, ShieldCheck, Settings, AlertCircle, MoreVertical, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from 'lucide-react'
 import { formatDate } from '@/lib/utils/format-date'
 import type { Comment } from '@/types'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
@@ -953,9 +953,13 @@ function CommentItem({
                                         onReplyToggle(comment.id)
                                     }
                                 }}
-                                className="text-xs text-content-muted hover:text-content-secondary transition-colors"
+                                className="flex items-center gap-1 text-xs text-content-muted hover:text-content-secondary transition-colors"
                             >
-                                {hasReplies ? `답글 ${replyCount}` : '답글'}
+                                <span>{hasReplies ? `답글 ${replyCount}` : '답글'}</span>
+                                {(hasReplies && repliesExpanded) || isReplyFormOpen ? 
+                                    <ChevronUp className="w-3.5 h-3.5" strokeWidth={2} /> : 
+                                    <ChevronDown className="w-3.5 h-3.5" strokeWidth={2} />
+                                }
                             </button>
                         )}
                     </div>

@@ -20,6 +20,7 @@ import type { Metadata } from 'next'
 import Script from 'next/script'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Eye, MessageCircleMore } from 'lucide-react'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import TimelineSection from '@/components/issue/TimelineSection'
@@ -139,9 +140,10 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         adminClient.from('issues').select('*').eq('id', id).single(),
         adminClient
             .from('discussion_topics')
-            .select('id, body, created_at')
+            .select('id, body, created_at, approval_status, view_count')
             .eq('issue_id', id)
-            .eq('approval_status', '진행중')
+            .in('approval_status', ['진행중', '마감'])
+            .order('approval_status', { ascending: true })
             .order('created_at', { ascending: false })
             .limit(5),
         adminClient
@@ -151,6 +153,30 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .in('phase', ['진행중', '마감']),
         createSupabaseServerClient(),
     ])
+
+    /* 토론 주제별 의견(댓글) 수 집계 */
+    const topicIds = (discussionTopics ?? []).map((t) => t.id)
+    const opinionCountMap: Record<string, number> = {}
+
+    if (topicIds.length > 0) {
+        const { data: commentRows } = await adminClient
+            .from('comments')
+            .select('discussion_topic_id')
+            .in('discussion_topic_id', topicIds)
+            .in('visibility', ['public', 'pending_review'])
+
+        for (const row of commentRows ?? []) {
+            if (row.discussion_topic_id) {
+                opinionCountMap[row.discussion_topic_id] = (opinionCountMap[row.discussion_topic_id] ?? 0) + 1
+            }
+        }
+    }
+
+    const discussionTopicsWithStats = (discussionTopics ?? []).map((topic) => ({
+        ...topic,
+        opinionCount: opinionCountMap[topic.id] ?? 0,
+        viewCount: topic.view_count ?? 0,
+    }))
 
     if (issueError || !issue) {
         return (
@@ -236,7 +262,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     issueId={id}
                     userId={userId}
                     initialVoteCount={voteCount ?? 0}
-                    initialDiscussionCount={discussionTopics?.length ?? 0}
+                    initialDiscussionCount={discussionTopicsWithStats?.length ?? 0}
                 />
             </div>
 
@@ -263,41 +289,63 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 관련 토론 주제 */}
-            {discussionTopics && discussionTopics.length > 0 && (
+            {discussionTopicsWithStats && discussionTopicsWithStats.length > 0 && (
                 <div id="section-discussion" style={{ scrollMarginTop: '80px' }}>
                     <div className="card overflow-hidden mb-6">
                     <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
-                            {discussionTopics.length >= 1 && (
-                                <span className="text-xs text-content-muted">{discussionTopics.length}</span>
+                            {discussionTopicsWithStats.length >= 1 && (
+                                <span className="text-xs text-content-muted">{discussionTopicsWithStats.length}</span>
                             )}
                         </div>
                         <Link
                             href={
-                                discussionTopics.length === 1
-                                    ? `/community/${discussionTopics[0].id}`
-                                    : `/community?issue_id=${id}&status=진행중`
+                                discussionTopicsWithStats.length === 1
+                                    ? `/community/${discussionTopicsWithStats[0].id}`
+                                    : `/community?issue_id=${id}`
                             }
                             className="text-xs text-content-secondary hover:text-content-primary font-semibold"
                         >
-                            {discussionTopics.length === 1 ? '토론 참여하기 →' : '이 이슈 토론 전체보기 →'}
+                            {discussionTopicsWithStats.length === 1 ? '토론 참여하기 →' : '이 이슈 토론 전체보기 →'}
                         </Link>
                     </div>
-                    <div className="divide-y divide-border-muted bg-surface">
-                        {discussionTopics.map((topic) => (
+                    <div className="divide-y divide-border-muted">
+                        {discussionTopicsWithStats.map((topic) => (
                             <Link
                                 key={topic.id}
                                 href={`/community/${topic.id}`}
-                                className="block p-4 hover:bg-surface-muted transition-colors group"
+                                className="block p-5 hover:bg-surface-muted transition-colors group"
                             >
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-content-primary leading-relaxed line-clamp-2 group-hover:text-primary">
-                                        {topic.body}
-                                    </p>
-                                    <p className="text-xs text-content-muted mt-1.5">
-                                        {formatDate(topic.created_at)}
-                                    </p>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-2.5">
+                                            {topic.approval_status === '진행중' ? (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
+                                                    토론 진행중
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-surface-muted text-content-muted border-border text-xs font-medium">
+                                                    토론 마감
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <p className="text-base font-medium text-content-primary line-clamp-2 leading-snug mb-3 group-hover:text-primary">
+                                            {topic.body}
+                                        </p>
+
+                                        <div className="flex items-center gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
+                                            <span className="flex items-center gap-1">
+                                                <Eye className="w-4 h-4" strokeWidth={1.8} />
+                                                <span>{topic.viewCount.toLocaleString()}</span>
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
+                                                <span>{topic.opinionCount.toLocaleString()}</span>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </Link>
                         ))}
@@ -307,7 +355,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             )}
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
-            {(!discussionTopics || discussionTopics.length === 0) && (
+            {(!discussionTopicsWithStats || discussionTopicsWithStats.length === 0) && (
                 <div id="section-discussion" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '80px' }}>
                     <div className="px-4 py-3 border-b border-border-muted">
                         <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>

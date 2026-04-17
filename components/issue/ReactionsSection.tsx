@@ -124,20 +124,20 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                             disabled={submitting}
                             title={label}
                             className={[
-                                'flex flex-col items-center px-2 py-2 rounded-xl border transition-all',
+                                'flex flex-col items-center px-2 py-2 rounded-xl transition-all',
                                 'w-[calc(25%-3px)] min-[480px]:flex-1',
                                 selected
-                                    ? 'border-primary-muted scale-105'
-                                    : 'border-border bg-surface',
+                                    ? 'bg-purple-50 scale-105'
+                                    : 'bg-gray-50',
                                 submitting
                                     ? 'opacity-60 cursor-not-allowed'
-                                    : 'hover:border-border-strong hover:scale-105 cursor-pointer',
+                                    : 'hover:bg-surface-muted hover:scale-105 cursor-pointer',
                             ].join(' ')}
                         >
                             <span className="text-xl leading-none">{emoji}</span>
                             <span className={[
-                                'text-xs mt-1',
-                                selected ? 'text-primary font-semibold' : 'text-content-secondary',
+                                'text-sm mt-1 font-semibold',
+                                selected ? 'text-primary' : 'text-content-secondary',
                             ].join(' ')}>
                                 {label}
                             </span>
