@@ -13,7 +13,6 @@ export default function Nav({ mobile = false }: NavProps) {
     const pathname = usePathname()
 
     const categories = [
-        { name: '커뮤니티', href: '/community', id: 'community' },
         { name: CATEGORY_LABELS['연예'], href: '/entertain', id: '연예' },
         { name: CATEGORY_LABELS['스포츠'], href: '/sports', id: '스포츠' },
         { name: CATEGORY_LABELS['정치'], href: '/politics', id: '정치' },
@@ -21,6 +20,7 @@ export default function Nav({ mobile = false }: NavProps) {
         { name: CATEGORY_LABELS['경제'], href: '/economy', id: '경제' },
         { name: CATEGORY_LABELS['기술'], href: '/tech', id: '기술' },
         { name: CATEGORY_LABELS['세계'], href: '/world', id: '세계' },
+        { name: '커뮤니티', href: '/community', id: 'community' },
     ]
 
     if (mobile) {
@@ -40,7 +40,7 @@ export default function Nav({ mobile = false }: NavProps) {
                             >
                                 {cat.name}
                             </Link>
-                            {cat.name === '커뮤니티' && (
+                            {cat.name === '세계' && (
                                 <span className="w-px h-4 bg-border -mx-2" />
                             )}
                         </Fragment>
@@ -66,7 +66,7 @@ export default function Nav({ mobile = false }: NavProps) {
                         >
                             {cat.name}
                         </Link>
-                        {cat.name === '커뮤니티' && (
+                        {cat.name === '세계' && (
                             <span className="w-px h-4 bg-border -mx-2" />
                         )}
                     </Fragment>

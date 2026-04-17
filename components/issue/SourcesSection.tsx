@@ -16,15 +16,10 @@
 import { useState, useEffect } from 'react'
 import { getSources } from '@/lib/api/issues'
 import { formatDate } from '@/lib/utils/format-date'
-import type { NewsData, CommunityData } from '@/types/issue'
+import type { NewsData } from '@/types/issue'
 
 const INITIAL_SHOW_COUNT = 5
 const SHOW_STEP = 5
-
-const SITE_BADGE_COLOR: Record<string, string> = {
-    '더쿠': 'bg-pink-50 text-pink-700 border-pink-200',
-    '네이트판': 'bg-orange-50 text-orange-700 border-orange-200',
-}
 
 interface SourcesSectionProps {
     issueId: string
@@ -32,11 +27,9 @@ interface SourcesSectionProps {
 
 export default function SourcesSection({ issueId }: SourcesSectionProps) {
     const [news, setNews] = useState<NewsData[]>([])
-    const [community, setCommunity] = useState<CommunityData[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [showNewsCount, setShowNewsCount] = useState(INITIAL_SHOW_COUNT)
-    const [showCommunityCount, setShowCommunityCount] = useState(INITIAL_SHOW_COUNT)
 
     useEffect(() => {
         const fetchSources = async () => {
@@ -44,7 +37,6 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                 setLoading(true)
                 const response = await getSources(issueId)
                 setNews(response.news || [])
-                setCommunity(response.community || [])
             } catch (err) {
                 setError(err instanceof Error ? err.message : '출처 조회 실패')
             } finally {
@@ -70,12 +62,10 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
     if (error) return null
 
     const hasNews = news.length > 0
-    const hasCommunity = community.length > 0
 
-    if (!hasNews && !hasCommunity) return null
+    if (!hasNews) return null
 
     const visibleNews = news.slice(0, showNewsCount)
-    const visibleCommunity = community.slice(0, showCommunityCount)
 
     return (
         <div className="card overflow-hidden mb-6">
@@ -121,51 +111,6 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                         </div>
                     )}
 
-                    {/* 커뮤니티 출처 */}
-                    {hasCommunity && (
-                        <div>
-                            <h3 className="text-sm font-semibold text-content-primary mb-2">
-                                커뮤니티
-                                <span className="ml-1.5 text-xs font-normal text-content-muted">{community.length}건</span>
-                            </h3>
-                            <div className="space-y-2">
-                                {visibleCommunity.map((item) => (
-                                    <div key={item.id} className="border border-border rounded-xl bg-surface p-3">
-                                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                                            <a
-                                                href={item.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-sm font-medium text-content-primary hover:text-primary underline underline-offset-2 flex-1 transition-colors"
-                                            >
-                                                {item.title}
-                                            </a>
-                                            <span className={`badge ${SITE_BADGE_COLOR[item.source_site] ?? 'bg-primary-light text-primary border-primary-muted'}`}>
-                                                {item.source_site}
-                                            </span>
-                                        </div>
-                                        <div className="text-xs text-content-secondary flex items-center gap-3">
-                                            {item.written_at && <span>{formatDate(item.written_at)}</span>}
-                                            {item.view_count > 0 && (
-                                                <span>조회 {item.view_count.toLocaleString()}</span>
-                                            )}
-                                            {item.comment_count > 0 && (
-                                                <span>댓글 {item.comment_count.toLocaleString()}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            {showCommunityCount < community.length && (
-                                <button
-                                    onClick={() => setShowCommunityCount((prev) => Math.min(prev + SHOW_STEP, community.length))}
-                                    className="btn-neutral btn-md mt-3 w-full"
-                                >
-                                    {`${Math.min(SHOW_STEP, community.length - showCommunityCount)}건 더 보기 (${community.length - showCommunityCount}건 남음)`}
-                                </button>
-                            )}
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
