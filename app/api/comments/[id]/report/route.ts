@@ -104,7 +104,11 @@ export async function POST(
     if (shouldAutoHide) {
         await supabaseAdmin
             .from('comments')
-            .update({ visibility: 'pending_review', updated_at: new Date().toISOString() })
+            .update({ 
+                visibility: 'pending_review', 
+                pending_reason: 'report',
+                updated_at: new Date().toISOString() 
+            })
             .eq('id', comment_id)
     }
 

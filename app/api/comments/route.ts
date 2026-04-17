@@ -57,10 +57,18 @@ if (!issue_id && !discussion_topic_id) {
     let query = admin
         .from('comments')
         .select('*, users(display_name)', { count: 'exact' })
-        .order(orderColumn, { ascending: false })
 
-    /* public + pending_review + deleted 포함 — 프론트에서 상태별 처리 */
-    query = query.in('visibility', ['public', 'pending_review', 'deleted'])
+    /* 베스트 댓글이 아닐 때만 기본 정렬 적용 */
+    if (!best) {
+        query = query.order(orderColumn, { ascending: false })
+    }
+
+    /* 베스트 댓글은 삭제된 댓글 제외, 일반 목록은 삭제된 댓글도 포함 (tombstone 표시용) */
+    if (best) {
+        query = query.in('visibility', ['public', 'pending_review'])
+    } else {
+        query = query.in('visibility', ['public', 'pending_review', 'deleted', 'deleted_by_admin'])
+    }
 
     /* parent_id가 있으면 해당 댓글의 답글만, 없으면 최상위 댓글만 조회 */
     if (parent_id) {
@@ -75,12 +83,13 @@ if (!issue_id && !discussion_topic_id) {
         query = query.eq('discussion_topic_id', discussion_topic_id!)
     }
 
-    /* 베스트 댓글: score 상위 3개. like_count 내림차순 + dislike_count 오름차순으로 근사 */
+    /* 베스트 댓글: score 상위 3개. like_count 내림차순 + dislike_count 오름차순 + 최신순 */
     if (best) {
         query = query
             .gt('like_count', 0)
             .order('like_count', { ascending: false })
             .order('dislike_count', { ascending: true })
+            .order('created_at', { ascending: false })
             .limit(3)
     } else {
         query = query.range(offset, offset + limit - 1)
@@ -114,7 +123,7 @@ if (!issue_id && !discussion_topic_id) {
             .from('comments')
             .select('parent_id')
             .in('parent_id', ids)
-            .eq('visibility', 'public')
+            .in('visibility', ['public', 'pending_review', 'deleted', 'deleted_by_admin'])
         for (const r of replyCounts ?? []) {
             if (r.parent_id) replyCountMap[r.parent_id] = (replyCountMap[r.parent_id] ?? 0) + 1
         }
@@ -191,6 +200,7 @@ export async function POST(request: NextRequest) {
             user_id: user.id,
             body: sanitizeText(content),
             visibility: pendingReview ? 'pending_review' : 'public',
+            pending_reason: pendingReview ? 'safety' : null,
         })
         .select('*, users(display_name)')
         .single()

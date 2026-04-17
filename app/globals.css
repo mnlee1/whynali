@@ -7,6 +7,10 @@
 /* ── 전역 기본 스타일 ────────────────────────────── */
 
 @layer base {
+    * {
+        word-break: keep-all;
+    }
+
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
     textarea,
     select {

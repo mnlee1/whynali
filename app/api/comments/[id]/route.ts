@@ -85,10 +85,28 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         return NextResponse.json({ error: '본인 댓글만 삭제할 수 있습니다.' }, { status: 403 })
     }
 
-    const { error } = await admin
+    // 답글 수 확인: 답글이 있으면 soft delete (맥락 보존), 없으면 완전 삭제
+    // pending_review 답글은 사용자에게 보이지 않으므로 없는 것으로 취급
+    const { count: replyCount } = await admin
         .from('comments')
-        .update({ visibility: 'deleted', updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .select('id', { count: 'exact', head: true })
+        .eq('parent_id', id)
+        .eq('visibility', 'public')
+
+    let error
+    if (replyCount && replyCount > 0) {
+        // 답글 있음 → soft delete (화면에 "삭제된 댓글" 표시)
+        ;({ error } = await admin
+            .from('comments')
+            .update({ visibility: 'deleted', updated_at: new Date().toISOString() })
+            .eq('id', id))
+    } else {
+        // 답글 없음 → 완전 삭제
+        ;({ error } = await admin
+            .from('comments')
+            .delete()
+            .eq('id', id))
+    }
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })

@@ -54,7 +54,8 @@ CREATE TABLE comments (
     body TEXT NOT NULL,
     like_count INT DEFAULT 0,
     dislike_count INT DEFAULT 0,
-    visibility TEXT CHECK (visibility IN ('public', 'pending_review', 'deleted')) DEFAULT 'public',
+    visibility TEXT CHECK (visibility IN ('public', 'pending_review', 'deleted', 'deleted_by_admin')) DEFAULT 'public',
+    pending_reason TEXT CHECK (pending_reason IN ('safety', 'report') OR pending_reason IS NULL),
     parent_id UUID REFERENCES comments(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { User as UserIcon, ChevronDown, Search, X } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { createBrowserClient } from '@supabase/ssr'
 import Nav from './Nav'
@@ -151,9 +152,7 @@ export default function Header() {
                     aria-label={mobile ? "로그인" : undefined}
                 >
                     {mobile ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
+                        <UserIcon className="w-6 h-6" strokeWidth={2} />
                     ) : (
                         "로그인"
                     )}
@@ -207,9 +206,7 @@ export default function Header() {
                         <div className="w-7 h-7 rounded-full bg-primary-light flex items-center justify-center text-sm font-semibold text-primary">
                             {initial}
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                     </button>
                     {mobileUserMenuOpen && dropdownMenu}
                 </div>
@@ -229,9 +226,7 @@ export default function Header() {
                     <span className="hidden xl:inline text-sm font-medium text-content-primary max-w-[14ch] truncate">
                         {name}
                     </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`hidden xl:block w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <ChevronDown className={`hidden xl:block w-3.5 h-3.5 text-neutral-400 transition-transform ${mobileUserMenuOpen ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                 </button>
                 {mobileUserMenuOpen && dropdownMenu}
             </div>
@@ -285,9 +280,7 @@ export default function Header() {
                             className="p-1.5 text-content-secondary hover:text-content-primary transition-colors"
                             aria-label="검색"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
+                            <Search className="w-5 h-5" strokeWidth={2} />
                         </button>
                         <AuthButton mobile />
                     </div>
@@ -318,9 +311,7 @@ export default function Header() {
                                     className="p-2 text-content-secondary hover:text-content-primary transition-colors"
                                     aria-label="검색 닫기"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                    <X className="w-6 h-6" strokeWidth={2} />
                                 </button>
                             </div>
                         </div>

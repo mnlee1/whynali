@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, CSSProperties } from 'react'
+import { CheckCircle2, ChevronDown, Calendar } from 'lucide-react'
 import type { Vote, VoteChoice } from '@/types'
 
 interface VoteSectionProps {
@@ -155,9 +156,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                     <h2 className="text-sm font-bold text-content-primary">투표</h2>
                 </div>
                 <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-content-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.745 3.745 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
-                    </svg>
+                    <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
                     <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
                     <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
                 </div>
@@ -198,9 +197,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                     </div>
                 ) : pastVotes.length > 0 ? (
                     <div className="flex flex-col items-center justify-center text-center gap-2 py-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-content-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.745 3.745 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
-                        </svg>
+                        <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
                         <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
                         <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
                     </div>
@@ -320,16 +317,10 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                 {totalCount.toLocaleString()}표
                             </span>
                         )}
-                        <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
+                        <ChevronDown 
                             className={`w-4 h-4 text-content-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            fill="none" 
-                            viewBox="0 0 24 24" 
-                            stroke="currentColor" 
                             strokeWidth={2}
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                        </svg>
+                        />
                     </div>
                 </button>
             ) : (
@@ -415,9 +406,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                             {autoEndDate && !isEndingSoon && (
                                 <div className="flex justify-end">
                                     <span className="flex items-center gap-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                                        </svg>
+                                        <Calendar className="w-3 h-3 shrink-0" strokeWidth={1.8} />
                                         {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료
                                     </span>
                                 </div>

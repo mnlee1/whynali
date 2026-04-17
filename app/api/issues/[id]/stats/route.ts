@@ -35,6 +35,7 @@ export async function GET(
                 .from('comments')
                 .select('*', { count: 'exact', head: true })
                 .eq('issue_id', id)
+                .is('parent_id', null)
                 .eq('visibility', 'public'),
             supabaseAdmin
                 .from('discussion_topics')
