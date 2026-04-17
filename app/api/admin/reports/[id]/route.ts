@@ -42,7 +42,7 @@ export async function PATCH(
 
         if (reportError) throw reportError
 
-        /* 처리완료: 댓글 내용 조회 후 visibility → deleted */
+        /* 처리완료: 댓글 내용 조회 후 visibility → deleted_by_admin */
         let logAction = `신고 ${action}`
         let logDetails: string | null = null
 
@@ -55,11 +55,28 @@ export async function PATCH(
 
             await supabaseAdmin
                 .from('comments')
-                .update({ visibility: 'deleted', updated_at: new Date().toISOString() })
+                .update({ visibility: 'deleted_by_admin', updated_at: new Date().toISOString() })
                 .eq('id', report.comment_id)
 
             logAction = '신고 댓글 삭제'
             logDetails = comment?.content ? `삭제된 댓글: "${comment.content}"` : null
+        }
+
+        /* 무시: pending_reason='report'인 댓글만 visibility를 public으로 복구 */
+        /* pending_reason='safety'(금칙어)인 댓글은 세이프티봇 영역이므로 복구하지 않음 */
+        if (action === '무시') {
+            await supabaseAdmin
+                .from('comments')
+                .update({ 
+                    visibility: 'public', 
+                    pending_reason: null,
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', report.comment_id)
+                .eq('visibility', 'pending_review')
+                .eq('pending_reason', 'report')
+
+            logAction = '신고 무시 (댓글 복구)'
         }
 
         await writeAdminLog(logAction, 'report', id, auth.adminEmail, logDetails)

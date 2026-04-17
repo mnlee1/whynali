@@ -11,8 +11,8 @@ interface ReactionsSectionProps {
 type CountMap = Partial<Record<ReactionType, number>>
 
 const REACTION_META: { type: ReactionType; emoji: string; label: string }[] = [
-    { type: '좋아요',     emoji: '👍', label: '좋아요' },
-    { type: '싫어요',     emoji: '👎', label: '싫어요' },
+    { type: '좋아요',     emoji: '😊', label: '좋아요' },
+    { type: '싫어요',     emoji: '😞', label: '싫어요' },
     { type: '화나요',     emoji: '😡', label: '화나요' },
     { type: '팝콘각',     emoji: '🍿', label: '팝콘각' },
     { type: '응원',       emoji: '📣', label: '응원' },

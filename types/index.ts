@@ -32,7 +32,8 @@ export interface Comment {
     body: string
     like_count: number
     dislike_count: number
-    visibility: 'public' | 'pending_review' | 'deleted'
+    visibility: 'public' | 'pending_review' | 'deleted' | 'deleted_by_admin'
+    pending_reason?: 'safety' | 'report' | null
     parent_id?: string
     created_at: string
     updated_at: string
