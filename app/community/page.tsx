@@ -19,8 +19,8 @@ type FilterStatus = '' | '진행중' | '마감'
 
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
     { value: '', label: '전체' },
-    { value: '진행중', label: '진행중' },
-    { value: '마감', label: '마감' },
+    { value: '진행중', label: '토론 진행중' },
+    { value: '마감', label: '토론 마감' },
 ]
 
 const PAGE_SIZE = 20
@@ -187,53 +187,63 @@ function CommunityContent() {
                     <div className="space-y-3">
                         {topics.map((topic) => (
                             <Link key={topic.id} href={`/community/${topic.id}`} className="block">
-                                <article className="card-hover p-4">
+                                <article className="card-hover p-5">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                             {/* 상태 뱃지 */}
-                                            <div className="flex items-center gap-2 mb-2">
+                                            <div className="flex items-center gap-2 mb-2.5">
                                                 <span className={[
                                                     'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
                                                     topic.approval_status === '진행중'
                                                         ? 'bg-green-50 text-green-700 border-green-200'
-                                                        : 'bg-surface-subtle text-content-muted border-border'
+                                                        : 'bg-surface-muted text-content-muted border-border'
                                                 ].join(' ')}>
-                                                    {topic.approval_status}
+                                                    {topic.approval_status === '진행중' ? '토론 진행중' : '토론 마감'}
                                                 </span>
                                             </div>
                                             
-                                            {/* 연결된 이슈명 */}
-                                            {!issueIdFilter && topic.issues?.id && topic.issues?.title && (
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.preventDefault()
-                                                        e.stopPropagation()
-                                                        if (!topic.issues?.id) return
-                                                        router.push(`/community?issue_id=${topic.issues.id}`)
-                                                    }}
-                                                    className="inline-block text-sm text-primary hover:underline mb-1 line-clamp-1 text-left transition-colors"
-                                                >
-                                                    {decodeHtml(topic.issues?.title ?? '')} ({issueTopicCountMap[topic.issues?.id ?? ''] ?? 1}) →
-                                                </button>
-                                            )}
                                             {/* 토론 주제 본문 */}
                                             <p className="text-base font-medium text-content-primary line-clamp-2 leading-snug mb-2">
                                                 {decodeHtml(topic.body)}
                                             </p>
+
+                                            {/* 연결된 이슈명 (issue_id 필터가 아닐 때만) */}
+                                            {!issueIdFilter && topic.issues?.id && topic.issues?.title && (
+                                                <p className="text-xs text-content-muted mb-3 line-clamp-1">
+                                                    연결 이슈 · {decodeHtml(topic.issues?.title ?? '')}
+                                                </p>
+                                            )}
+
                                             {/* 통계 */}
-                                            <div className="flex items-center gap-3 text-xs text-content-secondary">
-                                                {topic.viewCount !== undefined && (
-                                                    <span className="flex items-center gap-1">
-                                                        <Eye className="w-4 h-4" strokeWidth={1.8} />
-                                                        <span>{topic.viewCount.toLocaleString()}</span>
-                                                    </span>
-                                                )}
-                                                {topic.opinionCount !== undefined && (
-                                                    <span className="flex items-center gap-1">
-                                                        <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
-                                                        <span>{topic.opinionCount.toLocaleString()}</span>
-                                                    </span>
+                                            <div className="flex items-center justify-between gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
+                                                <div className="flex items-center gap-3">
+                                                    {topic.viewCount !== undefined && (
+                                                        <span className="flex items-center gap-1">
+                                                            <Eye className="w-4 h-4" strokeWidth={1.8} />
+                                                            <span>{topic.viewCount.toLocaleString()}</span>
+                                                        </span>
+                                                    )}
+                                                    {topic.opinionCount !== undefined && (
+                                                        <span className="flex items-center gap-1">
+                                                            <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
+                                                            <span>{topic.opinionCount.toLocaleString()}</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {!issueIdFilter && topic.issues?.id && (issueTopicCountMap[topic.issues?.id ?? ''] ?? 1) > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            if (!topic.issues?.id) return
+                                                            router.push(`/community?issue_id=${topic.issues.id}`)
+                                                        }}
+                                                        className="flex items-center gap-1 text-xs text-content-secondary hover:text-primary hover:underline transition-colors shrink-0"
+                                                    >
+                                                        <span>연결 이슈의 토론 {issueTopicCountMap[topic.issues?.id ?? ''] ?? 1}개 더보기</span>
+                                                        <span>→</span>
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
