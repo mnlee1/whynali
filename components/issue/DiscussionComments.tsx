@@ -4,13 +4,13 @@
  * components/issue/DiscussionComments.tsx
  *
  * 토론 주제 전용 댓글 컴포넌트.
- * - 질문 스타터 칩 (클릭하면 textarea에 삽입)
  * - 토론 톤 안내 placeholder
  * - 베스트 의견 상단, 최신순 고정, 공감/비공감 동일 적용
  * - 세이프티봇, 답글(대댓글) 기능 동일 적용
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { AlertTriangle, ShieldCheck, Settings, AlertCircle, MoreVertical, ThumbsUp, ThumbsDown } from 'lucide-react'
 import type { Comment } from '@/types'
 import ReportModal from '@/components/issue/ReportModal'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
@@ -31,15 +31,6 @@ type CommentWithLike = Comment & {
 
 const PAGE_SIZE = 5
 const RATE_LIMIT_SECONDS = 60
-
-/* 클릭하면 textarea 앞부분에 삽입되는 질문 스타터 칩 */
-const STARTERS = [
-    '제 생각에는...',
-    '다른 시각으로 보면...',
-    '만약 제가 당사자라면...',
-    '이 상황의 근본 원인은...',
-    '사회적으로 봤을 때...',
-]
 
 function authorLabel(comment: Comment): string {
     if (comment.display_name?.trim()) return comment.display_name.trim()
@@ -162,6 +153,9 @@ export default function DiscussionComments({
 
     const handleSafetyBotConfirm = (enabled: boolean) => {
         setSafetyBotEnabled(enabled)
+        setReplyToId(null)
+        setReplyDraft('')
+        setReplyError(null)
         setOffset(0)
         setLoading(true)
         loadBest()
@@ -234,7 +228,7 @@ export default function DiscussionComments({
             if (!res.ok) { setWriteError(json.error ?? '오류가 발생했습니다.'); return }
             setDraft('')
             if (json.pending) {
-                setPendingNotice(json.message ?? '등록되었습니다. 내용 검토 후 공개되거나 삭제될 수 있습니다.')
+                /* 금칙어 포함 댓글: 알럿 없이 state에만 추가 */
                 if (json.data) {
                     setComments((prev) => [json.data, ...prev])
                     setTotal((t) => t + 1)
@@ -314,7 +308,8 @@ export default function DiscussionComments({
     }
 
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
-        if (!userId || likingId) return
+        if (!userId) { redirectToLogin(); return }
+        if (likingId) return
         setLikingId(commentId)
 
         const prevComments = [...comments]
@@ -409,8 +404,7 @@ export default function DiscussionComments({
             }
             if (!res.ok) { setReplyError(json.error ?? '오류가 발생했습니다.'); return }
             setReplyDraft('')
-            setReplyToId(null)
-            if (!json.pending && json.data) {
+            if (json.data) {
                 const repliesRes = await fetch(`/api/comments?${contextParam}&parent_id=${parentId}&limit=50&offset=0`)
                 const repliesJson = await repliesRes.json()
                 if (repliesRes.ok) {
@@ -442,6 +436,7 @@ export default function DiscussionComments({
     }
 
     const handleOpenReportModal = (comment: Comment) => {
+        if (!userId) { redirectToLogin(); return }
         setReportTargetComment({
             id: comment.id,
             body: comment.body,
@@ -491,22 +486,8 @@ export default function DiscussionComments({
                         <p className="text-sm text-content-muted text-center py-3">
                             종료된 토론입니다. 의견을 작성할 수 없습니다.
                         </p>
-                    ) : userId ? (
+                    ) : (
                         <div className="space-y-2">
-                            {/* 질문 스타터 칩 */}
-                            <div className="flex flex-wrap gap-1.5 mb-1">
-                                {STARTERS.map((starter) => (
-                                    <button
-                                        key={starter}
-                                        type="button"
-                                        onClick={() => setDraft((prev) => (prev ? prev + ' ' + starter : starter))}
-                                        className="text-xs px-2.5 py-1 rounded-full border border-border text-primary hover:bg-primary-light transition-colors"
-                                    >
-                                        {starter}
-                                    </button>
-                                ))}
-                            </div>
-
                             {writeErrorType === 'rate_limit' && writeError && (
                                 <div className="flex items-center gap-3 px-3 py-2 bg-yellow-50 border border-yellow-300 rounded text-sm">
                                     <span className="text-yellow-700 flex-1">{writeError}</span>
@@ -525,9 +506,7 @@ export default function DiscussionComments({
                                     'flex items-center gap-2 px-3 py-2.5 rounded-xl border border-amber-200 bg-amber-50 transition-all duration-500',
                                     pendingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none',
                                 ].join(' ')}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                                    </svg>
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" strokeWidth={1.8} />
                                     <p className="text-xs text-amber-700">{pendingNotice}</p>
                                 </div>
                             )}
@@ -538,7 +517,17 @@ export default function DiscussionComments({
                                     setDraft(e.target.value)
                                     if (writeErrorType === 'validation') { setWriteError(null); setWriteErrorType(null) }
                                 }}
-                                placeholder="단순 찬반보다는, 이 주제에 대한 나만의 관점이나 경험을 자유롭게 적어주세요."
+                                onFocus={(e) => { 
+                                    if (!userId) {
+                                        const currentPath = window.location.pathname
+                                        if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                                            window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+                                        } else {
+                                            e.target.blur()
+                                        }
+                                    }
+                                }}
+                                placeholder={userId ? '단순 찬반보다는, 이 주제에 대한 나만의 관점이나 경험을 자유롭게 적어주세요.' : '의견을 작성하려면 로그인 해주세요'}
                                 maxLength={300}
                                 rows={4}
                                 className={[
@@ -559,16 +548,6 @@ export default function DiscussionComments({
                                 </button>
                             </div>
                         </div>
-                    ) : (
-                        <p className="text-sm text-content-secondary text-center py-3">
-                            <a
-                                href={`/login?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
-                                className="text-primary underline"
-                            >
-                                로그인
-                            </a>
-                            하면 의견을 남길 수 있습니다.
-                        </p>
                     )}
                 </div>
 
@@ -581,23 +560,18 @@ export default function DiscussionComments({
                 {/* 세이프티봇 안내 바 */}
                 <div className="flex items-center justify-between px-3 py-2 mb-3 bg-surface-muted border border-border rounded-xl">
                     <p className="text-xs text-content-secondary flex items-center gap-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-                        </svg>
+                        <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" strokeWidth={1.8} />
                         {safetyBotEnabled ? (
-                            <><span className="text-green-500 font-medium">세이프티봇</span>이 악성 의견으로부터 보호합니다.</>
+                            <span><span className="text-green-500 font-medium">세이프티봇</span>이 악성 의견으로부터 보호합니다.</span>
                         ) : (
-                            <><span className="text-green-500 font-medium">세이프티봇</span>이 꺼져 있어요. 모든 의견이 표시됩니다.</>
+                            <span><span className="text-green-500 font-medium">세이프티봇</span>이 꺼져 있어요. 모든 의견이 표시됩니다.</span>
                         )}
                     </p>
                     <button
                         onClick={() => setSafetyModalOpen(true)}
                         className="flex items-center gap-1 text-xs text-content-secondary shrink-0 ml-2"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                        </svg>
+                        <Settings className="w-4 h-4" strokeWidth={1.8} />
                         <span>설정</span>
                     </button>
                 </div>
@@ -807,16 +781,19 @@ function DiscussionCommentItem({
                             </button>
                         </div>
                     )}
-                    {/* 더보기 메뉴 (타인 + 로그인 + 미신고 시) */}
-                    {!isMine && userId && !isReported && comment.visibility !== 'deleted' && (comment.visibility !== 'pending_review' || !safetyBotEnabled) && (
+                    {/* 더보기 메뉴 (타인, 비로그인 포함) */}
+                    {!isMine && comment.visibility !== 'deleted' && comment.visibility !== 'deleted_by_admin' && 
+                     !(comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled) && (
                         <div className="relative" ref={menuRef}>
-                            <button
-                                onClick={() => setMenuOpen((prev) => !prev)}
-                                className="text-xs text-content-muted hover:text-content-secondary px-1 leading-none transition-colors"
-                                aria-label="더보기"
-                            >
-                                ⋮
-                            </button>
+                            {!isReported && (
+                                <button
+                                    onClick={() => setMenuOpen((prev) => !prev)}
+                                    className="text-content-muted hover:text-content-secondary transition-colors"
+                                    aria-label="더보기"
+                                >
+                                    <MoreVertical className="w-4 h-4" />
+                                </button>
+                            )}
                             {menuOpen && (
                                 <div className="absolute right-0 top-6 z-10 w-28 bg-surface border border-border rounded-xl shadow-card py-1">
                                     <button
@@ -835,17 +812,18 @@ function DiscussionCommentItem({
             {/* 본문 또는 수정 폼 */}
             {isReported ? (
                 <div className="flex items-center gap-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-content-muted shrink-0">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                    </svg>
+                    <AlertCircle className="w-4 h-4 text-content-muted shrink-0" strokeWidth={2.5} />
                     <p className="text-sm text-content-muted">검토 중인 댓글입니다.</p>
                 </div>
             ) : comment.visibility === 'deleted' ? (
                 <div className="flex items-center gap-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-content-muted shrink-0">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                    </svg>
+                    <AlertCircle className="w-4 h-4 text-content-muted shrink-0" strokeWidth={2.5} />
                     <p className="text-sm text-content-muted">작성자에 의해 삭제된 댓글입니다.</p>
+                </div>
+            ) : comment.visibility === 'deleted_by_admin' ? (
+                <div className="flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-content-muted shrink-0" strokeWidth={2.5} />
+                    <p className="text-sm text-content-muted">관리자에 의해 삭제된 댓글입니다.</p>
                 </div>
             ) : isEditing ? (
                 <div className="mt-2 space-y-2">
@@ -866,38 +844,42 @@ function DiscussionCommentItem({
                         </button>
                     </div>
                 </div>
-            ) : comment.visibility === 'pending_review' && !isMine && safetyBotEnabled ? (
+            ) : comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled && !isMine ? (
+                /* 금칙어 댓글 + 세이프티봇 ON + 타인 → 내용 숨김 + 안내 문구 */
                 <div className="flex items-center gap-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-content-muted shrink-0">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                    </svg>
+                    <AlertCircle className="w-4 h-4 text-content-muted shrink-0" strokeWidth={2.5} />
                     <p className="text-sm text-content-muted">세이프티봇이 부적절한 표현을 감지한 댓글입니다.</p>
                 </div>
-            ) : comment.visibility === 'pending_review' && isMine ? (
-                <p className="text-sm text-content-primary leading-relaxed whitespace-pre-wrap">{comment.body}</p>
+            ) : comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled && isMine ? (
+                /* 금칙어 댓글 + 세이프티봇 ON + 본인 → 본문 표시 + 아래 안내 문구 */
+                <div>
+                    <p className="text-sm text-content-primary leading-relaxed whitespace-pre-wrap">{comment.body}</p>
+                    <div className="mt-2 flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" strokeWidth={1.8} />
+                        <p className="text-xs text-amber-700">세이프티봇에 의해 다른 사용자에게 숨겨진 댓글입니다.</p>
+                    </div>
+                </div>
             ) : (
+                /* 정상 표시: public, pending_review + safety + 세이프티봇 OFF, pending_review + report */
                 <p className="text-sm text-content-primary leading-relaxed whitespace-pre-wrap">{comment.body}</p>
             )}
 
             {/* 답글(좌) + 공감/비공감(우) */}
-            {!isEditing && !isReported && comment.visibility !== 'deleted' && (isMine || comment.visibility !== 'pending_review' || !safetyBotEnabled) && (
+            {!isEditing && !isReported && comment.visibility !== 'deleted' && comment.visibility !== 'deleted_by_admin' && 
+             !(comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled && !isMine) && (
                 <div className="flex items-center justify-between mt-2">
                     {/* 답글 버튼 */}
                     <div>
-                        {!isReply && userId && isMine && hasReplies && onToggleReplies && (
+                        {!isReply && (
                             <button
-                                onClick={() => onToggleReplies(comment.id)}
-                                className="text-xs text-content-muted hover:text-content-secondary transition-colors"
-                            >
-                                {`답글 ${replyCount}`}
-                            </button>
-                        )}
-                        {!isReply && userId && !isMine && (
-                            <button
-                                onClick={() => hasReplies && onToggleReplies
-                                    ? onToggleReplies(comment.id)
-                                    : onReplyToggle?.(comment.id)
-                                }
+                                onClick={() => {
+                                    if (hasReplies && onToggleReplies) {
+                                        onToggleReplies(comment.id)
+                                    }
+                                    if (onReplyToggle) {
+                                        onReplyToggle(comment.id)
+                                    }
+                                }}
                                 className="text-xs text-content-muted hover:text-content-secondary transition-colors"
                             >
                                 {hasReplies ? `답글 ${replyCount}` : '답글'}
@@ -905,42 +887,72 @@ function DiscussionCommentItem({
                         )}
                     </div>
                     {/* 공감/비공감 — 본인은 숫자만, 타인은 클릭 가능 */}
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            onClick={() => !isMine && onLike(comment.id, 'like')}
-                            disabled={isMine || isLiking}
-                            className={[
-                                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors bg-surface',
-                                myType === 'like' ? 'border-primary-muted text-primary font-semibold' : 'border-border text-content-secondary hover:border-border-strong',
-                                isMine ? 'cursor-default' : isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-                            ].join(' ')}
-                        >
-                            <span>👍</span>
-                            <span>{comment.like_count}</span>
-                        </button>
-                        <button
-                            onClick={() => !isMine && onLike(comment.id, 'dislike')}
-                            disabled={isMine || isLiking}
-                            className={[
-                                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors bg-surface',
-                                myType === 'dislike' ? 'border-border-strong text-content-secondary font-semibold' : 'border-border text-content-secondary hover:border-border-strong',
-                                isMine ? 'cursor-default' : isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-                            ].join(' ')}
-                        >
-                            <span>👎</span>
-                            <span>{comment.dislike_count}</span>
-                        </button>
+                    <div className="flex items-center gap-1">
+                        {isMine ? (
+                            <>
+                                <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                    <ThumbsUp className="w-3.5 h-3.5" />
+                                    <span>{comment.like_count}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                    <ThumbsDown className="w-3.5 h-3.5" />
+                                    <span>{comment.dislike_count}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    onClick={() => onLike(comment.id, 'like')}
+                                    disabled={isLiking}
+                                    className={[
+                                        'flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors',
+                                        myType === 'like'
+                                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                                            : 'bg-gray-100 text-content-secondary hover:bg-gray-200',
+                                        isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                                    ].join(' ')}
+                                >
+                                    <ThumbsUp className="w-3.5 h-3.5" />
+                                    <span>{comment.like_count}</span>
+                                </button>
+                                <button
+                                    onClick={() => onLike(comment.id, 'dislike')}
+                                    disabled={isLiking}
+                                    className={[
+                                        'flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors',
+                                        myType === 'dislike'
+                                            ? 'bg-red-100 text-red-700 font-semibold'
+                                            : 'bg-gray-100 text-content-secondary hover:bg-gray-200',
+                                        isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                                    ].join(' ')}
+                                >
+                                    <ThumbsDown className="w-3.5 h-3.5" />
+                                    <span>{comment.dislike_count}</span>
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
 
             {/* 인라인 답글 작성 폼 */}
-            {!isReply && isReplyFormOpen && onReplyDraftChange && onReplySubmit && (
+            {!isReply && isReplyFormOpen && onReplyDraftChange && onReplySubmit && 
+             !(comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled && !isMine) && (
                 <div className="mt-3 pl-4 border-l-2 border-border-muted">
                     {replyError && <p className="text-xs text-red-500 mb-1">{replyError}</p>}
                     <textarea
                         value={replyDraft ?? ''}
                         onChange={(e) => onReplyDraftChange(e.target.value)}
+                        onFocus={(e) => {
+                            if (!userId) {
+                                const currentPath = window.location.pathname
+                                if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
+                                    window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
+                                } else {
+                                    e.target.blur()
+                                }
+                            }
+                        }}
                         placeholder="답글을 입력하세요"
                         rows={2}
                         maxLength={300}

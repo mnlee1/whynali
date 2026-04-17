@@ -29,6 +29,8 @@ import {
     CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
     AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
+import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
+import { generateVoteOptions } from '@/lib/ai/vote-generator'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -131,6 +133,9 @@ export async function GET(request: NextRequest) {
         let statusTransitioned = 0
         let timeoutReached = false
 
+        // 배치 루프 중 자동 승인된 이슈를 수집 — 투표·토론 생성은 루프 종료 후 순차 처리
+        const newlyApprovedIssues: Array<{ id: string; title: string; category: string; heatIndex: number }> = []
+
         const BATCH_SIZE = 5
         for (let i = 0; i < issues.length; i += BATCH_SIZE) {
             // 타임아웃 체크
@@ -184,6 +189,8 @@ export async function GET(request: NextRequest) {
                                         approved_at: new Date().toISOString(),
                                     })
                                     .eq('id', issue.id)
+                                // 투표·토론 생성은 배치 루프 밖에서 순차 처리 (타임아웃 방지)
+                                newlyApprovedIssues.push({ id: issue.id, title: issue.title, category, heatIndex })
                                 result.statusChanged = '대기 → 승인 (화력 ' + heatIndex + '점, ' + category + ')'
                                 return { ...result, autoApproved: 1, autoRejected: 0, statusTransitioned: 0 }
                             }
@@ -270,6 +277,65 @@ export async function GET(request: NextRequest) {
                     results.push(result)
                 }
             })
+        }
+
+        // 자동 승인된 이슈 투표·토론 생성 (배치 루프 종료 후 순차 처리)
+        // track-a와 달리 after()를 쓰지 않고 여기서 실행 — Cron이므로 응답 지연 허용
+        for (const approved of newlyApprovedIssues) {
+            try {
+                const metadata = {
+                    id: approved.id,
+                    title: approved.title,
+                    category: approved.category,
+                    status: '점화',
+                    heat_index: approved.heatIndex,
+                }
+
+                const [topics, votes] = await Promise.all([
+                    generateDiscussionTopics(metadata, 3).catch(() => []),
+                    generateVoteOptions(metadata, 1).catch(() => []),
+                ])
+
+                if (topics.length > 0) {
+                    await supabaseAdmin.from('discussion_topics').insert(
+                        topics.map(t => ({
+                            issue_id: approved.id,
+                            body: t.content,
+                            is_ai_generated: true,
+                            approval_status: '대기',
+                        }))
+                    )
+                    console.log(`  ✓ [토론 생성] "${approved.title}" — ${topics.length}건`)
+                }
+
+                if (votes.length > 0) {
+                    const vote = votes[0]
+                    const { data: newVote } = await supabaseAdmin
+                        .from('votes')
+                        .insert({
+                            issue_id: approved.id,
+                            title: vote.title,
+                            phase: '대기',
+                            approval_status: '대기',
+                            is_ai_generated: true,
+                            issue_status_snapshot: '점화',
+                        })
+                        .select('id')
+                        .single()
+
+                    if (newVote) {
+                        await supabaseAdmin.from('vote_choices').insert(
+                            vote.choices.map(label => ({
+                                vote_id: newVote.id,
+                                label,
+                            }))
+                        )
+                        console.log(`  ✓ [투표 생성] "${approved.title}" — "${vote.title}"`)
+                    }
+                }
+            } catch (e) {
+                console.error(`  ✗ [투표·토론 자동 생성 실패] "${approved.title}":`, e)
+            }
         }
 
         const elapsed = Date.now() - startTime
