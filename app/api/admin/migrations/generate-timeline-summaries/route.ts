@@ -84,7 +84,7 @@ JSON 응답:
     )
 
     const parsed = parseJsonObject<{
-        summaries: Array<{ stage: string; stageTitle: string; summary: string }>
+        summaries: Array<{ stage: string; stageTitle: string; bullets: string[] }>
         brief: { intro: string; bullets: string[]; conclusion: string }
     }>(content)
 
