@@ -62,6 +62,19 @@ export default function IssueCard({ issue }: IssueCardProps) {
                     {decodeHtml(issue.title)}
                 </h3>
 
+                {/* 주제 설명 (메인 목록용) */}
+                {issue.topic_description && (
+                    <div className="mb-3 space-y-1.5">
+                        {issue.topic && (
+                            <p className="text-xs font-medium text-primary">
+                                {issue.topic}
+                            </p>
+                        )}
+                        <p className="text-sm text-content-secondary line-clamp-2">
+                            {issue.topic_description}
+                        </p>
+                    </div>
+                )}
 
                 {/* 통계 정보 */}
                 <div className="flex items-center gap-4 text-xs text-content-secondary pt-3 border-t border-border-muted">
