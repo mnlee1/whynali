@@ -16,6 +16,8 @@ export interface IssueCreationData {
     approval_status?: string
     status?: string
     description?: string | null
+    topic?: string | null
+    topic_description?: string | null
 }
 
 /**
@@ -64,6 +66,8 @@ export function validateIssueCreation(data: Partial<IssueCreationData>): {
             approval_status: data.approval_status ?? '대기',
             status: data.status ?? '점화',
             description: data.description ?? null,
+            topic: data.topic ?? null,
+            topic_description: data.topic_description ?? null,
         }
     }
 }
