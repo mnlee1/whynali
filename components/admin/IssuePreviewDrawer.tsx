@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Issue } from '@/types/issue'
-import TimelineEditor from '@/components/admin/TimelineEditor'
+import TimelineSection from '@/components/issue/TimelineSection'
 import SourcesSection from '@/components/issue/SourcesSection'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
@@ -242,19 +242,20 @@ export default function IssuePreviewDrawer({
                         </div>
                     )}
 
-                    {/* 타임라인 편집 */}
+                    {/* 타임라인 — 사용자 화면과 동일한 AI 요약 뷰 */}
                     <div className="card overflow-hidden">
                         <div className="px-4 py-3 border-b border-border-muted">
                             <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
                         </div>
                         <div className="p-4">
-                            <TimelineEditor
+                            <TimelineSection
                                 issueId={issue.id}
                                 issueStatus={issue.status}
                                 issueUpdatedAt={issue.updated_at}
                             />
                         </div>
                     </div>
+
 
                     {/* 출처 */}
                     <SourcesSection issueId={issue.id} />

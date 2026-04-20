@@ -25,7 +25,7 @@ const FALLBACK_ERROR_TYPES = [
     'overloaded_error',        // 서버 과부하
 ]
 
-const FALLBACK_HTTP_STATUS = [400, 401, 403, 503]
+const FALLBACK_HTTP_STATUS = [400, 401, 403, 404, 503]
 
 function shouldFallback(error: any): boolean {
     if (FALLBACK_HTTP_STATUS.includes(error?.status)) return true
