@@ -87,6 +87,8 @@ interface AIVerificationResult {
     searchKeyword: string
     category: IssueCategory  // AI가 분류한 카테고리
     tentativeTitle: string   // 임시 이슈 제목 (뉴스 검색 전)
+    topic: string            // 주제 (메인 목록용)
+    topicDescription: string // 주제 설명 2~3줄 (메인 목록용)
 }
 
 /**
@@ -205,114 +207,156 @@ function simpleInferCategory(title: string): IssueCategory {
     return bestCategory
 }
 
-// 한국어 불용어 — 조사·어미·접속사·시간 부사 등 의미 없는 단어
-const STOPWORDS = new Set([
-    '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과', '이나', '나',
-    '도', '만', '까지', '부터', '에서', '에게', '한테', '한', '하는', '하고', '하여', '해서',
-    '이다', '있다', '없다', '하다', '되다', '이고', '하며', '에도', '으로도', '이라', '라',
-    '것', '수', '등', '및', '또', '그', '더', '이후', '앞서', '관련', '대해', '위해', '따라',
-    '통해', '대한', '위한', '같은', '지난', '현재', '오늘', '내일', '어제', '해당', '기자',
-])
+type TimelineStageName = '발단' | '전개' | '파생' | '진정'
 
-/** 제목에서 의미 있는 키워드 추출 (2글자 이상, 불용어 제외) */
-function extractKeywords(title: string): Set<string> {
-    return new Set(
-        title
-            .split(/[\s\[\]()「」『』<>【】·,./…!?"']+/)
-            .map(t => t.trim())
-            .filter(t => t.length >= 2 && !STOPWORDS.has(t))
-    )
+interface TimelineSummaryRow {
+    issue_id: string
+    stage: string
+    stage_title: string
+    summary: string
+    date_start: string
+    date_end: string
+    generated_at: string
 }
 
 /**
- * classifyTimelineStages - Groq으로 타임라인 기사 단계 분류
+ * classifyAndSummarizeTimeline - 단계 분류 + 개별/단계별 요약 생성 단일 Groq 호출
  *
- * 발단 선택: 이슈 제목과 키워드가 1개 이상 겹치는 가장 오래된 기사.
- *   겹치는 기사가 없으면 첫 번째 기사를 fallback으로 사용.
- * 마지막 기사 = 이슈 상태에 따라 '진정'/'전개'
- * 중간 기사들만 Groq 배치 요청으로 '전개'/'파생' 분류.
- * 중간이 2개 이하이거나 Groq 실패 시 전부 '전개'로 fallback.
+ * 기존 classifyTimelineStages + generateAndCacheSummaries 두 번 호출을 1번으로 통합.
+ * 신규 이슈 생성 시(track-a) 사용.
  */
-async function classifyTimelineStages(
+async function classifyAndSummarizeTimeline(
     issueTitle: string,
-    news: Array<{ id: string; title: string }>,
+    news: Array<{ id: string; title: string; published_at: string; link: string }>,
     issueStatus: string,
-): Promise<Map<string, '발단' | '전개' | '파생' | '진정'>> {
-    const result = new Map<string, '발단' | '전개' | '파생' | '진정'>()
+): Promise<{
+    stageMap: Map<string, TimelineStageName>
+    pointSummaries: Map<string, string>
+    summaryRows: Omit<TimelineSummaryRow, 'issue_id'>[]
+    briefSummary: { intro: string; bullets: string[]; conclusion: string } | null
+}> {
+    const stageMap = new Map<string, TimelineStageName>()
+    const pointSummaries = new Map<string, string>()
 
-    if (news.length === 0) return result
+    if (news.length === 0) return { stageMap, pointSummaries, summaryRows: [], briefSummary: null }
 
-    // 발단: 이슈 제목과 키워드 1개 이상 겹치는 가장 오래된 기사 선택
-    // 없으면 첫 번째 기사 fallback
-    const issueTitleKeywords = extractKeywords(issueTitle)
-    const baldanIndex = news.findIndex(n => {
-        if (!n.title) return false
-        const articleKeywords = extractKeywords(n.title)
-        for (const kw of issueTitleKeywords) {
-            if (articleKeywords.has(kw)) return true
-        }
-        return false
-    })
-    const baldanIdx = baldanIndex === -1 ? 0 : baldanIndex
-    result.set(news[baldanIdx].id, '발단')
-
-    if (news.length === 1) return result
-
-    // 마지막: 종결이면 진정, 아니면 전개
-    const lastStage = issueStatus === '종결' ? '진정' : '전개'
-    const lastIdx = news.length - 1
-    // 발단과 마지막이 같은 기사면 마지막 단계 배정 스킵
-    if (baldanIdx !== lastIdx) result.set(news[lastIdx].id, lastStage)
-
-    // 중간 기사 없으면 끝
-    const middle = news.slice(1, -1)
-    if (middle.length === 0) return result
-
-    // 중간 2개 이하: Groq 호출 없이 전개 배정
-    if (middle.length <= 2) {
-        middle.forEach(n => result.set(n.id, '전개'))
-        return result
+    if (news.length === 1) {
+        stageMap.set(news[0].id, '발단')
+        return { stageMap, pointSummaries, summaryRows: [], briefSummary: null }
     }
 
-    // Groq 배치 요청으로 전개/파생 분류
-    try {
-        const listText = middle.map((n, i) => `${i + 1}. ${n.title}`).join('\n')
-        const prompt = `다음은 한국 이슈와 관련 기사 목록입니다.
+    const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
+    const newsListText = news.map((n, i) =>
+        `${i + 1}. [${n.published_at.slice(0, 10)}] ${n.title}`
+    ).join('\n')
 
-이슈 제목: ${issueTitle}
+    const prompt = `다음은 한국 이슈 "${issueTitle}"와 관련된 뉴스 목록입니다 (시간순).
 
-아래 기사들을 각각 "전개" 또는 "파생"으로 분류해주세요.
-- 전개: 이슈의 직접적인 발전 (입장 발표, 후속 조치, 사건 확대 등)
-- 파생: 이슈로 인해 새로 불거진 별개의 논란 (새 인물 등장, 연관 사건 등)
+${newsListText}
 
-기사 목록:
-${listText}
+## 작업 1: 각 뉴스를 단계로 분류
+- 발단: 이슈가 처음 불거진 계기 (핵심 뉴스 1개, 보통 가장 오래된 것)
+- 전개: 이슈의 직접적인 발전 (입장 발표, 후속 조치 등)
+- 파생: 이슈로 인해 새로 불거진 별개 논란 (새 인물, 연관 사건 등)
+- 진정: 이슈가 마무리되는 흐름${issueStatus === '종결' ? ' (종결 이슈이므로 마지막 뉴스에 배정)' : ' (현재 진행 중이므로 사용 안 함)'}
+
+## 작업 2: 각 뉴스를 "타이틀: 설명" 형식으로 요약
+- 중복된 상황 변화는 하나만 선택하고 나머지는 제외 (같은 사건의 반복 보도 제거)
+- 타이틀은 3~5단어, 설명은 2~3문장 (제목에서 합리적으로 추론 가능한 내용만 사용)
+- 제목에 없는 내용을 과도하게 추측하지 마세요
+- 예시: {"index":1,"pointSummary":"경찰 수사 착수: 드라마 촬영장에서 스태프 사망 사고가 발생했다. 경찰이 사건 경위를 조사하고 있으며, 촬영장 안전 관리 소홀 여부에 대한 수사를 시작했다."}
+
+## 작업 3: 단계별 요약 생성 (분류된 단계만)
+규칙:
+1. 제공된 뉴스 제목에 있는 사실만 사용. 없는 내용 절대 추가 금지.
+2. 불확실한 내용은 "~한 것으로 보임", "~알려짐" 등으로 표현.
+3. stageTitle은 10자 이내, summary는 제공된 기사 제목 수에 맞는 분량으로 작성하세요. 기사가 1개면 1~2문장, 여러 개면 그에 맞게 늘리세요.
+
+## 작업 4: 브리핑 요약
+이슈 전체를 처음 접하는 사람에게 친근하게 설명하는 브리핑을 작성하세요.
+- intro: 이슈 현황을 한 문장으로 (예: "~가 ~해서 논란이야.")
+- bullets: 핵심 팩트 3~5개, 각 항목은 한 문장씩
+- conclusion: 한 줄 결론 (예: "👉 ~한 상황이야.")
+- 제공된 뉴스 제목에 있는 사실만 사용. 없는 내용은 절대 추가 금지.
 
 반드시 아래 JSON 형식으로만 답하세요:
-[{"index":1,"stage":"전개"},{"index":2,"stage":"파생"}]`
+{
+  "classifications": [{"index":1,"stage":"발단"},{"index":2,"stage":"전개"}],
+  "pointSummaries": [{"index":1,"pointSummary":"타이틀: 설명"},{"index":2,"pointSummary":"타이틀: 설명"}],
+  "summaries": [{"stage":"발단","stageTitle":"제목","summary":"요약문"}],
+  "brief": {"intro":"한 문장 현황","bullets":["팩트1","팩트2","팩트3"],"conclusion":"👉 한 줄 결론"}
+}`
 
+    try {
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 300 },
+            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 2000 },
         )
 
-        const parsed = parseJsonArray<{ index: number; stage: string }>(content)
-        if (parsed) {
-            parsed.forEach(item => {
-                const target = middle[item.index - 1]
-                if (target && (item.stage === '전개' || item.stage === '파생')) {
-                    result.set(target.id, item.stage)
+        const result = parseJsonObject<{
+            classifications: Array<{ index: number; stage: string }>
+            pointSummaries: Array<{ index: number; pointSummary: string }>
+            summaries: Array<{ stage: string; stageTitle: string; summary: string }>
+            brief: { intro: string; bullets: string[]; conclusion: string }
+        }>(content)
+
+        if (!result) throw new Error('JSON 파싱 실패')
+
+        // stageMap 구성
+        result.classifications?.forEach(item => {
+            const target = news[item.index - 1]
+            const valid: TimelineStageName[] = ['발단', '전개', '파생', '진정']
+            if (target && valid.includes(item.stage as TimelineStageName)) {
+                stageMap.set(target.id, item.stage as TimelineStageName)
+            }
+        })
+
+        // 분류 누락 fallback
+        news.forEach((n, i) => {
+            if (!stageMap.has(n.id)) stageMap.set(n.id, i === 0 ? '발단' : '전개')
+        })
+
+        // pointSummaries 구성
+        result.pointSummaries?.forEach(item => {
+            const target = news[item.index - 1]
+            if (target && item.pointSummary) {
+                pointSummaries.set(target.id, item.pointSummary)
+            }
+        })
+
+        // 단계별 날짜 범위 계산
+        const grouped = new Map<string, string[]>()
+        for (const n of news) {
+            const stage = stageMap.get(n.id) ?? '전개'
+            if (!grouped.has(stage)) grouped.set(stage, [])
+            grouped.get(stage)!.push(n.published_at)
+        }
+
+        const now = new Date().toISOString()
+        const summaryRows: Omit<TimelineSummaryRow, 'issue_id'>[] = (result.summaries ?? [])
+            .filter(s => grouped.has(s.stage))
+            .sort((a, b) => (STAGE_ORDER[a.stage] ?? 9) - (STAGE_ORDER[b.stage] ?? 9))
+            .map(s => {
+                const dates = grouped.get(s.stage)!.sort()
+                return {
+                    stage: s.stage,
+                    stage_title: s.stageTitle ?? s.stage,
+                    summary: s.summary ?? '',
+                    date_start: dates[0],
+                    date_end: dates[dates.length - 1],
+                    generated_at: now,
                 }
             })
-        }
-    } catch (error) {
-        console.warn('  ⚠️ [타임라인 단계 분류 실패] 전개로 fallback:', error)
+
+        const briefSummary = result.brief ?? null
+
+        return { stageMap, pointSummaries, summaryRows, briefSummary }
+
+    } catch (err) {
+        console.warn('  ⚠️ [타임라인 분류+요약 실패] fallback:', err)
+        news.forEach((n, i) => stageMap.set(n.id, i === 0 ? '발단' : '전개'))
+        return { stageMap, pointSummaries, summaryRows: [], briefSummary: null }
     }
-
-    // 분류 누락된 중간 기사 → 전개 fallback
-    middle.forEach(n => { if (!result.has(n.id)) result.set(n.id, '전개') })
-
-    return result
 }
 
 /**
@@ -817,6 +861,27 @@ ${sampleTitlesText}
 - 스포츠: 팀명 + 상대팀명 조합 (예: "WBC 한국 이탈리아")
 - 너무 포괄적인 키워드는 피하기 (예: "WBC 야구" X → "WBC 한국" O)
 
+## 6단계: 주제 및 주제 설명 생성 (메인 목록용)
+
+주제 작성 규칙 (반드시 준수):
+- 핵심 고유명사 필수 포함 (인물명/기업명/제품명/지역명)
+- 형식: [고유명사] + [행동/사건] (5~10자)
+- 일반 명사만으로는 절대 금지
+
+올바른 예시:
+✅ "옥택연 결혼", "민희진 뉴진스 분쟁", "갤럭시 S26 공개"
+✅ "손흥민 골", "윤석열 발언", "무신사 론칭"
+
+잘못된 예시:
+❌ "연예인 결혼", "연예계 분쟁", "제품 출시"
+❌ "스포츠 경기", "정치인 발언", "서비스 론칭"
+
+주제 설명 작성 (2~3줄, 총 60~100자):
+- 커뮤니티 게시글 샘플 제목을 기반으로 이슈 핵심 내용 설명
+- 구체적 사실 중심 (누가, 무엇을, 언제)
+- 제공된 정보 범위 내에서만 작성
+- 자연스러운 문장으로 작성 (예: "~했다.", "~됐다.", "~있다.")
+
 응답 형식 (JSON만):
 {
   "isIssue": true/false,
@@ -824,7 +889,9 @@ ${sampleTitlesText}
   "reason": "판단 이유 (한 줄)",
   "category": "연예",
   "tentativeTitle": "임시 이슈 제목",
-  "searchKeyword": "네이버 뉴스 검색용 키워드"
+  "searchKeyword": "네이버 뉴스 검색용 키워드",
+  "topic": "옥택연 결혼",
+  "topicDescription": "배우 옥택연이 10년 사귄 연인과 4월 24일 결혼한다. 비공개 결혼식으로 진행되며, 팬들의 축하가 이어지고 있다."
 }`
 
         const content = await callGroq(
@@ -848,7 +915,9 @@ ${sampleTitlesText}
                 reason: 'JSON 파싱 실패',
                 searchKeyword: '',
                 category: '사회',
-                tentativeTitle: ''
+                tentativeTitle: '',
+                topic: '',
+                topicDescription: ''
             }
         }
         
@@ -861,7 +930,9 @@ ${sampleTitlesText}
                 reason: 'AI 응답 불완전',
                 searchKeyword: '',
                 category: '사회',
-                tentativeTitle: ''
+                tentativeTitle: '',
+                topic: '',
+                topicDescription: ''
             }
         }
         
@@ -876,6 +947,8 @@ ${sampleTitlesText}
             searchKeyword: result.searchKeyword || keyword,
             category,
             tentativeTitle: result.tentativeTitle || keyword,
+            topic: result.topic || keyword,
+            topicDescription: result.topicDescription || '',
         }
         
     } catch (error) {
@@ -892,7 +965,9 @@ ${sampleTitlesText}
             reason: `에러: ${error}`,
             searchKeyword: '',
             category: '사회',
-            tentativeTitle: ''
+            tentativeTitle: '',
+            topic: '',
+            topicDescription: ''
         }
     }
 }
@@ -1030,9 +1105,12 @@ async function processTrackA(): Promise<{
         console.log(`  카테고리: ${aiResult.category}`)
         console.log(`  임시 제목: "${aiResult.tentativeTitle}"`)
         console.log(`  검색 키워드: "${aiResult.searchKeyword}"`)
+        console.log(`  주제: "${aiResult.topic}"`)
         
         const category = aiResult.category
         const tentativeTitle = aiResult.tentativeTitle
+        const topic = aiResult.topic
+        const topicDescription = aiResult.topicDescription
         
         // 4-2. 네이버 뉴스 즉시 타겟 검색 (카테고리 전달)
         const newsItems = await searchNaverNewsByKeyword(aiResult.searchKeyword, category)
@@ -1144,6 +1222,7 @@ async function processTrackA(): Promise<{
                                 occurred_at: firstNews.published_at,
                                 source_url: firstNews.link,
                                 stage: parentResult.stage,
+                                ai_summary: null, // update-timeline cron에서 생성
                             })
                         console.log(`  → 타임라인 포인트 추가 (${parentResult.stage}: "${firstNews.title}")`)
                     }
@@ -1210,6 +1289,8 @@ async function processTrackA(): Promise<{
             source_track: 'track_a',  // 명시적으로 지정
             approval_status: '대기',
             status: '점화',
+            topic,  // AI 생성 주제
+            topic_description: topicDescription,  // AI 생성 주제 설명
         })
         
         if (!issueValidation.isValid) {
@@ -1299,9 +1380,11 @@ async function processTrackA(): Promise<{
             title: string
             occurred_at: string
             source_url: string
-            stage: '발단' | '전개' | '파생' | '진정'
+            stage: TimelineStageName
         }> = []
-        
+        let timelineSummaryRows: TimelineSummaryRow[] = []
+        let issueBriefSummary: { intro: string; bullets: string[]; conclusion: string } | null = null
+
         if (linkedNewsCount > 0) {
             const sortedNews = [...(linkedNews ?? [])].sort((a, b) => {
                 const aTime = relevantNews.find(n => n.id === a.id)?.published_at ?? ''
@@ -1312,14 +1395,19 @@ async function processTrackA(): Promise<{
             const sampledNews = sortedNews.slice(0, 5)
             const newsForClassify = sampledNews.map(news => {
                 const item = relevantNews.find(n => n.id === news.id)
-                return { id: news.id, title: item?.title ?? '' }
+                return {
+                    id: news.id,
+                    title: item?.title ?? '',
+                    published_at: item?.published_at ?? new Date().toISOString(),
+                    link: item?.link ?? '',
+                }
             })
 
-            // Groq으로 단계 분류 (발단/전개/파생/진정)
-            const stageMap = await classifyTimelineStages(
+            // Groq 1번 호출로 단계 분류 + 요약 + 브리핑 동시 생성
+            const { stageMap, pointSummaries, summaryRows, briefSummary } = await classifyAndSummarizeTimeline(
                 finalIssueTitle,
                 newsForClassify,
-                '점화', // 신규 이슈는 항상 점화 상태
+                '점화',
             )
 
             timelinePoints = sampledNews.map(news => {
@@ -1330,8 +1418,12 @@ async function processTrackA(): Promise<{
                     occurred_at: newsItem?.published_at ?? new Date().toISOString(),
                     source_url: newsItem?.link ?? '',
                     stage: stageMap.get(news.id) ?? '전개',
+                    ai_summary: pointSummaries.get(news.id) ?? null,
                 }
             })
+
+            timelineSummaryRows = summaryRows.map(s => ({ ...s, issue_id: newIssue.id }))
+            issueBriefSummary = briefSummary
         }
         
         // 타임라인이 없으면 이슈 삭제
@@ -1366,7 +1458,32 @@ async function processTrackA(): Promise<{
         }
         
         console.log(`  ✓ [타임라인 생성 완료] ${timelinePoints.length}개 포인트`)
-        
+
+        // 요약 캐시 저장 (유저 접속 시 Groq 호출 없이 바로 노출)
+        if (timelineSummaryRows.length > 0) {
+            const { error: summaryError } = await supabaseAdmin
+                .from('timeline_summaries')
+                .upsert(timelineSummaryRows, { onConflict: 'issue_id,stage' })
+            if (summaryError) {
+                console.warn(`  ⚠️ [요약 캐시 저장 실패] ${summaryError.message}`)
+            } else {
+                console.log(`  ✓ [요약 캐시 저장] ${timelineSummaryRows.length}개 단계`)
+            }
+        }
+
+        // 브리핑 저장
+        if (issueBriefSummary) {
+            const { error: briefError } = await supabaseAdmin
+                .from('issues')
+                .update({ brief_summary: issueBriefSummary })
+                .eq('id', newIssue.id)
+            if (briefError) {
+                console.warn(`  ⚠️ [브리핑 저장 실패] ${briefError.message}`)
+            } else {
+                console.log(`  ✓ [브리핑 저장] "${finalIssueTitle}"`)
+            }
+        }
+
         // 4-9. 화력 계산
         const heatIndex = await calculateHeatIndex(newIssue.id).catch(() => 0)
         
