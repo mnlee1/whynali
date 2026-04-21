@@ -26,7 +26,7 @@ const NAV_ITEMS = [
         icon: <ClipboardCheck className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
     {
-        label: '수집 현황',
+        label: '이슈 자동화 로그',
         href: '/admin/collections',
         icon: <Database className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
