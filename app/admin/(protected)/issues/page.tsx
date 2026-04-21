@@ -553,7 +553,7 @@ export default function AdminIssuesPage() {
                                     <a
                                         href={`/issue/${issue.id}`}
                                         target="_blank"
-                                        className="text-primary hover:underline line-clamp-2"
+                                        className="text-primary hover:underline line-clamp-2 inline-block max-w-full"
                                     >
                                         {decodeHtml(issue.title)}
                                     </a>

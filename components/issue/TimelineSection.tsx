@@ -1,20 +1,17 @@
-/**
- * components/issue/TimelineSection.tsx
- *
- * 이슈 타임라인 섹션.
- * 발단 → 전개 → 파생 → 진정 순서로 카드 배치.
- * 각 카드에는 이벤트 요약 텍스트(title)와 출처 링크가 표시됩니다.
- *
- * 사용 예시:
- *   <TimelineSection issueId="abc-123" />
- */
-
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getTimeline } from '@/lib/api/issues'
-import { formatDateWithTime } from '@/lib/utils/format-date'
-import type { TimelinePoint } from '@/types/issue'
+import { Bot } from 'lucide-react'
+import { formatTimelineDate } from '@/lib/utils/format-date'
+
+interface TimelinePoint {
+    id: string
+    stage: '발단' | '전개' | '파생' | '진정'
+    title: string
+    ai_summary: string | null
+    source_url: string
+    occurred_at: string
+}
 
 interface TimelineSectionProps {
     issueId: string
@@ -22,68 +19,63 @@ interface TimelineSectionProps {
     issueUpdatedAt?: string
 }
 
-const STAGE_STYLES: Record<string, { card: string; dot: string; line: string; badge: string; header: string; headerText: string; headerLine: string }> = {
+const STAGE_STYLES = {
     '발단': {
-        card: 'bg-blue-50 border-blue-200',
-        dot:  'bg-blue-500',
+        dot: 'bg-blue-500',
         line: 'bg-blue-200',
-        badge: 'bg-blue-500 text-white',
         header: 'bg-blue-500',
         headerText: 'text-blue-600',
         headerLine: 'bg-blue-100',
+        card: 'bg-blue-50 border-blue-200',
     },
     '전개': {
-        card: 'bg-green-50 border-green-200',
-        dot:  'bg-green-500',
+        dot: 'bg-green-500',
         line: 'bg-green-200',
-        badge: 'bg-green-500 text-white',
         header: 'bg-green-500',
         headerText: 'text-green-600',
         headerLine: 'bg-green-100',
+        card: 'bg-green-50 border-green-200',
     },
     '파생': {
-        card: 'bg-yellow-50 border-yellow-200',
-        dot:  'bg-yellow-500',
+        dot: 'bg-yellow-500',
         line: 'bg-yellow-200',
-        badge: 'bg-yellow-500 text-white',
         header: 'bg-yellow-500',
         headerText: 'text-yellow-600',
         headerLine: 'bg-yellow-100',
+        card: 'bg-yellow-50 border-yellow-200',
     },
     '진정': {
-        card: 'bg-gray-50 border-gray-200',
-        dot:  'bg-gray-400',
+        dot: 'bg-gray-400',
         line: 'bg-gray-200',
-        badge: 'bg-gray-500 text-white',
         header: 'bg-gray-400',
         headerText: 'text-gray-500',
         headerLine: 'bg-gray-100',
+        card: 'bg-gray-50 border-gray-200',
     },
 }
 
-const STAGE_TEXT_COLOR: Record<string, string> = {
-    '발단': 'text-blue-700',
-    '전개': 'text-green-700',
-    '파생': 'text-yellow-700',
-    '진정': 'text-gray-600',
-}
-
 export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }: TimelineSectionProps) {
-    const [timeline, setTimeline] = useState<TimelinePoint[]>([])
+    const [points, setPoints] = useState<TimelinePoint[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({})
+
+    const toggleStage = (stage: string) => {
+        setExpandedStages(prev => ({
+            ...prev,
+            [stage]: !prev[stage]
+        }))
+    }
 
     useEffect(() => {
         const fetchTimeline = async () => {
             try {
                 setLoading(true)
-                console.log('[TimelineSection] Fetching timeline for issue:', issueId)
-                const response = await getTimeline(issueId)
-                console.log('[TimelineSection] Timeline response:', response)
-                console.log('[TimelineSection] Timeline data count:', response.data?.length ?? 0)
-                setTimeline(response.data)
+                const res = await fetch(`/api/issues/${issueId}/timeline`)
+                if (!res.ok) throw new Error('타임라인 조회 실패')
+                const json = await res.json()
+                setPoints(json.data ?? [])
             } catch (err) {
-                console.error('[TimelineSection] Error fetching timeline:', err)
                 setError(err instanceof Error ? err.message : '타임라인 조회 실패')
             } finally {
                 setLoading(false)
@@ -105,6 +97,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                             <div className="p-4 border border-border-muted rounded-xl space-y-2">
                                 <div className="h-3 w-16 bg-border-muted rounded-full animate-pulse" />
                                 <div className="h-4 w-3/4 bg-border-muted rounded-full animate-pulse" />
+                                <div className="h-3 w-full bg-border-muted rounded-full animate-pulse" />
                             </div>
                         </div>
                     </div>
@@ -121,7 +114,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
         )
     }
 
-    if (timeline.length === 0) {
+    if (points.length === 0) {
         return (
             <div className="text-center py-8 space-y-3">
                 <div className="text-4xl">⏳</div>
@@ -136,31 +129,53 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
     }
 
     const isClosed = issueStatus === '종결'
+    
+    const groupedByStage = points.reduce((acc, point) => {
+        if (!acc[point.stage]) {
+            acc[point.stage] = []
+        }
+        acc[point.stage].push(point)
+        return acc
+    }, {} as Record<string, TimelinePoint[]>)
+
+    const stageOrder: Array<'발단' | '전개' | '파생' | '진정'> = ['발단', '전개', '파생', '진정']
+    const stages = stageOrder.filter(stage => groupedByStage[stage])
 
     return (
         <div className="space-y-0">
-            {timeline.map((point, index) => {
-                const style = STAGE_STYLES[point.stage] ?? STAGE_STYLES['진정']
-                const textColor = STAGE_TEXT_COLOR[point.stage] ?? 'text-content-secondary'
-                const isLast = index === timeline.length - 1
-                const prevStage = index > 0 ? timeline[index - 1].stage : null
-                const isNewStage = point.stage !== prevStage
+            {/* AI 안내 문구 */}
+            <div className="mb-4 flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <Bot className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-600 leading-relaxed">
+                    AI가 자동 생성한 타임라인으로, 실제 내용과 다를 수 있습니다.
+                </p>
+            </div>
+
+            {stages.map((stage, index) => {
+                const stagePoints = groupedByStage[stage]
+                const style = STAGE_STYLES[stage] ?? STAGE_STYLES['진정']
+                const isLast = index === stages.length - 1 && !isClosed
+
+                const INITIAL_SHOW_COUNT = 3
+                const expanded = expandedStages[stage] || false
+                const hasMore = stagePoints.length > INITIAL_SHOW_COUNT
+                
+                // 최신 3개만 표시 (배열은 오름차순이므로 slice(-3)로 마지막 3개)
+                const visiblePoints = expanded ? stagePoints : stagePoints.slice(-INITIAL_SHOW_COUNT)
+                const hiddenCount = stagePoints.length - INITIAL_SHOW_COUNT
 
                 return (
-                    <div key={point.id}>
-                        {/* 단계 헤더 — stage가 바뀌는 시점에만 표시 */}
-                        {isNewStage && (
-                            <div className={`flex items-center gap-2 mb-3 ${index > 0 ? 'mt-5' : ''}`}>
-                                <div className={`w-[3px] h-[0.8rem] rounded-full shrink-0 ${style.header}`} />
-                                <span className={`text-sm font-semibold ${style.headerText}`}>
-                                    {point.stage}
-                                </span>
-                                <div className={`flex-1 h-px ${style.headerLine}`} />
-                            </div>
-                        )}
+                    <div key={stage}>
+                        {/* 단계 헤더 */}
+                        <div className={`flex items-center gap-2 mb-3 ${index > 0 ? 'mt-5' : ''}`}>
+                            <div className={`w-[3px] h-[0.8rem] rounded-full shrink-0 ${style.header}`} />
+                            <span className={`text-sm font-semibold ${style.headerText}`}>
+                                {stage}
+                            </span>
+                            <div className={`flex-1 h-px ${style.headerLine}`} />
+                        </div>
 
                         <div className="flex gap-3">
-                            {/* 왼쪽 dot + 세로선 */}
                             <div className="flex flex-col items-center">
                                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 ${style.dot}`} />
                                 {!isLast && (
@@ -168,38 +183,44 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                                 )}
                             </div>
 
-                            {/* 카드 */}
                             <div className="flex-1 pb-3">
                                 <div className={`p-3 border rounded-xl ${style.card}`}>
-                                    {/* 날짜 */}
-                                    <span className={`text-xs ${textColor} opacity-70 block mb-1`}>
-                                        {formatDateWithTime(point.occurred_at)}
-                                    </span>
-
-                                    {/* 이벤트 요약 텍스트 */}
-                                    {point.title && (
-                                        <p className={`text-sm font-medium mb-2 leading-snug ${textColor}`}>
-                                            {point.title}
-                                        </p>
-                                    )}
-
-                                    {/* 출처 링크 */}
-                                    {point.source_url ? (
-                                        <a
-                                            href={point.source_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className={`inline-flex items-center gap-1 text-xs underline underline-offset-2 hover:opacity-70 transition-opacity ${textColor}`}
+                                    {hasMore && (
+                                        <button
+                                            onClick={() => toggleStage(stage)}
+                                            className="mb-3 w-full btn-neutral btn-sm text-xs"
                                         >
-                                            <span>출처</span>
-                                            <span className="opacity-60">
-                                                ({new URL(point.source_url).hostname.replace('www.', '')})
-                                            </span>
-                                            <span>→</span>
-                                        </a>
-                                    ) : (
-                                        <span className="text-xs text-content-muted">출처 없음</span>
+                                            {expanded ? '접기' : `이전 상황 더보기 (${hiddenCount}개)`}
+                                        </button>
                                     )}
+                                    
+                                    <ul className="space-y-3">
+                                        {visiblePoints.map((point) => {
+                                            const displayText = point.ai_summary || point.title
+                                            const [title, ...descParts] = displayText.split(':')
+                                            const description = descParts.join(':').trim()
+                                            
+                                            return (
+                                                <li key={point.id} className="text-sm leading-relaxed">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <span className={`font-semibold ${style.headerText}`}>
+                                                                {title}
+                                                            </span>
+                                                            <span className="text-content-muted text-xs">
+                                                                {formatTimelineDate(point.occurred_at)}
+                                                            </span>
+                                                        </div>
+                                                        {description && (
+                                                            <p className="text-content-secondary pl-0">
+                                                                {description}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
                                 </div>
                             </div>
                         </div>
@@ -207,10 +228,9 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                 )
             })}
 
-            {/* 종결 표시 */}
+            {/* 종결 */}
             {isClosed && (
                 <div>
-                    {/* 종결 단계 헤더 */}
                     <div className="flex items-center gap-2 mb-3 mt-5">
                         <div className="w-[3px] h-[0.8rem] rounded-full shrink-0 bg-gray-400" />
                         <span className="text-sm font-semibold text-gray-500">종결</span>
@@ -222,12 +242,12 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                         </div>
                         <div className="flex-1 pb-3">
                             <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
-                                <span className="text-xs text-gray-400 block mb-1">
-                                    {issueUpdatedAt ? formatDateWithTime(issueUpdatedAt) : ''}
-                                </span>
-                                <p className="text-sm font-medium text-gray-500">
-                                    이슈 종결
-                                </p>
+                                {issueUpdatedAt && (
+                                    <span className="text-xs text-gray-400 block mb-1">
+                                        {formatTimelineDate(issueUpdatedAt)}
+                                    </span>
+                                )}
+                                <p className="text-sm font-medium text-gray-500">이슈 종결</p>
                             </div>
                         </div>
                     </div>

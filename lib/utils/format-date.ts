@@ -80,3 +80,33 @@ export function formatFullDate(dateString: string): string {
         day: 'numeric'
     })
 }
+
+/**
+ * 타임라인 전용 날짜 포맷 (괄호 없이)
+ * 3일 이내: "2시간 전", "1일 전"
+ * 3일 초과: "2026년 3월 25일 오전 09:20"
+ */
+export function formatTimelineDate(dateString: string): string {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    // 3일 이내: 상대 시간 표기
+    if (diffMins < 1) return '방금 전'
+    if (diffMins < 60) return `${diffMins}분 전`
+    if (diffHours < 24) return `${diffHours}시간 전`
+    if (diffDays <= 3) return `${diffDays}일 전`
+    
+    // 3일 초과: 날짜 + 시간 표기
+    return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    })
+}
