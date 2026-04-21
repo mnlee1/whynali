@@ -251,14 +251,16 @@ async function SearchResults({ query }: { query: string }) {
                             const raw = vote.issues as { id: string; title: string }[] | { id: string; title: string } | null
                             const issueData = Array.isArray(raw) ? raw[0] ?? null : raw
                             const choices = vote.vote_choices ?? []
-                            const totalCount = Array.isArray(choices) ? choices.reduce((sum: number, c: any) => sum + (c.count ?? 0), 0) : 0
+                            const participantCount = Array.isArray(choices) ? choices.reduce((sum: number, c: any) => sum + (c.count ?? 0), 0) : 0
+                            const isActive = vote.phase === '진행중'
                             return (
                                 <Link key={vote.id} href={`/issue/${vote.issue_id}`} className="block">
                                     <article className="card-hover p-5">
-                                        <div className="mb-2.5">
-                                            {vote.phase === '진행중' ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-xs font-semibold text-primary">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                        {/* 상태 라벨 + 참여 수 */}
+                                        <div className="flex items-center justify-between mb-3">
+                                            {isActive ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-green-200 bg-green-50 text-xs font-semibold text-green-700">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                                                     투표 진행중
                                                 </span>
                                             ) : (
@@ -267,6 +269,9 @@ async function SearchResults({ query }: { query: string }) {
                                                     투표 마감
                                                 </span>
                                             )}
+                                            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
+                                                <span className="font-bold text-primary">{participantCount.toLocaleString()}</span>명 참여 중
+                                            </span>
                                         </div>
 
                                         {/* 투표 제목 */}
@@ -281,13 +286,10 @@ async function SearchResults({ query }: { query: string }) {
                                             </p>
                                         )}
 
-                                        {/* 참여 수 */}
-                                        <div className="flex items-center justify-between pt-3 border-t border-border-muted">
-                                            <span className="text-xs text-content-muted font-medium">
-                                                {totalCount.toLocaleString()}명 참여
-                                            </span>
+                                        {/* 버튼 */}
+                                        <div className="pt-3 border-t border-border-muted text-right">
                                             <span className="text-xs font-semibold text-primary">
-                                                {vote.phase === '진행중' ? '참여하기' : '결과 보기'}
+                                                {isActive ? '투표하기' : '자세히 보기'}
                                             </span>
                                         </div>
                                     </article>
