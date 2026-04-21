@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
             .select('id, title')
             .in('approval_status', ['승인', '대기'])
             .order('created_at', { ascending: false })
-            .limit(200)
+            .limit(30)
 
         if (!issues || issues.length === 0) {
             return NextResponse.json({ success: true, message: '처리할 이슈 없음' })
