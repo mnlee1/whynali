@@ -56,7 +56,7 @@ ${issue.description ? `이슈 설명: ${issue.description}` : ''}
 응답 형식 (JSON만):
 {"topic": "...", "topic_description": "..."}`
 
-            const content = await ai.complete(prompt, { temperature: 0.2, max_tokens: 200 })
+            const content = await ai.complete(prompt, { temperature: 0.2, maxTokens: 200 })
             const result = parseJsonObject<{ topic: string; topic_description: string }>(content)
 
             if (result?.topic && result?.topic_description) {
