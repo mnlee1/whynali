@@ -24,10 +24,9 @@ import IssueList from '@/components/issues/IssueList'
 import HotIssueHighlight from '@/components/issues/HotIssueHighlight'
 import PopularRanking from '@/components/issues/PopularRanking'
 import VotePreview from '@/components/votes/VotePreview'
-import CommunityPreview from '@/components/community/CommunityPreview'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
-import type { Vote, VoteChoice, DiscussionTopic } from '@/types/index'
+import type { Vote, VoteChoice } from '@/types/index'
 import { generateWebSiteSchema, createJsonLd } from '@/lib/seo/schema'
 
 // ISR: 15분(900초)마다 페이지 재생성
@@ -38,12 +37,8 @@ interface VoteWithChoices extends Vote {
     issues?: { id: string; title: string } | null
 }
 
-interface TopicWithIssue extends DiscussionTopic {
-    issues?: { id: string; title: string } | null
-}
-
 async function fetchPageData() {
-    const [hotResult, surgingResult, latestResult, votesResult, discussionsResult] = await Promise.all([
+    const [hotResult, surgingResult, latestResult, votesResult] = await Promise.all([
         // HotIssueHighlight용 (heat 상위 100개, 급상승 보충용으로도 사용)
         supabaseAdmin
             .from('issues')
@@ -74,7 +69,7 @@ async function fetchPageData() {
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
             .order('created_at', { ascending: false })
-            .range(0, 9),
+            .range(0, 5),
 
         // VotePreview 데이터
         supabaseAdmin
@@ -85,33 +80,7 @@ async function fetchPageData() {
             .order('created_at', { ascending: false })
             .limit(50),
 
-        // CommunityPreview 데이터 (진행중 우선, 부족 시 마감으로 보충)
-        supabaseAdmin
-            .from('discussion_topics')
-            .select('*, issues(id, title)')
-            .in('approval_status', ['진행중', '마감'])
-            .order('created_at', { ascending: false })
-            .limit(10),
     ])
-
-    // 토론 주제별 의견(댓글) 수 계산
-    const discussionsData = discussionsResult.data ?? []
-    const topicIds = discussionsData.map((t) => t.id)
-    const opinionCountMap: Record<string, number> = {}
-
-    if (topicIds.length > 0) {
-        const { data: commentRows } = await supabaseAdmin
-            .from('comments')
-            .select('discussion_topic_id')
-            .in('discussion_topic_id', topicIds)
-            .eq('visibility', 'public')
-
-        for (const row of commentRows ?? []) {
-            if (row.discussion_topic_id) {
-                opinionCountMap[row.discussion_topic_id] = (opinionCountMap[row.discussion_topic_id] ?? 0) + 1
-            }
-        }
-    }
 
     // 유효한 이슈와 연결된 투표만 노출
     type RawVote = Vote & {
@@ -153,7 +122,7 @@ async function fetchPageData() {
             return { ...issue, surgePct }
         })
         .sort((a, b) => b.surgePct - a.surgePct)
-        .slice(0, 6)
+        .slice(0, 5)
 
     // 급상승 이슈 6개 미달 시 화력 상위 이슈로 보충 (슬라이드 이슈 제외, 종결 포함)
     if (surgingIssues.length < 6) {
@@ -165,18 +134,6 @@ async function fetchPageData() {
         surgingIssues = [...surgingIssues, ...fallback]
     }
 
-    // 토론 주제: 진행중 우선으로 5개 선별, 부족 시 마감으로 보충
-    const sortedDiscussions = [
-        ...discussionsData.filter((t: any) => t.approval_status === '진행중'),
-        ...discussionsData.filter((t: any) => t.approval_status === '마감'),
-    ].slice(0, 5)
-
-    const discussionsWithStats = sortedDiscussions.map((topic: any) => ({
-        ...topic,
-        opinionCount: opinionCountMap[topic.id] ?? 0,
-        viewCount: topic.view_count ?? 0,
-    }))
-
     return {
         heroIssues,
         surgingIssues,
@@ -185,12 +142,11 @@ async function fetchPageData() {
             total: latestResult.count ?? 0,
         },
         votes,
-        discussions: discussionsWithStats as TopicWithIssue[],
     }
 }
 
 export default async function HomePage() {
-    const { heroIssues, surgingIssues, latestIssues, votes, discussions } = await fetchPageData()
+    const { heroIssues, surgingIssues, latestIssues, votes } = await fetchPageData()
 
     const websiteSchema = generateWebSiteSchema()
 
@@ -201,16 +157,16 @@ export default async function HomePage() {
                 type="application/ld+json"
                 dangerouslySetInnerHTML={createJsonLd(websiteSchema)}
             />
-            <div className="container mx-auto px-4 py-6 md:py-8 space-y-10">
+            <div className="container mx-auto px-4 py-6 md:py-8 space-y-4">
             {/* 상단 2컬럼: 히어로 / 인기 랭킹 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 왼쪽: 캐러셀 */}
-                <div className="lg:col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* 왼쪽: 캐러셀 (3/5 = 60%) */}
+                <div className="lg:col-span-3">
                     <HotIssueHighlight initialIssues={heroIssues} />
                 </div>
 
-                {/* 오른쪽: 급상승 랭킹 */}
-                <div className="lg:col-span-1 h-full">
+                {/* 오른쪽: 급상승 랭킹 (2/5 = 40%) */}
+                <div className="lg:col-span-2 h-full">
                     <PopularRanking initialIssues={surgingIssues} isSurging />
                 </div>
             </div>
@@ -220,11 +176,9 @@ export default async function HomePage() {
 
             {/* 전체 이슈 목록 */}
             <section>
-                <IssueList initialData={latestIssues} initialLimit={10} hideSearch showFullLabel />
+                <IssueList initialData={latestIssues} initialLimit={6} hideSearch showFullLabel />
             </section>
 
-            {/* 커뮤니티 최신 토론 */}
-            <CommunityPreview initialTopics={discussions} />
         </div>
         </>
     )
