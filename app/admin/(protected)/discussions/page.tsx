@@ -702,7 +702,7 @@ export default function AdminDiscussionsPage() {
                                                 <Link
                                                     href={`/issue/${topic.issues.id}`}
                                                     target="_blank"
-                                                    className="text-primary hover:underline line-clamp-2 break-words"
+                                                    className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full"
                                                 >
                                                     {decodeHtml(topic.issues?.title ?? '')}
                                                 </Link>
