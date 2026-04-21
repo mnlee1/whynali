@@ -35,13 +35,13 @@ interface IssueListProps {
 
 // 상태 탭 목록
 const STATUS_TABS = [
-    { value: '', label: '전체', fullLabel: '전체 이슈', icon: null },
-    { value: '점화', label: '점화', fullLabel: '점화', icon: '🔥' },
-    { value: '논란중', label: '논란중', fullLabel: '논란중', icon: '⚡' },
-    { value: '종결', label: '종결', fullLabel: '종결', icon: '🏁' },
+    { value: '', label: '전체 이슈', fullLabel: '전체 이슈', icon: null },
+    { value: '점화', label: '급상승', fullLabel: '급상승', icon: '🔥' },
+    { value: '논란중', label: '화제 집중', fullLabel: '화제 집중', icon: '⚡' },
+    { value: '종결', label: '진화', fullLabel: '진화', icon: '🏁' },
 ]
 
-const LIMIT = 20
+const LIMIT = 6
 const DEBOUNCE_MS = 350
 
 export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData }: IssueListProps) {
@@ -145,28 +145,29 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                 />
             )}
 
+            {/* 타이틀 + 툴팁 */}
+            <div className="flex items-center gap-0.5">
+                <h2 className="text-base font-bold text-content-primary">왜 난리야?</h2>
+                <Tooltip label="" align="left" text="최신 등록순으로 정렬됩니다." />
+            </div>
+
             {/* 상태 탭 */}
-            <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-1.5 flex-1">
-                    {STATUS_TABS.map((tab) => (
-                        <button
-                            key={tab.value}
-                            onClick={() => setStatusFilter(tab.value)}
-                            className={[
-                                'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                                statusFilter === tab.value
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            {tab.icon && <span className="leading-none">{tab.icon}</span>}
-                            <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
-                        </button>
-                    ))}
-                </div>
-                <div className="hidden sm:flex shrink-0">
-                    <Tooltip label="최신순" text="최신 등록순으로 정렬됩니다." />
-                </div>
+            <div className="flex flex-wrap gap-1.5">
+                {STATUS_TABS.map((tab) => (
+                    <button
+                        key={tab.value}
+                        onClick={() => setStatusFilter(tab.value)}
+                        className={[
+                            'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                            statusFilter === tab.value
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                        ].join(' ')}
+                    >
+                        {tab.icon && <span className="leading-none">{tab.icon}</span>}
+                        <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
+                    </button>
+                ))}
             </div>
 
             {/* 에러 */}
@@ -192,7 +193,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
             {/* 이슈 카드 리스트 */}
             {issues.length > 0 && (
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {issues.map((issue) => (
                         <IssueCard key={issue.id} issue={issue} />
                     ))}

@@ -147,7 +147,7 @@ export default function Header() {
                     href="/login"
                     className={mobile
                         ? "p-2 text-content-secondary hover:text-content-primary transition-colors"
-                        : "btn-ghost btn-sm"
+                        : "px-4 py-1.5 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
                     }
                     aria-label={mobile ? "로그인" : undefined}
                 >

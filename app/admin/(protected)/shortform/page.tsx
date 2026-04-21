@@ -2,9 +2,9 @@
 
 /**
  * app/admin/shortform/page.tsx
- * 
+ *
  * [관리자 - 숏폼 job 관리 페이지]
- * 
+ *
  * 이슈 승인 시, 이슈 상태 전환 시 자동 생성된 숏폼 job을 관리합니다.
  * 승인된 job은 영상 생성 후 플랫폼 업로드 대상이 됩니다.
  */
@@ -36,14 +36,14 @@ interface ShortformJob {
     created_at: string
 }
 
-type FilterStatus = '' | 'pending' | 'approved' | 'rejected'
-
-interface ManualCreateModal {
-    open: boolean
-    issueId: string
-    loading: boolean
-    error: string | null
+interface IssueOption {
+    id: string
+    title: string
+    approval_status: string
+    heat_index: number | null
 }
+
+type FilterStatus = '' | 'pending' | 'approved' | 'rejected'
 
 interface ImagePreviewModal {
     open: boolean
@@ -104,7 +104,6 @@ export default function AdminShortformPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
-    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [imagePreview, setImagePreview] = useState<ImagePreviewModal>({
@@ -115,12 +114,14 @@ export default function AdminShortformPage() {
         loading: false,
         error: null,
     })
-    const [manualCreate, setManualCreate] = useState<ManualCreateModal>({
-        open: false,
-        issueId: '',
-        loading: false,
-        error: null,
-    })
+
+    // 수동 생성 인라인 영역
+    const [manualCreateOpen, setManualCreateOpen] = useState(false)
+    const [selectedIssueId, setSelectedIssueId] = useState('')
+    const [manualCreateLoading, setManualCreateLoading] = useState(false)
+    const [manualCreateError, setManualCreateError] = useState<string | null>(null)
+    const [issueOptions, setIssueOptions] = useState<IssueOption[]>([])
+    const [issueOptionsLoading, setIssueOptionsLoading] = useState(false)
 
     const loadTabCounts = useCallback(async () => {
         const tabParams: { value: FilterStatus; params: Record<string, string> }[] = [
@@ -166,11 +167,30 @@ export default function AdminShortformPage() {
 
             setJobs(json.data ?? [])
             setTotal(json.total ?? 0)
-            setLastRefreshedAt(new Date())
         } catch (e) {
             setError(e instanceof Error ? e.message : '조회 실패')
         } finally {
             setLoading(false)
+        }
+    }, [])
+
+    const loadIssueOptions = useCallback(async () => {
+        setIssueOptionsLoading(true)
+        try {
+            // 승인된 이슈 목록을 화력순으로 가져옴 (실서버/테스트서버 공통)
+            const params = new URLSearchParams({
+                approval_status: '승인',
+                limit: '100',
+                offset: '0',
+            })
+            const res = await fetch(`/api/admin/issues?${params}`)
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            setIssueOptions(json.data ?? [])
+        } catch {
+            setIssueOptions([])
+        } finally {
+            setIssueOptionsLoading(false)
         }
     }, [])
 
@@ -182,6 +202,17 @@ export default function AdminShortformPage() {
         setPage(1)
         loadJobs(filter, 1)
     }, [filter, loadJobs])
+
+    const handleToggleManualCreate = () => {
+        if (!manualCreateOpen) {
+            setManualCreateOpen(true)
+            setSelectedIssueId('')
+            setManualCreateError(null)
+            loadIssueOptions()
+        } else {
+            setManualCreateOpen(false)
+        }
+    }
 
     const handleAction = async (id: string, action: 'approve' | 'reject') => {
         const confirmMsg = action === 'approve'
@@ -286,31 +317,30 @@ export default function AdminShortformPage() {
     }
 
     const handleManualCreate = async () => {
-        const { issueId } = manualCreate
-        if (!issueId.trim()) {
-            setManualCreate((prev) => ({ ...prev, error: 'Issue ID를 입력해 주세요' }))
+        if (!selectedIssueId) {
+            setManualCreateError('이슈를 선택해 주세요')
             return
         }
 
-        setManualCreate((prev) => ({ ...prev, loading: true, error: null }))
+        setManualCreateLoading(true)
+        setManualCreateError(null)
         try {
             const res = await fetch('/api/admin/shortform', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issueId: issueId.trim(), triggerType: 'issue_created' }),
+                body: JSON.stringify({ issueId: selectedIssueId, triggerType: 'issue_created' }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            setManualCreate({ open: false, issueId: '', loading: false, error: null })
+            setManualCreateOpen(false)
+            setSelectedIssueId('')
             setFilter('pending')
             await Promise.all([loadJobs('pending', 1), loadTabCounts()])
         } catch (e) {
-            setManualCreate((prev) => ({
-                ...prev,
-                loading: false,
-                error: e instanceof Error ? e.message : 'Job 생성 실패',
-            }))
+            setManualCreateError(e instanceof Error ? e.message : 'Job 생성 실패')
+        } finally {
+            setManualCreateLoading(false)
         }
     }
 
@@ -394,26 +424,89 @@ export default function AdminShortformPage() {
                         이슈 승인/상태 전환 시 자동 생성된 숏폼 job 목록
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    {lastRefreshedAt && (
-                        <span className="text-sm text-content-muted">
-                            마지막 갱신: {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
-                    <button
-                        onClick={() => setManualCreate({ open: true, issueId: '', loading: false, error: null })}
-                        className="btn-primary btn-md"
-                    >
-                        수동 생성
-                    </button>
-                    <button
-                        onClick={() => loadJobs(filter, page)}
-                        className="btn-neutral btn-md"
-                    >
-                        새로고침
-                    </button>
-                </div>
+                <button
+                    onClick={handleToggleManualCreate}
+                    className="btn-primary btn-md"
+                >
+                    + 수동 생성
+                </button>
             </div>
+
+            {/* 수동 생성 인라인 폼 */}
+            {manualCreateOpen && (
+                <div className="mb-6 p-4 border border-primary-muted bg-primary-light/20 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-primary-dark">수동 숏폼 Job 생성</h2>
+                        <button
+                            type="button"
+                            onClick={handleToggleManualCreate}
+                            className="text-content-muted hover:text-content-secondary text-lg leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                    {manualCreateError && <p className="text-sm text-red-500">{manualCreateError}</p>}
+
+                    {/* 이슈 선택 */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-content-secondary">대상 이슈 (승인된 이슈만)</label>
+                        {issueOptionsLoading ? (
+                            <p className="text-sm text-content-muted">이슈 목록 불러오는 중...</p>
+                        ) : (
+                            <div className="relative">
+                                <select
+                                    value={selectedIssueId}
+                                    onChange={(e) => {
+                                        setSelectedIssueId(e.target.value)
+                                        setManualCreateError(null)
+                                    }}
+                                    disabled={manualCreateLoading}
+                                    className="w-full pl-3 pr-8 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface appearance-none"
+                                >
+                                    <option value="">이슈를 선택하세요</option>
+                                    {issueOptions.map((issue) => (
+                                        <option key={issue.id} value={issue.id}>
+                                            {issue.title}
+                                            {issue.heat_index != null ? ` (화력 ${issue.heat_index})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <svg
+                                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                >
+                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                        )}
+                        {!issueOptionsLoading && issueOptions.length === 0 && (
+                            <p className="text-xs text-content-muted">승인된 이슈가 없습니다.</p>
+                        )}
+                    </div>
+
+                    {/* 하단 버튼 */}
+                    <div className="flex gap-2 justify-end">
+                        <button
+                            type="button"
+                            onClick={handleToggleManualCreate}
+                            className="btn-neutral btn-sm"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleManualCreate}
+                            disabled={!selectedIssueId || manualCreateLoading || issueOptionsLoading}
+                            className="btn-primary btn-sm disabled:opacity-50"
+                        >
+                            {manualCreateLoading ? '생성 중...' : '등록'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* 필터 탭 */}
             <div className="mb-4">
@@ -770,55 +863,6 @@ export default function AdminShortformPage() {
                 disabled={loading}
                 onChange={(p) => { setPage(p); loadJobs(filter, p) }}
             />
-
-            {/* 수동 job 생성 모달 */}
-            {manualCreate.open && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-                    onClick={() => !manualCreate.loading && setManualCreate({ open: false, issueId: '', loading: false, error: null })}
-                >
-                    <div
-                        className="bg-surface rounded-xl shadow-2xl w-full max-w-md p-6"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h2 className="text-lg font-bold text-content-primary mb-1">수동 숏폼 Job 생성</h2>
-                        <p className="text-sm text-content-secondary mb-4">
-                            이슈 ID를 입력하면 화력 필터·쿨다운 없이 job을 생성합니다.
-                        </p>
-                        <label className="block text-sm font-medium text-content-secondary mb-1">
-                            Issue ID
-                        </label>
-                        <input
-                            type="text"
-                            value={manualCreate.issueId}
-                            onChange={(e) => setManualCreate((prev) => ({ ...prev, issueId: e.target.value, error: null }))}
-                            onKeyDown={(e) => e.key === 'Enter' && handleManualCreate()}
-                            placeholder="예: 550e8400-e29b-41d4-a716-446655440000"
-                            disabled={manualCreate.loading}
-                            className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-muted"
-                        />
-                        {manualCreate.error && (
-                            <p className="mt-2 text-sm text-red-600">{manualCreate.error}</p>
-                        )}
-                        <div className="flex justify-end gap-2 mt-5">
-                            <button
-                                onClick={() => setManualCreate({ open: false, issueId: '', loading: false, error: null })}
-                                disabled={manualCreate.loading}
-                                className="btn-neutral btn-md"
-                            >
-                                취소
-                            </button>
-                            <button
-                                onClick={handleManualCreate}
-                                disabled={manualCreate.loading || !manualCreate.issueId.trim()}
-                                className="btn-primary btn-md"
-                            >
-                                {manualCreate.loading ? '생성 중...' : 'Job 생성'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* 이미지 미리보기 모달 */}
             {imagePreview.open && (

@@ -143,9 +143,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .select('id, body, created_at, approval_status, view_count')
             .eq('issue_id', id)
             .in('approval_status', ['진행중', '마감'])
-            .order('approval_status', { ascending: true })
-            .order('created_at', { ascending: false })
-            .limit(5),
+            .limit(50),
         adminClient
             .from('votes')
             .select('*', { count: 'exact', head: true })
@@ -172,11 +170,18 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         }
     }
 
-    const discussionTopicsWithStats = (discussionTopics ?? []).map((topic) => ({
+    const topicsWithStats = (discussionTopics ?? []).map((topic) => ({
         ...topic,
         opinionCount: opinionCountMap[topic.id] ?? 0,
         viewCount: topic.view_count ?? 0,
     }))
+    const active = topicsWithStats
+        .filter(t => t.approval_status === '진행중')
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const closed = topicsWithStats
+        .filter(t => t.approval_status === '마감')
+        .sort((a, b) => (b.viewCount + b.opinionCount) - (a.viewCount + a.opinionCount))
+    const discussionTopicsWithStats = [...active, ...closed].slice(0, 5)
 
     if (issueError || !issue) {
         return (

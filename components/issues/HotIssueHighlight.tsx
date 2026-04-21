@@ -18,10 +18,10 @@ import Link from 'next/link'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Autoplay, Pagination } from 'swiper/modules'
 import { getIssues } from '@/lib/api/issues'
-import StatusBadge from '@/components/common/StatusBadge'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
-
+import { getCategoryById } from '@/lib/config/categories'
+import { supabase } from '@/lib/supabase/client'
 
 import 'swiper/css'
 import 'swiper/css/pagination'
@@ -33,6 +33,7 @@ interface Props {
 export default function HotIssueHighlight({ initialIssues }: Props) {
     const [issues, setIssues] = useState<Issue[]>(initialIssues ?? [])
     const [loading, setLoading] = useState(!initialIssues)
+    const [discussionCounts, setDiscussionCounts] = useState<Record<string, number>>({})
 
     useEffect(() => {
         if (initialIssues) return
@@ -49,28 +50,44 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
         load()
     }, [initialIssues])
 
+    useEffect(() => {
+        if (issues.length === 0) return
+        async function fetchCounts() {
+            const ids = issues.map((i) => i.id)
+            const { data } = await supabase
+                .from('discussion_topics')
+                .select('issue_id')
+                .in('issue_id', ids)
+                .eq('approval_status', '진행중')
+            if (data) {
+                const counts: Record<string, number> = {}
+                data.forEach((d: { issue_id: string }) => {
+                    counts[d.issue_id] = (counts[d.issue_id] ?? 0) + 1
+                })
+                setDiscussionCounts(counts)
+            }
+        }
+        fetchCounts()
+    }, [issues])
+
     if (loading) {
         return (
-            <div className="h-[300px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl animate-pulse" />
+            <div className="h-[300px] lg:h-full lg:min-h-[400px] bg-border-muted rounded-2xl animate-pulse" />
         )
     }
 
     if (issues.length === 0) {
         return (
-            <section className="relative h-[300px] lg:h-full lg:min-h-[500px] bg-border-muted rounded-2xl flex items-center justify-center">
+            <section className="relative h-[300px] lg:h-full lg:min-h-[400px] bg-border-muted rounded-2xl flex items-center justify-center">
                 <p className="text-content-muted text-sm">이슈를 불러오는 중입니다.</p>
             </section>
         )
     }
 
     return (
-        <section className="relative h-[300px] lg:h-full lg:min-h-[500px]">
-            {/* 왜난리 이슈 뱃지 */}
-            <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-primary text-white text-xs font-bold shadow-lg">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    왜난리 이슈
-                </span>
+        <section className="relative h-[300px] lg:h-full lg:min-h-[400px]">
+            {/* 화력 상위 뱃지 */}
+            <div className="absolute top-3 right-3 z-10">
                 <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">
                     실시간 화력 상위 5개
                 </span>
@@ -83,7 +100,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                 autoplay={{ delay: 5000, disableOnInteraction: false }}
                 pagination={{ clickable: true }}
                 loop={issues.length > 1}
-                className="h-full rounded-2xl transition-shadow duration-300 hover:shadow-2xl"
+                className="h-full rounded-2xl transition-shadow duration-300 hover:shadow-2xl hot-issue-swiper"
             >
             {issues.map((issue, index) => {
                 const gradients = [
@@ -137,20 +154,34 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent group-hover:from-black/60 group-hover:via-black/20 transition-all duration-500" />
 
                                 {/* 콘텐츠 */}
-                                <div className="absolute inset-0 flex flex-col justify-between p-5 lg:p-6 pb-12 lg:pb-18">
-                                    <div />
+                                <div className="absolute inset-x-0 bottom-0 flex flex-col p-5 lg:p-6 pb-16 lg:pb-20">
+                                    {/* 카테고리 태그 */}
+                                    {(() => {
+                                        const cat = getCategoryById(issue.category)
+                                        const hasDiscussion = (discussionCounts[issue.id] ?? 0) > 0
+                                        return cat ? (
+                                            <div className={hasDiscussion ? 'mb-1.5' : 'mb-4'}>
+                                                <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-sm text-white border border-white/30">
+                                                    {cat.label}
+                                                </span>
+                                            </div>
+                                        ) : null
+                                    })()}
 
-                                    {/* 하단: 이슈 정보 */}
-                                    <div className="space-y-3 pb-2 lg:pb-8">
-                                        <div>
-                                            <StatusBadge status={issue.status} size="sm" />
+                                    {/* 토론 진행 수 */}
+                                    {(discussionCounts[issue.id] ?? 0) > 0 && (
+                                        <div className="mb-2">
+                                            <span className="inline-flex items-center gap-2 text-white/90 text-sm font-semibold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                {discussionCounts[issue.id]}개 토론 진행 중
+                                            </span>
                                         </div>
+                                    )}
 
-                                        <h2 className="text-xl lg:text-2xl font-bold text-white leading-tight line-clamp-2 drop-shadow-lg">
-                                            {decodeHtml(issue.title)}
-                                        </h2>
-
-                                    </div>
+                                    {/* 제목 */}
+                                    <h2 className="text-xl lg:text-2xl font-bold text-white leading-tight line-clamp-2 drop-shadow-lg">
+                                        {decodeHtml(issue.title)}
+                                    </h2>
                                 </div>
                             </article>
                         </Link>

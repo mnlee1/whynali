@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { Search } from 'lucide-react'
+import { Search, ChevronDown } from 'lucide-react'
 
 interface SearchBarProps {
     mobile?: boolean
@@ -145,6 +145,7 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
     const router = useRouter()
     const pathname = usePathname()
     const wrapperRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
 
     // 페이지 이동 시 검색어 초기화
     useEffect(() => {
@@ -205,10 +206,11 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
                 setShowSuggestions(false)
             }
         }
-        
+
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
+
 
     const handleSearch = () => {
         if (query.trim().length >= 2) {
@@ -225,25 +227,52 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
         }
     }
 
-    const handleKeywordClick = (keyword: string, issueId: string) => {
+    const handleKeywordClick = (keyword: string) => {
         setQuery(keyword)
         router.push(`/search?q=${encodeURIComponent(keyword)}`)
         setShowSuggestions(false)
         onSearchComplete?.()
     }
 
+    // 유휴 오버레이 표시 조건 (모바일/데스크톱 공통)
+    const showIdleOverlay = !showSuggestions && !query && popularKeywords.length > 0
+
+    const currentPlaceholder = '실시간 인기 이슈 검색'
+
     return (
         <div ref={wrapperRef} className={`relative ${mobile ? 'w-full' : 'w-full md:w-auto'}`}>
             <div className="relative">
                 <input
+                    ref={inputRef}
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={() => setShowSuggestions(true)}
                     onKeyDown={handleKeyDown}
-                    placeholder="지금 이슈 검색"
-                    className={`${mobile ? 'w-full' : 'w-full md:w-64'} pl-3 pr-10 py-1.5 text-sm border border-border rounded-lg bg-white text-content-primary placeholder:text-content-muted focus:outline-none focus:border-primary transition-colors`}
+                    placeholder={currentPlaceholder}
+                    className={`${mobile ? 'w-full' : 'w-72'} pl-3 pr-10 py-2 text-sm rounded-full bg-white text-content-primary placeholder:text-content-muted focus:outline-none transition-colors border ${
+                        showIdleOverlay
+                            ? 'border-primary/60 cursor-pointer'
+                            : 'border-border focus:border-primary'
+                    }`}
                 />
+
+                {/* 유휴 상태 오버레이 (모바일/데스크톱 공통) */}
+                <div
+                    className={`absolute inset-0 flex items-center pl-3 pr-10 transition-opacity duration-150 ${
+                        showIdleOverlay ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'
+                    }`}
+                    onClick={() => {
+                        setShowSuggestions(true)
+                        inputRef.current?.focus()
+                    }}
+                >
+                    <span className="flex items-center gap-1.5 bg-white">
+                        <span className="text-sm text-content-secondary whitespace-nowrap">실시간 인기 이슈 키워드</span>
+                        <ChevronDown className="w-3.5 h-3.5 text-content-muted shrink-0" strokeWidth={2.5} />
+                    </span>
+                </div>
+
                 <button
                     type="button"
                     onClick={handleSearch}
@@ -258,12 +287,11 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
             {showSuggestions && popularKeywords.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-xl shadow-card z-50">
                     <div className="p-2">
-                        <p className="text-xs text-content-muted px-2 py-1 font-medium">인기 검색어</p>
                         <ul className="space-y-0.5">
                             {popularKeywords.map((item) => (
                                 <li key={item.rank}>
                                     <button
-                                        onClick={() => handleKeywordClick(item.keyword, item.issueId)}
+                                        onClick={() => handleKeywordClick(item.keyword)}
                                         className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-left hover:bg-surface-muted rounded-lg transition-colors"
                                     >
                                         <span className="text-xs font-bold text-primary w-4 shrink-0">{item.rank}</span>

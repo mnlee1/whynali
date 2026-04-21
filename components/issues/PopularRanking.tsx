@@ -18,7 +18,8 @@ import Link from 'next/link'
 import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
-
+import { formatDate } from '@/lib/utils/format-date'
+import { getCategoryById } from '@/lib/config/categories'
 import Tooltip from '@/components/common/Tooltip'
 
 interface IssueWithSurge extends Issue {
@@ -34,12 +35,12 @@ function filterThisWeek(issues: Issue[]): Issue[] {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
     return issues
         .filter((i) => new Date(i.created_at).getTime() >= sevenDaysAgo)
-        .slice(0, 6)
+        .slice(0, 5)
 }
 
 export default function PopularRanking({ initialIssues, isSurging = false }: Props) {
     const [issues, setIssues] = useState<IssueWithSurge[]>(
-        initialIssues ? (isSurging ? initialIssues.slice(0, 6) : filterThisWeek(initialIssues)) : []
+        initialIssues ? (isSurging ? initialIssues.slice(0, 5) : filterThisWeek(initialIssues)) : []
     )
     const [loading, setLoading] = useState(!initialIssues)
     const [activeIndex, setActiveIndex] = useState(0)
@@ -71,16 +72,17 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
         <section className="flex flex-col h-full">
             {/* 헤더 */}
             <div className="mb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-0.5">
                     <h2 className="text-base font-bold text-content-primary">
                         {isSurging ? '🔥 급상승 중' : '지금 뜨는 이슈'}
                     </h2>
-                    <Tooltip 
-                        label={isSurging ? "증가율순" : "화력순"} 
-                        text={isSurging 
-                            ? "최근 1시간 기준 화력 증가율이 높은 이슈를 보여줍니다." 
+                    <Tooltip
+                        label=""
+                        align="left"
+                        text={isSurging
+                            ? "최근 1시간 기준 화력 증가율이 높은 이슈를 보여줍니다."
                             : "최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬합니다."
-                        } 
+                        }
                     />
                 </div>
             </div>
@@ -103,22 +105,42 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                             >
                                 <Link href={`/issue/${issue.id}`} className="block h-full">
                                     <article className={`h-full bg-surface border rounded-xl transition-all duration-300 flex items-center gap-3 p-3 group ${
-                                        isActive 
-                                            ? 'border-primary-muted shadow-card-hover -translate-y-0.5 bg-gradient-to-r from-primary-light/30 to-transparent' 
+                                        isActive
+                                            ? 'border-primary-muted shadow-card-hover -translate-y-0.5 bg-gradient-to-r from-primary-light/30 to-transparent'
                                             : 'border-border shadow-card hover:shadow-card-hover hover:border-primary-muted hover:-translate-y-0.5'
                                     }`}>
+                                        {/* 순위 */}
                                         <span className={`shrink-0 text-sm font-bold w-5 text-center transition-all duration-300 ${
                                             isActive ? 'text-primary scale-110' : 'text-primary group-hover:scale-110'
                                         }`}>
                                             {idx + 1}
                                         </span>
+
+                                        {/* 텍스트 */}
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-semibold line-clamp-1 mb-0.5 transition-colors duration-300 ${
+                                            <p className={`text-sm font-semibold line-clamp-1 mb-1 transition-colors duration-300 ${
                                                 isActive ? 'text-primary' : 'text-content-primary group-hover:text-primary'
                                             }`}>
                                                 {decodeHtml(issue.title)}
                                             </p>
+                                            <div className="flex items-center gap-1.5 text-xs text-content-muted">
+                                                {(() => {
+                                                    const cat = getCategoryById(issue.category)
+                                                    return cat ? <span>{cat.label}</span> : null
+                                                })()}
+                                                <span>·</span>
+                                                <span>{formatDate(issue.created_at)}</span>
+                                            </div>
                                         </div>
+
+                                        {/* 썸네일 */}
+                                        {issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0] && (
+                                            <img
+                                                src={issue.thumbnail_urls[issue.primary_thumbnail_index ?? 0]!}
+                                                alt=""
+                                                className="shrink-0 w-14 h-14 rounded-lg object-cover"
+                                            />
+                                        )}
                                     </article>
                                 </Link>
                             </li>
