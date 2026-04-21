@@ -152,7 +152,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     }, [category, statusFilter, searchQuery])
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             {/* 검색창 */}
             {!hideSearch && (
                 <SearchBar
@@ -162,23 +162,25 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                 />
             )}
 
-            {/* 타이틀 + 툴팁 */}
-            <div className="flex items-center gap-0.5">
-                <h2 className="text-base font-bold text-content-primary">왜 난리야?</h2>
-                <Tooltip
-                    label=""
-                    align="left"
-                    width="w-max max-w-[220px]"
-                    text={
-                        <span className="flex flex-col gap-1">
-                            <span>최신 등록순으로 정렬됩니다.</span>
-                            <span>· 급상승: 화력이 오르는 이슈</span>
-                            <span>· 화제 집중: 반응이 활발한 이슈</span>
-                            <span>· 종결: 관심이 줄어든 이슈</span>
-                        </span>
-                    }
-                />
-            </div>
+            {/* 타이틀 + 툴팁 — 카테고리 페이지에서는 숨김 */}
+            {!category && (
+                <div className="flex items-center gap-0.5">
+                    <h2 className="text-base font-bold text-content-primary">왜 난리야?</h2>
+                    <Tooltip
+                        label=""
+                        align="left"
+                        width="w-max max-w-[220px]"
+                        text={
+                            <span className="flex flex-col gap-1">
+                                <span>최신 등록순으로 정렬됩니다.</span>
+                                <span>· 급상승: 최근 1시간 기준 급상승 중인 이슈</span>
+                                <span>· 화제 집중: 반응이 활발한 이슈</span>
+                                <span>· 종결: 관심이 줄어든 이슈</span>
+                            </span>
+                        }
+                    />
+                </div>
+            )}
 
             {/* 상태 탭 */}
             <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">

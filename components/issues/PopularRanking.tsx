@@ -80,7 +80,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                         label=""
                         align="left"
                         text={isSurging
-                            ? "최근 1시간 기준 화력 증가율이 높은 이슈를 보여줍니다."
+                            ? "최근 1시간 기준 급상승 중인 이슈를 보여줍니다."
                             : "최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬합니다."
                         }
                     />

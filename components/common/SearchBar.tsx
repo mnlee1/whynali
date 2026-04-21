@@ -21,7 +21,7 @@ interface SearchBarProps {
     placeholder?: string
 }
 
-export default function SearchBar({ value, onChange, onSearch, placeholder = '이슈 검색...' }: SearchBarProps) {
+export default function SearchBar({ value, onChange, onSearch, placeholder = '이슈 검색' }: SearchBarProps) {
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && onSearch) {
             onSearch()

@@ -16,7 +16,10 @@
         "restore": "node scripts/restore-db.mjs",
         "restore:auth": "node scripts/restore-auth-users.mjs",
         "backup:cleanup": "node scripts/cleanup-old-backups.mjs",
-        "check:api": "node scripts/check-api-failures.mjs"
+        "check:api": "node scripts/check-api-failures.mjs",
+        "fill-thumbnails": "npx tsx scripts/fill-missing-thumbnails.ts",
+        "fill-thumbnails:specific": "npx tsx scripts/fill-thumbnails-specific.ts",
+        "fill-thumbnails:specific:prod": "npx tsx scripts/fill-thumbnails-specific.ts --prod"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
