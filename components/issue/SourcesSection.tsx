@@ -16,6 +16,7 @@
 import { useState, useEffect } from 'react'
 import { getSources } from '@/lib/api/issues'
 import { formatDate } from '@/lib/utils/format-date'
+import { getNewsSourceName } from '@/lib/utils/news-source-mapper'
 import type { NewsData } from '@/types/issue'
 
 const INITIAL_SHOW_COUNT = 5
@@ -95,7 +96,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
                                             </a>
                                         </div>
                                         <div className="text-xs text-content-secondary">
-                                            {item.source} · {formatDate(item.published_at)}
+                                            {getNewsSourceName(item.source)} · {formatDate(item.published_at)}
                                         </div>
                                     </div>
                                 ))}
