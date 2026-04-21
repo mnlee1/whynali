@@ -243,18 +243,18 @@ ${existingSummaries || '(없음)'}
 - 파생: 이슈로 인해 새로 불거진 별개의 논란 (새 인물 등장, 연관 사건 등)
 - 기존 타임라인과 중복되는 상황 변화는 제외하세요
 
-## 작업 2: 각 뉴스를 "타이틀: 설명" 형식으로 요약
-- 타이틀은 3~5단어, 설명은 2~3문장 (제목에서 합리적으로 추론 가능한 내용만 사용)
-- 제목에 없는 내용을 과도하게 추측하지 마세요
+## 작업 2: 각 뉴스 제목을 1~2문장으로 요약
+- 반드시 제목에 나온 단어와 사실만 사용하세요
+- 제목에 없는 내용, 배경 지식, 추측을 절대 추가하지 마세요
 - 기존 타임라인과 유사한 내용은 제외
-- 예시: {"index":1,"stage":"전개","pointSummary":"경찰 수사 착수: 드라마 촬영장에서 스태프 사망 사고가 발생했다. 경찰이 사건 경위를 조사하고 있으며, 촬영장 안전 관리 소홀 여부에 대한 수사를 시작했다."}
+- 예시: {"index":1,"stage":"전개","pointSummary":"경찰이 드라마 촬영장 스태프 사망 사고 경위를 조사하고 있다."}
 
 반드시 아래 JSON 형식으로만 답하세요 (중복 제외된 뉴스만):
-[{"index":1,"stage":"전개","pointSummary":"타이틀: 설명"},{"index":3,"stage":"파생","pointSummary":"타이틀: 설명"}]`
+[{"index":1,"stage":"전개","pointSummary":"설명 1~2문장"},{"index":3,"stage":"파생","pointSummary":"설명 1~2문장"}]`
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 800 },
+            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 1200 },
         )
 
         const parsed = parseJsonArray<{ index: number; stage: string; pointSummary: string }>(content)
