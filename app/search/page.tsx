@@ -1,11 +1,10 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
-import { formatDate } from '@/lib/utils/format-date'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
 import SearchHeader from '@/components/search/SearchHeader'
-import { Eye, MessageSquare, BadgeCheck, Users, MessageCircleMore } from 'lucide-react'
+import { ChevronRight, Eye, MessageSquare, BadgeCheck, Users, MessageCircleMore } from 'lucide-react'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
@@ -145,9 +144,12 @@ async function SearchResults({ query }: { query: string }) {
                                         </div>
 
                                         {/* 제목 */}
-                                        <h3 className="text-base font-semibold text-content-primary mb-3 line-clamp-2">
-                                            {decodeHtml(issue.title)}
-                                        </h3>
+                                        <div className="flex items-center gap-0.5 mb-3">
+                                            <h3 className="text-base font-semibold text-content-primary line-clamp-2">
+                                                {decodeHtml(issue.title)}
+                                            </h3>
+                                            <ChevronRight className="w-4 h-4 text-content-primary shrink-0" strokeWidth={2.5} />
+                                        </div>
 
                                         {/* 통계 정보 */}
                                         <div className="flex items-center gap-4 text-xs text-content-secondary pt-3 border-t border-border-muted">
