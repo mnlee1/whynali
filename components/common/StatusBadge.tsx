@@ -28,19 +28,19 @@ function getStatusMeta(status: IssueStatus): {
         case '점화':
             return {
                 icon: '🔥',
-                label: '점화',
+                label: '급상승',
                 baseClass: 'bg-red-50 text-red-600 border-red-200'
             }
         case '논란중':
             return {
                 icon: '⚡',
-                label: '논란중',
+                label: '화제 집중',
                 baseClass: 'bg-orange-50 text-orange-600 border-orange-200'
             }
         case '종결':
             return {
                 icon: '🏁',
-                label: '종결',
+                label: '진화',
                 baseClass: 'bg-gray-50 text-gray-500 border-gray-200'
             }
         default:

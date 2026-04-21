@@ -29,7 +29,6 @@ export async function GET(request: NextRequest) {
     }
 
     query = query
-        .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
     if (issue_id) {
@@ -76,11 +75,19 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const topicsWithOpinions = (data || []).map((topic) => ({
+    const mapped = (data || []).map((topic) => ({
         ...topic,
         opinionCount: countMap[topic.id] ?? 0,
         viewCount: topic.view_count ?? 0,
     }))
+
+    const activeTopics = mapped
+        .filter(t => t.approval_status === '진행중')
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const closedTopics = mapped
+        .filter(t => t.approval_status === '마감')
+        .sort((a, b) => (b.viewCount + b.opinionCount) - (a.viewCount + a.opinionCount))
+    const topicsWithOpinions = [...activeTopics, ...closedTopics]
 
     return NextResponse.json({ data: topicsWithOpinions, total: count ?? 0 })
 }
