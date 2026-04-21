@@ -38,7 +38,7 @@ const STATUS_TABS = [
     { value: '', label: '전체 이슈', fullLabel: '전체 이슈', icon: null },
     { value: '점화', label: '급상승', fullLabel: '급상승', icon: '🔥' },
     { value: '논란중', label: '화제 집중', fullLabel: '화제 집중', icon: '⚡' },
-    { value: '종결', label: '진화', fullLabel: '진화', icon: '🏁' },
+    { value: '종결', label: '종결', fullLabel: '종결', icon: '🏁' },
 ]
 
 const LIMIT = 6
@@ -50,7 +50,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const [loading, setLoading] = useState(!initialData)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
-
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
@@ -60,6 +60,23 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const loadLimit = initialLimit ?? LIMIT
     // 마운트 시 initialData가 있으면 첫 fetch 건너뜀
     const skipNextFetch = useRef(!!initialData)
+
+    useEffect(() => {
+        async function fetchCounts() {
+            const tabKeys = ['', '점화', '논란중', '종결']
+            const results = await Promise.allSettled(
+                tabKeys.map(s => getIssues({ category, status: s || undefined, sort: 'latest', limit: 1, offset: 0 }))
+            )
+            const counts: Record<string, number> = {}
+            tabKeys.forEach((s, i) => {
+                const r = results[i]
+                if (r.status === 'fulfilled') counts[s] = r.value.total
+            })
+            setTabCounts(counts)
+        }
+        fetchCounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [category])
 
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
@@ -148,26 +165,49 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             {/* 타이틀 + 툴팁 */}
             <div className="flex items-center gap-0.5">
                 <h2 className="text-base font-bold text-content-primary">왜 난리야?</h2>
-                <Tooltip label="" align="left" text="최신 등록순으로 정렬됩니다." />
+                <Tooltip
+                    label=""
+                    align="left"
+                    width="w-max max-w-[220px]"
+                    text={
+                        <span className="flex flex-col gap-1">
+                            <span>최신 등록순으로 정렬됩니다.</span>
+                            <span>· 급상승: 화력이 오르는 이슈</span>
+                            <span>· 화제 집중: 반응이 활발한 이슈</span>
+                            <span>· 종결: 관심이 줄어든 이슈</span>
+                        </span>
+                    }
+                />
             </div>
 
             {/* 상태 탭 */}
-            <div className="flex flex-wrap gap-1.5">
-                {STATUS_TABS.map((tab) => (
-                    <button
-                        key={tab.value}
-                        onClick={() => setStatusFilter(tab.value)}
-                        className={[
-                            'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                            statusFilter === tab.value
-                                ? 'bg-primary text-white border-primary'
-                                : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                        ].join(' ')}
-                    >
-                        {tab.icon && <span className="leading-none">{tab.icon}</span>}
-                        <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
-                    </button>
-                ))}
+            <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                {STATUS_TABS.map((tab) => {
+                    const isActive = statusFilter === tab.value
+                    const count = tabCounts[tab.value]
+                    return (
+                        <button
+                            key={tab.value}
+                            onClick={() => setStatusFilter(tab.value)}
+                            className={[
+                                'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                                isActive
+                                    ? 'bg-primary text-white border-primary'
+                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                            ].join(' ')}
+                        >
+                            {tab.icon && <span className="leading-none">{tab.icon}</span>}
+                            <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
+                            {count !== undefined && count > 0 && (
+                                <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
+                                    isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
+                                }`}>
+                                    {count.toLocaleString()}
+                                </span>
+                            )}
+                        </button>
+                    )
+                })}
             </div>
 
             {/* 에러 */}
@@ -177,10 +217,20 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                 </div>
             )}
 
-            {/* 첫 로딩 */}
-            {loading && issues.length === 0 && (
-                <div className="text-center py-12 text-content-secondary text-sm">
-                    로딩 중...
+            {/* 로딩 스켈레톤 (초기 + 탭 전환 시) */}
+            {loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[0, 1, 2, 3].map(i => (
+                        <div key={i} className="card-hover p-5 h-48 flex flex-col gap-3">
+                            <div className="h-4 bg-border-muted rounded animate-pulse w-1/3" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-4/5" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-2/3 mt-1" />
+                            <div className="flex gap-4 mt-auto">
+                                {[0,1,2,3].map(j => <div key={j} className="h-3 w-8 bg-border-muted rounded animate-pulse" />)}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -192,7 +242,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             )}
 
             {/* 이슈 카드 리스트 */}
-            {issues.length > 0 && (
+            {!loading && issues.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {issues.map((issue) => (
                         <IssueCard key={issue.id} issue={issue} />

@@ -1,15 +1,8 @@
-/**
- * app/community/[id]/page.tsx
- *
- * 토론 주제 상세 페이지.
- * - 이슈 댓글과 시각적으로 구분된 토론 영역
- * - 철학적 관점 유도 안내 문구와 질문 스타터 칩 제공
- * - 세이프티봇 연동 댓글 작성
- */
-
 import Link from 'next/link'
+import { Eye, MessageCircleMore } from 'lucide-react'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import DiscussionComments from '@/components/issue/DiscussionComments'
+import ViewCounter from '@/components/issue/ViewCounter'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatFullDate } from '@/lib/utils/format-date'
 
@@ -40,11 +33,12 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
         )
     }
 
-    // 조회수 서버사이드 증가 (force-dynamic이므로 매 방문마다 실행됨)
-    await admin
-        .from('discussion_topics')
-        .update({ view_count: (topic.view_count ?? 0) + 1 })
-        .eq('id', id)
+    // 의견(댓글) 수 조회
+    const { count: opinionCount } = await admin
+        .from('comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('discussion_topic_id', id)
+        .eq('visibility', 'public')
 
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -52,9 +46,13 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
 
     const issueData = topic.issues as { id: string; title: string } | null
     const isClosed = topic.approval_status === '마감'
+    const viewCount = topic.view_count ?? 0
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
+            {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출) */}
+            <ViewCounter endpoint={`/api/discussions/${id}/view`} />
+
             {/* 뒤로가기 */}
             <Link href="/community" className="inline-block text-sm text-content-muted hover:text-content-secondary mb-4">
                 ← 커뮤니티 목록
@@ -62,7 +60,8 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
 
             {/* 토론 주제 카드 */}
             <div className="card p-5 mb-4">
-                <div className="flex items-center gap-2 mb-3">
+                {/* 상태 + AI 라벨 */}
+                <div className="flex items-center gap-2 mb-2">
                     <span className={[
                         'text-xs px-2.5 py-0.5 rounded-full border font-medium',
                         isClosed
@@ -78,32 +77,44 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
                     )}
                 </div>
 
+                {/* 연결 이슈 — 라벨 바로 아래 */}
+                {issueData && (
+                    <div className="flex items-center gap-1.5 mt-5 mb-3">
+                        <span className="text-xs text-content-muted">연결 이슈:</span>
+                        <Link
+                            href={`/issue/${issueData.id}`}
+                            className="text-xs text-primary underline underline-offset-2 hover:text-primary-dark line-clamp-1"
+                        >
+                            {decodeHtml(issueData.title)} →
+                        </Link>
+                    </div>
+                )}
+
                 {/* 토론 주제 본문 */}
                 <p className="text-base md:text-lg font-semibold text-content-primary leading-relaxed whitespace-pre-wrap mb-3">
                     {decodeHtml(topic.body)}
                 </p>
 
-                <p className="text-xs text-content-muted">
+                {/* 날짜 */}
+                <p className="text-xs text-content-muted mb-3">
                     {formatFullDate(topic.created_at)}
                 </p>
-            </div>
 
-            {/* 연결된 이슈 */}
-            {issueData && (
-                <div className="mb-6 flex items-center gap-2 px-1">
-                    <span className="text-xs text-content-muted">연결 이슈:</span>
-                    <Link
-                        href={`/issue/${issueData.id}`}
-                        className="text-sm text-primary underline underline-offset-2 hover:text-primary-dark"
-                    >
-                        {issueData.title} →
-                    </Link>
+                {/* 통계 */}
+                <div className="flex items-center gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
+                    <span className="flex items-center gap-1">
+                        <Eye className="w-4 h-4" strokeWidth={1.8} />
+                        {viewCount.toLocaleString()}
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
+                        {(opinionCount ?? 0).toLocaleString()}
+                    </span>
                 </div>
-            )}
+            </div>
 
             {/* 토론 댓글 영역 */}
             <div className="card overflow-hidden">
-                {/* 토론 영역 헤더 */}
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">의견 나누기</h2>
                     <p className="text-xs text-content-secondary mt-0.5">
