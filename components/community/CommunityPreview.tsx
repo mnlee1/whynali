@@ -102,9 +102,11 @@ export default function CommunityPreview({ initialTopics }: Props) {
     return (
         <section>
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-content-primary">이 토론, 어떻게 생각해?</h2>
+                <div className="flex items-center gap-0.5">
+                    <h2 className="text-base font-bold text-content-primary">이 토론, 어떻게 생각해?</h2>
+                    <Tooltip label="" align="left" text="최신 등록순으로 정렬됩니다." />
+                </div>
                 <div className="flex items-center gap-3">
-                    <Tooltip label="최신순" text="최신 등록순으로 정렬됩니다." />
                     <Link href="/community" className="btn-neutral btn-sm">
                         전체 보기
                     </Link>

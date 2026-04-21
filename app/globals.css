@@ -136,6 +136,10 @@
 
 /* ── Swiper 페이지네이션 닷 ──────────────────────── */
 
+.hot-issue-swiper .swiper-pagination {
+    bottom: 20px !important;
+}
+
 .swiper-pagination-bullet {
     background: rgba(255, 255, 255, 0.5) !important;
     opacity: 1 !important;
