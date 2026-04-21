@@ -49,20 +49,27 @@ async function generateSummariesForIssue(
 
     const prompt = `이슈: "${issueTitle}"
 
-다음은 이 이슈와 관련된 뉴스 기사 제목들입니다 (시간순):
+다음은 이 이슈와 관련된 뉴스 기사 제목들입니다.
+각 단계는 [발단], [전개], [파생], [진정]으로 구분되어 있습니다.
 
 ${stagesText}
+
+## 중요: 단계별 독립 요약 원칙
+- **각 단계는 해당 단계의 뉴스만 사용**해서 요약하세요
+- 예: [발단] 요약 시 [전개]나 [파생]의 뉴스는 절대 사용하지 마세요
+- **중복된 내용의 뉴스는 하나만 선택**하세요 (예: "본격화" 제목이 3개면 1개만 사용)
+- **bullets 개수는 해당 단계의 뉴스 개수를 초과하지 마세요**
 
 ## 법적 안전성 준수
 - 위 기사 제목에 있는 내용만 사용하세요
 - 기사 본문은 없으므로 제목에 없는 내용을 추측하지 마세요
 
 ## 요청사항
-위 제목들을 바탕으로 이 이슈가 **어떻게 진행되었는지** 시간순으로 정리해주세요.
+위 원칙을 엄격히 지켜 각 단계를 독립적으로 요약해주세요.
 
 **출력 형식:**
-1. 각 주요 진행 단계를 "발단/전개/파생/진정" 중 하나로 분류
-2. 각 단계의 핵심 사건들을 bullet points로 (1~5개)
+1. 각 단계를 "발단/전개/파생/진정" 중 하나로 분류
+2. 각 단계의 핵심 사건들을 bullet points로 (1~5개, 해당 단계 뉴스 개수 이하)
 3. 각 bullet은 한 문장으로 간결하게
 4. 제목에서 확인할 수 있는 사실만 작성
 5. stageTitle에는 단계명을 붙이지 말고 내용만 작성 (예: "녹대 탈출" O, "[발단] 녹대 탈출" X)
@@ -98,12 +105,43 @@ JSON 응답:
         const items = grouped.get(stage)!
         const dates = items.map(i => i.occurred_at).sort()
         const ai = parsed.summaries.find(s => s.stage === stage)
+        
+        let bullets = ai?.bullets ?? []
+        
+        // 검증 1: bullets 개수가 해당 단계 뉴스 개수를 초과하는 경우 경고
+        if (bullets.length > items.length) {
+            console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)
+        }
+        
+        // 검증 2: 중복된 bullets 제거 (완전 일치 + 유사도 높은 것)
+        const uniqueBullets: string[] = []
+        for (const bullet of bullets) {
+            const normalized = bullet.toLowerCase().trim()
+            const isDuplicate = uniqueBullets.some(existing => {
+                const existingNormalized = existing.toLowerCase().trim()
+                // 완전 일치
+                if (normalized === existingNormalized) return true
+                // 90% 이상 유사 (간단한 포함 관계 체크)
+                const shorter = normalized.length < existingNormalized.length ? normalized : existingNormalized
+                const longer = normalized.length >= existingNormalized.length ? normalized : existingNormalized
+                return longer.includes(shorter) && shorter.length / longer.length > 0.9
+            })
+            
+            if (!isDuplicate) {
+                uniqueBullets.push(bullet)
+            }
+        }
+        
+        if (uniqueBullets.length < bullets.length) {
+            console.log(`  ✓ [중복 제거] ${issueTitle} - ${stage}: ${bullets.length}개 → ${uniqueBullets.length}개`)
+        }
+        
         return {
             issue_id: issueId,
             stage,
             stage_title: ai?.stageTitle ?? stage,
-            bullets: ai?.bullets ?? [],
-            summary: ai?.bullets?.join(' ') ?? '', // 호환성을 위해 summary도 저장
+            bullets: uniqueBullets,
+            summary: uniqueBullets.join(' '), // 호환성을 위해 summary도 저장
             date_start: dates[0],
             date_end: dates[dates.length - 1],
             generated_at: now,
