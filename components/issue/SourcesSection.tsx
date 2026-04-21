@@ -24,15 +24,17 @@ const SHOW_STEP = 5
 
 interface SourcesSectionProps {
     issueId: string
+    initialNews?: NewsData[]
 }
 
-export default function SourcesSection({ issueId }: SourcesSectionProps) {
-    const [news, setNews] = useState<NewsData[]>([])
-    const [loading, setLoading] = useState(true)
+export default function SourcesSection({ issueId, initialNews }: SourcesSectionProps) {
+    const [news, setNews] = useState<NewsData[]>(initialNews ?? [])
+    const [loading, setLoading] = useState(!initialNews)
     const [error, setError] = useState<string | null>(null)
     const [showNewsCount, setShowNewsCount] = useState(INITIAL_SHOW_COUNT)
 
     useEffect(() => {
+        if (initialNews) return
         const fetchSources = async () => {
             try {
                 setLoading(true)
@@ -46,7 +48,7 @@ export default function SourcesSection({ issueId }: SourcesSectionProps) {
         }
 
         fetchSources()
-    }, [issueId])
+    }, [issueId, initialNews])
 
     const getCredibilityBadge = (credibility?: number) => {
         if (!credibility) return null

@@ -15,6 +15,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
@@ -135,9 +136,11 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
 
                                         {/* 썸네일 */}
                                         {issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0] && (
-                                            <img
+                                            <Image
                                                 src={issue.thumbnail_urls[issue.primary_thumbnail_index ?? 0]!}
                                                 alt=""
+                                                width={56}
+                                                height={56}
                                                 className="shrink-0 w-14 h-14 rounded-lg object-cover"
                                             />
                                         )}

@@ -15,13 +15,13 @@ import type { Vote, VoteChoice } from '@/types'
 
 interface VoteSectionProps {
     issueId: string
-    userId: string | null
+    userId: string | null | undefined
 }
 
 type VoteWithChoices = Vote & { vote_choices: VoteChoice[] }
 
 export default function VoteSection({ issueId, userId: serverUserId }: VoteSectionProps) {
-    const [userId, setUserId] = useState<string | null>(serverUserId)
+    const [userId, setUserId] = useState<string | null>(serverUserId ?? null)
     const [votes, setVotes] = useState<VoteWithChoices[]>([])
     const [userVotes, setUserVotes] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(true)
@@ -30,7 +30,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
 
     useEffect(() => {
-        if (serverUserId) { setUserId(serverUserId); return }
+        if (serverUserId !== undefined) { setUserId(serverUserId); return }
         fetch('/api/auth/me')
             .then((r) => r.ok ? r.json() : null)
             .then((d) => { if (d?.id) setUserId(d.id) })

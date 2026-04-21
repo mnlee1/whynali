@@ -15,6 +15,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Autoplay, Pagination } from 'swiper/modules'
 import { getIssues } from '@/lib/api/issues'
@@ -120,10 +121,13 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                             <article className={`relative h-full ${heroImage ? '' : `bg-gradient-to-br ${gradient}`} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all overflow-hidden`}>
                                 {/* Unsplash 이미지 배경 (있을 때만) */}
                                 {heroImage && (
-                                    <img
+                                    <Image
                                         src={heroImage}
                                         alt=""
-                                        className="absolute inset-0 w-full h-full object-cover"
+                                        fill
+                                        className="object-cover"
+                                        priority
+                                        sizes="100vw"
                                     />
                                 )}
 

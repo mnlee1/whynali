@@ -39,28 +39,19 @@ const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
 
-/* 카드 단위 컴포넌트 — issue stats 개별 fetch */
 function CommunityCard({
     topic,
     issueIdFilter,
     issueTopicCount,
+    stats,
     onMoreClick,
 }: {
     topic: TopicWithIssue
     issueIdFilter: string
     issueTopicCount: number
+    stats?: IssueStats | null
     onMoreClick: (issueId: string) => void
 }) {
-    const [stats, setStats] = useState<IssueStats | null>(null)
-
-    useEffect(() => {
-        if (!topic.issues?.id) return
-        fetch(`/api/issues/${topic.issues.id}/stats`)
-            .then(r => r.ok ? r.json() : null)
-            .then(d => d && setStats(d))
-            .catch(() => {})
-    }, [topic.issues?.id])
-
     const issueDescription = topic.issues?.description ?? null
 
     return (
@@ -177,6 +168,7 @@ function CommunityContent() {
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
     const [issueTitle, setIssueTitle] = useState<string | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
+    const [statsMap, setStatsMap] = useState<Record<string, IssueStats>>({})
 
     const issueTopicCountMap = topics.reduce<Record<string, number>>((acc, t) => {
         if (t.issues?.id) {
@@ -242,6 +234,19 @@ function CommunityContent() {
             }
             if (!append) {
                 offsetRef.current = data.length
+            }
+
+            // 배치로 이슈 통계 조회 (N+1 → 요청 1회)
+            const issueIds = [...new Set(data.map(t => t.issues?.id).filter(Boolean) as string[])]
+            if (issueIds.length > 0) {
+                fetch(`/api/issues/stats/batch?ids=${issueIds.join(',')}`)
+                    .then(r => r.ok ? r.json() : {})
+                    .then((batch: Record<string, IssueStats>) => {
+                        setStatsMap(prev => append ? { ...prev, ...batch } : batch)
+                    })
+                    .catch(() => {})
+            } else if (!append) {
+                setStatsMap({})
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : '목록 조회 실패')
@@ -364,6 +369,7 @@ function CommunityContent() {
                                 topic={topic}
                                 issueIdFilter={issueIdFilter}
                                 issueTopicCount={issueTopicCountMap[topic.issues?.id ?? ''] ?? 0}
+                                stats={statsMap[topic.issues?.id ?? ''] ?? null}
                                 onMoreClick={(issueId) => router.push(`/community?issue_id=${issueId}`)}
                             />
                         ))}

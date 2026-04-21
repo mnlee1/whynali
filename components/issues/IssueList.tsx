@@ -31,6 +31,7 @@ interface IssueListProps {
     hideSearch?: boolean    // 검색바 숨김 여부
     showFullLabel?: boolean // 전체 탭을 "전체 이슈"로 표시 (기본: false)
     initialData?: { data: Issue[]; total: number } // SSR에서 전달받은 초기 데이터
+    initialTabCounts?: Record<string, number>       // SSR에서 전달받은 탭별 카운트
 }
 
 // 상태 탭 목록
@@ -44,13 +45,13 @@ const STATUS_TABS = [
 const LIMIT = 6
 const DEBOUNCE_MS = 350
 
-export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData }: IssueListProps) {
+export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData, initialTabCounts }: IssueListProps) {
     const [issues, setIssues] = useState<Issue[]>(initialData?.data ?? [])
     const [total, setTotal] = useState(initialData?.total ?? 0)
     const [loading, setLoading] = useState(!initialData)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>(initialTabCounts ?? {})
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
@@ -62,6 +63,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const skipNextFetch = useRef(!!initialData)
 
     useEffect(() => {
+        if (initialTabCounts) return  // SSR에서 이미 받았으면 클라이언트 재조회 불필요
         async function fetchCounts() {
             const tabKeys = ['', '점화', '논란중', '종결']
             const results = await Promise.allSettled(

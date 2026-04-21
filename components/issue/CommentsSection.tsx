@@ -23,7 +23,7 @@ import NicknameAvatar from '@/components/common/NicknameAvatar'
 interface CommentsSectionProps {
     issueId?: string
     discussionTopicId?: string
-    userId: string | null
+    userId: string | null | undefined
     isClosed?: boolean
 }
 
@@ -49,7 +49,7 @@ export default function CommentsSection({
     userId: serverUserId,
     isClosed = false,
 }: CommentsSectionProps) {
-    const [userId, setUserId] = useState<string | null>(serverUserId)
+    const [userId, setUserId] = useState<string | null>(serverUserId ?? null)
 
     /* 댓글 목록 상태 */
     const [bestComments, setBestComments] = useState<CommentWithLike[]>([])
@@ -97,7 +97,7 @@ export default function CommentsSection({
 
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
     useEffect(() => {
-        if (serverUserId) { setUserId(serverUserId); return }
+        if (serverUserId !== undefined) { setUserId(serverUserId); return }
         fetch('/api/auth/me')
             .then((r) => r.ok ? r.json() : null)
             .then((d) => { if (d?.id) setUserId(d.id) })

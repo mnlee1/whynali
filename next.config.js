@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    serverExternalPackages: ['googleapis', 'sharp', 'ffmpeg-static'],
+    images: {
+        remotePatterns: [
+            {
+                protocol: 'https',
+                hostname: 'images.unsplash.com',
+            },
+        ],
+    },
+    serverExternalPackages: ['googleapis', 'sharp', 'ffmpeg-static', 'opentype.js'],
     outputFileTracingIncludes: {
         '/api/admin/shortform/[id]/generate': [
             './node_modules/ffmpeg-static/ffmpeg',
