@@ -20,8 +20,9 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 // 이슈 제목과 뉴스 제목 간 최소 키워드 겹침 수
-// 이 값 미만이면 오매칭으로 판단
-const MIN_KEYWORD_OVERLAP = 2
+// 0 = 공통 키워드 없음 (명백한 오매칭)
+// overlap=1은 관련 있는 경우가 많으므로 1 미만(=0)만 삭제
+const MIN_KEYWORD_OVERLAP = 1
 
 const STOPWORDS = new Set([
     '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과',
