@@ -64,6 +64,15 @@ const STAGE_STYLES: Record<TimelineStage, {
         card: 'bg-gray-50 border-gray-200',
         bullet: 'bg-gray-300',
     },
+    '종결': {
+        dot: 'bg-gray-400',
+        line: 'bg-gray-200',
+        header: 'bg-gray-400',
+        headerText: 'text-gray-500',
+        headerLine: 'bg-gray-100',
+        card: 'bg-gray-50 border-gray-200',
+        bullet: 'bg-gray-300',
+    },
 }
 
 export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }: TimelineSectionProps) {
