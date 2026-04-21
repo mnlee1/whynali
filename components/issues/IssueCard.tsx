@@ -10,11 +10,6 @@ import { ChevronRight, Eye, MessageSquare, MessageCircleMore, BadgeCheck, Users 
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
-function extractKeywords(title: string): string {
-    const cleaned = title.replace(/\[.*?\]/g, '').trim()
-    return cleaned.split(/\s+/).slice(0, 3).join(' ')
-}
-
 interface IssueCardProps {
     issue: Issue
 }
@@ -70,18 +65,20 @@ export default function IssueCard({ issue }: IssueCardProps) {
         <article className="card-hover p-5 transition-all h-full flex flex-col">
             {/* 이슈 영역 → 이슈 상세 */}
             <Link href={`/issue/${issue.id}`} className="block">
-                {/* 큰 이슈 주제 */}
+                {/* 이슈 제목 */}
                 <div className="flex items-center gap-0.5 mb-1.5">
-                    <span className="text-base font-semibold text-content-primary">
-                        {extractKeywords(decodeHtml(issue.title))}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-content-primary" strokeWidth={2.5} />
+                    <h3 className="text-base font-semibold text-content-primary line-clamp-2">
+                        {decodeHtml(issue.title)}
+                    </h3>
+                    <ChevronRight className="w-4 h-4 text-content-primary shrink-0" strokeWidth={2.5} />
                 </div>
 
-                {/* 이슈 제목 */}
-                <h3 className="text-sm font-normal text-content-primary line-clamp-2 mb-3">
-                    {decodeHtml(issue.title)}
-                </h3>
+                {/* 이슈 내용 요약 */}
+                {(issue.topic_description || issue.brief_summary?.intro) && (
+                    <p className="text-xs text-content-secondary line-clamp-2 mb-3 leading-relaxed">
+                        {issue.topic_description ?? issue.brief_summary!.intro}
+                    </p>
+                )}
 
                 {/* 이슈 통계 */}
                 <div className="flex items-center gap-4 text-xs text-content-secondary mb-3">

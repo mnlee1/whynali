@@ -40,7 +40,7 @@ function getStatusMeta(status: IssueStatus): {
         case '종결':
             return {
                 icon: '🏁',
-                label: '진화',
+                label: '종결',
                 baseClass: 'bg-gray-50 text-gray-500 border-gray-200'
             }
         default:

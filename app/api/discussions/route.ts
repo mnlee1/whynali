@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     let query = admin
         .from('discussion_topics')
-        .select('*, issues(id, title)', { count: 'exact' })
+        .select('*, issues(id, title, description)', { count: 'exact' })
 
     // status 파라미터가 있으면 해당 상태만, 없으면 진행중/마감 둘 다
     if (status) {

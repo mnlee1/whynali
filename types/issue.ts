@@ -31,6 +31,7 @@ export interface Issue {
     primary_thumbnail_index?: number | null // 대표 이미지 인덱스 (thumbnail_urls 배열 내 위치, 기본값 0)
     topic?: string | null // 이슈 주제 (메인 목록용)
     topic_description?: string | null // 이슈 주제 설명 2~3줄 (메인 목록용)
+    brief_summary?: { intro: string; bullets: string[]; conclusion: string } | null
 }
 
 export interface TimelinePoint {

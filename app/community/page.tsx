@@ -3,16 +3,29 @@
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, MessageCircleMore } from 'lucide-react'
+import { Eye, MessageSquare, MessageCircleMore, BadgeCheck, Users, ChevronRight } from 'lucide-react'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
 import SearchBar from '@/components/common/SearchBar'
 import type { DiscussionTopic } from '@/types'
 
+type IssueInfo = {
+    id: string
+    title: string
+    description?: string | null
+}
+
 type TopicWithIssue = DiscussionTopic & {
-    issues: { id: string; title: string } | null
+    issues: IssueInfo | null
     opinionCount?: number
     viewCount?: number
+}
+
+type IssueStats = {
+    viewCount: number
+    commentCount: number
+    voteCount: number
+    discussionCount: number
 }
 
 type FilterStatus = '' | '진행중' | '마감'
@@ -26,10 +39,132 @@ const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
 
+/* 카드 단위 컴포넌트 — issue stats 개별 fetch */
+function CommunityCard({
+    topic,
+    issueIdFilter,
+    issueTopicCount,
+    onMoreClick,
+}: {
+    topic: TopicWithIssue
+    issueIdFilter: string
+    issueTopicCount: number
+    onMoreClick: (issueId: string) => void
+}) {
+    const [stats, setStats] = useState<IssueStats | null>(null)
+
+    useEffect(() => {
+        if (!topic.issues?.id) return
+        fetch(`/api/issues/${topic.issues.id}/stats`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => d && setStats(d))
+            .catch(() => {})
+    }, [topic.issues?.id])
+
+    const issueDescription = topic.issues?.description ?? null
+
+    return (
+        <article className="card-hover p-5 flex flex-col">
+            {/* 이슈 영역 → 이슈 상세 */}
+            {topic.issues?.id ? (
+                <Link href={`/issue/${topic.issues.id}`} className="block mb-3">
+                    {/* 이슈 제목 */}
+                    <div className="flex items-center gap-0.5 mb-1.5">
+                        <h3 className="text-base font-semibold text-content-primary line-clamp-2">
+                            {decodeHtml(topic.issues.title)}
+                        </h3>
+                        <ChevronRight className="w-4 h-4 text-content-primary shrink-0" strokeWidth={2.5} />
+                    </div>
+
+                    {/* 이슈 설명 */}
+                    {issueDescription && (
+                        <p className="text-xs text-content-secondary line-clamp-2 leading-relaxed mb-3">
+                            {issueDescription}
+                        </p>
+                    )}
+
+                    {/* 이슈 통계 */}
+                    <div className="flex items-center gap-4 text-xs text-content-secondary">
+                        <span className="flex items-center gap-1">
+                            <Eye className="w-4 h-4" strokeWidth={1.8} />
+                            {stats ? stats.viewCount.toLocaleString() : '—'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <MessageSquare className="w-4 h-4" strokeWidth={1.8} />
+                            {stats ? stats.commentCount.toLocaleString() : '—'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <BadgeCheck className="w-4 h-4" strokeWidth={1.8} />
+                            {stats ? stats.voteCount.toLocaleString() : '—'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <Users className="w-4 h-4" strokeWidth={1.8} />
+                            {stats ? stats.discussionCount.toLocaleString() : '—'}
+                        </span>
+                    </div>
+                </Link>
+            ) : null}
+
+            {/* 토론 영역 → 토론 상세 */}
+            <div className={topic.issues?.id ? 'border-t border-border pt-3' : ''}>
+                <Link
+                    href={`/community/${topic.id}`}
+                    className={`block pl-3 border-l-2 transition-colors group ${
+                        topic.approval_status === '진행중' ? 'border-primary' : 'border-border'
+                    }`}
+                >
+                    {/* 상태 뱃지 */}
+                    <div className="mb-1.5">
+                        <span className={[
+                            'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
+                            topic.approval_status === '진행중'
+                                ? 'bg-green-50 text-green-700 border-green-200'
+                                : 'bg-surface-muted text-content-muted border-border'
+                        ].join(' ')}>
+                            {topic.approval_status === '진행중' ? '토론 진행중' : '토론 마감'}
+                        </span>
+                    </div>
+
+                    {/* 토론 제목 */}
+                    <p className="text-sm font-medium text-content-primary line-clamp-1 mb-3 group-hover:text-primary transition-colors">
+                        {decodeHtml(topic.body)}
+                    </p>
+
+                    {/* 토론 통계 */}
+                    <div className="flex items-center gap-3 text-xs text-content-secondary">
+                        {topic.viewCount !== undefined && (
+                            <span className="flex items-center gap-1">
+                                <Eye className="w-4 h-4" strokeWidth={1.8} />
+                                <span>{topic.viewCount.toLocaleString()}</span>
+                            </span>
+                        )}
+                        {topic.opinionCount !== undefined && (
+                            <span className="flex items-center gap-1">
+                                <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
+                                <span>{topic.opinionCount.toLocaleString()}</span>
+                            </span>
+                        )}
+                    </div>
+                </Link>
+            </div>
+
+            {/* 연결 이슈의 다른 토론 더보기 — DB 전체 토론 수가 현재 페이지에 보이는 수보다 많을 때만 표시 */}
+            {!issueIdFilter && topic.issues?.id && stats && stats.discussionCount > issueTopicCount && (
+                <button
+                    type="button"
+                    onClick={() => onMoreClick(topic.issues!.id)}
+                    className="mt-4 text-left text-xs text-content-secondary hover:text-primary hover:underline transition-colors"
+                >
+                    연결 이슈의 토론 {stats.discussionCount}개 더보기 →
+                </button>
+            )}
+        </article>
+    )
+}
+
 function CommunityContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
-    /* 이슈 상세에서 "이 이슈의 커뮤니티" 진입 시 issue_id 파라미터로 필터링 */
     const issueIdFilter = searchParams.get('issue_id') ?? ''
 
     const [topics, setTopics] = useState<TopicWithIssue[]>([])
@@ -40,10 +175,9 @@ function CommunityContent() {
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
-    /* 연결 이슈 제목 (issue_id 필터 시 헤더에 표시) */
     const [issueTitle, setIssueTitle] = useState<string | null>(null)
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
 
-    /* topics에서 이슈별 토픽 수 계산 (렌더 시점마다 파생) */
     const issueTopicCountMap = topics.reduce<Record<string, number>>((acc, t) => {
         if (t.issues?.id) {
             acc[t.issues.id] = (acc[t.issues.id] ?? 0) + 1
@@ -54,7 +188,27 @@ function CommunityContent() {
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    /* 검색 입력 → debounce → searchQuery 업데이트 */
+    useEffect(() => {
+        async function fetchCounts() {
+            const tabKeys: FilterStatus[] = ['', '진행중', '마감']
+            const results = await Promise.allSettled(
+                tabKeys.map(s => {
+                    const params = new URLSearchParams({ limit: '1', offset: '0' })
+                    if (s) params.set('status', s)
+                    if (issueIdFilter) params.set('issue_id', issueIdFilter)
+                    return fetch(`/api/discussions?${params}`).then(r => r.json())
+                })
+            )
+            const counts: Record<string, number> = {}
+            tabKeys.forEach((s, i) => {
+                const r = results[i]
+                if (r.status === 'fulfilled') counts[s] = r.value.total ?? 0
+            })
+            setTabCounts(counts)
+        }
+        fetchCounts()
+    }, [issueIdFilter])
+
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
         if (debounceTimer.current) clearTimeout(debounceTimer.current)
@@ -63,7 +217,6 @@ function CommunityContent() {
         }, DEBOUNCE_MS)
     }
 
-    /* Enter 키: debounce 취소 후 즉시 검색 트리거 */
     const handleSearch = () => {
         if (debounceTimer.current) clearTimeout(debounceTimer.current)
         setSearchQuery(searchInput)
@@ -84,7 +237,6 @@ function CommunityContent() {
             const data: TopicWithIssue[] = json.data ?? []
             setTopics((prev) => append ? [...prev, ...data] : data)
             setTotal(json.total ?? 0)
-            /* issue_id 필터 시 첫 항목의 이슈 제목 저장 */
             if (issueIdFilter && data.length > 0 && data[0].issues?.title) {
                 setIssueTitle(decodeHtml(data[0].issues.title))
             }
@@ -99,7 +251,6 @@ function CommunityContent() {
         }
     }, [issueIdFilter])
 
-    /* 검색어 또는 상태 필터 변경 시 목록 초기화 및 재로드 */
     useEffect(() => {
         setLoading(true)
         setError(null)
@@ -131,28 +282,39 @@ function CommunityContent() {
                         value={searchInput}
                         onChange={handleSearchChange}
                         onSearch={handleSearch}
-                        placeholder="토론 주제 검색..."
+                        placeholder="토론 주제 검색"
                     />
                 </div>
             )}
 
             {/* 상태 필터 탭 */}
             <div className="flex flex-wrap items-center justify-between gap-1.5 mb-6">
-                <div className="flex flex-wrap gap-1.5">
-                    {FILTER_LABELS.map(({ value, label }) => (
-                        <button
-                            key={value}
-                            onClick={() => setStatusFilter(value)}
-                            className={[
-                                'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                                statusFilter === value
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                    {FILTER_LABELS.map(({ value, label }) => {
+                        const isActive = statusFilter === value
+                        const count = tabCounts[value]
+                        return (
+                            <button
+                                key={value}
+                                onClick={() => setStatusFilter(value)}
+                                className={[
+                                    'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                                    isActive
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                                ].join(' ')}
+                            >
+                                <span>{label}</span>
+                                {count !== undefined && count > 0 && (
+                                    <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
+                                        isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
+                                    }`}>
+                                        {count.toLocaleString()}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
                 </div>
                 {issueIdFilter && (
                     <Link
@@ -172,9 +334,20 @@ function CommunityContent() {
 
             {/* 스켈레톤 */}
             {loading ? (
-                <div className="space-y-4">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-20 bg-surface-subtle rounded-xl animate-pulse" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="card-hover p-5 flex flex-col gap-3">
+                            <div className="h-4 bg-border-muted rounded animate-pulse w-3/4" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-2/3" />
+                            <div className="flex gap-4">
+                                {[0,1,2,3].map(j => <div key={j} className="h-3 w-8 bg-border-muted rounded animate-pulse" />)}
+                            </div>
+                            <div className="border-t border-border-muted pt-3 space-y-2">
+                                <div className="h-3 bg-border-muted rounded animate-pulse w-1/4" />
+                                <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
+                            </div>
+                        </div>
                     ))}
                 </div>
             ) : topics.length === 0 ? (
@@ -184,72 +357,15 @@ function CommunityContent() {
             ) : (
                 <>
                     <p className="text-sm text-content-secondary mb-4">총 {total.toLocaleString()}개</p>
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {topics.map((topic) => (
-                            <Link key={topic.id} href={`/community/${topic.id}`} className="block">
-                                <article className="card-hover p-5">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex-1 min-w-0">
-                                            {/* 상태 뱃지 */}
-                                            <div className="flex items-center gap-2 mb-2.5">
-                                                <span className={[
-                                                    'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
-                                                    topic.approval_status === '진행중'
-                                                        ? 'bg-green-50 text-green-700 border-green-200'
-                                                        : 'bg-surface-muted text-content-muted border-border'
-                                                ].join(' ')}>
-                                                    {topic.approval_status === '진행중' ? '토론 진행중' : '토론 마감'}
-                                                </span>
-                                            </div>
-                                            
-                                            {/* 토론 주제 본문 */}
-                                            <p className="text-base font-medium text-content-primary line-clamp-2 leading-snug mb-2">
-                                                {decodeHtml(topic.body)}
-                                            </p>
-
-                                            {/* 연결된 이슈명 (issue_id 필터가 아닐 때만) */}
-                                            {!issueIdFilter && topic.issues?.id && topic.issues?.title && (
-                                                <p className="text-xs text-content-muted mb-3 line-clamp-1">
-                                                    연결 이슈 · {decodeHtml(topic.issues?.title ?? '')}
-                                                </p>
-                                            )}
-
-                                            {/* 통계 */}
-                                            <div className="flex items-center justify-between gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
-                                                <div className="flex items-center gap-3">
-                                                    {topic.viewCount !== undefined && (
-                                                        <span className="flex items-center gap-1">
-                                                            <Eye className="w-4 h-4" strokeWidth={1.8} />
-                                                            <span>{topic.viewCount.toLocaleString()}</span>
-                                                        </span>
-                                                    )}
-                                                    {topic.opinionCount !== undefined && (
-                                                        <span className="flex items-center gap-1">
-                                                            <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
-                                                            <span>{topic.opinionCount.toLocaleString()}</span>
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {!issueIdFilter && topic.issues?.id && (issueTopicCountMap[topic.issues?.id ?? ''] ?? 1) > 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.preventDefault()
-                                                            e.stopPropagation()
-                                                            if (!topic.issues?.id) return
-                                                            router.push(`/community?issue_id=${topic.issues.id}`)
-                                                        }}
-                                                        className="flex items-center gap-1 text-xs text-content-secondary hover:text-primary hover:underline transition-colors shrink-0"
-                                                    >
-                                                        <span>연결 이슈의 토론 {issueTopicCountMap[topic.issues?.id ?? ''] ?? 1}개 더보기</span>
-                                                        <span>→</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </article>
-                            </Link>
+                            <CommunityCard
+                                key={topic.id}
+                                topic={topic}
+                                issueIdFilter={issueIdFilter}
+                                issueTopicCount={issueTopicCountMap[topic.issues?.id ?? ''] ?? 0}
+                                onMoreClick={(issueId) => router.push(`/community?issue_id=${issueId}`)}
+                            />
                         ))}
                     </div>
 
@@ -276,9 +392,9 @@ export default function CommunityPage() {
         <Suspense fallback={
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
-                <div className="space-y-4">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-20 bg-surface-subtle rounded-xl animate-pulse" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="card-hover p-5 h-48 animate-pulse bg-surface-subtle rounded-xl" />
                     ))}
                 </div>
             </div>

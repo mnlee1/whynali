@@ -3,10 +3,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { CircleAlert, X } from 'lucide-react'
 
 interface TooltipProps {
-    text: string
+    text: ReactNode
     label: string
     align?: 'right' | 'left'
     width?: string

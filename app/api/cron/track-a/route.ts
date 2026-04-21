@@ -1357,11 +1357,42 @@ async function processTrackA(): Promise<{
             continue
         }
         
-        // 4-7-1. 이미지 자동 생성 (Unsplash)
+        // 4-7-1. 이미지 자동 생성 (Unsplash → 뉴스 og:image 폴백)
         try {
             const { fetchUnsplashImages } = await import('@/lib/unsplash')
-            const thumbnailUrls = await fetchUnsplashImages(finalIssueTitle, category)
-            
+            let thumbnailUrls = await fetchUnsplashImages(finalIssueTitle, category)
+
+            // Unsplash 결과 없으면 연결된 뉴스 기사에서 og:image 추출
+            if (thumbnailUrls.length === 0 && relevantNews.length > 0) {
+                const ogImages: string[] = []
+                const newsLinks = relevantNews.slice(0, 5).map(n => n.link).filter(Boolean)
+
+                for (const link of newsLinks) {
+                    if (ogImages.length >= 3) break
+                    try {
+                        const res = await fetch(link, {
+                            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WhyNaliBot/1.0)' },
+                            signal: AbortSignal.timeout(5000),
+                        })
+                        if (!res.ok) continue
+                        const html = await res.text()
+                        const match = html.match(/<meta[^>]+(?:property="og:image"|name="og:image")[^>]+content="([^"]+)"/i)
+                            ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+(?:property="og:image"|name="og:image")/i)
+                        const imgUrl = match?.[1]
+                        if (imgUrl && imgUrl.startsWith('http') && !ogImages.includes(imgUrl)) {
+                            ogImages.push(imgUrl)
+                        }
+                    } catch {
+                        // 개별 기사 fetch 실패는 무시
+                    }
+                }
+
+                if (ogImages.length > 0) {
+                    thumbnailUrls = ogImages
+                    console.log(`  ✓ [이미지 생성] 뉴스 og:image ${ogImages.length}개 추출 완료`)
+                }
+            }
+
             if (thumbnailUrls.length > 0) {
                 await supabaseAdmin
                     .from('issues')
@@ -1370,8 +1401,8 @@ async function processTrackA(): Promise<{
                         primary_thumbnail_index: 0,
                     })
                     .eq('id', newIssue.id)
-                
-                console.log(`  ✓ [이미지 생성] ${thumbnailUrls.length}개 이미지 자동 생성 완료`)
+
+                console.log(`  ✓ [이미지 생성] ${thumbnailUrls.length}개 이미지 저장 완료`)
             } else {
                 console.log(`  ℹ [이미지 생성] 이미지 없음 (그라디언트 배경 사용)`)
             }
