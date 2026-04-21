@@ -20,9 +20,11 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 // 이슈 제목과 뉴스 제목 간 최소 키워드 겹침 수
-// 0 = 공통 키워드 없음 (명백한 오매칭)
-// overlap=1은 관련 있는 경우가 많으므로 1 미만(=0)만 삭제
-const MIN_KEYWORD_OVERLAP = 1
+const MIN_KEYWORD_OVERLAP = 2
+
+// 뉴스 키워드 중 이슈 키워드와 겹치는 비율이 이 값 이상이면 관련있음으로 판단
+// 예: '모자무싸 구교환'(2개) 중 모자무싸(1개) = 50% → 관련있음
+const MIN_NEWS_KW_COVERAGE = 0.45
 
 const STOPWORDS = new Set([
     '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과',
@@ -49,10 +51,10 @@ function countKeywordOverlap(issueTitle: string, newsTitle: string): number {
     let overlap = 0
     for (const kw of issueKws) {
         if (newsKws.has(kw)) overlap++
-        // 부분 일치도 허용 (3글자 이상)
-        else if (kw.length >= 3) {
+        // 부분 일치 허용 (2글자 이상 — '노조'↔'초기업노조', '충전'↔'충전소' 등)
+        else if (kw.length >= 2) {
             for (const nkw of newsKws) {
-                if (nkw.length >= 3 && (kw.includes(nkw) || nkw.includes(kw))) {
+                if (nkw.length >= 2 && (kw.includes(nkw) || nkw.includes(kw))) {
                     overlap++
                     break
                 }
@@ -60,6 +62,20 @@ function countKeywordOverlap(issueTitle: string, newsTitle: string): number {
         }
     }
     return overlap
+}
+
+function isWrongMatch(issueTitle: string, newsTitle: string): boolean {
+    if (!newsTitle) return false
+    const newsKws = extractKeywords(newsTitle)
+    const overlap = countKeywordOverlap(issueTitle, newsTitle)
+
+    if (overlap === 0) return true
+
+    // 뉴스 키워드 커버리지가 높으면 관련있음
+    // 예: '모자무싸 구교환'(2개) 중 1개 = 50% → 관련있음
+    if (newsKws.size > 0 && overlap / newsKws.size >= MIN_NEWS_KW_COVERAGE) return false
+
+    return overlap < MIN_KEYWORD_OVERLAP
 }
 
 export async function POST(request: NextRequest) {
@@ -117,22 +133,14 @@ export async function POST(request: NextRequest) {
             if (allNews.length === 0 && allTimeline.length === 0) continue
 
             // 오매칭 뉴스 판별
-            const wrongNews = allNews.filter(n => {
-                if (!n.title) return false
-                const overlap = countKeywordOverlap(issue.title, n.title)
-                return overlap < MIN_KEYWORD_OVERLAP
-            }).map(n => ({
+            const wrongNews = allNews.filter(n => isWrongMatch(issue.title, n.title ?? '')).map(n => ({
                 id: n.id,
                 title: n.title ?? '',
                 overlap: countKeywordOverlap(issue.title, n.title ?? ''),
             }))
 
             // 오매칭 타임라인 판별
-            const wrongTimeline = allTimeline.filter(p => {
-                if (!p.title) return false
-                const overlap = countKeywordOverlap(issue.title, p.title)
-                return overlap < MIN_KEYWORD_OVERLAP
-            }).map(p => ({
+            const wrongTimeline = allTimeline.filter(p => isWrongMatch(issue.title, p.title ?? '')).map(p => ({
                 id: p.id,
                 title: p.title ?? '',
                 overlap: countKeywordOverlap(issue.title, p.title ?? ''),
