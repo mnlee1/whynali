@@ -31,7 +31,21 @@ const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
 
-function CommunityCard({ topic }: { topic: TopicWithIssue }) {
+function CommunityCard({
+    topic,
+    issueIdFilter,
+    issueTopicCount,
+    stats,
+    onMoreClick,
+}: {
+    topic: TopicWithIssue
+    issueIdFilter: string
+    issueTopicCount: number
+    stats?: IssueStats | null
+    onMoreClick: (issueId: string) => void
+}) {
+    const issueDescription = topic.issues?.description ?? null
+
     return (
         <article className="card-hover p-5 flex flex-col">
             {/* 이슈 타이틀 */}
@@ -98,6 +112,7 @@ function CommunityContent() {
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
+    const [statsMap, setStatsMap] = useState<Record<string, IssueStats>>({})
 
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -147,7 +162,25 @@ function CommunityContent() {
             const data: TopicWithIssue[] = json.data ?? []
             setTopics(prev => append ? [...prev, ...data] : data)
             setTotal(json.total ?? 0)
-            if (!append) offsetRef.current = data.length
+            if (issueIdFilter && data.length > 0 && data[0].issues?.title) {
+                setIssueTitle(decodeHtml(data[0].issues.title))
+            }
+            if (!append) {
+                offsetRef.current = data.length
+            }
+
+            // 배치로 이슈 통계 조회 (N+1 → 요청 1회)
+            const issueIds = [...new Set(data.map(t => t.issues?.id).filter(Boolean) as string[])]
+            if (issueIds.length > 0) {
+                fetch(`/api/issues/stats/batch?ids=${issueIds.join(',')}`)
+                    .then(r => r.ok ? r.json() : {})
+                    .then((batch: Record<string, IssueStats>) => {
+                        setStatsMap(prev => append ? { ...prev, ...batch } : batch)
+                    })
+                    .catch(() => {})
+            } else if (!append) {
+                setStatsMap({})
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : '목록 조회 실패')
         } finally {
@@ -238,7 +271,14 @@ function CommunityContent() {
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {topics.map((topic) => (
-                            <CommunityCard key={topic.id} topic={topic} />
+                            <CommunityCard
+                                key={topic.id}
+                                topic={topic}
+                                issueIdFilter={issueIdFilter}
+                                issueTopicCount={issueTopicCountMap[topic.issues?.id ?? ''] ?? 0}
+                                stats={statsMap[topic.issues?.id ?? ''] ?? null}
+                                onMoreClick={(issueId) => router.push(`/community?issue_id=${issueId}`)}
+                            />
                         ))}
                     </div>
 

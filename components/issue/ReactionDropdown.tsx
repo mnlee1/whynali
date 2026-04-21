@@ -46,8 +46,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
 
     useEffect(() => {
         const handleReactionUpdate = (e: CustomEvent) => {
-            if (e.detail?.issueId === issueId) {
-                console.log('[ReactionDropdown] Received reactionUpdated event')
+            if (e.detail?.issueId === issueId && e.detail?.source !== 'ReactionDropdown') {
                 loadReactions()
             }
         }
@@ -78,6 +77,22 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             return
         }
         if (submitting) return
+
+        // 낙관적 업데이트
+        const prevCounts = { ...counts }
+        const prevUserReaction = userReaction
+        const newCounts = { ...counts }
+        if (userReaction === type) {
+            newCounts[type] = Math.max(0, (newCounts[type] ?? 0) - 1)
+            setCounts(newCounts)
+            setUserReaction(null)
+        } else {
+            if (userReaction) newCounts[userReaction] = Math.max(0, (newCounts[userReaction] ?? 0) - 1)
+            newCounts[type] = (newCounts[type] ?? 0) + 1
+            setCounts(newCounts)
+            setUserReaction(type)
+        }
+
         setSubmitting(true)
         try {
             const res = await fetch('/api/reactions', {
@@ -87,17 +102,16 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             })
             const json = await res.json()
             if (res.ok) {
-                console.log('[ReactionDropdown] API success:', json)
                 await loadReactions()
-                console.log('[ReactionDropdown] loadReactions completed')
-                window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId } }))
+                window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId, source: 'ReactionDropdown' } }))
             } else {
-                console.error('[ReactionDropdown] handleClick API failed:', res.status, json)
+                setCounts(prevCounts)
+                setUserReaction(prevUserReaction)
             }
-        } catch (err) {
-            console.error('[ReactionDropdown] handleClick error:', err)
-        }
-        finally {
+        } catch {
+            setCounts(prevCounts)
+            setUserReaction(prevUserReaction)
+        } finally {
             setSubmitting(false)
             setOpen(false)
         }
