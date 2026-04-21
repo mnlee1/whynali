@@ -26,7 +26,7 @@ export interface ParentIssueResult {
     reason: string
 }
 
-const PARENT_CONFIDENCE_THRESHOLD = 85
+const PARENT_CONFIDENCE_THRESHOLD = 92
 const MAX_CANDIDATE_ISSUES = 15
 
 // 인스턴스 재사용 (호출마다 키 로딩 방지)
@@ -76,14 +76,18 @@ ${issueList}
 - 파생: 기존 이슈로 인해 새로 불거진 연관 논란 (다른 인물 등장, 연관 사건 등)
 - 별개: 이름/키워드만 겹치는 완전히 다른 사건 → isDerivative: false
 
-신뢰도 70% 미만이면 반드시 isDerivative: false로 응답하세요.
+## 중요 판단 원칙 (반드시 준수)
+- 주인공 인물·장소·사건이 다르면 무조건 별개 (isDerivative: false)
+- 단순히 같은 시기에 화제인 것만으로는 파생이 아님
+- 확신이 없으면 반드시 isDerivative: false
+- 신뢰도 90% 미만이면 반드시 isDerivative: false
 
 응답 형식 (JSON만):
 {
   "isDerivative": true,
   "parentIndex": 1,
   "stage": "전개",
-  "confidence": 85,
+  "confidence": 92,
   "reason": "판단 이유 (한 줄)"
 }`
 
