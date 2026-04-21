@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { Bot } from 'lucide-react'
-import { formatTimelineDate } from '@/lib/utils/format-date'
 
-interface TimelinePoint {
-    id: string
-    stage: '발단' | '전개' | '파생' | '진정'
-    title: string
-    ai_summary: string | null
-    source_url: string
-    occurred_at: string
+type TimelineStage = '발단' | '전개' | '파생' | '진정'
+
+interface StageSummary {
+    stage: TimelineStage
+    stageTitle: string
+    bullets: string[]
+    dateStart: string
+    dateEnd: string
 }
 
 interface TimelineSectionProps {
@@ -19,7 +19,15 @@ interface TimelineSectionProps {
     issueUpdatedAt?: string
 }
 
-const STAGE_STYLES = {
+const STAGE_STYLES: Record<TimelineStage, {
+    dot: string
+    line: string
+    header: string
+    headerText: string
+    headerLine: string
+    card: string
+    bullet: string
+}> = {
     '발단': {
         dot: 'bg-blue-500',
         line: 'bg-blue-200',
@@ -27,6 +35,7 @@ const STAGE_STYLES = {
         headerText: 'text-blue-600',
         headerLine: 'bg-blue-100',
         card: 'bg-blue-50 border-blue-200',
+        bullet: 'bg-blue-300',
     },
     '전개': {
         dot: 'bg-green-500',
@@ -35,6 +44,7 @@ const STAGE_STYLES = {
         headerText: 'text-green-600',
         headerLine: 'bg-green-100',
         card: 'bg-green-50 border-green-200',
+        bullet: 'bg-green-300',
     },
     '파생': {
         dot: 'bg-yellow-500',
@@ -43,6 +53,7 @@ const STAGE_STYLES = {
         headerText: 'text-yellow-600',
         headerLine: 'bg-yellow-100',
         card: 'bg-yellow-50 border-yellow-200',
+        bullet: 'bg-yellow-300',
     },
     '진정': {
         dot: 'bg-gray-400',
@@ -51,37 +62,30 @@ const STAGE_STYLES = {
         headerText: 'text-gray-500',
         headerLine: 'bg-gray-100',
         card: 'bg-gray-50 border-gray-200',
+        bullet: 'bg-gray-300',
     },
 }
 
 export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }: TimelineSectionProps) {
-    const [points, setPoints] = useState<TimelinePoint[]>([])
+    const [summaries, setSummaries] = useState<StageSummary[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({})
-
-    const toggleStage = (stage: string) => {
-        setExpandedStages(prev => ({
-            ...prev,
-            [stage]: !prev[stage]
-        }))
-    }
 
     useEffect(() => {
-        const fetchTimeline = async () => {
+        const fetchSummaries = async () => {
             try {
                 setLoading(true)
-                const res = await fetch(`/api/issues/${issueId}/timeline`)
+                const res = await fetch(`/api/issues/${issueId}/timeline/summary`)
                 if (!res.ok) throw new Error('타임라인 조회 실패')
                 const json = await res.json()
-                setPoints(json.data ?? [])
+                setSummaries(json.data ?? [])
             } catch (err) {
                 setError(err instanceof Error ? err.message : '타임라인 조회 실패')
             } finally {
                 setLoading(false)
             }
         }
-        fetchTimeline()
+        fetchSummaries()
     }, [issueId])
 
     if (loading) {
@@ -114,7 +118,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
         )
     }
 
-    if (points.length === 0) {
+    if (summaries.length === 0) {
         return (
             <div className="text-center py-8 space-y-3">
                 <div className="text-4xl">⏳</div>
@@ -129,17 +133,8 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
     }
 
     const isClosed = issueStatus === '종결'
-    
-    const groupedByStage = points.reduce((acc, point) => {
-        if (!acc[point.stage]) {
-            acc[point.stage] = []
-        }
-        acc[point.stage].push(point)
-        return acc
-    }, {} as Record<string, TimelinePoint[]>)
-
-    const stageOrder: Array<'발단' | '전개' | '파생' | '진정'> = ['발단', '전개', '파생', '진정']
-    const stages = stageOrder.filter(stage => groupedByStage[stage])
+    const stageOrder: TimelineStage[] = ['발단', '전개', '파생', '진정']
+    const stages = stageOrder.filter(s => summaries.find(sum => sum.stage === s))
 
     return (
         <div className="space-y-0">
@@ -152,17 +147,9 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
             </div>
 
             {stages.map((stage, index) => {
-                const stagePoints = groupedByStage[stage]
-                const style = STAGE_STYLES[stage] ?? STAGE_STYLES['진정']
+                const summary = summaries.find(s => s.stage === stage)!
+                const style = STAGE_STYLES[stage]
                 const isLast = index === stages.length - 1 && !isClosed
-
-                const INITIAL_SHOW_COUNT = 3
-                const expanded = expandedStages[stage] || false
-                const hasMore = stagePoints.length > INITIAL_SHOW_COUNT
-                
-                // 최신 3개만 표시 (배열은 오름차순이므로 slice(-3)로 마지막 3개)
-                const visiblePoints = expanded ? stagePoints : stagePoints.slice(-INITIAL_SHOW_COUNT)
-                const hiddenCount = stagePoints.length - INITIAL_SHOW_COUNT
 
                 return (
                     <div key={stage}>
@@ -185,42 +172,23 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
 
                             <div className="flex-1 pb-3">
                                 <div className={`p-3 border rounded-xl ${style.card}`}>
-                                    {hasMore && (
-                                        <button
-                                            onClick={() => toggleStage(stage)}
-                                            className="mb-3 w-full btn-neutral btn-sm text-xs"
-                                        >
-                                            {expanded ? '접기' : `이전 상황 더보기 (${hiddenCount}개)`}
-                                        </button>
+                                    {/* 단계 타이틀 */}
+                                    {summary.stageTitle && (
+                                        <p className={`text-sm font-semibold mb-2 ${style.headerText}`}>
+                                            {summary.stageTitle}
+                                        </p>
                                     )}
-                                    
-                                    <ul className="space-y-3">
-                                        {visiblePoints.map((point) => {
-                                            const displayText = point.ai_summary || point.title
-                                            const [title, ...descParts] = displayText.split(':')
-                                            const description = descParts.join(':').trim()
-                                            
-                                            return (
-                                                <li key={point.id} className="text-sm leading-relaxed">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-0.5">
-                                                            <span className={`font-semibold ${style.headerText}`}>
-                                                                {title}
-                                                            </span>
-                                                            <span className="text-content-muted text-xs">
-                                                                {formatTimelineDate(point.occurred_at)}
-                                                            </span>
-                                                        </div>
-                                                        {description && (
-                                                            <p className="text-content-secondary pl-0">
-                                                                {description}
-                                                            </p>
-                                                        )}
-                                                    </div>
+                                    {/* bullet points */}
+                                    {summary.bullets.length > 0 && (
+                                        <ul className="space-y-1.5">
+                                            {summary.bullets.map((bullet, i) => (
+                                                <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
+                                                    <span className={`w-1 h-1 rounded-full shrink-0 mt-2 ${style.bullet}`} />
+                                                    {bullet}
                                                 </li>
-                                            )
-                                        })}
-                                    </ul>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -244,7 +212,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                             <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
                                 {issueUpdatedAt && (
                                     <span className="text-xs text-gray-400 block mb-1">
-                                        {formatTimelineDate(issueUpdatedAt)}
+                                        {new Date(issueUpdatedAt).toLocaleDateString('ko-KR')}
                                     </span>
                                 )}
                                 <p className="text-sm font-medium text-gray-500">이슈 종결</p>

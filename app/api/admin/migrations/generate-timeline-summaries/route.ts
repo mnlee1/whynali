@@ -29,8 +29,11 @@ async function generateSummariesForIssue(
 
     if (!points || points.length === 0) return 0
 
+    // timeline_points가 너무 많으면 최근 50개만 사용 (토큰 제한 방지)
+    const limitedPoints = points.length > 50 ? points.slice(-50) : points
+
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
-    for (const p of points) {
+    for (const p of limitedPoints) {
         if (!grouped.has(p.stage)) grouped.set(p.stage, [])
         grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
     }
@@ -80,7 +83,7 @@ JSON 응답:
 
     const content = await callGroq(
         [{ role: 'user', content: prompt }],
-        { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 1500 },
+        { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 2000 },
     )
 
     const parsed = parseJsonObject<{
@@ -162,14 +165,23 @@ export async function POST(request: NextRequest) {
 
         let successCount = 0
         let skippedCount = 0
+        let errorCount = 0
+        const failedIssues: Array<{ title: string; error: string }> = []
 
         for (const issue of targets) {
-            const count = await generateSummariesForIssue(issue.id, issue.title)
-            if (count > 0) {
-                console.log(`  ✓ ${issue.title}: ${count}개 단계`)
-                successCount++
-            } else {
-                skippedCount++
+            try {
+                const count = await generateSummariesForIssue(issue.id, issue.title)
+                if (count > 0) {
+                    console.log(`  ✓ ${issue.title}: ${count}개 단계`)
+                    successCount++
+                } else {
+                    skippedCount++
+                }
+            } catch (error) {
+                errorCount++
+                const errorMessage = error instanceof Error ? error.message : String(error)
+                console.warn(`  ⚠️ [이슈 처리 실패] ${issue.title}: ${errorMessage}`)
+                failedIssues.push({ title: issue.title, error: errorMessage })
             }
             await new Promise(resolve => setTimeout(resolve, 800))
         }
@@ -178,7 +190,9 @@ export async function POST(request: NextRequest) {
             success: true,
             processed: successCount,
             skipped: skippedCount,
-            message: `${successCount}개 이슈 요약 생성 완료`,
+            errors: errorCount,
+            failedIssues: failedIssues.length > 0 ? failedIssues : undefined,
+            message: `${successCount}개 이슈 요약 생성 완료${errorCount > 0 ? `, ${errorCount}개 실패` : ''}`,
         })
     } catch (error) {
         console.error('[generate-timeline-summaries] 에러:', error)
