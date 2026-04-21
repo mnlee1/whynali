@@ -138,30 +138,30 @@ export async function POST(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const force = searchParams.get('force') === 'true'
 
-        const { data: issues } = await supabaseAdmin
-            .from('issues')
-            .select('id, title')
-            .in('approval_status', ['승인', '대기'])
-            .order('created_at', { ascending: false })
-            .limit(30)
+        let issues: Array<{ id: string; title: string }>
 
-        if (!issues || issues.length === 0) {
+        if (force) {
+            // force=true: 전체 이슈 조회하여 재생성
+            const { data } = await supabaseAdmin
+                .from('issues')
+                .select('id, title')
+                .in('approval_status', ['승인', '대기'])
+                .order('created_at', { ascending: false })
+                .limit(200)
+            issues = data ?? []
+        } else {
+            // force=false: 미생성 이슈만 조회
+            const { data } = await supabaseAdmin
+                .rpc('get_issues_without_summaries', { limit_count: 30 })
+            issues = data ?? []
+        }
+
+        if (issues.length === 0) {
             return NextResponse.json({ success: true, message: '처리할 이슈 없음' })
         }
 
-        let targets = issues
-
-        if (!force) {
-            const existingSummaries = await supabaseAdmin
-                .from('timeline_summaries')
-                .select('issue_id')
-
-            const alreadyDone = new Set(
-                (existingSummaries.data ?? []).map(s => s.issue_id)
-            )
-            targets = issues.filter(i => !alreadyDone.has(i.id))
-        }
-        console.log(`[generate-timeline-summaries] 대상: ${targets.length}건 (전체 ${issues.length}건 중 미생성)`)
+        const targets = issues
+        console.log(`[generate-timeline-summaries] 대상: ${targets.length}건 ${force ? '(재생성 모드)' : '(미생성 이슈만)'}`)
 
         let successCount = 0
         let skippedCount = 0
