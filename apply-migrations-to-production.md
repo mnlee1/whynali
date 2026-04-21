@@ -4,6 +4,7 @@
 
 1. `20260416_add_deleted_by_admin_visibility.sql`
 2. `20260416_add_pending_reason_to_comments.sql`
+3. `fix_null_created_heat_index.sql` (최신)
 
 ## 방법 1: Supabase 대시보드 사용 (추천)
 
@@ -53,6 +54,22 @@ ON comments(pending_reason)
 WHERE pending_reason IS NOT NULL;
 ```
 
+### 3단계: created_heat_index null 수정
+
+```sql
+-- created_heat_index가 null인 이슈들을 현재 화력으로 업데이트
+-- 원인: 이슈 등록 후 화력 UPDATE 실패 시 null로 남음
+-- 효과: 관리자 페이지에서 "—→9점" 대신 "15점→9점" 형태로 정상 표시
+
+UPDATE issues
+SET created_heat_index = heat_index
+WHERE created_heat_index IS NULL
+  AND heat_index IS NOT NULL;
+
+-- 적용 후 확인: null이 남아있는 이슈가 있는지 체크
+-- SELECT COUNT(*) FROM issues WHERE created_heat_index IS NULL;
+```
+
 ## 방법 2: Supabase CLI 사용
 
 ```bash
@@ -68,6 +85,7 @@ supabase db push
 # 또는 개별 파일 실행
 supabase db execute --file supabase/migrations/20260416_add_deleted_by_admin_visibility.sql
 supabase db execute --file supabase/migrations/20260416_add_pending_reason_to_comments.sql
+supabase db execute --file supabase/migrations/fix_null_created_heat_index.sql
 ```
 
 ## 적용 후 확인
@@ -91,6 +109,17 @@ LIMIT 10;
 SELECT constraint_name, check_clause
 FROM information_schema.check_constraints
 WHERE constraint_name LIKE 'comments_%';
+
+-- 4. created_heat_index null 이슈가 남아있는지 확인
+SELECT COUNT(*) FROM issues WHERE created_heat_index IS NULL;
+-- 결과: 0이면 정상
+
+-- 5. 화력 추이 샘플 확인
+SELECT id, title, heat_index, created_heat_index, approval_status
+FROM issues
+WHERE created_heat_index IS NOT NULL
+ORDER BY created_at DESC
+LIMIT 5;
 ```
 
 ## 주의사항
@@ -98,3 +127,12 @@ WHERE constraint_name LIKE 'comments_%';
 - 마이그레이션 적용 전 **백업 권장**
 - 테스트서버(whynali-dev)에서 먼저 테스트 후 실서버 적용
 - 적용 후 whynali.com에서 댓글 기능 정상 작동 확인
+- `fix_null_created_heat_index.sql` 적용 후 관리자 페이지에서 화력 추이 정상 표시 확인
+
+## 배포 필요 사항
+
+마이그레이션 적용 후 다음 파일의 코드 변경사항을 배포해야 합니다:
+- `app/api/cron/track-a/route.ts` - 화력 UPDATE 에러 처리 추가
+- `lib/candidate/community-burst-detector.ts` - 화력 UPDATE 에러 처리 추가
+
+이 코드 변경으로 앞으로는 `created_heat_index`가 null로 남는 일이 없습니다.

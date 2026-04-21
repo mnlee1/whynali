@@ -23,6 +23,7 @@ import { evaluateStatusTransition } from '@/lib/analysis/status-transition'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { closeVotesOnIssueClosed, cancelVoteScheduledClose } from '@/lib/vote-auto-closer'
 import { closeDiscussionsOnIssueClosed, cancelDiscussionScheduledClose } from '@/lib/discussion-auto-closer'
+import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
 import { type IssueCategory } from '@/lib/config/categories'
 import {
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
@@ -230,7 +231,7 @@ export async function GET(request: NextRequest) {
                                     })
                                     .eq('id', issue.id)
                                 
-                                // 이슈가 '종결' 상태로 전환되면 관련 투표/토론 자동 마감
+                                // 이슈가 '종결' 상태로 전환되면 관련 투표/토론 자동 마감 + 종결 요약 생성
                                 if (transition.newStatus === '종결') {
                                     const { count: voteCount } = await closeVotesOnIssueClosed(issue.id)
                                     if (voteCount > 0) {
@@ -240,6 +241,9 @@ export async function GET(request: NextRequest) {
                                     if (discussionCount > 0) {
                                         console.log(`[토론 마감 예약] 이슈 ${issue.id} 종결 → ${discussionCount}개 토론 7일 후 마감`)
                                     }
+                                    generateCloseSummary(issue.id, issue.title).catch(err =>
+                                        console.warn(`[종결 요약] ${issue.title} 생성 실패:`, err)
+                                    )
                                 }
 
                                 // 재점화(종결 → 논란중)되면 마감 예약 취소

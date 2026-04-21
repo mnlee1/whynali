@@ -1515,7 +1515,7 @@ async function processTrackA(): Promise<{
         const approvalStatus = shouldAutoApprove ? '승인' : '대기'
         const now = new Date().toISOString()
 
-        await supabaseAdmin
+        const { error: updateError } = await supabaseAdmin
             .from('issues')
             .update({
                 heat_index: heatIndex,
@@ -1525,6 +1525,18 @@ async function processTrackA(): Promise<{
                 approved_at: shouldAutoApprove ? now : null,
             })
             .eq('id', newIssue.id)
+
+        if (updateError) {
+            console.error(`  ❌ [화력 업데이트 실패] ${updateError.message} - 이슈 삭제`)
+            await cleanupOrphanedRecords(newIssue.id)
+            await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+            await logTrackA(burst.keyword, burst.count, 'update_failed', {
+                finalIssueTitle,
+                error: updateError.message,
+            })
+            failedCount++
+            continue
+        }
 
         const statusLabel = shouldAutoApprove
             ? `자동승인 (화력 ${heatIndex}점 ≥ ${AUTO_APPROVE_HEAT_THRESHOLD}점)`

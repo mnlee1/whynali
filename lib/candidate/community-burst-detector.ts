@@ -300,13 +300,22 @@ export async function detectCommunityBurst(): Promise<number> {
             continue
         }
         
-        await supabaseAdmin
+        const { error: updateError } = await supabaseAdmin
             .from('issues')
             .update({ 
                 heat_index: heatIndex,
                 created_heat_index: heatIndex  // 등록 시점 화력 저장
             })
             .eq('id', newIssue.id)
+        
+        if (updateError) {
+            console.error(`  ❌ [화력 업데이트 실패] "${issueTitle}" (ID: ${newIssue.id}) - ${updateError.message}`)
+            await supabaseAdmin
+                .from('issues')
+                .delete()
+                .eq('id', newIssue.id)
+            continue
+        }
         
         console.log(`  ✅ [긴급 이슈 생성] "${issueTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점)`)
         createdCount++
