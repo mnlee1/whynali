@@ -11,10 +11,10 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-type TimelineStage = '발단' | '전개' | '파생' | '진정'
+type TimelineStage = '발단' | '전개' | '파생' | '진정' | '종결'
 
 const STAGE_ORDER: Record<TimelineStage, number> = {
-    '발단': 0, '전개': 1, '파생': 2, '진정': 3,
+    '발단': 0, '전개': 1, '파생': 2, '진정': 3, '종결': 4,
 }
 
 export interface StageSummary {

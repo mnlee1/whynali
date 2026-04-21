@@ -22,6 +22,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonArray, parseJsonObject } from '@/lib/ai/parse-json-response'
+import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
 
 /**
  * generateAndCacheSummaries - 이슈 타임라인 AI 요약 생성 후 DB 저장
@@ -331,7 +332,7 @@ export async function GET(request: NextRequest) {
 
         // 1. 처리 대상 이슈 조회
         // - 점화/논란중: 항상 처리
-        // - 종결: 최근 48시간 내 news_data가 새로 연결된 경우만 (재점화 대응)
+        // - 종결 재점화 감지: 최근 48시간 내 업데이트된 종결 이슈
         const [activeIssues, reigniteIssues] = await Promise.all([
             supabaseAdmin
                 .from('issues')
@@ -348,6 +349,35 @@ export async function GET(request: NextRequest) {
                 .order('updated_at', { ascending: false })
                 .limit(20),
         ])
+
+        // 종결 요약 백필: 종결 요약이 없는 이슈를 매 크론마다 5개씩 자동 처리
+        const { data: existingCloseSummaries } = await supabaseAdmin
+            .from('timeline_summaries')
+            .select('issue_id')
+            .eq('stage', '종결')
+
+        const closedWithSummary = new Set((existingCloseSummaries ?? []).map(r => r.issue_id))
+
+        const { data: closedIssues } = await supabaseAdmin
+            .from('issues')
+            .select('id, title, status')
+            .eq('status', '종결')
+            .eq('approval_status', '승인')
+            .order('updated_at', { ascending: false })
+            .limit(100)
+
+        const backfillTargets = (closedIssues ?? [])
+            .filter(i => !closedWithSummary.has(i.id))
+            .slice(0, 5)
+
+        for (const issue of backfillTargets) {
+            generateCloseSummary(issue.id, issue.title).catch(err =>
+                console.warn(`[종결 요약 백필] ${issue.title} 실패:`, err)
+            )
+        }
+        if (backfillTargets.length > 0) {
+            console.log(`[update-timeline] 종결 요약 백필: ${backfillTargets.length}건`)
+        }
 
         const issues = [
             ...(activeIssues.data ?? []),
@@ -422,6 +452,13 @@ export async function GET(request: NextRequest) {
                 return acc
             }, [])
 
+            // 종결 이슈에 종결 요약이 없으면 백필 (새 뉴스 없어도 실행)
+            if (issue.status === '종결') {
+                generateCloseSummary(issue.id, issue.title).catch(err =>
+                    console.warn(`[종결 요약 백필] ${issue.title} 실패:`, err)
+                )
+            }
+
             if (newNews.length === 0) {
                 skippedCount++
                 continue
@@ -462,6 +499,7 @@ export async function GET(request: NextRequest) {
                 // 포인트 추가 후 즉시 요약 캐시 갱신 (유저 요청 시 Groq 호출 없음)
                 await generateAndCacheSummaries(issue.id, issue.title)
             }
+
         }
 
         const elapsed = Date.now() - startTime

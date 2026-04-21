@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Bot } from 'lucide-react'
 
-type TimelineStage = '발단' | '전개' | '파생' | '진정'
+type TimelineStage = '발단' | '전개' | '파생' | '진정' | '종결'
 
 interface StageSummary {
     stage: TimelineStage
@@ -133,6 +133,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
     }
 
     const isClosed = issueStatus === '종결'
+    const closeSummary = summaries.find(s => s.stage === '종결')
     const stageOrder: TimelineStage[] = ['발단', '전개', '파생', '진정']
     const stages = stageOrder.filter(s => summaries.find(sum => sum.stage === s))
 
@@ -215,7 +216,23 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
                                         {new Date(issueUpdatedAt).toLocaleDateString('ko-KR')}
                                     </span>
                                 )}
-                                <p className="text-sm font-medium text-gray-500">이슈 종결</p>
+                                {closeSummary ? (
+                                    <>
+                                        <p className="text-sm font-semibold text-gray-600 mb-2">
+                                            {closeSummary.stageTitle}
+                                        </p>
+                                        <ul className="space-y-1.5">
+                                            {closeSummary.bullets.map((bullet, i) => (
+                                                <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
+                                                    <span className="w-1 h-1 rounded-full shrink-0 mt-2 bg-gray-300" />
+                                                    {bullet}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </>
+                                ) : (
+                                    <p className="text-sm font-medium text-gray-500">이슈 종결</p>
+                                )}
                             </div>
                         </div>
                     </div>
