@@ -17,6 +17,7 @@ interface TimelineSectionProps {
     issueId: string
     issueStatus?: string
     issueUpdatedAt?: string
+    initialSummaries?: StageSummary[]
 }
 
 const STAGE_STYLES: Record<TimelineStage, {
@@ -75,12 +76,13 @@ const STAGE_STYLES: Record<TimelineStage, {
     },
 }
 
-export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }: TimelineSectionProps) {
-    const [summaries, setSummaries] = useState<StageSummary[]>([])
-    const [loading, setLoading] = useState(true)
+export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, initialSummaries }: TimelineSectionProps) {
+    const [summaries, setSummaries] = useState<StageSummary[]>(initialSummaries ?? [])
+    const [loading, setLoading] = useState(!initialSummaries)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
+        if (initialSummaries) return
         const fetchSummaries = async () => {
             try {
                 setLoading(true)
@@ -95,7 +97,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt }
             }
         }
         fetchSummaries()
-    }, [issueId])
+    }, [issueId, initialSummaries])
 
     if (loading) {
         return (

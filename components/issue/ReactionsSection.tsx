@@ -5,7 +5,7 @@ import type { ReactionType } from '@/types'
 
 interface ReactionsSectionProps {
     issueId: string
-    userId: string | null
+    userId: string | null | undefined
 }
 
 type CountMap = Partial<Record<ReactionType, number>>
@@ -22,7 +22,7 @@ const REACTION_META: { type: ReactionType; emoji: string; label: string }[] = [
 const REACTIONS = REACTION_META.map((r) => r.type)
 
 export default function ReactionsSection({ issueId, userId: serverUserId }: ReactionsSectionProps) {
-    const [userId, setUserId] = useState<string | null>(serverUserId)
+    const [userId, setUserId] = useState<string | null>(serverUserId ?? null)
     const [counts, setCounts] = useState<CountMap>({})
     const [userReaction, setUserReaction] = useState<ReactionType | null>(null)
     const [loading, setLoading] = useState(true)
@@ -30,7 +30,9 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        if (serverUserId) {
+        // serverUserId가 null이면 서버에서 비로그인 확정 → 재조회 불필요
+        // undefined는 SSR 없이 마운트된 경우(드롭다운 등)에 대한 폴백
+        if (serverUserId !== undefined) {
             setUserId(serverUserId)
             return
         }
@@ -60,8 +62,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
 
     useEffect(() => {
         const handleReactionUpdate = (e: CustomEvent) => {
-            if (e.detail?.issueId === issueId) {
-                console.log('[ReactionsSection] Received reactionUpdated event')
+            if (e.detail?.issueId === issueId && e.detail?.source !== 'ReactionsSection') {
                 loadReactions()
             }
         }
@@ -78,6 +79,22 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             return
         }
         if (submitting) return
+
+        // 낙관적 업데이트: API 응답 전에 즉시 UI 반영
+        const prevCounts = { ...counts }
+        const prevUserReaction = userReaction
+        const newCounts = { ...counts }
+        if (userReaction === type) {
+            newCounts[type] = Math.max(0, (newCounts[type] ?? 0) - 1)
+            setCounts(newCounts)
+            setUserReaction(null)
+        } else {
+            if (userReaction) newCounts[userReaction] = Math.max(0, (newCounts[userReaction] ?? 0) - 1)
+            newCounts[type] = (newCounts[type] ?? 0) + 1
+            setCounts(newCounts)
+            setUserReaction(type)
+        }
+
         setSubmitting(true)
         setError(null)
         try {
@@ -88,11 +105,13 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
-            console.log('[ReactionsSection] API success:', json)
+            // 서버 확정값으로 동기화 + 상대 컴포넌트(ReactionDropdown) 업데이트
             await loadReactions()
-            console.log('[ReactionsSection] loadReactions completed')
-            window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId } }))
+            window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId, source: 'ReactionsSection' } }))
         } catch (e) {
+            // 실패 시 롤백
+            setCounts(prevCounts)
+            setUserReaction(prevUserReaction)
             setError(e instanceof Error ? e.message : '처리 실패')
         } finally {
             setSubmitting(false)

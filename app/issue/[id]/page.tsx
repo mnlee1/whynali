@@ -17,6 +17,7 @@
  */
 
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import Script from 'next/script'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -38,16 +39,21 @@ import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@
 // 같은 이슈를 여러 사용자가 보더라도 15분에 한 번만 생성
 export const revalidate = 900
 
+// 한 요청 내 generateMetadata + IssuePage 간 DB 조회 공유
+const getIssue = cache(async (id: string) => {
+    const adminClient = createSupabaseAdminClient()
+    const { data } = await adminClient
+        .from('issues')
+        .select('*')
+        .eq('id', id)
+        .single()
+    return data
+})
+
 // 동적 메타데이터 생성 (SEO + 실시간 업데이트 시그널)
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
     const { id } = await params
-    const adminClient = createSupabaseAdminClient()
-
-    const { data: issue } = await adminClient
-        .from('issues')
-        .select('id, title, description, category, status, heat_index, created_at, updated_at')
-        .eq('id', id)
-        .single()
+    const issue = await getIssue(id)
 
     if (!issue) {
         return {
@@ -131,13 +137,16 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     const adminClient = createSupabaseAdminClient()
 
     /* 이슈 데이터 + 관련 데이터 + 사용자 세션을 병렬로 조회 */
+    /* getIssue(id)는 generateMetadata에서 이미 호출된 경우 cache()로 재사용됨 */
     const [
-        { data: issue, error: issueError },
+        issue,
         { data: discussionTopics },
         { count: voteCount },
         sessionClient,
+        { data: timelineSummariesRaw },
+        { data: newsData },
     ] = await Promise.all([
-        adminClient.from('issues').select('*').eq('id', id).single(),
+        getIssue(id),
         adminClient
             .from('discussion_topics')
             .select('id, body, created_at, approval_status, view_count')
@@ -150,7 +159,27 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .eq('issue_id', id)
             .in('phase', ['진행중', '마감']),
         createSupabaseServerClient(),
+        adminClient
+            .from('timeline_summaries')
+            .select('stage, stage_title, bullets, date_start, date_end')
+            .eq('issue_id', id),
+        adminClient
+            .from('news_data')
+            .select('id, title, link, source, published_at, issue_id, created_at')
+            .eq('issue_id', id)
+            .order('published_at', { ascending: false }),
     ])
+
+    const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3, '종결': 4 }
+    const timelineSummaries = (timelineSummariesRaw ?? [])
+        .sort((a, b) => (STAGE_ORDER[a.stage] ?? 9) - (STAGE_ORDER[b.stage] ?? 9))
+        .map(row => ({
+            stage: row.stage as '발단' | '전개' | '파생' | '진정' | '종결',
+            stageTitle: row.stage_title,
+            bullets: row.bullets || [],
+            dateStart: row.date_start,
+            dateEnd: row.date_end,
+        }))
 
     /* 토론 주제별 의견(댓글) 수 집계 */
     const topicIds = (discussionTopics ?? []).map((t) => t.id)
@@ -183,7 +212,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         .sort((a, b) => (b.viewCount + b.opinionCount) - (a.viewCount + a.opinionCount))
     const discussionTopicsWithStats = [...active, ...closed].slice(0, 5)
 
-    if (issueError || !issue) {
+    if (!issue) {
         return (
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
@@ -281,12 +310,13 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                         issueId={id}
                         issueStatus={issue.status}
                         issueUpdatedAt={issue.updated_at}
+                        initialSummaries={timelineSummaries}
                     />
                 </div>
             </div>
 
             {/* 출처 */}
-            <SourcesSection issueId={id} />
+            <SourcesSection issueId={id} initialNews={newsData ?? []} />
 
             {/* 투표 */}
             <div id="section-vote" style={{ scrollMarginTop: '80px' }}>
