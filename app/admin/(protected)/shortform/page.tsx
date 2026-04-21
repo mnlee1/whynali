@@ -480,7 +480,7 @@ export default function AdminShortformPage() {
                                             <Link
                                                 href={`/issue/${job.issue_id}`}
                                                 target="_blank"
-                                                className="text-primary hover:underline font-medium block mb-1"
+                                                className="text-primary hover:underline font-medium inline-block max-w-full mb-1"
                                             >
                                                 {job.issue_title}
                                             </Link>

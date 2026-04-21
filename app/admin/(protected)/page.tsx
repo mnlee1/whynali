@@ -373,7 +373,7 @@ export default function AdminDashboardPage() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="mb-4">
                                     <div className="bg-white/60 rounded-xl p-3 flex flex-col justify-between">
                                         <p className="text-sm text-content-secondary mb-1">
                                             오늘 ({new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })})
@@ -381,16 +381,6 @@ export default function AdminDashboardPage() {
                                         <div>
                                             <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.today}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
                                             <p className="text-sm font-semibold text-orange-600 mt-1">${apiCosts.claude.today.toFixed(4)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white/60 rounded-xl p-3 flex flex-col justify-between">
-                                        <div>
-                                            <p className="text-sm text-content-secondary">이번 달</p>
-                                            <p className="text-xs text-content-muted mt-0.5">{new Date().toLocaleDateString('ko-KR', { month: 'short' })} 1일~현재</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-2xl font-bold text-content-primary">{apiCosts.claude.calls.monthly}<span className="text-sm font-normal text-content-secondary ml-1">회</span></p>
-                                            <p className="text-sm font-semibold text-orange-600 mt-1">${apiCosts.claude.monthly.toFixed(4)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -558,10 +548,12 @@ export default function AdminDashboardPage() {
                                         {[
                                             { label: '이슈 진위 판단', desc: '카테고리·키워드·제목 추출 포함', model: 'Claude', schedule: '10분' },
                                             { label: '중복 이슈 체크', desc: '기존 이슈와 AI 비교', model: 'Groq', schedule: '10분' },
+                                            { label: '상위 이슈 연결', desc: '후속·파생 이슈 자동 연결', model: 'Groq', schedule: '10분' },
                                             { label: '뉴스·커뮤니티 필터링', desc: '관련 콘텐츠 선별 + 최종 제목', model: 'Claude', schedule: '10분' },
                                             { label: '타임라인 분류', desc: '전개·파생 단계 분류', model: 'Groq', schedule: '10분 / 매시 30분' },
                                             { label: '토론 주제 생성', desc: '승인 이슈 대상', model: 'Groq', schedule: '매일' },
                                             { label: '투표 생성', desc: '승인 이슈 대상', model: 'Groq', schedule: '매일' },
+                                            { label: '숏폼 해시태그 생성', desc: '업로드 시 자동 생성', model: 'Groq', schedule: '수동' },
                                             { label: '숏폼 이미지 검증', desc: '생성된 이미지 적합성 판별', model: 'Gemini', schedule: '매일' },
                                         ].map((feature) => (
                                             <div key={feature.label} className="flex items-start text-sm bg-surface rounded px-2.5 py-1.5 border border-border-muted">
