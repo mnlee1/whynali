@@ -23,7 +23,7 @@ test.describe('이슈 상세 페이지', () => {
         await expect(title).not.toBeEmpty()
     })
 
-    test('3줄 요약(description) 표시 확인', async ({ page }) => {
+    test('topic_description 표시 확인', async ({ page }) => {
         const desc = page.locator('p.text-gray-600').first()
         const descVisible = await desc.isVisible()
         if (descVisible) {

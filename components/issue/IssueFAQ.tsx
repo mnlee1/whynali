@@ -73,7 +73,7 @@ export default function IssueFAQ({
                             이 이슈는 무엇인가요?
                         </dt>
                         <dd className="text-content-secondary leading-relaxed">
-                            {issue.description || `${categoryDescriptions[issue.category] || ''} 이슈입니다.`}
+                            {issue.topic_description || `${categoryDescriptions[issue.category] || ''} 이슈입니다.`}
                         </dd>
                     </div>
 

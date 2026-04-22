@@ -14,6 +14,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import type { Issue } from '@/types/issue'
 import TimelineSection from '@/components/issue/TimelineSection'
 import SourcesSection from '@/components/issue/SourcesSection'
@@ -39,9 +40,13 @@ export default function IssuePreviewDrawer({
 }: IssuePreviewDrawerProps) {
     const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState<number>(0)
     const [isRefreshing, setIsRefreshing] = useState(false)
+    const [localThumbnailUrls, setLocalThumbnailUrls] = useState<string[]>([])
+    const [refreshSuccess, setRefreshSuccess] = useState(false)
+
     useEffect(() => {
         if (issue) {
             setSelectedThumbnailIndex(issue.primary_thumbnail_index ?? 0)
+            setLocalThumbnailUrls(issue.thumbnail_urls ?? [])
         }
     }, [issue])
 
@@ -105,9 +110,10 @@ export default function IssuePreviewDrawer({
             }
 
             const data = await res.json()
+            setLocalThumbnailUrls(data.thumbnail_urls ?? [])
             setSelectedThumbnailIndex(0)
-            alert('이미지가 재검색되었습니다')
-            onIssueUpdate?.()
+            setRefreshSuccess(true)
+            setTimeout(() => setRefreshSuccess(false), 2000)
         } catch (error) {
             console.error('이미지 재검색 에러:', error)
             alert(error instanceof Error ? error.message : '이미지 재검색에 실패했습니다')
@@ -187,15 +193,18 @@ export default function IssuePreviewDrawer({
                         </div>
                     </div>
 
-                    {/* Unsplash 이미지 미리보기 */}
-                    {issue.thumbnail_urls && issue.thumbnail_urls.length > 0 && (
+                    {/* 이미지 미리보기 */}
+                    {localThumbnailUrls.length > 0 && (
                         <div className="card overflow-hidden">
                             <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                                 <h2 className="text-sm font-bold text-content-primary">
                                     대표 이미지
-                                    <span className="ml-2 text-xs font-normal text-content-muted">({issue.thumbnail_urls.length}개)</span>
+                                    <span className="ml-2 text-xs font-normal text-content-muted">({localThumbnailUrls.length}개)</span>
                                 </h2>
                                 <div className="flex items-center gap-2">
+                                    {refreshSuccess && (
+                                        <span className="text-xs text-green-600 font-medium">✓ 완료</span>
+                                    )}
                                     <button
                                         onClick={handleRefreshThumbnails}
                                         disabled={isRefreshing}
@@ -216,10 +225,10 @@ export default function IssuePreviewDrawer({
                                     슬라이드에 표시할 대표 이미지를 선택하세요
                                 </p>
                                 <div className="grid grid-cols-3 gap-3">
-                                    {issue.thumbnail_urls.map((url, i) => (
-                                        <label key={i} className="block cursor-pointer group">
+                                    {localThumbnailUrls.map((url, i) => (
+                                        <label key={url} className="block cursor-pointer group">
                                             <div className={`relative aspect-video rounded-lg overflow-hidden ring-2 transition-all ${selectedThumbnailIndex === i ? 'ring-primary shadow-lg' : 'ring-transparent hover:ring-border'}`}>
-                                                <img src={url} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
+                                                <Image src={url} alt={`이미지 ${i + 1}`} fill sizes="200px" className="object-cover" />
                                                 <input
                                                     type="radio"
                                                     name="thumbnail"

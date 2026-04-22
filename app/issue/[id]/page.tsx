@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
     const title = `${issue.title}`
-    const description = issue.description || `${issue.category} 카테고리의 ${issue.status} 이슈. 화력 지수 ${issue.heat_index ?? 0}점. 실시간 반응, 타임라인, 투표, 댓글을 확인하세요.`
+    const description = issue.topic_description || `${issue.category} 카테고리의 ${issue.status} 이슈. 화력 지수 ${issue.heat_index ?? 0}점. 실시간 반응, 타임라인, 투표, 댓글을 확인하세요.`
 
     const categoryKeywords: Record<string, string[]> = {
         '연예': ['연예', '연예계', '셀럽', '아이돌', '배우', '가수'],
