@@ -88,9 +88,9 @@ Reply with ONLY the keywords::tone format, nothing else.`,
 /**
  * Pixabay 검색 후 결과 중 랜덤 3개 URL 반환
  * 사람 관련 태그가 포함된 이미지는 자동 제외
- * isDark=true 이면 grayscale 필터 적용
+ * 톤은 키워드 자체(shadow, night 등)로 반영 — colors 필터 미사용 (결과 다양성 확보)
  */
-async function searchPixabay(query: string, apiKey: string, isDark = false): Promise<string[]> {
+async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
     const params = new URLSearchParams({
         key: apiKey,
         q: query,
@@ -100,8 +100,6 @@ async function searchPixabay(query: string, apiKey: string, isDark = false): Pro
         safesearch: 'true',
         min_width: '640',
     })
-
-    if (isDark) params.set('colors', 'grayscale')
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
     if (!res.ok) {
@@ -144,7 +142,7 @@ export async function fetchPixabayImages(title: string, category: string, debug?
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const urls = await searchPixabay(groqResult.keywords, apiKey, groqResult.isDark)
+            const urls = await searchPixabay(groqResult.keywords, apiKey)
             if (urls.length > 0) return debug ? { urls, keyword: groqResult.keywords, isDark: groqResult.isDark, source: 'groq' } : urls
         } catch {
             // 실패 시 카테고리 폴백으로 진행
