@@ -12,7 +12,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, ClipboardCheck, Database, MessageCircle, CheckSquare, Video, Shield, FileText } from 'lucide-react'
+import { Home, ClipboardCheck, Database, MessageCircle, CheckSquare, Video, Shield, FileText, Activity } from 'lucide-react'
 
 const NAV_ITEMS = [
     {
@@ -49,6 +49,11 @@ const NAV_ITEMS = [
         label: '세이프티',
         href: '/admin/safety',
         icon: <Shield className="w-4 h-4 shrink-0" strokeWidth={2} />,
+    },
+    {
+        label: '시스템 모니터링',
+        href: '/admin/monitoring',
+        icon: <Activity className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
     {
         label: '운영 로그',
