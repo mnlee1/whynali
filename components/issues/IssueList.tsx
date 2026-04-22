@@ -71,7 +71,10 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const skipNextFetch = useRef(!!initialData)
 
     useEffect(() => {
-        if (initialTabCounts && !searchQuery) return  // 검색 중엔 항상 재조회
+        if (!searchQuery && initialTabCounts) {
+            setTabCounts(initialTabCounts)
+            return
+        }
         async function fetchCounts() {
             const tabKeys = ['', '점화', '논란중', '종결']
             const results = await Promise.allSettled(
