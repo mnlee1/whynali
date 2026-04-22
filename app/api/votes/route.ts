@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
         .map((v) => {
             /* 내부 필터용 필드를 제거하고 id·title만 남김 */
             if (v.issues) {
-                const { approval_status: _a, visibility_status: _v, ...rest } = v.issues as Record<string, unknown>
+                const iss = v.issues as unknown as { id: any; title: any; approval_status?: string; visibility_status?: string }
+                const { approval_status: _a, visibility_status: _v, ...rest } = iss
                 return { ...v, issues: rest }
             }
             return v
