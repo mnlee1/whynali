@@ -1,7 +1,7 @@
 /**
  * app/world/page.tsx
  *
- * [?�계 카테고리 ?�이지]
+ * [세계 카테고리 페이지]
  */
 
 import type { Metadata } from 'next'
@@ -13,12 +13,12 @@ import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } 
 import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT } from '@/lib/config/candidate-thresholds'
 
 export const metadata: Metadata = {
-    title: '?�계 ?�슈',
-    description: '?�계??최신 ?�슈?� ?��????�눈?? �?��, ?�외, ?�교, 글로벌 ?�스�??�시간으�??�인?�세??',
-    keywords: ['?�계', '�?��', '?�외', '?�교', '글로벌', '?�계 ?�슈', '�?�� ?�스'],
+    title: '세계 이슈',
+    description: '세계의 최신 이슈와 논란을 한눈에. 국제, 해외, 외교, 글로벌 뉴스를 실시간으로 확인하세요.',
+    keywords: ['세계', '국제', '해외', '외교', '글로벌', '세계 이슈', '국제 뉴스'],
     openGraph: {
-        title: '?�계 ?�슈 | ?�난�?,
-        description: '?�계??최신 ?�슈?� ?��????�눈?? �?��, ?�외, ?�교, 글로벌 ?�스�??�시간으�??�인?�세??',
+        title: '세계 이슈 | 왜난리',
+        description: '세계의 최신 이슈와 논란을 한눈에. 국제, 해외, 외교, 글로벌 뉴스를 실시간으로 확인하세요.',
     },
 }
 
@@ -27,10 +27,10 @@ export const revalidate = 900
 
 export default async function WorldPage() {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
-    const collectionSchema = generateCollectionPageSchema('?�계')
+    const collectionSchema = generateCollectionPageSchema('세계')
     const breadcrumbSchema = generateBreadcrumbSchema([
-        { name: '??, url: baseUrl },
-        { name: '?�계', url: `${baseUrl}/world` },
+        { name: '홈', url: baseUrl },
+        { name: '세계', url: `${baseUrl}/world` },
     ])
 
     const [
@@ -40,14 +40,14 @@ export default async function WorldPage() {
         { count: controversialCount },
         { count: closedCount },
     ] = await Promise.all([
-        supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).gte('heat_index', MIN_HEAT).eq('category', '?�계').order('created_at', { ascending: false }).range(0, 19),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�계'),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�계').eq('status', '?�화'),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�계').eq('status', '?��?�?),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�계').eq('status', '종결'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).gte('heat_index', MIN_HEAT).eq('category', '세계').order('created_at', { ascending: false }).range(0, 19),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '세계'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '세계').eq('status', '점화'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '세계').eq('status', '논란중'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '세계').eq('status', '종결'),
     ])
 
-    const tabCounts = { '': totalCount ?? 0, '?�화': hotCount ?? 0, '?��?�?: controversialCount ?? 0, '종결': closedCount ?? 0 }
+    const tabCounts = { '': totalCount ?? 0, '점화': hotCount ?? 0, '논란중': controversialCount ?? 0, '종결': closedCount ?? 0 }
 
     return (
         <>
@@ -62,9 +62,9 @@ export default async function WorldPage() {
                 dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
             />
             <div className="container mx-auto px-4 py-6 md:py-8">
-                <h1 className="text-2xl font-bold text-content-primary mb-6">?�계 ?�슈</h1>
+                <h1 className="text-2xl font-bold text-content-primary mb-6">세계 이슈</h1>
                 <IssueList
-                    category="?�계"
+                    category="세계"
                     initialData={{ data: (data ?? []) as Issue[], total: totalCount ?? 0 }}
                     initialTabCounts={tabCounts}
                 infiniteScroll

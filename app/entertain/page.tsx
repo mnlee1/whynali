@@ -1,7 +1,7 @@
 /**
  * app/entertain/page.tsx
  *
- * [?�예 카테고리 ?�이지]
+ * [연예 카테고리 페이지]
  */
 
 import type { Metadata } from 'next'
@@ -13,12 +13,12 @@ import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } 
 import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT } from '@/lib/config/candidate-thresholds'
 
 export const metadata: Metadata = {
-    title: '?�예 ?�슈',
-    description: '?�예계의 최신 ?�슈?� ?��????�눈?? ?�이?? 배우, 가?? 방송?�의 ?�건�??�스�??�시간으�??�인?�세??',
-    keywords: ['?�예', '?�예�?, '?�이??, '배우', '가??, '방송??, '?�??, '?�예 ?�슈', '?�예 ?�스'],
+    title: '연예 이슈',
+    description: '연예계의 최신 이슈와 논란을 한눈에. 아이돌, 배우, 가수, 방송인의 사건과 뉴스를 실시간으로 확인하세요.',
+    keywords: ['연예', '연예계', '아이돌', '배우', '가수', '방송인', '셀럽', '연예 이슈', '연예 뉴스'],
     openGraph: {
-        title: '?�예 ?�슈 | ?�난�?,
-        description: '?�예계의 최신 ?�슈?� ?��????�눈?? ?�이?? 배우, 가?? 방송?�의 ?�건�??�스�??�시간으�??�인?�세??',
+        title: '연예 이슈 | 왜난리',
+        description: '연예계의 최신 이슈와 논란을 한눈에. 아이돌, 배우, 가수, 방송인의 사건과 뉴스를 실시간으로 확인하세요.',
     },
 }
 
@@ -27,10 +27,10 @@ export const revalidate = 900
 
 export default async function EntertainPage() {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
-    const collectionSchema = generateCollectionPageSchema('?�예')
+    const collectionSchema = generateCollectionPageSchema('연예')
     const breadcrumbSchema = generateBreadcrumbSchema([
-        { name: '??, url: baseUrl },
-        { name: '?�예', url: `${baseUrl}/entertain` },
+        { name: '홈', url: baseUrl },
+        { name: '연예', url: `${baseUrl}/entertain` },
     ])
 
     const [
@@ -40,17 +40,17 @@ export default async function EntertainPage() {
         { count: controversialCount },
         { count: closedCount },
     ] = await Promise.all([
-        supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).gte('heat_index', MIN_HEAT).eq('category', '?�예').order('created_at', { ascending: false }).range(0, 19),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�예'),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�예').eq('status', '?�화'),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�예').eq('status', '?��?�?),
-        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '?�인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '?�예').eq('status', '종결'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).gte('heat_index', MIN_HEAT).eq('category', '연예').order('created_at', { ascending: false }).range(0, 19),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '연예'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '연예').eq('status', '점화'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '연예').eq('status', '논란중'),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '연예').eq('status', '종결'),
     ])
 
     const tabCounts = {
         '': totalCount ?? 0,
-        '?�화': hotCount ?? 0,
-        '?��?�?: controversialCount ?? 0,
+        '점화': hotCount ?? 0,
+        '논란중': controversialCount ?? 0,
         '종결': closedCount ?? 0,
     }
 
@@ -67,9 +67,9 @@ export default async function EntertainPage() {
                 dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
             />
             <div className="container mx-auto px-4 py-6 md:py-8">
-                <h1 className="text-2xl font-bold text-content-primary mb-6">?�예 ?�슈</h1>
+                <h1 className="text-2xl font-bold text-content-primary mb-6">연예 이슈</h1>
             <IssueList
-                category="?�예"
+                category="연예"
                 initialData={{ data: (data ?? []) as Issue[], total: totalCount ?? 0 }}
                 initialTabCounts={tabCounts}
                 infiniteScroll
