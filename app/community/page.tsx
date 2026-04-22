@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, MessageCircleMore } from 'lucide-react'
 import { decodeHtml } from '@/lib/utils/decode-html'
@@ -12,12 +12,20 @@ import type { DiscussionTopic } from '@/types'
 type IssueInfo = {
     id: string
     title: string
+    description?: string | null
 }
 
 type TopicWithIssue = DiscussionTopic & {
     issues: IssueInfo | null
     opinionCount?: number
     viewCount?: number
+}
+
+type IssueStats = {
+    viewCount: number
+    commentCount: number
+    voteCount: number
+    discussionCount: number
 }
 
 type FilterStatus = '' | '진행중' | '마감'
@@ -102,6 +110,8 @@ function CommunityCard({
 
 function CommunityContent() {
     const searchParams = useSearchParams()
+    const router = useRouter()
+    const issueIdFilter = searchParams.get('issue_id') ?? ''
 
     const [topics, setTopics] = useState<TopicWithIssue[]>([])
     const [total, setTotal] = useState(0)
@@ -111,8 +121,16 @@ function CommunityContent() {
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
+    const [issueTitle, setIssueTitle] = useState<string | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [statsMap, setStatsMap] = useState<Record<string, IssueStats>>({})
+
+    const issueTopicCountMap = topics.reduce<Record<string, number>>((acc, t) => {
+        if (t.issues?.id) {
+            acc[t.issues.id] = (acc[t.issues.id] ?? 0) + 1
+        }
+        return acc
+    }, {})
 
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -124,6 +142,7 @@ function CommunityContent() {
                 tabKeys.map(s => {
                     const params = new URLSearchParams({ limit: '1', offset: '0' })
                     if (s) params.set('status', s)
+                    if (issueIdFilter) params.set('issue_id', issueIdFilter)
                     return fetch(`/api/discussions?${params}`).then(r => r.json())
                 })
             )
@@ -135,7 +154,7 @@ function CommunityContent() {
             setTabCounts(counts)
         }
         fetchCounts()
-    }, [])
+    }, [issueIdFilter])
 
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
@@ -156,6 +175,7 @@ function CommunityContent() {
             })
             if (q) params.set('q', q)
             if (status) params.set('status', status)
+            if (issueIdFilter) params.set('issue_id', issueIdFilter)
             const res = await fetch(`/api/discussions?${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -187,7 +207,7 @@ function CommunityContent() {
             setLoading(false)
             setLoadingMore(false)
         }
-    }, [])
+    }, [issueIdFilter])
 
     useEffect(() => {
         setLoading(true)
@@ -204,44 +224,64 @@ function CommunityContent() {
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl font-bold text-content-primary mb-6">커뮤니티</h1>
+            {issueIdFilter && issueTitle ? (
+                <div className="mb-4">
+                    <p className="text-xs text-primary mb-1">이슈 연결 토론</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-content-primary">{issueTitle}</h1>
+                </div>
+            ) : (
+                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
+            )}
 
-            <div className="mb-6">
-                <SearchBar
-                    value={searchInput}
-                    onChange={handleSearchChange}
-                    onSearch={handleSearch}
-                    placeholder="토론 주제 검색"
-                />
-            </div>
+            {/* 검색 */}
+            {!issueIdFilter && (
+                <div className="mb-6">
+                    <SearchBar
+                        value={searchInput}
+                        onChange={handleSearchChange}
+                        onSearch={handleSearch}
+                        placeholder="토론 주제 검색"
+                    />
+                </div>
+            )}
 
             {/* 상태 필터 탭 */}
-            <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 mb-6">
-                {FILTER_LABELS.map(({ value, label }) => {
-                    const isActive = statusFilter === value
-                    const count = tabCounts[value]
-                    return (
-                        <button
-                            key={value}
-                            onClick={() => setStatusFilter(value)}
-                            className={[
-                                'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                                isActive
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            <span>{label}</span>
-                            {count !== undefined && count > 0 && (
-                                <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
-                                    isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
-                                }`}>
-                                    {count.toLocaleString()}
-                                </span>
-                            )}
-                        </button>
-                    )
-                })}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 mb-6">
+                <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                    {FILTER_LABELS.map(({ value, label }) => {
+                        const isActive = statusFilter === value
+                        const count = tabCounts[value]
+                        return (
+                            <button
+                                key={value}
+                                onClick={() => setStatusFilter(value)}
+                                className={[
+                                    'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                                    isActive
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                                ].join(' ')}
+                            >
+                                <span>{label}</span>
+                                {count !== undefined && count > 0 && (
+                                    <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
+                                        isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
+                                    }`}>
+                                        {count.toLocaleString()}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
+                {issueIdFilter && (
+                    <Link
+                        href="/community"
+                        className="text-xs text-content-secondary hover:text-content-primary font-medium whitespace-nowrap"
+                    >
+                        전체 커뮤니티 보기 →
+                    </Link>
+                )}
             </div>
 
             {error && (
@@ -250,15 +290,20 @@ function CommunityContent() {
                 </div>
             )}
 
+            {/* 스켈레톤 */}
             {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[1, 2, 3, 4].map((i) => (
                         <div key={i} className="card-hover p-5 flex flex-col gap-3">
                             <div className="h-4 bg-border-muted rounded animate-pulse w-3/4" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-2/3" />
+                            <div className="flex gap-4">
+                                {[0,1,2,3].map(j => <div key={j} className="h-3 w-8 bg-border-muted rounded animate-pulse" />)}
+                            </div>
                             <div className="border-t border-border-muted pt-3 space-y-2">
                                 <div className="h-3 bg-border-muted rounded animate-pulse w-1/4" />
                                 <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
-                                <div className="h-3 bg-border-muted rounded animate-pulse w-1/3" />
                             </div>
                         </div>
                     ))}
@@ -269,6 +314,7 @@ function CommunityContent() {
                 </p>
             ) : (
                 <>
+                    <p className="text-sm text-content-secondary mb-4">총 {total.toLocaleString()}개</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {topics.map((topic) => (
                             <CommunityCard
@@ -282,6 +328,7 @@ function CommunityContent() {
                         ))}
                     </div>
 
+                    {/* 더보기 */}
                     {topics.length < total && (
                         <div className="text-center mt-6">
                             <button

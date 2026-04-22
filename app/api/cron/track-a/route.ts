@@ -16,7 +16,7 @@
  * 스케줄: 매 정각 1시간 주기 (vercel.json: "0 * * * *")
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -1357,59 +1357,57 @@ async function processTrackA(): Promise<{
             continue
         }
         
-        // 4-7-1. 이미지 자동 생성 (Unsplash → 뉴스 og:image 폴백)
-        try {
-            const { fetchUnsplashImages } = await import('@/lib/unsplash')
-            let thumbnailUrls = await fetchUnsplashImages(finalIssueTitle, category)
+        // 4-7-1. 이미지 자동 생성 — 응답 후 비동기 실행 (타임아웃 영향 없음)
+        const _issueId = newIssue.id
+        const _issueTitle = finalIssueTitle
+        const _category = category
+        const _newsLinks = relevantNews.slice(0, 5).map((n: { link?: string }) => n.link).filter(Boolean) as string[]
 
-            // Unsplash 결과 없으면 연결된 뉴스 기사에서 og:image 추출
-            if (thumbnailUrls.length === 0 && relevantNews.length > 0) {
-                const ogImages: string[] = []
-                const newsLinks = relevantNews.slice(0, 5).map(n => n.link).filter(Boolean)
+        after(async () => {
+            try {
+                const { fetchPixabayImages } = await import('@/lib/pixabay')
+                let thumbnailUrls = await fetchPixabayImages(_issueTitle, _category)
 
-                for (const link of newsLinks) {
-                    if (ogImages.length >= 3) break
-                    try {
-                        const res = await fetch(link, {
-                            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WhyNaliBot/1.0)' },
-                            signal: AbortSignal.timeout(5000),
-                        })
-                        if (!res.ok) continue
-                        const html = await res.text()
-                        const match = html.match(/<meta[^>]+(?:property="og:image"|name="og:image")[^>]+content="([^"]+)"/i)
-                            ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+(?:property="og:image"|name="og:image")/i)
-                        const imgUrl = match?.[1]
-                        if (imgUrl && imgUrl.startsWith('http') && !ogImages.includes(imgUrl)) {
-                            ogImages.push(imgUrl)
+                // Pixabay 결과 없으면 연결된 뉴스 기사에서 og:image 추출
+                if (thumbnailUrls.length === 0 && _newsLinks.length > 0) {
+                    const ogImages: string[] = []
+
+                    for (const link of _newsLinks) {
+                        if (ogImages.length >= 3) break
+                        try {
+                            const res = await fetch(link, {
+                                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WhyNaliBot/1.0)' },
+                                signal: AbortSignal.timeout(5000),
+                            })
+                            if (!res.ok) continue
+                            const html = await res.text()
+                            const match = html.match(/<meta[^>]+(?:property="og:image"|name="og:image")[^>]+content="([^"]+)"/i)
+                                ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+(?:property="og:image"|name="og:image")/i)
+                            const imgUrl = match?.[1]
+                            if (imgUrl && imgUrl.startsWith('http') && !ogImages.includes(imgUrl)) {
+                                ogImages.push(imgUrl)
+                            }
+                        } catch {
+                            // 개별 기사 fetch 실패는 무시
                         }
-                    } catch {
-                        // 개별 기사 fetch 실패는 무시
                     }
+
+                    if (ogImages.length > 0) thumbnailUrls = ogImages
                 }
 
-                if (ogImages.length > 0) {
-                    thumbnailUrls = ogImages
-                    console.log(`  ✓ [이미지 생성] 뉴스 og:image ${ogImages.length}개 추출 완료`)
+                if (thumbnailUrls.length > 0) {
+                    await supabaseAdmin
+                        .from('issues')
+                        .update({ thumbnail_urls: thumbnailUrls, primary_thumbnail_index: 0 })
+                        .eq('id', _issueId)
+                    console.log(`[이미지 after] "${_issueTitle}" — ${thumbnailUrls.length}개 저장`)
+                } else {
+                    console.log(`[이미지 after] "${_issueTitle}" — 이미지 없음`)
                 }
+            } catch (e) {
+                console.warn(`[이미지 after 실패] "${_issueTitle}":`, e)
             }
-
-            if (thumbnailUrls.length > 0) {
-                await supabaseAdmin
-                    .from('issues')
-                    .update({
-                        thumbnail_urls: thumbnailUrls,
-                        primary_thumbnail_index: 0,
-                    })
-                    .eq('id', newIssue.id)
-
-                console.log(`  ✓ [이미지 생성] ${thumbnailUrls.length}개 이미지 저장 완료`)
-            } else {
-                console.log(`  ℹ [이미지 생성] 이미지 없음 (그라디언트 배경 사용)`)
-            }
-        } catch (imageError) {
-            // 이미지 생성 실패해도 이슈는 계속 진행
-            console.warn(`  ⚠ [이미지 생성 실패] ${imageError instanceof Error ? imageError.message : '알 수 없는 오류'}`)
-        }
+        })
         
         // 4-8. 타임라인 준비 (실제 연결된 뉴스 기준)
         console.log(`  → [타임라인 생성 시작] 연결된 뉴스 ${linkedNewsCount}건 기준`)
