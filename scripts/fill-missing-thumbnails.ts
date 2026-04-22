@@ -10,7 +10,12 @@
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 
+const isProd = process.argv.includes('--prod')
+const isForce = process.argv.includes('--force') // 기존 이미지도 덮어씀
+
+// --prod: 실서버 (.env.production.local 우선, .env.local에서 API 키 보완)
 config({ path: '.env.local' })
+if (isProd) config({ path: '.env.production.local', override: true })
 
 const CATEGORY_FALLBACK: Record<string, string> = {
     '연예': 'entertainment stage concert',
@@ -38,7 +43,7 @@ async function extractKeywords(title: string): Promise<string | null> {
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: 'llama-3.1-8b-instant',
-                messages: [{ role: 'user', content: `Extract 2 English search keywords for a stock photo search from this Korean news headline. Reply with ONLY the keywords, nothing else.\n\n"${title}"` }],
+                messages: [{ role: 'user', content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.\n\nExamples:\n- "BTS 새 앨범 발매" → "music concert stage"\n- "삼성전자 노조 파업" → "factory workers protest"\n- "토트넘 강등 위기" → "soccer stadium match"\n\nKorean headline: "${title}"\nReply with ONLY the keywords, nothing else.` }],
                 max_tokens: 20,
                 temperature: 0,
             }),
@@ -90,16 +95,18 @@ async function main() {
     }
 
     console.log('='.repeat(60))
-    console.log('썸네일 없는 이슈 일괄 이미지 채우기 (Pixabay)')
+    console.log(`이슈 이미지 채우기 (Pixabay) [${isProd ? '실서버' : '테스트서버'}]${isForce ? ' [전체 덮어쓰기]' : ''}`)
     console.log(`DB: ${process.env.NEXT_PUBLIC_SUPABASE_URL}`)
     console.log('='.repeat(60))
 
-    const { data: targets, error } = await supabase
+    const query = supabase
         .from('issues')
         .select('id, title, category, approval_status')
-        .or('thumbnail_urls.is.null,thumbnail_urls.eq.{}')
-        .eq('approval_status', '승인')
         .order('created_at', { ascending: false })
+
+    if (!isForce) query.or('thumbnail_urls.is.null,thumbnail_urls.eq.{}')
+
+    const { data: targets, error } = await query
 
     if (error) { console.error('❌ 조회 실패:', error); return }
     if (!targets || targets.length === 0) { console.log('✅ 이미지 없는 승인 이슈 없음'); return }
@@ -133,7 +140,7 @@ async function main() {
             .eq('id', issue.id)
 
         if (updateError) {
-            console.log('❌ 저장 실패')
+            console.log('❌ 저장 실패:', updateError.message)
             failed++
         } else {
             console.log(`✅ ${urls.length}개 저장 (키워드: ${keywords ?? 'fallback'})`)
