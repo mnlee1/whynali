@@ -6,6 +6,10 @@ const nextConfig = {
                 protocol: 'https',
                 hostname: 'images.unsplash.com',
             },
+            {
+                protocol: 'https',
+                hostname: 'pixabay.com',
+            },
         ],
     },
     serverExternalPackages: ['googleapis', 'sharp', 'ffmpeg-static', 'opentype.js'],
