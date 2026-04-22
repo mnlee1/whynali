@@ -21,9 +21,10 @@ const CATEGORY_FALLBACK: Record<string, string> = {
 }
 
 /**
- * Groq API 직접 호출로 한국어 이슈 제목 → 영어 검색 키워드 추출
+ * Groq API 직접 호출로 한국어 이슈 제목 → 영어 검색 키워드 + 톤(dark/bright) 추출
+ * 반환 형식: { keywords: "...", isDark: boolean }
  */
-async function extractEnglishKeywords(title: string, category: string): Promise<string | null> {
+async function extractKeywordsAndTone(title: string, category: string): Promise<{ keywords: string; isDark: boolean } | null> {
     const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) return null
 
@@ -39,32 +40,46 @@ async function extractEnglishKeywords(title: string, category: string): Promise<
                 messages: [
                     {
                         role: 'user',
-                        content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.
+                        content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords for the visual background image, then add ::dark or ::bright based on the issue tone.
+
+Rules:
+- ::dark → controversy, scandal, accident, crime, conflict, death, protest, crisis, defeat
+- ::bright → comeback, release, achievement, award, victory, celebration, debut
 
 Category: ${category}
 Examples:
-- [연예] "BTS 새 앨범 발매" → "music concert stage"
-- [연예] "워너원 컴백 무대" → "kpop concert performance"
-- [스포츠] "토트넘 강등 위기" → "soccer stadium match"
-- [정치] "국회의원 막말 논란" → "parliament building debate"
-- [사회] "이태원 참사 추모" → "memorial candles vigil"
-- [경제] "삼성전자 노조 파업" → "factory strike protest"
-- [기술] "AI 주식 투자 열풍" → "stock market technology"
-- [세계] "이스라엘 레바논 공습" → "war conflict destruction"
+- [연예] "BTS 새 앨범 발매" → "music concert stage::bright"
+- [연예] "지수 친오빠 크레딧 삭제 논란" → "music studio silhouette::dark"
+- [연예] "아이유 콘서트 매진" → "concert spotlight stage::bright"
+- [연예] "배우 음주운전 적발" → "night city road::dark"
+- [스포츠] "토트넘 강등 위기" → "soccer stadium empty::dark"
+- [스포츠] "손흥민 골든부트 수상" → "soccer trophy celebration::bright"
+- [정치] "국회의원 막말 논란" → "parliament building shadow::dark"
+- [사회] "이태원 참사 추모" → "memorial candles vigil::dark"
+- [경제] "삼성전자 노조 파업" → "factory gate protest::dark"
+- [경제] "코스피 사상 최고치" → "stock market graph::bright"
+- [기술] "AI 주식 투자 열풍" → "stock market technology::bright"
+- [세계] "이스라엘 레바논 공습" → "war conflict destruction::dark"
 
 Korean headline: "${title}"
-Reply with ONLY the keywords, nothing else.`,
+Reply with ONLY the keywords::tone format, nothing else.`,
                     },
                 ],
-                max_tokens: 20,
+                max_tokens: 25,
                 temperature: 0,
             }),
         })
 
         if (!res.ok) return null
         const data = await res.json()
-        const keywords = data.choices?.[0]?.message?.content?.trim()
-        return keywords || null
+        const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
+        if (!raw) return null
+
+        const [keywords, tone] = raw.split('::')
+        return {
+            keywords: keywords.trim(),
+            isDark: tone?.trim() === 'dark',
+        }
     } catch {
         return null
     }
@@ -73,8 +88,9 @@ Reply with ONLY the keywords, nothing else.`,
 /**
  * Pixabay 검색 후 결과 중 랜덤 3개 URL 반환
  * 사람 관련 태그가 포함된 이미지는 자동 제외
+ * isDark=true 이면 grayscale 필터 적용
  */
-async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
+async function searchPixabay(query: string, apiKey: string, isDark = false): Promise<string[]> {
     const params = new URLSearchParams({
         key: apiKey,
         q: query,
@@ -84,6 +100,8 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         safesearch: 'true',
         min_width: '640',
     })
+
+    if (isDark) params.set('colors', 'grayscale')
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
     if (!res.ok) {
@@ -117,28 +135,28 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
  * @returns 이미지 URL 배열 (최대 3개) — 실패 시 빈 배열
  */
 export async function fetchPixabayImages(title: string, category: string): Promise<string[]>
-export async function fetchPixabayImages(title: string, category: string, debug: true): Promise<{ urls: string[]; keyword: string; source: 'groq' | 'fallback' }>
-export async function fetchPixabayImages(title: string, category: string, debug?: boolean): Promise<string[] | { urls: string[]; keyword: string; source: 'groq' | 'fallback' }> {
+export async function fetchPixabayImages(title: string, category: string, debug: true): Promise<{ urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }>
+export async function fetchPixabayImages(title: string, category: string, debug?: boolean): Promise<string[] | { urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }> {
     const apiKey = process.env.PIXABAY_API_KEY
-    if (!apiKey) return debug ? { urls: [], keyword: '', source: 'fallback' } : []
+    if (!apiKey) return debug ? { urls: [], keyword: '', isDark: false, source: 'fallback' } : []
 
-    // 1차: Groq로 영어 키워드 추출 후 검색
-    const englishKeywords = await extractEnglishKeywords(title, category)
-    if (englishKeywords) {
+    // 1차: Groq로 영어 키워드 + 톤 추출 후 검색
+    const groqResult = await extractKeywordsAndTone(title, category)
+    if (groqResult) {
         try {
-            const urls = await searchPixabay(englishKeywords, apiKey)
-            if (urls.length > 0) return debug ? { urls, keyword: englishKeywords, source: 'groq' } : urls
+            const urls = await searchPixabay(groqResult.keywords, apiKey, groqResult.isDark)
+            if (urls.length > 0) return debug ? { urls, keyword: groqResult.keywords, isDark: groqResult.isDark, source: 'groq' } : urls
         } catch {
             // 실패 시 카테고리 폴백으로 진행
         }
     }
 
-    // 2차 폴백: 카테고리 영어 키워드로 재검색
+    // 2차 폴백: 카테고리 영어 키워드로 재검색 (톤 미적용)
     const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
     try {
         const urls = await searchPixabay(fallbackQuery, apiKey)
-        return debug ? { urls, keyword: fallbackQuery, source: 'fallback' } : urls
+        return debug ? { urls, keyword: fallbackQuery, isDark: false, source: 'fallback' } : urls
     } catch {
-        return debug ? { urls: [], keyword: fallbackQuery, source: 'fallback' } : []
+        return debug ? { urls: [], keyword: fallbackQuery, isDark: false, source: 'fallback' } : []
     }
 }
