@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Masonry from 'react-masonry-css'
 import { Eye, MessageCircleMore } from 'lucide-react'
@@ -21,13 +21,6 @@ type TopicWithIssue = DiscussionTopic & {
     viewCount?: number
 }
 
-type IssueStats = {
-    viewCount: number
-    commentCount: number
-    voteCount: number
-    discussionCount: number
-}
-
 type FilterStatus = '' | '진행중' | '마감'
 
 
@@ -39,6 +32,11 @@ const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
 
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
+
+const breakpointColumns = {
+    default: 2,
+    768: 1,
+}
 
 type IssueGroup = {
     issueId: string
@@ -119,7 +117,6 @@ function IssueGroupCard({ group }: { group: IssueGroup }) {
 
 function CommunityContent() {
     const searchParams = useSearchParams()
-    const router = useRouter()
     const issueIdFilter = searchParams.get('issue_id') ?? ''
 
     const [topics, setTopics] = useState<TopicWithIssue[]>([])
@@ -130,17 +127,8 @@ function CommunityContent() {
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
-    const [issueTitle, setIssueTitle] = useState<string | null>(null)
+    const [issueTitle] = useState<string | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
-
-    const issueIdFilter = searchParams.get('issue_id') ?? ''
-
-    const issueTopicCountMap = topics.reduce<Record<string, number>>((acc, t) => {
-        if (t.issues?.id) {
-            acc[t.issues.id] = (acc[t.issues.id] ?? 0) + 1
-        }
-        return acc
-    }, {})
 
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -311,7 +299,11 @@ function CommunityContent() {
                 </p>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Masonry
+                        breakpointCols={breakpointColumns}
+                        className="flex gap-3 w-auto -ml-3"
+                        columnClassName="pl-3 bg-clip-padding"
+                    >
                         {groupTopicsByIssue(topics).map((group) => (
                             <IssueGroupCard key={group.issueId} group={group} />
                         ))}
