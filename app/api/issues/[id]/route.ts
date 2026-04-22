@@ -42,7 +42,7 @@ export async function PATCH(
 
     try {
         const body = await request.json()
-        const allowed = ['title', 'description', 'status', 'category', 'heat_index', 'approval_status', 'approved_at']
+        const allowed = ['title', 'status', 'category', 'heat_index', 'approval_status', 'approved_at']
         const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
         for (const key of allowed) {
