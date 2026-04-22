@@ -9,7 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
-import { fetchUnsplashImages } from '@/lib/unsplash'
+import { fetchPixabayImages } from '@/lib/pixabay'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
 
@@ -53,7 +53,7 @@ export async function POST(
         const hasThumbnails = data.thumbnail_urls && Array.isArray(data.thumbnail_urls) && data.thumbnail_urls.length > 0
         
         if (!hasThumbnails) {
-            const thumbnailUrls = await fetchUnsplashImages(data.title, data.category)
+            const thumbnailUrls = await fetchPixabayImages(data.title, data.category)
             if (thumbnailUrls.length > 0) {
                 await supabaseAdmin.from('issues').update({ 
                     thumbnail_urls: thumbnailUrls,
