@@ -39,7 +39,17 @@ async function extractEnglishKeywords(title: string): Promise<string | null> {
                 messages: [
                     {
                         role: 'user',
-                        content: `Extract 2 English search keywords for a stock photo search from this Korean news headline. Reply with ONLY the keywords, nothing else.\n\n"${title}"`,
+                        content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.
+
+Examples:
+- "BTS 새 앨범 발매" → "music concert stage"
+- "삼성전자 노조 파업" → "factory workers protest"
+- "토트넘 강등 위기" → "soccer stadium match"
+- "이스라엘 레바논 공습" → "war conflict explosion"
+- "AI 주식 투자 열풍" → "stock market technology"
+
+Korean headline: "${title}"
+Reply with ONLY the keywords, nothing else.`,
                     },
                 ],
                 max_tokens: 20,
