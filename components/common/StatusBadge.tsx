@@ -28,7 +28,7 @@ function getStatusMeta(status: IssueStatus): {
         case '점화':
             return {
                 icon: '🔥',
-                label: '급상승',
+                label: '점화 중',
                 baseClass: 'bg-red-50 text-red-600 border-red-200'
             }
         case '논란중':
