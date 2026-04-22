@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const issue_id = searchParams.get('issue_id')
     const q = searchParams.get('q')?.trim()
     const status = searchParams.get('status')?.trim()
+    const sort = searchParams.get('sort') ?? 'latest'
     const limit = Number(searchParams.get('limit') ?? 20)
     const offset = Number(searchParams.get('offset') ?? 0)
 
@@ -81,13 +82,10 @@ export async function GET(request: NextRequest) {
         viewCount: topic.view_count ?? 0,
     }))
 
-    const activeTopics = mapped
-        .filter(t => t.approval_status === '진행중')
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    const closedTopics = mapped
-        .filter(t => t.approval_status === '마감')
-        .sort((a, b) => (b.viewCount + b.opinionCount) - (a.viewCount + a.opinionCount))
-    const topicsWithOpinions = [...activeTopics, ...closedTopics]
+    const sorted = sort === 'popular'
+        ? mapped.sort((a, b) => (b.viewCount + b.opinionCount) - (a.viewCount + a.opinionCount))
+        : mapped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const topicsWithOpinions = sorted
 
     return NextResponse.json({ data: topicsWithOpinions, total: count ?? 0 })
 }

@@ -33,6 +33,7 @@ interface IssueListProps {
     showFullLabel?: boolean // 전체 탭을 "전체 이슈"로 표시 (기본: false)
     initialData?: { data: Issue[]; total: number } // SSR에서 전달받은 초기 데이터
     initialTabCounts?: Record<string, number>       // SSR에서 전달받은 탭별 카운트
+    infiniteScroll?: boolean                        // 인피니트 스크롤 여부 (기본: false)
 }
 
 // 상태 탭 목록
@@ -51,7 +52,7 @@ const breakpointColumns = {
     767: 1,
 }
 
-export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData, initialTabCounts }: IssueListProps) {
+export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData, initialTabCounts, infiniteScroll = false }: IssueListProps) {
     const [issues, setIssues] = useState<Issue[]>(initialData?.data ?? [])
     const [total, setTotal] = useState(initialData?.total ?? 0)
     const [loading, setLoading] = useState(!initialData)
@@ -64,6 +65,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
     const offsetRef = useRef(initialData?.data.length ?? 0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const sentinelRef = useRef<HTMLDivElement>(null)
     const loadLimit = initialLimit ?? LIMIT
     // 마운트 시 initialData가 있으면 첫 fetch 건너뜀
     const skipNextFetch = useRef(!!initialData)
@@ -158,6 +160,20 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         fetchIssues()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [category, statusFilter, searchQuery])
+
+    useEffect(() => {
+        if (!infiniteScroll) return
+        const sentinel = sentinelRef.current
+        if (!sentinel) return
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting && issues.length < total && !loadingMore && !loading) {
+                fetchMore()
+            }
+        }, { threshold: 0.1 })
+        observer.observe(sentinel)
+        return () => observer.disconnect()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [infiniteScroll, issues.length, total, loadingMore, loading])
 
     return (
         <div className="space-y-6">
@@ -277,25 +293,36 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                 </Masonry>
             )}
 
-            {/* 더 보기 */}
-            {issues.length < total && (
-                <div className="text-center pt-6">
-                    <button
-                        onClick={fetchMore}
-                        disabled={loadingMore}
-                        className="btn-neutral btn-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {loadingMore ? '로딩 중...' : '더 보기'}
-                    </button>
-                </div>
+            {/* 더 보기 — 인피니트 스크롤 or 버튼 */}
+            {infiniteScroll ? (
+                <>
+                    <div ref={sentinelRef} className="h-4" />
+                    {loadingMore && (
+                        <div className="text-center py-4 text-sm text-content-muted">로딩 중...</div>
+                    )}
+                </>
+            ) : (
+                issues.length < total && (
+                    <div className="text-center pt-6">
+                        <button
+                            onClick={fetchMore}
+                            disabled={loadingMore}
+                            className="btn-neutral btn-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white active:bg-white"
+                        >
+                            {loadingMore ? '로딩 중...' : (
+                                <>
+                                    더 보기
+                                    <span className="text-xs text-content-muted font-normal flex items-center gap-1.5">
+                                        <span>·</span>
+                                        <span>{issues.length} / {total}</span>
+                                    </span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )
             )}
 
-            {/* 결과 개수 */}
-            {issues.length > 0 && (
-                <div className="text-center pt-2 text-xs text-content-muted">
-                    {issues.length} / {total}
-                </div>
-            )}
         </div>
     )
 }

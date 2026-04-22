@@ -293,7 +293,7 @@ async function SearchResults({ query }: { query: string }) {
                                         )}
 
                                         {/* 버튼 */}
-                                        <div className="pt-3 border-t border-border-muted text-right">
+                                        <div className="pt-3 border-t border-border-muted text-left">
                                             <span className="text-xs font-semibold text-primary">
                                                 {isActive ? '투표하기' : '자세히 보기'}
                                             </span>

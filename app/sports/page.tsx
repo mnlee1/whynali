@@ -65,6 +65,7 @@ export default async function SportsPage() {
                     category="스포츠"
                     initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
                     initialTabCounts={tabCounts}
+                infiniteScroll
                 />
             </div>
         </>
