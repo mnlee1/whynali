@@ -368,7 +368,7 @@ export async function GET(request: NextRequest) {
 
         const backfillTargets = (closedIssues ?? [])
             .filter(i => !closedWithSummary.has(i.id))
-            .slice(0, 5)
+            .slice(0, 20)
 
         for (const issue of backfillTargets) {
             generateCloseSummary(issue.id, issue.title).catch(err =>
@@ -392,6 +392,13 @@ export async function GET(request: NextRequest) {
 
         let updatedCount = 0
         let skippedCount = 0
+
+        // summaries 보유 현황 배치 조회 (backfill 판단용)
+        const { data: summaryCheck } = await supabaseAdmin
+            .from('timeline_summaries')
+            .select('issue_id')
+            .in('issue_id', issues.map(i => i.id))
+        const issuesWithSummaries = new Set((summaryCheck ?? []).map(s => s.issue_id))
 
         for (const issue of issues) {
             if (Date.now() - startTime > MAX_EXECUTION_TIME) {
@@ -460,7 +467,15 @@ export async function GET(request: NextRequest) {
             }
 
             if (newNews.length === 0) {
-                skippedCount++
+                // timeline_points는 있는데 summaries가 없으면 backfill
+                if (existingCount > 0 && !issuesWithSummaries.has(issue.id)) {
+                    console.log(`  [${issue.title}] summaries 누락 → backfill 실행`)
+                    await generateAndCacheSummaries(issue.id, issue.title)
+                    issuesWithSummaries.add(issue.id)
+                    updatedCount++
+                } else {
+                    skippedCount++
+                }
                 continue
             }
 
