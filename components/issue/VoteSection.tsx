@@ -296,6 +296,11 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                     {isClosed ? '투표 마감' : '투표 진행중'}
                                 </span>
                             )}
+                            {vote.is_ai_generated && (
+                                <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200 font-medium">
+                                    AI 생성
+                                </span>
+                            )}
                             {vote.title && (
                                 <p className="font-semibold text-sm">{vote.title}</p>
                             )}
