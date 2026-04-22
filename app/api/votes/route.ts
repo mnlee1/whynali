@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     
     let query = admin
         .from('votes')
-        .select('*, vote_choices(*), issues(id, title, approval_status, visibility_status)')
+        .select('id, title, phase, approval_status, is_ai_generated, issue_id, created_at, auto_end_date, auto_end_participants, issue_status_snapshot, vote_choices(*), issues(id, title, approval_status, visibility_status)')
         .in('phase', ['진행중', '마감'])
         .eq('approval_status', '승인')
         .order('created_at', { ascending: false })

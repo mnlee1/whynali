@@ -178,8 +178,8 @@ export default function TermsPage() {
                         <li>
                             저작권 침해 등 권리 침해 신고는{' '}
                             <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a>으로
-                            접수합니다. 회사는 신고 접수 후 <strong>48시간 이내 임시 차단 조치</strong>를 취하고,
-                            게시자에게 소명 기회(7일)를 부여한 후 최종 처리합니다.
+                            접수합니다. 회사는 <strong>일정 신고 건수 이상 접수 시 자동 임시 숨김 처리</strong>하며,
+                            관리자 검토 후 게시자에게 소명 기회(7일)를 부여하고 최종 처리합니다.
                         </li>
                     </ol>
                 </section>
