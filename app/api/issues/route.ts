@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (q && q.trim()) {
-            query = query.or(`title.ilike.%${q.trim()}%,description.ilike.%${q.trim()}%`)
+            query = query.ilike('title', `%${q.trim()}%`)
         }
 
         if (sort === 'heat') {

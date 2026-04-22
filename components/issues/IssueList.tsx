@@ -37,7 +37,7 @@ interface IssueListProps {
 // 상태 탭 목록
 const STATUS_TABS = [
     { value: '', label: '전체 이슈', fullLabel: '전체 이슈', icon: null },
-    { value: '점화', label: '급상승', fullLabel: '급상승', icon: '🔥' },
+    { value: '점화', label: '점화 중', fullLabel: '점화 중', icon: '🔥' },
     { value: '논란중', label: '화제 집중', fullLabel: '화제 집중', icon: '⚡' },
     { value: '종결', label: '종결', fullLabel: '종결', icon: '🏁' },
 ]
@@ -63,11 +63,11 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const skipNextFetch = useRef(!!initialData)
 
     useEffect(() => {
-        if (initialTabCounts) return  // SSR에서 이미 받았으면 클라이언트 재조회 불필요
+        if (initialTabCounts && !searchQuery) return  // 검색 중엔 항상 재조회
         async function fetchCounts() {
             const tabKeys = ['', '점화', '논란중', '종결']
             const results = await Promise.allSettled(
-                tabKeys.map(s => getIssues({ category, status: s || undefined, sort: 'latest', limit: 1, offset: 0 }))
+                tabKeys.map(s => getIssues({ category, status: s || undefined, sort: 'latest', limit: 1, offset: 0, q: searchQuery || undefined }))
             )
             const counts: Record<string, number> = {}
             tabKeys.forEach((s, i) => {
@@ -78,7 +78,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         }
         fetchCounts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [category])
+    }, [category, searchQuery])
 
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
@@ -164,6 +164,13 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                 />
             )}
 
+            {/* 검색 결과 수 */}
+            {searchQuery && !loading && (
+                <p className="text-xl text-content-primary">
+                    &lsquo;{searchQuery}&rsquo;에 대한 <span className="font-medium text-primary">{total.toLocaleString()}</span>건의 검색결과가 있습니다.
+                </p>
+            )}
+
             {/* 타이틀 + 툴팁 — 카테고리 페이지에서는 숨김 */}
             {!category && (
                 <div className="flex items-center gap-0.5">
@@ -171,11 +178,11 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                     <Tooltip
                         label=""
                         align="left"
-                        width="w-max max-w-[220px]"
+                        width="w-max max-w-[290px]"
                         text={
                             <span className="flex flex-col gap-1">
                                 <span>최신 등록순으로 정렬됩니다.</span>
-                                <span>· 급상승: 최근 1시간 기준 급상승 중인 이슈</span>
+                                <span>· 점화 중: 반응이 급격히 늘어나는 이슈</span>
                                 <span>· 화제 집중: 반응이 활발한 이슈</span>
                                 <span>· 종결: 관심이 줄어든 이슈</span>
                             </span>
@@ -185,7 +192,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             )}
 
             {/* 상태 탭 */}
-            <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+            <div className={`w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5${category ? ' !mt-10' : ''}`}>
                 {STATUS_TABS.map((tab) => {
                     const isActive = statusFilter === tab.value
                     const count = tabCounts[tab.value]
@@ -202,7 +209,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                         >
                             {tab.icon && <span className="leading-none">{tab.icon}</span>}
                             <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
-                            {count !== undefined && count > 0 && (
+                            {count !== undefined && (
                                 <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
                                     isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
                                 }`}>

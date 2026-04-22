@@ -122,16 +122,20 @@ async function SearchResults({ query }: { query: string }) {
 
     return (
         <>
-            <p className="text-sm text-content-secondary mb-6">
-                "{query}" — {totalCount}개 결과
-            </p>
+            {/* 검색 결과 헤더 */}
+            <div className="mb-16">
+                <p className="text-xl text-content-primary">
+                    &lsquo;{query}&rsquo;에 대한 <span className="font-medium text-primary">{totalCount.toLocaleString()}</span>건의 검색결과가 있습니다.
+                </p>
+            </div>
 
             {/* 이슈 결과 */}
             {issues.length > 0 && (
                 <section className="mb-8">
-                    <h2 className="text-base font-semibold text-content-secondary mb-3">
-                        이슈 ({issues.length})
-                    </h2>
+                    <div className="flex items-center gap-1.5 mb-4">
+                        <h2 className="text-sm font-medium text-content-primary">이슈 검색결과</h2>
+                        <span className="text-sm font-medium text-content-primary"><span className="text-primary">{issues.length}</span>개</span>
+                    </div>
                     <div className="space-y-4">
                         {issues.map((issue) => {
                             const stats = issueStats[issue.id] ?? { viewCount: 0, commentCount: 0, voteCount: 0, discussionCount: 0 }
@@ -184,10 +188,11 @@ async function SearchResults({ query }: { query: string }) {
 
             {/* 토론 주제 결과 */}
             {discussions.length > 0 && (
-                <section className="mb-8">
-                    <h2 className="text-base font-semibold text-content-secondary mb-3">
-                        토론 주제 ({discussions.length})
-                    </h2>
+                <section className="mb-8 mt-10">
+                    <div className="flex items-center gap-1.5 mb-4">
+                        <h2 className="text-sm font-medium text-content-primary">토론 주제 검색결과</h2>
+                        <span className="text-sm font-medium text-content-primary"><span className="text-primary">{discussions.length}</span>개</span>
+                    </div>
                     <div className="space-y-4">
                         {discussions.map((topic) => {
                             const raw = topic.issues as { id: string; title: string }[] | { id: string; title: string } | null
@@ -242,10 +247,11 @@ async function SearchResults({ query }: { query: string }) {
 
             {/* 투표 주제 결과 */}
             {votes.length > 0 && (
-                <section>
-                    <h2 className="text-base font-semibold text-content-secondary mb-3">
-                        투표 ({votes.length})
-                    </h2>
+                <section className="mt-10">
+                    <div className="flex items-center gap-1.5 mb-4">
+                        <h2 className="text-sm font-medium text-content-primary">투표 검색결과</h2>
+                        <span className="text-sm font-medium text-content-primary"><span className="text-primary">{votes.length}</span>개</span>
+                    </div>
                     <div className="space-y-4">
                         {votes.map((vote) => {
                             const raw = vote.issues as { id: string; title: string }[] | { id: string; title: string } | null
