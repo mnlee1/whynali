@@ -293,7 +293,7 @@
 
 /* 투표 Swiper 컨테이너 */
 .vote-swiper {
-    padding-bottom: 3rem;
+    padding-bottom: 2rem;
     padding-left: 1rem;
     padding-right: 1rem;
     margin-left: -1rem;
@@ -313,7 +313,7 @@
 .vote-swiper .swiper-pagination {
     position: relative !important;
     bottom: 0 !important;
-    margin-top: 1.5rem !important;
+    margin-top: 0.5rem !important;
     display: flex !important;
     justify-content: center !important;
     align-items: center !important;

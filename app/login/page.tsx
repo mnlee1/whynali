@@ -11,7 +11,8 @@ function LoginForm() {
     const nextParam = next !== '/' ? `?next=${encodeURIComponent(next)}` : ''
 
     return (
-        <div className="min-h-[calc(100svh-3rem)] xl:min-h-[calc(100svh-3.5rem)] flex flex-col justify-center px-4 py-8 max-w-sm mx-auto">
+        <div className="min-h-[calc(100svh-3rem)] xl:min-h-[calc(100svh-3.5rem)] flex flex-col justify-center items-center px-4 py-8">
+        <div className="w-full max-w-[360px]">
             <div className="text-center mb-5 sm:mb-8">
                 <h1 className="text-2xl font-bold text-content-primary mb-2">로그인</h1>
                 <p className="text-sm text-content-secondary">
@@ -70,10 +71,11 @@ function LoginForm() {
                 </Link>
             </div>
 
-            <p className="text-xs text-content-muted text-center mt-6 break-keep">
+            <p className="text-xs text-content-muted text-center mt-6 break-keep leading-5">
                 로그인 시 <Link href="/terms" className="underline hover:text-content-secondary">서비스 이용약관</Link> 및{' '}
-                <Link href="/privacy" className="underline hover:text-content-secondary">개인정보처리방침</Link>에 동의하는 것으로 간주됩니다.
+                <Link href="/privacy" className="underline hover:text-content-secondary">개인정보처리방침</Link>에<br />동의하는 것으로 간주됩니다.
             </p>
+        </div>
         </div>
     )
 }

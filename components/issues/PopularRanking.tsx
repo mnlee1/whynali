@@ -106,7 +106,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                                 className="flex-1"
                             >
                                 <Link href={`/issue/${issue.id}`} className="block h-full">
-                                    <article className={`h-full bg-surface border rounded-xl transition-all duration-300 flex items-center gap-3 p-3 group ${
+                                    <article className={`h-full bg-surface border rounded-xl transition-all duration-300 flex items-center gap-2.5 p-2.5 group ${
                                         isActive
                                             ? 'border-primary-muted shadow-card-hover -translate-y-0.5 bg-gradient-to-r from-primary-light/30 to-transparent'
                                             : 'border-border shadow-card hover:shadow-card-hover hover:border-primary-muted hover:-translate-y-0.5'
@@ -142,7 +142,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                                                 alt=""
                                                 width={56}
                                                 height={56}
-                                                className="shrink-0 w-14 h-14 rounded-lg object-cover"
+                                                className="shrink-0 w-11 h-11 rounded-lg object-cover"
                                             />
                                         )}
                                     </article>

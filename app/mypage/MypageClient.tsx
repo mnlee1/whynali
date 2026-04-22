@@ -285,7 +285,7 @@ export default function MypageClient({
         <div className="container mx-auto px-4 py-8 max-w-2xl">
             {/* 프로필 카드 */}
             <div className="flex items-center gap-4 mb-8 p-5 bg-primary-light/35 border border-primary-muted rounded-xl">
-                <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted shrink-0">
+                <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted shrink-0 leading-none select-none">
                     {initial}
                 </div>
                 <div className="min-w-0">

@@ -65,6 +65,7 @@ export default async function EconomyPage() {
                     category="경제"
                     initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
                     initialTabCounts={tabCounts}
+                infiniteScroll
                 />
             </div>
         </>
