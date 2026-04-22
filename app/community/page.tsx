@@ -367,7 +367,7 @@ function CommunityContent() {
                         {groupTopicsByIssue(topics).map((group) => (
                             <IssueGroupCard key={group.issueId} group={group} />
                         ))}
-                    </div>
+                    </Masonry>
 
                     {/* 인피니트 스크롤 sentinel */}
                     <div ref={sentinelRef} className="h-4" />
