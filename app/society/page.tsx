@@ -65,6 +65,7 @@ export default async function SocietyPage() {
                     category="사회"
                     initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
                     initialTabCounts={tabCounts}
+                infiniteScroll
                 />
             </div>
         </>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Masonry from 'react-masonry-css'
-import { Eye, MessageCircleMore } from 'lucide-react'
+import { Eye, MessageCircleMore, ChevronDown } from 'lucide-react'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
 import SearchBar from '@/components/common/SearchBar'
@@ -58,7 +58,7 @@ function groupTopicsByIssue(topics: TopicWithIssue[]): IssueGroup[] {
 
 function IssueGroupCard({ group }: { group: IssueGroup }) {
     return (
-        <article className="card-hover p-5 flex flex-col">
+        <article className="card-hover p-5 flex flex-col mb-3">
             {/* 이슈 타이틀 (1번만) */}
             {group.issue?.id && (
                 <div className="mb-3">
@@ -115,6 +115,59 @@ function IssueGroupCard({ group }: { group: IssueGroup }) {
     )
 }
 
+type SortOrder = 'latest' | 'popular'
+
+const SORT_LABELS: { value: SortOrder; label: string }[] = [
+    { value: 'latest', label: '최신순' },
+    { value: 'popular', label: '참여도순' },
+]
+
+function SortDropdown({ value, onChange }: { value: SortOrder; onChange: (v: SortOrder) => void }) {
+    const [open, setOpen] = useState(false)
+    const ref = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
+
+    const current = SORT_LABELS.find(l => l.value === value)
+
+    return (
+        <div ref={ref} className="relative shrink-0">
+            <button
+                onClick={() => setOpen(prev => !prev)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-surface-subtle transition-colors text-xs text-content-secondary"
+            >
+                <span>{current?.label}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={2.5} />
+            </button>
+            {open && (
+                <div className="absolute left-0 min-[416px]:left-auto min-[416px]:right-0 top-full mt-2 w-24 bg-surface border border-border rounded-lg shadow-card z-50">
+                    <div className="p-1">
+                        {SORT_LABELS.map(({ value: v, label }) => (
+                            <button
+                                key={v}
+                                onClick={() => { onChange(v); setOpen(false) }}
+                                className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                                    v === value
+                                        ? 'text-primary font-medium bg-primary/5'
+                                        : 'text-content-secondary hover:bg-surface-muted'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 function CommunityContent() {
     const searchParams = useSearchParams()
     const issueIdFilter = searchParams.get('issue_id') ?? ''
@@ -127,11 +180,13 @@ function CommunityContent() {
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
-    const [issueTitle] = useState<string | null>(null)
+    const [sortOrder, setSortOrder] = useState<SortOrder>('latest')
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
 
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const sentinelRef = useRef<HTMLDivElement>(null)
+    const hasMore = topics.length < total && !loadingMore && !loading
 
     useEffect(() => {
         async function fetchCounts() {
@@ -166,11 +221,12 @@ function CommunityContent() {
         setSearchQuery(searchInput)
     }
 
-    const loadTopics = useCallback(async (q: string, status: FilterStatus, currentOffset: number, append: boolean) => {
+    const loadTopics = useCallback(async (q: string, status: FilterStatus, sort: SortOrder, currentOffset: number, append: boolean) => {
         try {
             const params = new URLSearchParams({
                 limit: String(PAGE_SIZE),
                 offset: String(currentOffset),
+                sort,
             })
             if (q) params.set('q', q)
             if (status) params.set('status', status)
@@ -196,26 +252,27 @@ function CommunityContent() {
     useEffect(() => {
         setLoading(true)
         setError(null)
-        loadTopics(searchQuery, statusFilter, 0, false)
-    }, [searchQuery, statusFilter, loadTopics])
+        loadTopics(searchQuery, statusFilter, sortOrder, 0, false)
+    }, [searchQuery, statusFilter, sortOrder, loadTopics])
 
-    const handleLoadMore = () => {
-        const next = offsetRef.current
-        setLoadingMore(true)
-        loadTopics(searchQuery, statusFilter, next, true)
-        offsetRef.current = next + PAGE_SIZE
-    }
+    useEffect(() => {
+        const sentinel = sentinelRef.current
+        if (!sentinel) return
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting && hasMore) {
+                const next = offsetRef.current
+                setLoadingMore(true)
+                loadTopics(searchQuery, statusFilter, sortOrder, next, true)
+                offsetRef.current = next + PAGE_SIZE
+            }
+        }, { threshold: 0.1 })
+        observer.observe(sentinel)
+        return () => observer.disconnect()
+    }, [hasMore, searchQuery, statusFilter, sortOrder, loadTopics])
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">
-            {issueIdFilter && issueTitle ? (
-                <div className="mb-4">
-                    <p className="text-xs text-primary mb-1">이슈 연결 토론</p>
-                    <h1 className="text-2xl md:text-3xl font-bold text-content-primary">{issueTitle}</h1>
-                </div>
-            ) : (
-                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
-            )}
+            <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
 
             {/* 검색 */}
             {!issueIdFilter && (
@@ -236,33 +293,36 @@ function CommunityContent() {
                 </p>
             )}
 
-            {/* 상태 필터 탭 */}
-            <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 mb-6 mt-10">
-                {FILTER_LABELS.map(({ value, label }) => {
-                    const isActive = statusFilter === value
-                    const count = tabCounts[value]
-                    return (
-                        <button
-                            key={value}
-                            onClick={() => setStatusFilter(value)}
-                            className={[
-                                'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                                isActive
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            <span>{label}</span>
-                            {count !== undefined && (
-                                <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
-                                    isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
-                                }`}>
-                                    {count.toLocaleString()}
-                                </span>
-                            )}
-                        </button>
-                    )
-                })}
+            {/* 상태 필터 탭 + 정렬 */}
+            <div className="w-full flex flex-col items-start gap-2 min-[416px]:flex-row min-[416px]:items-center min-[416px]:justify-between mb-6 mt-10">
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                    {FILTER_LABELS.map(({ value, label }) => {
+                        const isActive = statusFilter === value
+                        const count = tabCounts[value]
+                        return (
+                            <button
+                                key={value}
+                                onClick={() => setStatusFilter(value)}
+                                className={[
+                                    'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                                    isActive
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                                ].join(' ')}
+                            >
+                                <span>{label}</span>
+                                {count !== undefined && (
+                                    <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
+                                        isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
+                                    }`}>
+                                        {count.toLocaleString()}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
+                <SortDropdown value={sortOrder} onChange={setSortOrder} />
             </div>
 
             {error && (
@@ -307,19 +367,12 @@ function CommunityContent() {
                         {groupTopicsByIssue(topics).map((group) => (
                             <IssueGroupCard key={group.issueId} group={group} />
                         ))}
-                    </Masonry>
+                    </div>
 
-                    {/* 더보기 */}
-                    {topics.length < total && (
-                        <div className="text-center mt-6">
-                            <button
-                                onClick={handleLoadMore}
-                                disabled={loadingMore}
-                                className="btn-neutral btn-md"
-                            >
-                                {loadingMore ? '로딩 중...' : '더 보기'}
-                            </button>
-                        </div>
+                    {/* 인피니트 스크롤 sentinel */}
+                    <div ref={sentinelRef} className="h-4" />
+                    {loadingMore && (
+                        <div className="text-center py-4 text-sm text-content-muted">로딩 중...</div>
                     )}
                 </>
             )}

@@ -65,6 +65,7 @@ export default async function PoliticsPage() {
                     category="정치"
                     initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
                     initialTabCounts={tabCounts}
+                infiniteScroll
                 />
             </div>
         </>

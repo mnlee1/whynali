@@ -70,6 +70,7 @@ export default async function EntertainPage() {
                 category="연예"
                 initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
                 initialTabCounts={tabCounts}
+                infiniteScroll
             />
         </div>
         </>
