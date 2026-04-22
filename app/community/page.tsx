@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Masonry from 'react-masonry-css'
 import { Eye, MessageCircleMore } from 'lucide-react'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
@@ -37,6 +38,11 @@ const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
 
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
+
+const breakpointColumns = {
+    default: 2,
+    767: 1,
+}
 
 function CommunityCard({
     topic,
@@ -289,9 +295,13 @@ function CommunityContent() {
 
             {/* 스켈레톤 */}
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Masonry
+                    breakpointCols={breakpointColumns}
+                    className="flex gap-3 w-auto -ml-3"
+                    columnClassName="pl-3 bg-clip-padding"
+                >
                     {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="card-hover p-5 flex flex-col gap-3">
+                        <div key={i} className="card-hover p-5 flex flex-col gap-3 mb-3">
                             <div className="h-4 bg-border-muted rounded animate-pulse w-3/4" />
                             <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
                             <div className="h-3 bg-border-muted rounded animate-pulse w-2/3" />
@@ -304,7 +314,7 @@ function CommunityContent() {
                             </div>
                         </div>
                     ))}
-                </div>
+                </Masonry>
             ) : topics.length === 0 ? (
                 <p className="text-sm text-content-muted text-center py-12">
                     {searchQuery ? `"${searchQuery}"에 대한 토론 주제가 없습니다.` : '등록된 토론 주제가 없습니다.'}
@@ -312,18 +322,23 @@ function CommunityContent() {
             ) : (
                 <>
                     <p className="text-sm text-content-secondary mb-4">총 {total.toLocaleString()}개</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Masonry
+                        breakpointCols={breakpointColumns}
+                        className="flex gap-3 w-auto -ml-3"
+                        columnClassName="pl-3 bg-clip-padding"
+                    >
                         {topics.map((topic) => (
-                            <CommunityCard
-                                key={topic.id}
-                                topic={topic}
-                                issueIdFilter={issueIdFilter}
-                                issueTopicCount={issueTopicCountMap[topic.issues?.id ?? ''] ?? 0}
-                                stats={statsMap[topic.issues?.id ?? ''] ?? null}
-                                onMoreClick={(issueId) => router.push(`/community?issue_id=${issueId}`)}
-                            />
+                            <div key={topic.id} className="mb-3">
+                                <CommunityCard
+                                    topic={topic}
+                                    issueIdFilter={issueIdFilter}
+                                    issueTopicCount={issueTopicCountMap[topic.issues?.id ?? ''] ?? 0}
+                                    stats={statsMap[topic.issues?.id ?? ''] ?? null}
+                                    onMoreClick={(issueId) => router.push(`/community?issue_id=${issueId}`)}
+                                />
+                            </div>
                         ))}
-                    </div>
+                    </Masonry>
 
                     {/* 더보기 */}
                     {topics.length < total && (
@@ -348,11 +363,15 @@ export default function CommunityPage() {
         <Suspense fallback={
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <h1 className="text-2xl font-bold text-content-primary mb-6">커뮤니티</h1>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Masonry
+                    breakpointCols={breakpointColumns}
+                    className="flex gap-3 w-auto -ml-3"
+                    columnClassName="pl-3 bg-clip-padding"
+                >
                     {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="card-hover p-5 h-36 animate-pulse bg-surface-subtle rounded-xl" />
+                        <div key={i} className="card-hover p-5 h-36 animate-pulse bg-surface-subtle rounded-xl mb-3" />
                     ))}
-                </div>
+                </Masonry>
             </div>
         }>
             <CommunityContent />
