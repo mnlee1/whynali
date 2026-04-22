@@ -30,6 +30,7 @@ type IssueStats = {
 
 type FilterStatus = '' | '진행중' | '마감'
 
+
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
     { value: '', label: '전체' },
     { value: '진행중', label: '토론 진행중' },
@@ -39,73 +40,78 @@ const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
 const PAGE_SIZE = 20
 const DEBOUNCE_MS = 350
 
-const breakpointColumns = {
-    default: 2,
-    767: 1,
+type IssueGroup = {
+    issueId: string
+    issue: IssueInfo | null
+    topics: TopicWithIssue[]
 }
 
-function CommunityCard({
-    topic,
-    issueIdFilter,
-    issueTopicCount,
-    stats,
-    onMoreClick,
-}: {
-    topic: TopicWithIssue
-    issueIdFilter: string
-    issueTopicCount: number
-    stats?: IssueStats | null
-    onMoreClick: (issueId: string) => void
-}) {
+function groupTopicsByIssue(topics: TopicWithIssue[]): IssueGroup[] {
+    const map = new Map<string, IssueGroup>()
+    for (const topic of topics) {
+        const id = topic.issues?.id ?? '__no_issue__'
+        if (!map.has(id)) {
+            map.set(id, { issueId: id, issue: topic.issues, topics: [] })
+        }
+        map.get(id)!.topics.push(topic)
+    }
+    return Array.from(map.values())
+}
+
+function IssueGroupCard({ group }: { group: IssueGroup }) {
     return (
         <article className="card-hover p-5 flex flex-col">
-            {/* 이슈 타이틀 */}
-            {topic.issues?.id && (
+            {/* 이슈 타이틀 (1번만) */}
+            {group.issue?.id && (
                 <div className="mb-3">
                     <h3 className="text-base font-semibold text-content-primary line-clamp-2">
-                        {decodeHtml(topic.issues.title)}
+                        {decodeHtml(group.issue.title)}
                     </h3>
                 </div>
             )}
 
-            {/* 토론 영역 → 토론 상세 */}
-            <div className={topic.issues?.id ? 'border-t border-border pt-3' : ''}>
-                <Link
-                    href={`/community/${topic.id}`}
-                    className={`block pl-3 border-l-2 transition-colors group ${
-                        topic.approval_status === '진행중' ? 'border-primary' : 'border-border'
-                    }`}
-                >
-                    <div className="mb-1.5">
-                        <span className={[
-                            'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
-                            topic.approval_status === '진행중'
-                                ? 'bg-green-50 text-green-700 border-green-200'
-                                : 'bg-surface-muted text-content-muted border-border'
-                        ].join(' ')}>
-                            {topic.approval_status === '진행중' ? '토론 진행중' : '토론 마감'}
-                        </span>
-                    </div>
+            {/* 토론 목록 */}
+            <div className={group.issue?.id ? 'border-t border-border pt-3 flex flex-col gap-5' : 'flex flex-col gap-5'}>
+                {group.topics.map((topic) => (
+                    <div key={topic.id}>
+                        <Link
+                            href={`/community/${topic.id}`}
+                            className={`block pl-3 border-l-2 transition-colors group ${
+                                topic.approval_status === '진행중' ? 'border-primary' : 'border-border'
+                            }`}
+                        >
+                            <div className="mb-1.5">
+                                <span className={[
+                                    'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
+                                    topic.approval_status === '진행중'
+                                        ? 'bg-green-50 text-green-700 border-green-200'
+                                        : 'bg-surface-muted text-content-muted border-border'
+                                ].join(' ')}>
+                                    {topic.approval_status === '진행중' ? '토론 진행중' : '토론 마감'}
+                                </span>
+                            </div>
 
-                    <p className="text-sm font-medium text-content-primary line-clamp-1 mb-3 group-hover:text-primary transition-colors">
-                        {decodeHtml(topic.body)}
-                    </p>
+                            <p className="text-sm font-medium text-content-primary line-clamp-1 mb-3 group-hover:text-primary transition-colors">
+                                {decodeHtml(topic.body)}
+                            </p>
 
-                    <div className="flex items-center gap-3 text-xs text-content-secondary">
-                        {topic.viewCount !== undefined && (
-                            <span className="flex items-center gap-1">
-                                <Eye className="w-4 h-4" strokeWidth={1.8} />
-                                <span>{topic.viewCount.toLocaleString()}</span>
-                            </span>
-                        )}
-                        {topic.opinionCount !== undefined && (
-                            <span className="flex items-center gap-1">
-                                <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
-                                <span>{topic.opinionCount.toLocaleString()}</span>
-                            </span>
-                        )}
+                            <div className="flex items-center gap-3 text-xs text-content-secondary">
+                                {topic.viewCount !== undefined && (
+                                    <span className="flex items-center gap-1">
+                                        <Eye className="w-4 h-4" strokeWidth={1.8} />
+                                        <span>{topic.viewCount.toLocaleString()}</span>
+                                    </span>
+                                )}
+                                {topic.opinionCount !== undefined && (
+                                    <span className="flex items-center gap-1">
+                                        <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
+                                        <span>{topic.opinionCount.toLocaleString()}</span>
+                                    </span>
+                                )}
+                            </div>
+                        </Link>
                     </div>
-                </Link>
+                ))}
             </div>
         </article>
     )
@@ -126,7 +132,8 @@ function CommunityContent() {
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
     const [issueTitle, setIssueTitle] = useState<string | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
-    const [statsMap, setStatsMap] = useState<Record<string, IssueStats>>({})
+
+    const issueIdFilter = searchParams.get('issue_id') ?? ''
 
     const issueTopicCountMap = topics.reduce<Record<string, number>>((acc, t) => {
         if (t.issues?.id) {
@@ -145,6 +152,7 @@ function CommunityContent() {
                 tabKeys.map(s => {
                     const params = new URLSearchParams({ limit: '1', offset: '0' })
                     if (s) params.set('status', s)
+                    if (searchQuery) params.set('q', searchQuery)
                     if (issueIdFilter) params.set('issue_id', issueIdFilter)
                     return fetch(`/api/discussions?${params}`).then(r => r.json())
                 })
@@ -157,7 +165,7 @@ function CommunityContent() {
             setTabCounts(counts)
         }
         fetchCounts()
-    }, [issueIdFilter])
+    }, [searchQuery, issueIdFilter])
 
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
@@ -185,25 +193,10 @@ function CommunityContent() {
             const data: TopicWithIssue[] = json.data ?? []
             setTopics(prev => append ? [...prev, ...data] : data)
             setTotal(json.total ?? 0)
-            if (issueIdFilter && data.length > 0 && data[0].issues?.title) {
-                setIssueTitle(decodeHtml(data[0].issues.title))
-            }
             if (!append) {
                 offsetRef.current = data.length
             }
 
-            // 배치로 이슈 통계 조회 (N+1 → 요청 1회)
-            const issueIds = [...new Set(data.map(t => t.issues?.id).filter(Boolean) as string[])]
-            if (issueIds.length > 0) {
-                fetch(`/api/issues/stats/batch?ids=${issueIds.join(',')}`)
-                    .then(r => r.ok ? r.json() : {})
-                    .then((batch: Record<string, IssueStats>) => {
-                        setStatsMap(prev => append ? { ...prev, ...batch } : batch)
-                    })
-                    .catch(() => {})
-            } else if (!append) {
-                setStatsMap({})
-            }
         } catch (e) {
             setError(e instanceof Error ? e.message : '목록 조회 실패')
         } finally {
@@ -248,43 +241,40 @@ function CommunityContent() {
                 </div>
             )}
 
+            {/* 검색 결과 수 */}
+            {searchQuery && !loading && (
+                <p className="text-xl text-content-primary mb-6">
+                    &lsquo;{searchQuery}&rsquo;에 대한 <span className="font-medium text-primary">{total.toLocaleString()}</span>건의 검색결과가 있습니다.
+                </p>
+            )}
+
             {/* 상태 필터 탭 */}
-            <div className="flex flex-wrap items-center justify-between gap-1.5 mb-6">
-                <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                    {FILTER_LABELS.map(({ value, label }) => {
-                        const isActive = statusFilter === value
-                        const count = tabCounts[value]
-                        return (
-                            <button
-                                key={value}
-                                onClick={() => setStatusFilter(value)}
-                                className={[
-                                    'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                                    isActive
-                                        ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                                ].join(' ')}
-                            >
-                                <span>{label}</span>
-                                {count !== undefined && count > 0 && (
-                                    <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
-                                        isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
-                                    }`}>
-                                        {count.toLocaleString()}
-                                    </span>
-                                )}
-                            </button>
-                        )
-                    })}
-                </div>
-                {issueIdFilter && (
-                    <Link
-                        href="/community"
-                        className="text-xs text-content-secondary hover:text-content-primary font-medium whitespace-nowrap"
-                    >
-                        전체 커뮤니티 보기 →
-                    </Link>
-                )}
+            <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 mb-6 mt-10">
+                {FILTER_LABELS.map(({ value, label }) => {
+                    const isActive = statusFilter === value
+                    const count = tabCounts[value]
+                    return (
+                        <button
+                            key={value}
+                            onClick={() => setStatusFilter(value)}
+                            className={[
+                                'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                                isActive
+                                    ? 'bg-primary text-white border-primary'
+                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                            ].join(' ')}
+                        >
+                            <span>{label}</span>
+                            {count !== undefined && (
+                                <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
+                                    isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
+                                }`}>
+                                    {count.toLocaleString()}
+                                </span>
+                            )}
+                        </button>
+                    )
+                })}
             </div>
 
             {error && (
@@ -321,22 +311,9 @@ function CommunityContent() {
                 </p>
             ) : (
                 <>
-                    <p className="text-sm text-content-secondary mb-4">총 {total.toLocaleString()}개</p>
-                    <Masonry
-                        breakpointCols={breakpointColumns}
-                        className="flex gap-3 w-auto -ml-3"
-                        columnClassName="pl-3 bg-clip-padding"
-                    >
-                        {topics.map((topic) => (
-                            <div key={topic.id} className="mb-3">
-                                <CommunityCard
-                                    topic={topic}
-                                    issueIdFilter={issueIdFilter}
-                                    issueTopicCount={issueTopicCountMap[topic.issues?.id ?? ''] ?? 0}
-                                    stats={statsMap[topic.issues?.id ?? ''] ?? null}
-                                    onMoreClick={(issueId) => router.push(`/community?issue_id=${issueId}`)}
-                                />
-                            </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {groupTopicsByIssue(topics).map((group) => (
+                            <IssueGroupCard key={group.issueId} group={group} />
                         ))}
                     </Masonry>
 

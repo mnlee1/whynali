@@ -246,7 +246,7 @@ export default function VotePreview({ initialVotes }: Props) {
             <div className="container mx-auto">
                 <div className="flex items-center gap-0.5 mb-1">
                     <h2 className="text-base font-bold text-content-primary">지금 뜨는 투표</h2>
-                    <Tooltip label="" align="left" text="진행 중인 투표 우선, 참여 수 많은 순으로 정렬됩니다." />
+                    <Tooltip label="" align="left" width="w-max max-w-[300px]" text="진행 중인 투표 우선, 참여 수 많은 순으로 정렬됩니다." />
                 </div>
                 <Swiper
                     modules={[Pagination]}
