@@ -66,6 +66,13 @@ export async function middleware(request: NextRequest) {
 
     /* ── /admin/* 및 /api/admin/* 은 @nhnad.com 세션 필요 ── */
     if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+        // CRON_SECRET Bearer 토큰이 있으면 세션 체크 없이 통과 (backfill 등 서버 작업용)
+        const cronSecret = process.env.CRON_SECRET
+        const authHeader = request.headers.get('authorization')
+        if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+            return NextResponse.next()
+        }
+
         const { user, supabaseResponse } = await getSessionUser(request)
 
         if (!user) {

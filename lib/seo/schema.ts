@@ -25,7 +25,7 @@ export function generateArticleSchema(issue: Issue) {
         '@context': 'https://schema.org',
         '@type': 'Article',
         headline: issue.title,
-        description: issue.description || `${issue.category} 카테고리의 ${issue.status} 이슈`,
+        description: issue.topic_description || `${issue.category} 카테고리의 ${issue.status} 이슈`,
         articleSection: issue.category,
         datePublished: issue.created_at,
         dateModified: issue.updated_at,

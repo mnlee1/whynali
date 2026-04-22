@@ -12,7 +12,6 @@ import type { DiscussionTopic } from '@/types'
 type IssueInfo = {
     id: string
     title: string
-    description?: string | null
 }
 
 type TopicWithIssue = DiscussionTopic & {
@@ -52,8 +51,6 @@ function CommunityCard({
     stats?: IssueStats | null
     onMoreClick: (issueId: string) => void
 }) {
-    const issueDescription = topic.issues?.description ?? null
-
     return (
         <article className="card-hover p-5 flex flex-col">
             {/* 이슈 타이틀 */}

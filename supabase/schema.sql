@@ -5,7 +5,6 @@
 CREATE TABLE issues (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
-    description TEXT,
     status TEXT CHECK (status IN ('점화', '논란중', '종결')),
     category TEXT CHECK (category IN ('사회', '정치', '연예', '스포츠', '경제', 'IT과학', '생활문화', '세계')),
     heat_index NUMERIC,

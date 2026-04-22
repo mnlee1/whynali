@@ -34,7 +34,7 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function extractKeywords(title: string): Promise<string | null> {
+async function extractKeywords(title: string, category: string): Promise<string | null> {
     const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) return null
     try {
@@ -43,7 +43,7 @@ async function extractKeywords(title: string): Promise<string | null> {
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: 'llama-3.1-8b-instant',
-                messages: [{ role: 'user', content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.\n\nExamples:\n- "BTS 새 앨범 발매" → "music concert stage"\n- "삼성전자 노조 파업" → "factory workers protest"\n- "토트넘 강등 위기" → "soccer stadium match"\n\nKorean headline: "${title}"\nReply with ONLY the keywords, nothing else.` }],
+                messages: [{ role: 'user', content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.\n\nCategory: ${category}\nExamples:\n- [연예] "BTS 새 앨범 발매" → "music concert stage"\n- [연예] "워너원 컴백 무대" → "kpop concert performance"\n- [스포츠] "토트넘 강등 위기" → "soccer stadium match"\n- [정치] "국회의원 막말 논란" → "parliament building debate"\n- [경제] "삼성전자 노조 파업" → "factory strike protest"\n- [기술] "AI 주식 투자 열풍" → "stock market technology"\n\nKorean headline: "${title}"\nReply with ONLY the keywords, nothing else.` }],
                 max_tokens: 20,
                 temperature: 0,
             }),
@@ -64,7 +64,7 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         orientation: 'horizontal',
         per_page: '30',
         safesearch: 'true',
-        min_width: '1280',
+        min_width: '640',
     })
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
@@ -74,7 +74,7 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
     }
 
     const data = await res.json()
-    const hits: Array<{ largeImageURL: string; tags: string }> = data.hits ?? []
+    const hits: Array<{ webformatURL: string; tags: string }> = data.hits ?? []
     if (hits.length === 0) return []
 
     const personTags = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'crowd', 'girl', 'boy', 'child']
@@ -83,8 +83,9 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         return !personTags.some(t => tags.includes(t))
     })
 
-    const final = filtered.length > 0 ? filtered : hits
-    return [...final].sort(() => Math.random() - 0.5).slice(0, 3).map(h => h.largeImageURL).filter(Boolean)
+    const pool = (filtered.length > 0 ? filtered : hits).slice(0, 15)
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, 3).map(h => h.webformatURL).filter(Boolean)
 }
 
 async function main() {
@@ -119,7 +120,7 @@ async function main() {
     for (const issue of targets) {
         process.stdout.write(`  처리 중: "${issue.title}" ... `)
 
-        const keywords = await extractKeywords(issue.title)
+        const keywords = await extractKeywords(issue.title, issue.category)
         let urls: string[] = []
 
         if (keywords) urls = await searchPixabay(keywords, apiKey)

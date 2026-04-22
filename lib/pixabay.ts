@@ -23,7 +23,7 @@ const CATEGORY_FALLBACK: Record<string, string> = {
 /**
  * Groq API 직접 호출로 한국어 이슈 제목 → 영어 검색 키워드 추출
  */
-async function extractEnglishKeywords(title: string): Promise<string | null> {
+async function extractEnglishKeywords(title: string, category: string): Promise<string | null> {
     const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) return null
 
@@ -41,12 +41,16 @@ async function extractEnglishKeywords(title: string): Promise<string | null> {
                         role: 'user',
                         content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.
 
+Category: ${category}
 Examples:
-- "BTS 새 앨범 발매" → "music concert stage"
-- "삼성전자 노조 파업" → "factory workers protest"
-- "토트넘 강등 위기" → "soccer stadium match"
-- "이스라엘 레바논 공습" → "war conflict explosion"
-- "AI 주식 투자 열풍" → "stock market technology"
+- [연예] "BTS 새 앨범 발매" → "music concert stage"
+- [연예] "워너원 컴백 무대" → "kpop concert performance"
+- [스포츠] "토트넘 강등 위기" → "soccer stadium match"
+- [정치] "국회의원 막말 논란" → "parliament building debate"
+- [사회] "이태원 참사 추모" → "memorial candles vigil"
+- [경제] "삼성전자 노조 파업" → "factory strike protest"
+- [기술] "AI 주식 투자 열풍" → "stock market technology"
+- [세계] "이스라엘 레바논 공습" → "war conflict destruction"
 
 Korean headline: "${title}"
 Reply with ONLY the keywords, nothing else.`,
@@ -78,7 +82,7 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         orientation: 'horizontal',
         per_page: '30',
         safesearch: 'true',
-        min_width: '1280',
+        min_width: '640',
     })
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
@@ -88,7 +92,8 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
     }
 
     const data = await res.json()
-    const hits: Array<{ largeImageURL: string; tags: string }> = data.hits ?? []
+    // webformatURL: 웹 표시 전용 URL (핫링크 허용), _640을 _1280으로 교체해 고해상도 사용
+    const hits: Array<{ webformatURL: string; tags: string }> = data.hits ?? []
     if (hits.length === 0) return []
 
     // 사람 관련 태그 포함 이미지 제외
@@ -98,11 +103,12 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         return !personTags.some(t => tags.includes(t))
     })
 
-    const finalHits = filtered.length > 0 ? filtered : hits
-    const shuffled = [...finalHits].sort(() => Math.random() - 0.5)
+    // 관련도 상위 15개 중 랜덤 3개 — 품질 유지 + 매번 다른 이미지
+    const pool = (filtered.length > 0 ? filtered : hits).slice(0, 15)
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
     return shuffled
         .slice(0, Math.min(3, shuffled.length))
-        .map(h => h.largeImageURL)
+        .map(h => h.webformatURL)
         .filter(Boolean)
 }
 
@@ -117,7 +123,7 @@ export async function fetchPixabayImages(title: string, category: string, debug?
     if (!apiKey) return debug ? { urls: [], keyword: '', source: 'fallback' } : []
 
     // 1차: Groq로 영어 키워드 추출 후 검색
-    const englishKeywords = await extractEnglishKeywords(title)
+    const englishKeywords = await extractEnglishKeywords(title, category)
     if (englishKeywords) {
         try {
             const urls = await searchPixabay(englishKeywords, apiKey)

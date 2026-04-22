@@ -264,7 +264,6 @@ export async function detectCommunityBurst(): Promise<number> {
             .from('issues')
             .insert({
                 title: issueTitle,
-                description: null,
                 status: '점화',
                 category: '사회',  // 기본 카테고리
                 approval_status: '대기',
