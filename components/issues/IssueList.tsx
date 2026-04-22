@@ -19,6 +19,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Masonry from 'react-masonry-css'
 import { getIssues } from '@/lib/api/issues'
 import IssueCard from './IssueCard'
 import SearchBar from '@/components/common/SearchBar'
@@ -44,6 +45,11 @@ const STATUS_TABS = [
 
 const LIMIT = 6
 const DEBOUNCE_MS = 350
+
+const breakpointColumns = {
+    default: 2,
+    767: 1,
+}
 
 export default function IssueList({ category, initialLimit, hideSearch, showFullLabel, initialData, initialTabCounts }: IssueListProps) {
     const [issues, setIssues] = useState<Issue[]>(initialData?.data ?? [])
@@ -230,9 +236,13 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
             {/* 로딩 스켈레톤 (초기 + 탭 전환 시) */}
             {loading && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Masonry
+                    breakpointCols={breakpointColumns}
+                    className="flex gap-3 w-auto -ml-3"
+                    columnClassName="pl-3 bg-clip-padding"
+                >
                     {[0, 1, 2, 3].map(i => (
-                        <div key={i} className="card-hover p-5 h-48 flex flex-col gap-3">
+                        <div key={i} className="card-hover p-5 h-48 flex flex-col gap-3 mb-3">
                             <div className="h-4 bg-border-muted rounded animate-pulse w-1/3" />
                             <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
                             <div className="h-3 bg-border-muted rounded animate-pulse w-4/5" />
@@ -242,7 +252,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                             </div>
                         </div>
                     ))}
-                </div>
+                </Masonry>
             )}
 
             {/* 빈 목록 */}
@@ -254,11 +264,17 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
             {/* 이슈 카드 리스트 */}
             {!loading && issues.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Masonry
+                    breakpointCols={breakpointColumns}
+                    className="flex gap-3 w-auto -ml-3"
+                    columnClassName="pl-3 bg-clip-padding"
+                >
                     {issues.map((issue) => (
-                        <IssueCard key={issue.id} issue={issue} />
+                        <div key={issue.id} className="mb-3">
+                            <IssueCard issue={issue} />
+                        </div>
                     ))}
-                </div>
+                </Masonry>
             )}
 
             {/* 더 보기 */}

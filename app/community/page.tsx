@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Masonry from 'react-masonry-css'
 import { Eye, MessageCircleMore } from 'lucide-react'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
@@ -18,6 +19,13 @@ type TopicWithIssue = DiscussionTopic & {
     issues: IssueInfo | null
     opinionCount?: number
     viewCount?: number
+}
+
+type IssueStats = {
+    viewCount: number
+    commentCount: number
+    voteCount: number
+    discussionCount: number
 }
 
 type FilterStatus = '' | '진행중' | '마감'
@@ -111,6 +119,8 @@ function IssueGroupCard({ group }: { group: IssueGroup }) {
 
 function CommunityContent() {
     const searchParams = useSearchParams()
+    const router = useRouter()
+    const issueIdFilter = searchParams.get('issue_id') ?? ''
 
     const [topics, setTopics] = useState<TopicWithIssue[]>([])
     const [total, setTotal] = useState(0)
@@ -120,9 +130,17 @@ function CommunityContent() {
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
+    const [issueTitle, setIssueTitle] = useState<string | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
 
     const issueIdFilter = searchParams.get('issue_id') ?? ''
+
+    const issueTopicCountMap = topics.reduce<Record<string, number>>((acc, t) => {
+        if (t.issues?.id) {
+            acc[t.issues.id] = (acc[t.issues.id] ?? 0) + 1
+        }
+        return acc
+    }, {})
 
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -202,16 +220,26 @@ function CommunityContent() {
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl font-bold text-content-primary mb-6">커뮤니티</h1>
+            {issueIdFilter && issueTitle ? (
+                <div className="mb-4">
+                    <p className="text-xs text-primary mb-1">이슈 연결 토론</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-content-primary">{issueTitle}</h1>
+                </div>
+            ) : (
+                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
+            )}
 
-            <div className="mb-6">
-                <SearchBar
-                    value={searchInput}
-                    onChange={handleSearchChange}
-                    onSearch={handleSearch}
-                    placeholder="토론 주제 검색"
-                />
-            </div>
+            {/* 검색 */}
+            {!issueIdFilter && (
+                <div className="mb-6">
+                    <SearchBar
+                        value={searchInput}
+                        onChange={handleSearchChange}
+                        onSearch={handleSearch}
+                        placeholder="토론 주제 검색"
+                    />
+                </div>
+            )}
 
             {/* 검색 결과 수 */}
             {searchQuery && !loading && (
@@ -255,19 +283,28 @@ function CommunityContent() {
                 </div>
             )}
 
+            {/* 스켈레톤 */}
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Masonry
+                    breakpointCols={breakpointColumns}
+                    className="flex gap-3 w-auto -ml-3"
+                    columnClassName="pl-3 bg-clip-padding"
+                >
                     {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="card-hover p-5 flex flex-col gap-3">
+                        <div key={i} className="card-hover p-5 flex flex-col gap-3 mb-3">
                             <div className="h-4 bg-border-muted rounded animate-pulse w-3/4" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
+                            <div className="h-3 bg-border-muted rounded animate-pulse w-2/3" />
+                            <div className="flex gap-4">
+                                {[0,1,2,3].map(j => <div key={j} className="h-3 w-8 bg-border-muted rounded animate-pulse" />)}
+                            </div>
                             <div className="border-t border-border-muted pt-3 space-y-2">
                                 <div className="h-3 bg-border-muted rounded animate-pulse w-1/4" />
                                 <div className="h-3 bg-border-muted rounded animate-pulse w-full" />
-                                <div className="h-3 bg-border-muted rounded animate-pulse w-1/3" />
                             </div>
                         </div>
                     ))}
-                </div>
+                </Masonry>
             ) : topics.length === 0 ? (
                 <p className="text-sm text-content-muted text-center py-12">
                     {searchQuery ? `"${searchQuery}"에 대한 토론 주제가 없습니다.` : '등록된 토론 주제가 없습니다.'}
@@ -278,8 +315,9 @@ function CommunityContent() {
                         {groupTopicsByIssue(topics).map((group) => (
                             <IssueGroupCard key={group.issueId} group={group} />
                         ))}
-                    </div>
+                    </Masonry>
 
+                    {/* 더보기 */}
                     {topics.length < total && (
                         <div className="text-center mt-6">
                             <button
@@ -302,11 +340,15 @@ export default function CommunityPage() {
         <Suspense fallback={
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <h1 className="text-2xl font-bold text-content-primary mb-6">커뮤니티</h1>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Masonry
+                    breakpointCols={breakpointColumns}
+                    className="flex gap-3 w-auto -ml-3"
+                    columnClassName="pl-3 bg-clip-padding"
+                >
                     {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="card-hover p-5 h-36 animate-pulse bg-surface-subtle rounded-xl" />
+                        <div key={i} className="card-hover p-5 h-36 animate-pulse bg-surface-subtle rounded-xl mb-3" />
                     ))}
-                </div>
+                </Masonry>
             </div>
         }>
             <CommunityContent />

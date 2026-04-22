@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
-import { fetchUnsplashImages } from '@/lib/unsplash'
+import { fetchPixabayImages } from '@/lib/pixabay'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,7 @@ export async function POST(
 
         if (fetchError) throw fetchError
 
-        const thumbnailUrls = await fetchUnsplashImages(issue.title, issue.category)
+        const thumbnailUrls = await fetchPixabayImages(issue.title, issue.category)
 
         if (thumbnailUrls.length === 0) {
             return NextResponse.json(

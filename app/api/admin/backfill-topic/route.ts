@@ -21,11 +21,10 @@ export async function POST(request: NextRequest) {
     const limit = Math.min(Number(body.limit ?? 10), 30)
     const admin = createSupabaseAdminClient()
 
-    // topic_description이 NULL인 이슈 조회
+    // topic_description이 NULL인 이슈 조회 (승인 여부 무관)
     const { data: issues, error } = await admin
         .from('issues')
-        .select('id, title, description, category')
-        .eq('approval_status', '승인')
+        .select('id, title, category')
         .is('topic_description', null)
         .order('created_at', { ascending: false })
         .limit(limit)
@@ -47,7 +46,6 @@ export async function POST(request: NextRequest) {
 
 이슈 제목: ${issue.title}
 카테고리: ${issue.category}
-${issue.description ? `이슈 설명: ${issue.description}` : ''}
 
 작성 규칙:
 - topic: 이슈의 핵심 주제를 15자 이내로 (예: "옥택연 결혼", "갤럭시 S26 공개")

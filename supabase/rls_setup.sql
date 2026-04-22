@@ -163,3 +163,17 @@ ALTER TABLE claude_credit_cycles ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE admin_settings ENABLE ROW LEVEL SECURITY;
 -- 정책 없음 = 모든 클라이언트 접근 차단
+
+-- ============================================================
+-- 14. timeline_summaries — 공개 읽기
+-- ============================================================
+ALTER TABLE timeline_summaries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "timeline_summaries_public_read" ON timeline_summaries
+    FOR SELECT USING (true);
+
+-- ============================================================
+-- 15. app_settings — 클라이언트 접근 차단 (서비스 롤만)
+-- ============================================================
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+-- 정책 없음 = 모든 클라이언트 접근 차단

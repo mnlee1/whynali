@@ -22,7 +22,8 @@ import Script from 'next/script'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Eye, MessageCircleMore } from 'lucide-react'
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
+import { supabaseAdmin } from '@/lib/supabase/server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import TimelineSection from '@/components/issue/TimelineSection'
 import SourcesSection from '@/components/issue/SourcesSection'
@@ -41,8 +42,7 @@ export const revalidate = 900
 
 // 한 요청 내 generateMetadata + IssuePage 간 DB 조회 공유
 const getIssue = cache(async (id: string) => {
-    const adminClient = createSupabaseAdminClient()
-    const { data } = await adminClient
+    const { data } = await supabaseAdmin
         .from('issues')
         .select('*')
         .eq('id', id)
@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
     const title = `${issue.title}`
-    const description = issue.description || `${issue.category} 카테고리의 ${issue.status} 이슈. 화력 지수 ${issue.heat_index ?? 0}점. 실시간 반응, 타임라인, 투표, 댓글을 확인하세요.`
+    const description = issue.topic_description || `${issue.category} 카테고리의 ${issue.status} 이슈. 화력 지수 ${issue.heat_index ?? 0}점. 실시간 반응, 타임라인, 투표, 댓글을 확인하세요.`
 
     const categoryKeywords: Record<string, string[]> = {
         '연예': ['연예', '연예계', '셀럽', '아이돌', '배우', '가수'],
@@ -134,8 +134,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
-    const adminClient = createSupabaseAdminClient()
-
     /* 이슈 데이터 + 관련 데이터 + 사용자 세션을 병렬로 조회 */
     /* getIssue(id)는 generateMetadata에서 이미 호출된 경우 cache()로 재사용됨 */
     const [
@@ -147,23 +145,23 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         { data: newsData },
     ] = await Promise.all([
         getIssue(id),
-        adminClient
+        supabaseAdmin
             .from('discussion_topics')
             .select('id, body, created_at, approval_status, view_count')
             .eq('issue_id', id)
             .in('approval_status', ['진행중', '마감'])
             .limit(50),
-        adminClient
+        supabaseAdmin
             .from('votes')
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', id)
             .in('phase', ['진행중', '마감']),
         createSupabaseServerClient(),
-        adminClient
+        supabaseAdmin
             .from('timeline_summaries')
             .select('stage, stage_title, bullets, date_start, date_end')
             .eq('issue_id', id),
-        adminClient
+        supabaseAdmin
             .from('news_data')
             .select('id, title, link, source, published_at, issue_id, created_at')
             .eq('issue_id', id)
@@ -186,7 +184,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     const opinionCountMap: Record<string, number> = {}
 
     if (topicIds.length > 0) {
-        const { data: commentRows } = await adminClient
+        const { data: commentRows } = await supabaseAdmin
             .from('comments')
             .select('discussion_topic_id')
             .in('discussion_topic_id', topicIds)

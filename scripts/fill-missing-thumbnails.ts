@@ -1,7 +1,7 @@
 /**
  * scripts/fill-missing-thumbnails.ts
  *
- * thumbnail_urls 가 없는 이슈에 Unsplash 이미지를 일괄 채움
+ * thumbnail_urls 가 없는 이슈에 Pixabay 이미지를 일괄 채움
  * 실서버: NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY 가 실서버 값이면 실서버에 적용
  *
  * 실행: npx ts-node -r tsconfig-paths/register scripts/fill-missing-thumbnails.ts
@@ -10,7 +10,12 @@
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 
+const isProd = process.argv.includes('--prod')
+const isForce = process.argv.includes('--force') // 기존 이미지도 덮어씀
+
+// --prod: 실서버 (.env.production.local 우선, .env.local에서 API 키 보완)
 config({ path: '.env.local' })
+if (isProd) config({ path: '.env.production.local', override: true })
 
 const CATEGORY_FALLBACK: Record<string, string> = {
     '연예': 'entertainment stage concert',
@@ -29,7 +34,7 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function extractKeywords(title: string): Promise<string | null> {
+async function extractKeywords(title: string, category: string): Promise<string | null> {
     const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) return null
     try {
@@ -38,7 +43,7 @@ async function extractKeywords(title: string): Promise<string | null> {
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: 'llama-3.1-8b-instant',
-                messages: [{ role: 'user', content: `Extract 2 English search keywords for a stock photo search from this Korean news headline. Reply with ONLY the keywords, nothing else.\n\n"${title}"` }],
+                messages: [{ role: 'user', content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.\n\nCategory: ${category}\nExamples:\n- [연예] "BTS 새 앨범 발매" → "music concert stage"\n- [연예] "워너원 컴백 무대" → "kpop concert performance"\n- [스포츠] "토트넘 강등 위기" → "soccer stadium match"\n- [정치] "국회의원 막말 논란" → "parliament building debate"\n- [경제] "삼성전자 노조 파업" → "factory strike protest"\n- [기술] "AI 주식 투자 열풍" → "stock market technology"\n\nKorean headline: "${title}"\nReply with ONLY the keywords, nothing else.` }],
                 max_tokens: 20,
                 temperature: 0,
             }),
@@ -51,50 +56,58 @@ async function extractKeywords(title: string): Promise<string | null> {
     }
 }
 
-async function searchUnsplash(query: string, accessKey: string, excludeUrls: string[]): Promise<string[]> {
-    const excludeTerms = '-person -people -face -portrait -human -man -woman -selfie -crowd'
-    const searchQuery = `${query} architecture abstract object concept ${excludeTerms}`
-    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=30&orientation=landscape`
-    const res = await fetch(url, { headers: { Authorization: `Client-ID ${accessKey}` } })
-    if (!res.ok) return []
-    const data = await res.json()
-    const results: Array<{ urls: { regular: string }; description?: string; alt_description?: string }> = data.results ?? []
-    if (results.length === 0) return []
-
-    const personKeywords = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'selfie', 'crowd', 'girl', 'boy', 'child', 'adult']
-    const filtered = results.filter(r => {
-        const desc = (r.description || r.alt_description || '').toLowerCase()
-        return !personKeywords.some(k => desc.includes(k)) && !excludeUrls.includes(r.urls?.regular)
+async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
+    const params = new URLSearchParams({
+        key: apiKey,
+        q: query,
+        image_type: 'photo',
+        orientation: 'horizontal',
+        per_page: '30',
+        safesearch: 'true',
+        min_width: '640',
     })
 
-    const final = filtered.length > 0 ? filtered : results.filter(r => !excludeUrls.includes(r.urls?.regular))
-    return [...final].sort(() => Math.random() - 0.5).slice(0, 3).map(r => r.urls?.regular).filter(Boolean)
+    const res = await fetch(`https://pixabay.com/api/?${params}`)
+    if (!res.ok) {
+        console.warn(`  ⚠ Pixabay API 오류: ${res.status}`)
+        return []
+    }
+
+    const data = await res.json()
+    const hits: Array<{ webformatURL: string; tags: string }> = data.hits ?? []
+    if (hits.length === 0) return []
+
+    const personTags = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'crowd', 'girl', 'boy', 'child']
+    const filtered = hits.filter(h => {
+        const tags = h.tags.toLowerCase()
+        return !personTags.some(t => tags.includes(t))
+    })
+
+    const pool = (filtered.length > 0 ? filtered : hits).slice(0, 15)
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, 3).map(h => h.webformatURL).filter(Boolean)
 }
 
 async function main() {
-    const accessKey = process.env.UNSPLASH_ACCESS_KEY
-    if (!accessKey) {
-        console.error('❌ UNSPLASH_ACCESS_KEY 없음')
+    const apiKey = process.env.PIXABAY_API_KEY
+    if (!apiKey) {
+        console.error('❌ PIXABAY_API_KEY 없음')
         return
     }
 
     console.log('='.repeat(60))
-    console.log('썸네일 없는 이슈 일괄 이미지 채우기')
+    console.log(`이슈 이미지 채우기 (Pixabay) [${isProd ? '실서버' : '테스트서버'}]${isForce ? ' [전체 덮어쓰기]' : ''}`)
     console.log(`DB: ${process.env.NEXT_PUBLIC_SUPABASE_URL}`)
     console.log('='.repeat(60))
 
-    // 이미 사용 중인 이미지 URL 수집 (중복 방지)
-    const { data: allIssues } = await supabase.from('issues').select('thumbnail_urls').not('thumbnail_urls', 'is', null)
-    const usedUrls: string[] = []
-    allIssues?.forEach(i => { if (Array.isArray(i.thumbnail_urls)) usedUrls.push(...i.thumbnail_urls) })
-
-    // 이미지 없는 이슈 조회
-    const { data: targets, error } = await supabase
+    const query = supabase
         .from('issues')
         .select('id, title, category, approval_status')
-        .or('thumbnail_urls.is.null,thumbnail_urls.eq.{}')
-        .eq('approval_status', '승인')
         .order('created_at', { ascending: false })
+
+    if (!isForce) query.or('thumbnail_urls.is.null,thumbnail_urls.eq.{}')
+
+    const { data: targets, error } = await query
 
     if (error) { console.error('❌ 조회 실패:', error); return }
     if (!targets || targets.length === 0) { console.log('✅ 이미지 없는 승인 이슈 없음'); return }
@@ -107,15 +120,13 @@ async function main() {
     for (const issue of targets) {
         process.stdout.write(`  처리 중: "${issue.title}" ... `)
 
-        const keywords = await extractKeywords(issue.title)
+        const keywords = await extractKeywords(issue.title, issue.category)
         let urls: string[] = []
 
-        if (keywords) {
-            urls = await searchUnsplash(keywords, accessKey, usedUrls)
-        }
+        if (keywords) urls = await searchPixabay(keywords, apiKey)
         if (urls.length === 0) {
             const fallback = CATEGORY_FALLBACK[issue.category] ?? 'news'
-            urls = await searchUnsplash(fallback, accessKey, usedUrls)
+            urls = await searchPixabay(fallback, apiKey)
         }
 
         if (urls.length === 0) {
@@ -130,16 +141,15 @@ async function main() {
             .eq('id', issue.id)
 
         if (updateError) {
-            console.log('❌ 저장 실패')
+            console.log('❌ 저장 실패:', updateError.message)
             failed++
         } else {
             console.log(`✅ ${urls.length}개 저장 (키워드: ${keywords ?? 'fallback'})`)
-            usedUrls.push(...urls)
             filled++
         }
 
-        // Unsplash rate limit 방지 (50req/hour 무료)
-        await new Promise(r => setTimeout(r, 1200))
+        // Pixabay 5,000회/시간 — 여유 있지만 Groq rate limit 방지용 간격
+        await new Promise(r => setTimeout(r, 500))
     }
 
     console.log('\n' + '='.repeat(60))

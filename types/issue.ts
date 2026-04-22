@@ -9,7 +9,6 @@ export type TimelineStage = '발단' | '전개' | '파생' | '진정'
 export interface Issue {
     id: string
     title: string
-    description: string | null
     status: IssueStatus
     category: IssueCategory
     heat_index: number | null
