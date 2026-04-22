@@ -13,10 +13,10 @@ import { supabaseAdmin } from '@/lib/supabase/server'
  *   - community_data 없음: heat = newsCredibility × 0.3 (최대 30점)
  *     커뮤니티 반응이 화력을 점화하는 구조 — §6.4 참조
  * 
- * 시간 가중치 적용 (2026-03-11, 2026-03-23 개선):
- *   - 최근 7일 데이터: 가중치 1.0 (100%)
- *   - 30일 이상 데이터: 가중치 0 (완전 소멸, 기존 0.1 → 0)
- *   - 7-30일 사이: 선형 감소
+ * 시간 가중치 적용 (2026-03-11, 2026-03-23, 2026-04-22 개선):
+ *   - 최근 3일 데이터: 가중치 1.0 (100%)
+ *   - 14일 이상 데이터: 가중치 0 (완전 소멸)
+ *   - 3-14일 사이: 선형 감소
  *   - 정규화: 총합 → 포스트당 평균 (고조회수 인기글의 cap 고착 방지)
  *   - UI 표시용 화력으로 실시간성 반영
  */
@@ -43,10 +43,10 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
         const age = Date.now() - new Date(createdAt).getTime()
         const daysSinceCreated = age / (1000 * 60 * 60 * 24)
 
-        // 선형 감소: 3일까지 100%, 30일 후 0% (완전 소멸)
+        // 선형 감소: 3일까지 100%, 14일 후 0% (완전 소멸)
         if (daysSinceCreated <= 3) return 1.0
-        if (daysSinceCreated >= 30) return 0
-        return 1.0 - (daysSinceCreated - 3) / 27
+        if (daysSinceCreated >= 14) return 0
+        return 1.0 - (daysSinceCreated - 3) / 11
     }
 
     let communityHeat = 0
@@ -187,8 +187,8 @@ export async function calculateBothHeats(issueId: string): Promise<{
         const age = Date.now() - new Date(createdAt).getTime()
         const daysSinceCreated = age / (1000 * 60 * 60 * 24)
         if (daysSinceCreated <= 3) return 1.0
-        if (daysSinceCreated >= 30) return 0
-        return 1.0 - (daysSinceCreated - 3) / 27
+        if (daysSinceCreated >= 14) return 0
+        return 1.0 - (daysSinceCreated - 3) / 11
     }
 
     // ── heatIndex 계산 (시간 가중치 적용) ────────────────────────────────────
