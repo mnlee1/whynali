@@ -48,6 +48,7 @@ export interface Vote {
     title?: string
     phase?: '대기' | '진행중' | '마감'
     approval_status?: '대기' | '승인' | '반려'
+    is_ai_generated?: boolean
     issue_status_snapshot?: '점화' | '논란중' | '종결' | null
     started_at?: string | null
     ended_at?: string | null

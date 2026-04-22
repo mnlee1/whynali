@@ -359,7 +359,11 @@ function CommunityContent() {
                 </p>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Masonry
+                        breakpointCols={breakpointColumns}
+                        className="flex gap-3 w-auto -ml-3"
+                        columnClassName="pl-3 bg-clip-padding"
+                    >
                         {groupTopicsByIssue(topics).map((group) => (
                             <IssueGroupCard key={group.issueId} group={group} />
                         ))}

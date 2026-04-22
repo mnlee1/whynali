@@ -149,19 +149,10 @@ export default function AdminIssuesPage() {
             }
             
             const url = `/api/admin/issues?${params.toString()}`
-            console.log('[관리자 이슈] API 호출:', url)
             const response = await fetch(url)
             if (!response.ok) throw new Error('이슈 조회 실패')
             const data = await response.json()
             const list: Issue[] = data.data ?? []
-            console.log('[관리자 이슈] 응답:', list.length, '개 이슈')
-            if (list.length > 0) {
-                console.log('[관리자 이슈] 첫 번째 이슈:', {
-                    title: list[0].title,
-                    approval_status: list[0].approval_status,
-                    approval_type: list[0].approval_type,
-                })
-            }
             setIssues(sortIssues(list))
             
             // 미리보기 중인 이슈가 있으면 업데이트
