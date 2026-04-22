@@ -65,7 +65,7 @@ export default async function SportsPage() {
                 <h1 className="text-2xl font-bold text-content-primary mb-6">스포츠 이슈</h1>
                 <IssueList
                     category="스포츠"
-                    initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+                    initialData={{ data: (data ?? []) as Issue[], total: totalCount ?? 0 }}
                     initialTabCounts={tabCounts}
                 infiniteScroll
                 />
