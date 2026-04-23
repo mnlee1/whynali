@@ -65,7 +65,7 @@ export default async function EconomyPage() {
                 <h1 className="text-2xl font-bold text-content-primary mb-6">경제 이슈</h1>
                 <IssueList
                     category="경제"
-                    initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+                    initialData={{ data: (data ?? []) as Issue[], total: totalCount ?? 0 }}
                     initialTabCounts={tabCounts}
                 infiniteScroll
                 />
