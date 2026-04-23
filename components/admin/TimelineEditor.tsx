@@ -14,8 +14,9 @@ import type { TimelinePoint, TimelineStage } from '@/types/issue'
 
 interface TimelineEditorProps {
     issueId: string
-    issueStatus?: string       // 이슈 현재 상태 ('종결' 여부 판단용)
-    issueUpdatedAt?: string    // 종결 시각 표시용
+    issueStatus?: string
+    issueUpdatedAt?: string
+    onDeleteSuccess?: () => void  // 포인트 삭제 후 외부에 알림 (요약 재생성 트리거용)
 }
 
 
@@ -43,7 +44,7 @@ function formatDateTime(iso: string): string {
     })
 }
 
-export default function TimelineEditor({ issueId, issueStatus, issueUpdatedAt }: TimelineEditorProps) {
+export default function TimelineEditor({ issueId, issueStatus, issueUpdatedAt, onDeleteSuccess }: TimelineEditorProps) {
     const [points, setPoints] = useState<TimelinePoint[]>([])
     const [loading, setLoading] = useState(true)
     const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -78,6 +79,7 @@ export default function TimelineEditor({ issueId, issueStatus, issueUpdatedAt }:
             })
             if (!res.ok) throw new Error('삭제 실패')
             await fetchPoints()
+            onDeleteSuccess?.()
         } catch (err) {
             setError(err instanceof Error ? err.message : '삭제 실패')
         } finally {
@@ -150,8 +152,15 @@ export default function TimelineEditor({ issueId, issueStatus, issueUpdatedAt }:
 
                                             {/* 이벤트 요약 텍스트 */}
                                             {point.title && (
-                                                <p className={`text-sm font-medium mb-2 leading-snug ${textColor}`}>
+                                                <p className={`text-sm font-medium mb-1.5 leading-snug ${textColor}`}>
                                                     {point.title}
+                                                </p>
+                                            )}
+
+                                            {/* AI 요약 — 유저뷰 bullet 소스 */}
+                                            {point.ai_summary && (
+                                                <p className="text-xs text-content-muted leading-relaxed mb-2 pl-2 border-l-2 border-border-muted">
+                                                    {point.ai_summary}
                                                 </p>
                                             )}
 

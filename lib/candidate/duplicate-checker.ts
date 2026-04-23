@@ -231,7 +231,7 @@ async function compareByAI(
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.1-8b-instant',
+                model: 'llama-3.3-70b-versatile',
                 temperature: 0.2,
                 max_tokens: 200,
             }
