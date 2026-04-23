@@ -101,7 +101,7 @@ export default function VotePreview({ initialVotes }: Props) {
         return (
             <section className="py-6 md:py-8">
                 <div className="container mx-auto">
-                    <h2 className="text-base font-bold text-content-primary mb-4">지금 뜨는 투표</h2>
+                    <h2 className="text-[17px] font-bold text-content-primary mb-4">지금 뜨는 투표</h2>
                     <div className="h-40 bg-border-muted rounded-xl flex items-center justify-center">
                         <p className="text-content-muted text-sm">진행 중인 투표가 없습니다.</p>
                     </div>
@@ -151,10 +151,10 @@ export default function VotePreview({ initialVotes }: Props) {
                         {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
                     </h3>
 
-                    {/* 선택지 or 결과 */}
-                    <div className={`flex-1 flex flex-col ${showResults ? 'gap-3' : 'gap-1.5'}`}>
-                        {showResults ? (
-                            sortedByCount.map((choice, i) => {
+                    {/* 결과지: 선택지 제목 바로 아래 */}
+                    {showResults && (
+                        <div className="flex flex-col gap-3">
+                            {sortedByCount.map((choice, i) => {
                                 const ratio = totalCount > 0 ? Math.round((choice.count / totalCount) * 100) : 0
                                 const isMyChoice = choice.id === userChoiceId
                                 return (
@@ -162,7 +162,7 @@ export default function VotePreview({ initialVotes }: Props) {
                                         <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                                 <span className="text-[10px] text-content-muted shrink-0 w-3">{i + 1}</span>
-                                                <p className={`text-xs line-clamp-1 ${isMyChoice ? 'font-semibold text-primary' : 'text-content-secondary'}`}>
+                                                <p className={`text-[13px] line-clamp-1 ${isMyChoice ? 'font-semibold text-primary' : 'text-content-secondary'}`}>
                                                     {choice.label}
                                                 </p>
                                                 {isMyChoice && (
@@ -181,9 +181,14 @@ export default function VotePreview({ initialVotes }: Props) {
                                         </div>
                                     </div>
                                 )
-                            })
-                        ) : (
-                            choices.map((choice) => {
+                            })}
+                        </div>
+                    )}
+
+                    {/* 투표 전: 선택지+버튼 하단 고정 */}
+                    {!showResults && (
+                        <div className="mt-auto flex flex-col gap-1.5">
+                            {choices.map((choice) => {
                                 const isSelected = selectedChoiceId === choice.id
                                 return (
                                     <button
@@ -205,37 +210,39 @@ export default function VotePreview({ initialVotes }: Props) {
                                                     </svg>
                                                 )}
                                             </span>
-                                            <span className={`text-xs line-clamp-1 ${isSelected ? 'font-semibold text-primary' : 'text-content-primary'}`}>
+                                            <span className={`text-[13px] line-clamp-1 ${isSelected ? 'font-semibold text-primary' : 'text-content-primary'}`}>
                                                 {choice.label}
                                             </span>
                                         </div>
                                     </button>
                                 )
-                            })
-                        )}
-                    </div>
+                            })}
+                        </div>
+                    )}
 
                     {/* 푸터 액션 */}
-                    {showResults ? (
-                        <Link
-                            href={`/issue/${issueId}#section-vote`}
-                            className="flex items-center justify-center w-full h-9 text-xs font-bold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
-                        >
-                            자세히 보기
-                        </Link>
-                    ) : (
-                        <button
-                            onClick={() => selectedChoiceId && handleVote(vote.id, selectedChoiceId)}
-                            disabled={!selectedChoiceId || isSubmitting}
-                            className={`w-full h-9 rounded-lg text-xs font-bold transition-all ${
-                                selectedChoiceId
-                                    ? 'bg-primary text-white hover:opacity-90 active:scale-[0.98]'
-                                    : 'bg-surface-muted text-content-muted cursor-not-allowed'
-                            }`}
-                        >
-                            {isSubmitting ? '투표 중...' : '투표하기'}
-                        </button>
-                    )}
+                    <div className="mt-auto">
+                        {showResults ? (
+                            <Link
+                                href={`/issue/${issueId}#section-vote`}
+                                className="flex items-center justify-center w-full h-9 text-xs font-bold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                            >
+                                자세히 보기
+                            </Link>
+                        ) : (
+                            <button
+                                onClick={() => selectedChoiceId && handleVote(vote.id, selectedChoiceId)}
+                                disabled={!selectedChoiceId || isSubmitting}
+                                className={`w-full h-9 rounded-lg text-xs font-bold transition-all ${
+                                    selectedChoiceId
+                                        ? 'bg-primary text-white hover:opacity-90 active:scale-[0.98]'
+                                        : 'bg-surface-muted text-content-muted cursor-not-allowed'
+                                }`}
+                            >
+                                {isSubmitting ? '투표 중...' : '투표하기'}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         )
@@ -245,7 +252,7 @@ export default function VotePreview({ initialVotes }: Props) {
         <section className="pt-10 pb-6 md:pt-14 md:pb-8">
             <div className="container mx-auto">
                 <div className="flex items-center gap-0.5 mb-1">
-                    <h2 className="text-base font-bold text-content-primary">지금 뜨는 투표</h2>
+                    <h2 className="text-[17px] font-bold text-content-primary">지금 뜨는 투표</h2>
                     <Tooltip label="" align="left" width="w-max max-w-[300px]" text="진행 중인 투표 우선, 참여 수 많은 순으로 정렬됩니다." />
                 </div>
                 <Swiper

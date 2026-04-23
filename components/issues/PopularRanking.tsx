@@ -74,7 +74,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
             {/* 헤더 */}
             <div className="mb-4">
                 <div className="flex items-center gap-0.5">
-                    <h2 className="text-base font-bold text-content-primary">
+                    <h2 className="text-[17px] font-bold text-content-primary">
                         {isSurging ? '🔥 급상승 중' : '지금 뜨는 이슈'}
                     </h2>
                     <Tooltip
@@ -106,7 +106,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                                 className="flex-1"
                             >
                                 <Link href={`/issue/${issue.id}`} className="block h-full">
-                                    <article className={`h-full bg-surface border rounded-xl transition-all duration-300 flex items-center gap-2.5 p-2.5 group ${
+                                    <article className={`h-full bg-surface border rounded-xl transition-all duration-300 flex items-center gap-3.5 p-2.5 group ${
                                         isActive
                                             ? 'border-primary-muted shadow-card-hover -translate-y-0.5 bg-gradient-to-r from-primary-light/30 to-transparent'
                                             : 'border-border shadow-card hover:shadow-card-hover hover:border-primary-muted hover:-translate-y-0.5'
@@ -120,7 +120,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
 
                                         {/* 텍스트 */}
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-semibold line-clamp-1 mb-1 transition-colors duration-300 ${
+                                            <p className={`text-sm font-semibold line-clamp-1 mb-1.5 transition-colors duration-300 ${
                                                 isActive ? 'text-primary' : 'text-content-primary group-hover:text-primary'
                                             }`}>
                                                 {decodeHtml(issue.title)}
