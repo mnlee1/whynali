@@ -333,14 +333,10 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                             )}
                         </div>
                         <Link
-                            href={
-                                discussionTopicsWithStats.length === 1
-                                    ? `/community/${discussionTopicsWithStats[0].id}`
-                                    : `/community?issue_id=${id}`
-                            }
+                            href="/community"
                             className="text-xs text-content-secondary hover:text-content-primary font-semibold"
                         >
-                            {discussionTopicsWithStats.length === 1 ? '토론 참여하기 →' : '이 이슈 토론 전체보기 →'}
+                            더 많은 토론 보기 →
                         </Link>
                     </div>
                     <div className="divide-y divide-border-muted">
@@ -395,14 +391,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     </div>
                     <div className="p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-semibold text-content-primary mb-0.5">이 이슈의 커뮤니티</p>
-                            <p className="text-xs text-content-secondary">이 이슈에서 파생된 토론 주제에 참여해보세요.</p>
+                            <p className="text-sm font-semibold text-content-primary mb-1">아직 관련 토론이 없어요</p>
+                            <p className="text-xs text-content-secondary">다른 이슈의 토론에 참여해보세요.</p>
                         </div>
                         <Link
                             href="/community"
                             className="shrink-0 btn-primary btn-sm"
                         >
-                            토론 보기
+                            토론 참여하기
                         </Link>
                     </div>
                 </div>
