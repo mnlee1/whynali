@@ -828,7 +828,7 @@ function CommentItem({
                     {isReported && (
                         <span className="text-xs text-red-500 border border-red-300 px-1.5 py-0.5 rounded-full">신고완료</span>
                     )}
-                    {isMine && !isEditing && (
+                    {isMine && !isEditing && comment.visibility !== 'deleted' && comment.visibility !== 'deleted_by_admin' && (
                         <div className="flex gap-2">
                             <button
                                 onClick={() => onEditStart(comment)}
