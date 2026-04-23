@@ -15,7 +15,7 @@ import type { IssueStatus } from '@/types/issue'
 
 interface StatusBadgeProps {
     status: IssueStatus
-    size?: 'sm' | 'md' | 'lg'
+    size?: 'xs' | 'sm' | 'md' | 'lg'
 }
 
 // 상태별 아이콘, 색상, 라벨
@@ -53,12 +53,18 @@ function getStatusMeta(status: IssueStatus): {
 }
 
 // 크기별 클래스
-function getSizeClass(size: 'sm' | 'md' | 'lg'): { 
+function getSizeClass(size: 'xs' | 'sm' | 'md' | 'lg'): {
     containerClass: string
     iconClass: string
     textClass: string
 } {
     switch (size) {
+        case 'xs':
+            return {
+                containerClass: 'px-1.5 py-0.5 gap-0.5',
+                iconClass: 'text-[12px]',
+                textClass: 'text-[12px]'
+            }
         case 'sm':
             return {
                 containerClass: 'px-2 py-1 gap-1',
