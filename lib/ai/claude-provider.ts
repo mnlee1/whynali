@@ -172,6 +172,7 @@ export class ClaudeProvider implements AIProvider {
                     key_hash: keyHash,
                     is_blocked: true,
                     blocked_until: blockedUntil,
+                    block_reason: 'rate_limit',
                     fail_count: 1,
                     updated_at: now,
                 },
@@ -189,6 +190,50 @@ export class ClaudeProvider implements AIProvider {
             `[ClaudeProvider] Rate Limit - 키 차단: ...${keyHash} ` +
                 `(${Math.floor(blockDuration / 1000)}초 후 재시도)`
         )
+    }
+
+    private async markCreditDepleted(): Promise<void> {
+        const now = new Date().toISOString()
+        // key_hash를 provider 단위 공유 키로 사용 (크레딧은 키별이 아닌 계정 단위)
+        const { error } = await supabaseAdmin
+            .from('ai_key_status')
+            .upsert(
+                {
+                    provider: 'claude',
+                    key_hash: '__account__',
+                    is_blocked: true,
+                    blocked_until: null,
+                    block_reason: 'credit_depleted',
+                    fail_count: 1,
+                    updated_at: now,
+                },
+                { onConflict: 'provider,key_hash' }
+            )
+
+        if (error) {
+            console.error(`[ClaudeProvider] 크레딧 소진 상태 저장 에러:`, error)
+            return
+        }
+
+        console.warn(`[ClaudeProvider] 크레딧 소진 감지 — ai_key_status 기록 완료`)
+    }
+
+    private async clearCreditDepleted(): Promise<void> {
+        const { error } = await supabaseAdmin
+            .from('ai_key_status')
+            .update({
+                is_blocked: false,
+                block_reason: null,
+                fail_count: 0,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('provider', 'claude')
+            .eq('key_hash', '__account__')
+            .eq('block_reason', 'credit_depleted')
+
+        if (!error) {
+            console.log(`[ClaudeProvider] 크레딧 복구 감지 — 상태 해제 완료`)
+        }
     }
 
     async complete(userPrompt: string, options?: AIOptions): Promise<string> {
@@ -254,7 +299,7 @@ export class ClaudeProvider implements AIProvider {
                     throw new Error('Claude API 응답이 text 타입이 아닙니다')
                 }
 
-                // 사용량 추적 (fire-and-forget)
+                // 사용량 추적 + 크레딧 복구 자동 해제 (fire-and-forget)
                 const inputTokens = message.usage?.input_tokens ?? 0
                 const outputTokens = message.usage?.output_tokens ?? 0
                 incrementApiUsage('claude', {
@@ -263,6 +308,7 @@ export class ClaudeProvider implements AIProvider {
                     inputTokens,
                     outputTokens,
                 }).catch(() => {})
+                this.clearCreditDepleted().catch(() => {})
 
                 return content.text.trim()
             } catch (error: any) {
@@ -272,8 +318,16 @@ export class ClaudeProvider implements AIProvider {
                     error.type === 'rate_limit_error' ||
                     error.message?.includes('rate limit')
 
+                // 크레딧 소진 에러 확인
+                const isCreditDepleted =
+                    error.status === 400 &&
+                    (error.type === 'invalid_request_error' || error.error?.type === 'invalid_request_error') &&
+                    (error.message?.includes('credit') ||
+                        error.message?.includes('balance') ||
+                        error.error?.message?.includes('credit') ||
+                        error.error?.message?.includes('balance'))
+
                 if (!isRateLimit) {
-                    // 사용량 추적 (실패)
                     console.error(
                         `[ClaudeProvider] API 호출 실패 (키: ...${keyStatus.keyHash}):`,
                         {
@@ -284,6 +338,9 @@ export class ClaudeProvider implements AIProvider {
                         }
                     )
                     incrementApiUsage('claude', { calls: 1, failures: 1 }).catch(() => {})
+                    if (isCreditDepleted) {
+                        this.markCreditDepleted().catch(() => {})
+                    }
                     throw error
                 }
 

@@ -310,7 +310,7 @@ async function getAiKeyStatus(provider: 'claude' | 'groq') {
     try {
         const { data, error } = await supabaseAdmin
             .from('ai_key_status')
-            .select('is_blocked, blocked_until, fail_count, updated_at')
+            .select('is_blocked, blocked_until, fail_count, block_reason, updated_at')
             .eq('provider', provider)
             .eq('is_blocked', true)
             .limit(1)
@@ -318,13 +318,14 @@ async function getAiKeyStatus(provider: 'claude' | 'groq') {
 
         if (error || !data) return null
 
-        // 차단 시간이 지났으면 null 반환
-        if (data.blocked_until && new Date(data.blocked_until) <= new Date()) return null
+        // rate_limit: 차단 시간이 지났으면 null 반환
+        if (data.block_reason !== 'credit_depleted' && data.blocked_until && new Date(data.blocked_until) <= new Date()) return null
 
         return {
             isBlocked: true,
             blockedUntil: data.blocked_until as string | null,
             failCount: data.fail_count as number,
+            blockReason: (data.block_reason ?? 'rate_limit') as 'rate_limit' | 'credit_depleted',
         }
     } catch {
         return null

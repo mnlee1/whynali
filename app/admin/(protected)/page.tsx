@@ -35,6 +35,7 @@ interface AiKeyStatus {
     isBlocked: boolean
     blockedUntil: string | null
     failCount: number
+    blockReason: 'rate_limit' | 'credit_depleted'
 }
 
 interface ApiCostsSummary {
@@ -384,12 +385,18 @@ export default function AdminDashboardPage() {
                                 <div className="pt-3 border-t border-orange-200">
                                     {(() => {
                                         const keyStatus = apiCosts.claude.keyStatus
+                                        const isCreditDepleted = keyStatus?.blockReason === 'credit_depleted'
                                         const blockedUntil = keyStatus?.blockedUntil
                                             ? new Date(keyStatus.blockedUntil)
                                             : null
                                         const secsLeft = blockedUntil
                                             ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / 1000))
                                             : 0
+                                        const label = !keyStatus
+                                            ? '정상'
+                                            : isCreditDepleted
+                                            ? '크레딧 소진'
+                                            : `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
                                         return (
                                             <div className="flex items-center justify-between">
                                                 <span className="text-sm text-content-secondary">AI 상태</span>
@@ -399,9 +406,7 @@ export default function AdminDashboardPage() {
                                                     <span className={`w-2 h-2 rounded-full ${
                                                         keyStatus ? 'bg-red-500' : 'bg-green-500'
                                                     }`} />
-                                                    {keyStatus
-                                                        ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
-                                                        : '정상'}
+                                                    {label}
                                                 </span>
                                             </div>
                                         )
