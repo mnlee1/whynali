@@ -10,7 +10,6 @@ import IssueList from '@/components/issues/IssueList'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import type { Issue } from '@/types/issue'
 import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
-import { CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT } from '@/lib/config/candidate-thresholds'
 
 export const metadata: Metadata = {
     title: '경제 이슈',
@@ -40,6 +39,7 @@ export default async function EconomyPage() {
         { count: controversialCount },
         { count: closedCount },
     ] = await Promise.all([
+        supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '경제').order('created_at', { ascending: false }).range(0, 19),
         supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).gte('heat_index', MIN_HEAT).eq('category', '경제').order('created_at', { ascending: false }).range(0, 19),
         supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '경제'),
         supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '경제').eq('status', '점화'),
