@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import type { Issue } from '@/types/issue'
 import TimelineSection from '@/components/issue/TimelineSection'
+import TimelineEditor from '@/components/admin/TimelineEditor'
 import SourcesSection from '@/components/issue/SourcesSection'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
@@ -42,13 +43,39 @@ export default function IssuePreviewDrawer({
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [localThumbnailUrls, setLocalThumbnailUrls] = useState<string[]>([])
     const [refreshSuccess, setRefreshSuccess] = useState(false)
+    const [timelineTab, setTimelineTab] = useState<'preview' | 'manage'>('preview')
+    const [summaryKey, setSummaryKey] = useState(0)
+    const [sourcesKey, setSourcesKey] = useState(0)
+    const [isRegenerating, setIsRegenerating] = useState(false)
 
     useEffect(() => {
         if (issue) {
             setSelectedThumbnailIndex(issue.primary_thumbnail_index ?? 0)
             setLocalThumbnailUrls(issue.thumbnail_urls ?? [])
+            setTimelineTab('preview')
+            setSummaryKey(0)
+            setSourcesKey(0)
         }
     }, [issue])
+
+    // 포인트 삭제 후 요약 재생성 → 유저뷰로 전환
+    const handleTimelineDeleteSuccess = async () => {
+        if (!issue) return
+        setIsRegenerating(true)
+        try {
+            await fetch(
+                `/api/admin/migrations/regenerate-single-timeline?issueId=${issue.id}`,
+                { method: 'POST' }
+            )
+        } catch {
+            // 재생성 실패해도 탭은 전환 (다음 cron에서 자동 갱신됨)
+        } finally {
+            setSummaryKey(k => k + 1)
+            setSourcesKey(k => k + 1)
+            setTimelineTab('preview')
+            setIsRegenerating(false)
+        }
+    }
 
     /* ESC 키로 닫기 */
     useEffect(() => {
@@ -251,23 +278,60 @@ export default function IssuePreviewDrawer({
                         </div>
                     )}
 
-                    {/* 타임라인 — 사용자 화면과 동일한 AI 요약 뷰 */}
+                    {/* 타임라인 — 유저뷰/포인트 관리 탭 */}
                     <div className="card overflow-hidden">
-                        <div className="px-4 py-3 border-b border-border-muted">
-                            <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
+                        <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
+                                {isRegenerating && (
+                                    <span className="text-xs text-content-muted animate-pulse">요약 재생성 중...</span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1 bg-surface-muted rounded-lg p-0.5">
+                                <button
+                                    onClick={() => setTimelineTab('preview')}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                                        timelineTab === 'preview'
+                                            ? 'bg-surface text-content-primary shadow-sm'
+                                            : 'text-content-muted hover:text-content-secondary'
+                                    }`}
+                                >
+                                    유저뷰
+                                </button>
+                                <button
+                                    onClick={() => setTimelineTab('manage')}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                                        timelineTab === 'manage'
+                                            ? 'bg-surface text-content-primary shadow-sm'
+                                            : 'text-content-muted hover:text-content-secondary'
+                                    }`}
+                                >
+                                    포인트 관리
+                                </button>
+                            </div>
                         </div>
                         <div className="p-4">
-                            <TimelineSection
-                                issueId={issue.id}
-                                issueStatus={issue.status}
-                                issueUpdatedAt={issue.updated_at}
-                            />
+                            {timelineTab === 'preview' ? (
+                                <TimelineSection
+                                    key={summaryKey}
+                                    issueId={issue.id}
+                                    issueStatus={issue.status}
+                                    issueUpdatedAt={issue.updated_at}
+                                />
+                            ) : (
+                                <TimelineEditor
+                                    issueId={issue.id}
+                                    issueStatus={issue.status}
+                                    issueUpdatedAt={issue.updated_at}
+                                    onDeleteSuccess={handleTimelineDeleteSuccess}
+                                />
+                            )}
                         </div>
                     </div>
 
 
                     {/* 출처 */}
-                    <SourcesSection issueId={issue.id} />
+                    <SourcesSection key={sourcesKey} issueId={issue.id} />
                 </div>
 
                 {/* 하단 액션 (대기 상태일 때만) */}
