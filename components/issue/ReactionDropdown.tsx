@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { ReactionType } from '@/types'
 
 interface ReactionDropdownProps {
@@ -26,6 +26,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
     const [userReaction, setUserReaction] = useState<ReactionType | null>(null)
     const [submitting, setSubmitting] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
+    const instanceId = useMemo(() => Math.random().toString(36).slice(2), [])
 
     const loadReactions = useCallback(async () => {
         try {
@@ -46,7 +47,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
 
     useEffect(() => {
         const handleReactionUpdate = (e: CustomEvent) => {
-            if (e.detail?.issueId === issueId && e.detail?.source !== 'ReactionDropdown') {
+            if (e.detail?.issueId === issueId && e.detail?.source !== instanceId) {
                 loadReactions()
             }
         }
@@ -103,7 +104,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
             const json = await res.json()
             if (res.ok) {
                 await loadReactions()
-                window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId, source: 'ReactionDropdown' } }))
+                window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId, source: instanceId } }))
             } else {
                 setCounts(prevCounts)
                 setUserReaction(prevUserReaction)
@@ -183,7 +184,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
                                 >
                                     <span className="text-xl leading-none">{emoji}</span>
                                     <span className={[
-                                        'text-sm mt-1 font-semibold',
+                                        'text-xs mt-1 font-semibold',
                                         selected ? 'text-primary' : 'text-content-secondary',
                                     ].join(' ')}>
                                         {label}
@@ -221,7 +222,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
                                 >
                                     <span className="text-xl leading-none">{emoji}</span>
                                     <span className={[
-                                        'text-sm mt-1 font-semibold',
+                                        'text-xs mt-1 font-semibold',
                                         selected ? 'text-primary' : 'text-content-secondary',
                                     ].join(' ')}>
                                         {label}
