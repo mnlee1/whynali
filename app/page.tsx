@@ -98,14 +98,15 @@ async function fetchPageData() {
             issues: v.issues ? { id: v.issues.id, title: v.issues.title } : null,
         }))
 
-    // 슬라이드 이슈 확정 (종결 제외 상위 5개, 부족 시 종결으로 보충)
+    // 슬라이드 이슈 확정 (연예 카테고리만, 종결 제외 상위 5개, 부족 시 종결으로 보충)
     const hotIssues = (hotResult.data ?? []) as Issue[]
-    const nonClosedHero = hotIssues.filter(i => i.status !== '종결').slice(0, 5)
+    const entertainmentIssues = hotIssues.filter(i => i.category === '연예')
+    const nonClosedHero = entertainmentIssues.filter(i => i.status !== '종결').slice(0, 5)
     const heroIssues = nonClosedHero.length >= 5
         ? nonClosedHero
         : [
             ...nonClosedHero,
-            ...hotIssues
+            ...entertainmentIssues
                 .filter(i => i.status === '종결')
                 .slice(0, 5 - nonClosedHero.length),
           ]
