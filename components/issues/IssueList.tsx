@@ -199,7 +199,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             {/* 타이틀 + 툴팁 — 카테고리 페이지에서는 숨김 */}
             {!category && (
                 <div className="flex items-center gap-0.5">
-                    <h2 className="text-base font-bold text-content-primary">왜 난리야?</h2>
+                    <h2 className="text-[17px] font-bold text-content-primary">왜 난리야?</h2>
                     <Tooltip
                         label=""
                         align="left"
