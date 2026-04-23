@@ -40,10 +40,17 @@ export async function POST(request: NextRequest) {
             .order('occurred_at', { ascending: true })
 
         if (!points || points.length === 0) {
+            // 포인트가 전부 삭제된 경우 — 남아있는 summaries도 함께 정리
+            await supabaseAdmin
+                .from('timeline_summaries')
+                .delete()
+                .eq('issue_id', issueId)
             return NextResponse.json({ 
-                error: 'No timeline points',
-                title: issue.title 
-            }, { status: 404 })
+                success: true,
+                title: issue.title,
+                stages: 0,
+                bullets: 0,
+            })
         }
 
         const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
@@ -155,6 +162,15 @@ JSON 응답:
                 generated_at: now,
             }
         })
+
+        // 현재 active stage 이외의 orphan 행만 삭제 → 그 후 upsert
+        // delete-then-insert 방식은 insert 실패 시 빈 타임라인이 될 수 있어 이 순서가 더 안전함
+        const activeStages = rows.map(r => r.stage)
+        await supabaseAdmin
+            .from('timeline_summaries')
+            .delete()
+            .eq('issue_id', issueId)
+            .not('stage', 'in', `(${activeStages.join(',')})`)
 
         const { error } = await supabaseAdmin
             .from('timeline_summaries')

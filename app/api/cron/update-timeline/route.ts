@@ -216,7 +216,8 @@ function extractKeywords(title: string): Set<string> {
 /**
  * isSimilarTitle - 새 제목이 기존 제목 목록 중 하나와 유사한지 판단
  *
- * 핵심 키워드가 3개 이상 겹치면 같은 사건을 다룬 기사로 간주합니다.
+ * 핵심 키워드가 5개 이상 겹치면 같은 사건을 다룬 기사로 간주합니다.
+ * (3이면 이슈 고유명사 3개만으로도 필터링되어 새 전개 기사가 차단됨)
  */
 function isSimilarTitle(newTitle: string, existingTitles: string[]): boolean {
     const newKeywords = extractKeywords(newTitle)
@@ -228,7 +229,7 @@ function isSimilarTitle(newTitle: string, existingTitles: string[]): boolean {
         for (const kw of newKeywords) {
             if (existingKeywords.has(kw)) overlap++
         }
-        if (overlap >= 3) return true
+        if (overlap >= 5) return true
     }
     return false
 }
@@ -244,10 +245,10 @@ async function classifyAndSummarizeNewPoints(
     newsItems: Array<{ id: string; title: string }>,
     existingPoints: Array<{ title: string; ai_summary: string | null }>,
 ): Promise<{
-    stageMap: Map<string, '전개' | '파생'>
+    stageMap: Map<string, '전개' | '파생' | '진정'>
     summaryMap: Map<string, string>
 }> {
-    const stageMap = new Map<string, '전개' | '파생'>()
+    const stageMap = new Map<string, '전개' | '파생' | '진정'>()
     const summaryMap = new Map<string, string>()
 
     if (newsItems.length === 0) return { stageMap, summaryMap }
@@ -260,7 +261,7 @@ async function classifyAndSummarizeNewPoints(
 
     try {
         const listText = newsItems.map((n, i) => `${i + 1}. ${n.title}`).join('\n')
-        
+
         // 기존 포인트들의 키워드 추출 (중복 방지 안내용)
         const existingSummaries = existingPoints
             .map(p => p.ai_summary || p.title)
@@ -277,9 +278,10 @@ ${listText}
 ## 기존 타임라인:
 ${existingSummaries || '(없음)'}
 
-## 작업 1: 각 뉴스를 "전개" 또는 "파생"으로 분류
+## 작업 1: 각 뉴스를 "전개", "파생", "진정" 중 하나로 분류
 - 전개: 이슈의 직접적인 발전 (입장 발표, 후속 조치, 사건 확대 등)
 - 파생: 이슈로 인해 새로 불거진 별개의 논란 (새 인물 등장, 연관 사건 등)
+- 진정: 핵심 갈등/사건이 실질적으로 해결된 신호 (체포·생포·판결·합의·복귀·사과·회복 등 갈등 종결 신호)
 - 기존 타임라인과 중복되는 상황 변화는 제외하세요
 
 ## 작업 2: 각 뉴스 제목을 1~2문장으로 요약
@@ -289,18 +291,18 @@ ${existingSummaries || '(없음)'}
 - 예시: {"index":1,"stage":"전개","pointSummary":"경찰이 드라마 촬영장 스태프 사망 사고 경위를 조사하고 있다."}
 
 반드시 아래 JSON 형식으로만 답하세요 (중복 제외된 뉴스만):
-[{"index":1,"stage":"전개","pointSummary":"설명 1~2문장"},{"index":3,"stage":"파생","pointSummary":"설명 1~2문장"}]`
+[{"index":1,"stage":"전개","pointSummary":"설명 1~2문장"},{"index":3,"stage":"진정","pointSummary":"설명 1~2문장"}]`
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 1200 },
+            { model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: 1200 },
         )
 
         const parsed = parseJsonArray<{ index: number; stage: string; pointSummary: string }>(content)
         if (parsed) {
             parsed.forEach(item => {
                 const target = newsItems[item.index - 1]
-                if (target && (item.stage === '전개' || item.stage === '파생')) {
+                if (target && (item.stage === '전개' || item.stage === '파생' || item.stage === '진정')) {
                     stageMap.set(target.id, item.stage)
                     if (item.pointSummary) {
                         summaryMap.set(target.id, item.pointSummary)
@@ -498,7 +500,7 @@ export async function GET(request: NextRequest) {
                 existingPoints ?? [],
             )
 
-            // 6. 새 포인트 생성 (전개/파생만 — '진정'은 recalculate-heat 종결 전환 시 배정)
+            // 6. 새 포인트 생성 (전개/파생/진정)
             const newPoints = newsToAdd.map((news) => ({
                 issue_id: issue.id,
                 title: news.title ?? '',
