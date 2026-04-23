@@ -312,11 +312,9 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                         )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                        {totalCount > 0 && (
-                            <span className="text-xs text-content-primary font-medium">
-                                {totalCount.toLocaleString()}표
-                            </span>
-                        )}
+                        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
+                            <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
+                        </span>
                         {isClosed && (
                             <ChevronDown 
                                 className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
