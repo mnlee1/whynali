@@ -518,7 +518,7 @@ export default function MypageClient({
 
             {/* 내 댓글 탭 */}
             {tab === 'comments' && (
-                <div className="space-y-3">
+                <div className="space-y-5">
                     {comments.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">작성한 댓글이 없습니다.</p>
                     ) : (
@@ -527,13 +527,13 @@ export default function MypageClient({
                                 {c.issues && (
                                     <Link
                                         href={`/issue/${c.issues.id}`}
-                                        className="text-xs font-medium text-primary hover:underline mb-1.5 block truncate"
+                                        className="text-[13px] font-medium text-primary hover:underline mb-1.5 block truncate"
                                     >
                                         {c.issues.title}
                                     </Link>
                                 )}
                                 <p className="text-sm text-content-primary line-clamp-2">{c.body}</p>
-                                <p className="text-xs text-content-muted mt-1.5">{formatDate(c.created_at)}</p>
+                                <p className="text-xs text-content-muted mt-4">{formatDate(c.created_at)}</p>
                             </div>
                         ))
                     )}
@@ -542,7 +542,7 @@ export default function MypageClient({
 
             {/* 내 토론 탭 */}
             {tab === 'discussions' && (
-                <div className="space-y-3">
+                <div className="space-y-5">
                     {discussions.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">참여한 토론이 없습니다.</p>
                     ) : (
@@ -551,18 +551,18 @@ export default function MypageClient({
                                 {d.discussion_topics?.issues && (
                                     <Link
                                         href={`/issue/${d.discussion_topics.issues.id}`}
-                                        className="text-xs font-medium text-primary hover:underline mb-1 block truncate"
+                                        className="text-[13px] font-medium text-primary hover:underline mb-1 block truncate"
                                     >
                                         {d.discussion_topics.issues.title}
                                     </Link>
                                 )}
                                 {d.discussion_topics && (
-                                    <p className="text-xs text-content-secondary mb-1.5 line-clamp-1">
+                                    <p className="text-[13px] text-content-secondary mb-1.5 line-clamp-1">
                                         토론 주제: {d.discussion_topics.body}
                                     </p>
                                 )}
                                 <p className="text-sm text-content-primary line-clamp-2">{d.body}</p>
-                                <p className="text-xs text-content-muted mt-1.5">{formatDate(d.created_at)}</p>
+                                <p className="text-xs text-content-muted mt-4">{formatDate(d.created_at)}</p>
                             </div>
                         ))
                     )}
@@ -571,7 +571,7 @@ export default function MypageClient({
 
             {/* 내 투표 탭 */}
             {tab === 'votes' && (
-                <div className="space-y-3">
+                <div className="space-y-5">
                     {votes.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">참여한 투표가 없습니다.</p>
                     ) : (
@@ -580,13 +580,13 @@ export default function MypageClient({
                                 {v.votes?.issues && (
                                     <Link
                                         href={`/issue/${v.votes.issues.id}`}
-                                        className="text-xs font-medium text-primary hover:underline mb-1 block truncate"
+                                        className="text-[13px] font-medium text-primary hover:underline mb-1 block truncate"
                                     >
                                         {v.votes.issues.title}
                                     </Link>
                                 )}
                                 {v.votes?.title && (
-                                    <p className="text-sm font-medium text-content-primary mb-1">{v.votes.title}</p>
+                                    <p className="text-sm font-medium text-content-primary mb-2">{v.votes.title}</p>
                                 )}
                                 <div className="flex items-center gap-2">
                                     {v.vote_choices && (
@@ -604,7 +604,7 @@ export default function MypageClient({
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-content-muted mt-1.5">{formatDate(v.created_at)}</p>
+                                <p className="text-xs text-content-muted mt-4">{formatDate(v.created_at)}</p>
                             </div>
                         ))
                     )}

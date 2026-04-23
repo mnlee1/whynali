@@ -155,7 +155,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                         >
                             <span className="text-xl leading-none">{emoji}</span>
                             <span className={[
-                                'text-sm mt-1 font-semibold',
+                                'text-xs mt-1 font-semibold',
                                 selected ? 'text-primary' : 'text-content-secondary',
                             ].join(' ')}>
                                 {label}
