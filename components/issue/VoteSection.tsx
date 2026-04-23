@@ -279,51 +279,51 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
     return (
         <div className="rounded-xl transition-all p-4 border border-border">
             {/* 제목 + 상태 배지 */}
-            <div className={isClosed && !isExpanded ? '' : 'mb-3'}>
-                <div 
-                    className={`flex items-center justify-between gap-2 ${isClosed ? 'cursor-pointer' : ''}`}
+            <div className={isClosed && !isExpanded ? '' : 'mb-4'}>
+                <div
+                    className={isClosed ? 'cursor-pointer' : ''}
                     onClick={() => isClosed && setIsExpanded(!isExpanded)}
                 >
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                            <div className="flex items-center gap-1">
-                                {vote.phase && (
-                                    <span className={[
-                                        'inline-flex items-center px-2 py-0.5 rounded-full border font-medium shrink-0 text-xs',
-                                        isClosed
-                                            ? 'bg-surface-muted text-content-muted border-border'
-                                            : 'bg-purple-50 text-purple-700 border-purple-200'
-                                    ].join(' ')}>
-                                        {isClosed ? '투표 마감' : '투표 진행중'}
-                                    </span>
-                                )}
-                                {vote.is_ai_generated && (
-                                    <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200 font-medium">
-                                        AI 생성
-                                    </span>
-                                )}
-                            </div>
-                            {vote.title && (
-                                <p className="font-semibold text-sm">{vote.title}</p>
+                    {/* 1행: 상태/생성 라벨 + 참여 중 */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-1">
+                            {vote.phase && (
+                                <span className={[
+                                    'inline-flex items-center px-2 py-0.5 rounded-full border font-medium shrink-0 text-xs',
+                                    isClosed
+                                        ? 'bg-surface-muted text-content-muted border-border'
+                                        : 'bg-purple-50 text-purple-700 border-purple-200'
+                                ].join(' ')}>
+                                    {isClosed ? '투표 마감' : '투표 진행중'}
+                                </span>
+                            )}
+                            {vote.is_ai_generated && (
+                                <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200 font-medium">
+                                    AI 생성
+                                </span>
                             )}
                         </div>
-                        {!isClosed && isEndingSoon && (
-                            <span className="inline-block text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-medium animate-pulse">
-                                🔥 {getTimeRemainingText()}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
+                                <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
                             </span>
-                        )}
+                            {isClosed && (
+                                <ChevronDown
+                                    className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    strokeWidth={2}
+                                />
+                            )}
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
-                            <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
+                    {/* 2행: 투표 제목 */}
+                    {vote.title && (
+                        <p className="font-semibold text-sm">{vote.title}</p>
+                    )}
+                    {!isClosed && isEndingSoon && (
+                        <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-medium animate-pulse">
+                            🔥 {getTimeRemainingText()}
                         </span>
-                        {isClosed && (
-                            <ChevronDown 
-                                className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                strokeWidth={2}
-                            />
-                        )}
-                    </div>
+                    )}
                 </div>
             </div>
 
