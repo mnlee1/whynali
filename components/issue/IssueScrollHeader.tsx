@@ -74,8 +74,8 @@ export default function IssueScrollHeader({ title, status, issueId, userId, init
     }
 
     return (
-        <div className={`fixed left-0 right-0 z-40 bg-surface border-b border-border shadow-sm transition-all duration-200
-            top-[88px] xl:top-14
+        <div className={`hidden xl:block fixed left-0 right-0 z-40 bg-surface border-b border-border shadow-sm transition-all duration-200
+            xl:top-14
             ${visible ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-4 opacity-0 pointer-events-none'}
         `}>
             <div className="container mx-auto px-4 max-w-2xl">
