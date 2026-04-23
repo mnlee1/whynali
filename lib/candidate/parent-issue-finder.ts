@@ -97,7 +97,7 @@ export async function findParentIssue(
 
     // 키워드 프리필터: AI 호출 전에 제목 키워드가 1개 이상 겹치는 이슈만 후보로 좁힘
     // → 카테고리만 같고 내용이 전혀 다른 이슈가 AI 후보에 올라가는 것을 차단
-    const MIN_KEYWORD_OVERLAP = parseInt(process.env.PARENT_MIN_KEYWORD_OVERLAP ?? '1')
+    const MIN_KEYWORD_OVERLAP = parseInt(process.env.PARENT_MIN_KEYWORD_OVERLAP ?? '2')
     const filteredIssues = (activeIssues as Array<{ id: string; title: string }>)
         .filter(iss => countKeywordOverlap(newTitle, iss.title) >= MIN_KEYWORD_OVERLAP)
 
