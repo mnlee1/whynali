@@ -364,7 +364,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                                             )}
                                         </div>
 
-                                        <p className="text-base font-medium text-content-primary line-clamp-2 leading-snug mb-3 group-hover:text-primary">
+                                        <p className="text-[15px] font-medium text-content-primary line-clamp-2 leading-snug mb-3 group-hover:text-primary">
                                             {topic.body}
                                         </p>
 
