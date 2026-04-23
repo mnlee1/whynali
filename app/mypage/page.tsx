@@ -32,7 +32,7 @@ export default async function MypagePage() {
         // 이슈 댓글
         admin
             .from('comments')
-            .select('id, body, created_at, like_count, issues(id, title)')
+            .select('id, body, created_at, like_count, dislike_count, issues(id, title)')
             .eq('user_id', user.id)
             .eq('visibility', 'public')
             .not('issue_id', 'is', null)
@@ -41,7 +41,7 @@ export default async function MypagePage() {
         // 토론 댓글
         admin
             .from('comments')
-            .select('id, body, created_at, like_count, discussion_topics(id, body, issues(id, title))')
+            .select('id, body, created_at, like_count, dislike_count, discussion_topics(id, body, issues(id, title))')
             .eq('user_id', user.id)
             .eq('visibility', 'public')
             .not('discussion_topic_id', 'is', null)
@@ -50,7 +50,7 @@ export default async function MypagePage() {
         // 투표 참여
         admin
             .from('user_votes')
-            .select('id, created_at, vote_choices(label), votes(id, title, phase, issues(id, title))')
+            .select('id, created_at, vote_choices(label, count), votes(id, title, phase, issues(id, title), vote_choices(count))')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(30),

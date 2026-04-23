@@ -34,8 +34,8 @@ export default function Nav({ mobile = false }: NavProps) {
                                 href={cat.href}
                                 className={`pt-2 pb-2.5 text-sm whitespace-nowrap transition-colors border-b-2 ${
                                     isActive
-                                        ? 'text-content-primary font-bold border-primary'
-                                        : 'text-content-secondary font-bold border-transparent hover:text-content-primary'
+                                        ? 'text-content-primary font-semibold border-primary'
+                                        : 'text-content-secondary font-semibold border-transparent hover:text-content-primary'
                                 }`}
                             >
                                 {cat.name}
@@ -60,8 +60,8 @@ export default function Nav({ mobile = false }: NavProps) {
                             href={cat.href}
                             className={`flex items-center h-full text-sm whitespace-nowrap transition-colors border-b-2 ${
                                 isActive
-                                    ? 'text-content-primary font-bold border-primary'
-                                    : 'text-content-secondary font-bold border-transparent hover:text-content-primary'
+                                    ? 'text-content-primary font-semibold border-primary'
+                                    : 'text-content-secondary font-semibold border-transparent hover:text-content-primary'
                             }`}
                         >
                             {cat.name}

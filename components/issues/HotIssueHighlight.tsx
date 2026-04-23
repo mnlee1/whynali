@@ -73,20 +73,20 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
 
     if (loading) {
         return (
-            <div className="h-[300px] lg:h-full lg:min-h-[400px] bg-border-muted rounded-2xl animate-pulse" />
+            <div className="h-[300px] lg:h-full lg:min-h-[350px] bg-border-muted rounded-2xl animate-pulse" />
         )
     }
 
     if (issues.length === 0) {
         return (
-            <section className="relative h-[300px] lg:h-full lg:min-h-[400px] bg-border-muted rounded-2xl flex items-center justify-center">
+            <section className="relative h-[300px] lg:h-full lg:min-h-[350px] bg-border-muted rounded-2xl flex items-center justify-center">
                 <p className="text-content-muted text-sm">이슈를 불러오는 중입니다.</p>
             </section>
         )
     }
 
     return (
-        <section className="relative h-[300px] lg:h-full lg:min-h-[400px]">
+        <section className="relative h-[300px] lg:h-full lg:min-h-[350px]">
             {/* 화력 상위 뱃지 */}
             <div className="absolute top-3 right-3 z-10">
                 <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">

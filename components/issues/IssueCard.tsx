@@ -75,7 +75,7 @@ export default function IssueCard({ issue }: IssueCardProps) {
 
                 {/* 이슈 내용 요약 */}
                 {(issue.topic_description || issue.brief_summary?.intro) && (
-                    <p className="text-xs text-content-secondary line-clamp-2 mb-3 leading-relaxed">
+                    <p className="text-[13px] text-content-secondary line-clamp-2 mb-3 leading-relaxed">
                         {issue.topic_description ?? issue.brief_summary!.intro}
                     </p>
                 )}

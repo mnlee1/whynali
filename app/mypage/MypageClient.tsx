@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { ThumbsUp, ThumbsDown } from 'lucide-react'
 import { validateEmail } from '@/lib/validate-email'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
@@ -20,6 +21,7 @@ type CommentRow = {
     body: string
     created_at: string
     like_count: number
+    dislike_count: number
     issues: IssueRef | null
 }
 
@@ -28,6 +30,7 @@ type DiscussionRow = {
     body: string
     created_at: string
     like_count: number
+    dislike_count: number
     discussion_topics: {
         id: string
         body: string
@@ -38,12 +41,13 @@ type DiscussionRow = {
 type VoteRow = {
     id: string
     created_at: string
-    vote_choices: { label: string } | null
+    vote_choices: { label: string; count: number } | null
     votes: {
         id: string
         title: string | null
         phase: string
         issues: IssueRef | null
+        vote_choices: { count: number }[]
     } | null
 }
 
@@ -89,6 +93,12 @@ export default function MypageClient({
     votes,
 }: MypageClientProps) {
     const [tab, setTab] = useState<Tab>('profile')
+    const [tabVisible, setTabVisible] = useState(true)
+
+    const handleTabChange = (key: Tab) => {
+        setTabVisible(false)
+        setTimeout(() => { setTab(key); setTabVisible(true) }, 120)
+    }
 
     // 닉네임 변경
     const [nickname, setNickname] = useState(displayName)
@@ -285,7 +295,7 @@ export default function MypageClient({
         <div className="container mx-auto px-4 py-8 max-w-2xl">
             {/* 프로필 카드 */}
             <div className="flex items-center gap-4 mb-8 p-5 bg-primary-light/35 border border-primary-muted rounded-xl">
-                <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted shrink-0">
+                <div className="w-14 h-14 rounded-full bg-surface shadow-sm flex items-center justify-center text-2xl font-bold text-primary border border-primary-muted shrink-0 leading-none select-none">
                     {initial}
                 </div>
                 <div className="min-w-0">
@@ -307,7 +317,7 @@ export default function MypageClient({
                 {tabs.map(({ key, label, count }) => (
                     <button
                         key={key}
-                        onClick={() => setTab(key)}
+                        onClick={() => handleTabChange(key)}
                         className={[
                             'flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
                             tab === key
@@ -518,7 +528,7 @@ export default function MypageClient({
 
             {/* 내 댓글 탭 */}
             {tab === 'comments' && (
-                <div className="space-y-3">
+                <div className={`space-y-3 transition-opacity duration-150 ${tabVisible ? 'opacity-100' : 'opacity-0'}`}>
                     {comments.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">작성한 댓글이 없습니다.</p>
                     ) : (
@@ -527,13 +537,25 @@ export default function MypageClient({
                                 {c.issues && (
                                     <Link
                                         href={`/issue/${c.issues.id}`}
-                                        className="text-xs font-medium text-primary hover:underline mb-1.5 block truncate"
+                                        className="text-[13px] font-medium text-primary hover:underline mb-1.5 block truncate"
                                     >
                                         {c.issues.title}
                                     </Link>
                                 )}
                                 <p className="text-sm text-content-primary line-clamp-2">{c.body}</p>
-                                <p className="text-xs text-content-muted mt-1.5">{formatDate(c.created_at)}</p>
+                                <div className="flex items-center justify-between mt-4">
+                                    <p className="text-xs text-content-muted">{formatDate(c.created_at)}</p>
+                                    <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                            <ThumbsUp className="w-3.5 h-3.5" />
+                                            <span>{c.like_count}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                            <ThumbsDown className="w-3.5 h-3.5" />
+                                            <span>{c.dislike_count}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         ))
                     )}
@@ -542,7 +564,7 @@ export default function MypageClient({
 
             {/* 내 토론 탭 */}
             {tab === 'discussions' && (
-                <div className="space-y-3">
+                <div className={`space-y-3 transition-opacity duration-150 ${tabVisible ? 'opacity-100' : 'opacity-0'}`}>
                     {discussions.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">참여한 토론이 없습니다.</p>
                     ) : (
@@ -551,18 +573,30 @@ export default function MypageClient({
                                 {d.discussion_topics?.issues && (
                                     <Link
                                         href={`/issue/${d.discussion_topics.issues.id}`}
-                                        className="text-xs font-medium text-primary hover:underline mb-1 block truncate"
+                                        className="text-[13px] font-medium text-primary hover:underline mb-1 block truncate"
                                     >
                                         {d.discussion_topics.issues.title}
                                     </Link>
                                 )}
                                 {d.discussion_topics && (
-                                    <p className="text-xs text-content-secondary mb-1.5 line-clamp-1">
+                                    <p className="text-[13px] text-content-secondary mb-1.5 line-clamp-1">
                                         토론 주제: {d.discussion_topics.body}
                                     </p>
                                 )}
                                 <p className="text-sm text-content-primary line-clamp-2">{d.body}</p>
-                                <p className="text-xs text-content-muted mt-1.5">{formatDate(d.created_at)}</p>
+                                <div className="flex items-center justify-between mt-4">
+                                    <p className="text-xs text-content-muted">{formatDate(d.created_at)}</p>
+                                    <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                            <ThumbsUp className="w-3.5 h-3.5" />
+                                            <span>{d.like_count}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                            <ThumbsDown className="w-3.5 h-3.5" />
+                                            <span>{d.dislike_count}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         ))
                     )}
@@ -571,42 +605,52 @@ export default function MypageClient({
 
             {/* 내 투표 탭 */}
             {tab === 'votes' && (
-                <div className="space-y-3">
+                <div className={`space-y-3 transition-opacity duration-150 ${tabVisible ? 'opacity-100' : 'opacity-0'}`}>
                     {votes.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">참여한 투표가 없습니다.</p>
                     ) : (
-                        votes.map((v) => (
-                            <div key={v.id} className="card-hover p-4">
-                                {v.votes?.issues && (
-                                    <Link
-                                        href={`/issue/${v.votes.issues.id}`}
-                                        className="text-xs font-medium text-primary hover:underline mb-1 block truncate"
-                                    >
-                                        {v.votes.issues.title}
-                                    </Link>
-                                )}
-                                {v.votes?.title && (
-                                    <p className="text-sm font-medium text-content-primary mb-1">{v.votes.title}</p>
-                                )}
-                                <div className="flex items-center gap-2">
+                        votes.map((v) => {
+                            const myCount = v.vote_choices?.count ?? 0
+                            const total = (v.votes?.vote_choices ?? []).reduce((sum, c) => sum + (c.count ?? 0), 0)
+                            const ratio = total > 0 ? Math.round((myCount / total) * 100) : 0
+                            return (
+                                <div key={v.id} className="card-hover p-4">
+                                    {v.votes?.issues && (
+                                        <Link
+                                            href={`/issue/${v.votes.issues.id}`}
+                                            className="text-[13px] font-medium text-primary hover:underline mb-1 block truncate"
+                                        >
+                                            {v.votes.issues.title}
+                                        </Link>
+                                    )}
+                                    <div className="flex items-center gap-2 mb-2">
+                                        {v.votes?.phase && (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                                                v.votes.phase === '진행중'
+                                                    ? 'bg-green-50 text-green-700'
+                                                    : 'bg-surface-subtle text-content-muted'
+                                            }`}>
+                                                {v.votes.phase}
+                                            </span>
+                                        )}
+                                        {v.votes?.title && (
+                                            <p className="text-sm font-medium text-content-primary line-clamp-1">{v.votes.title}</p>
+                                        )}
+                                    </div>
                                     {v.vote_choices && (
-                                        <span className="text-xs px-2 py-0.5 bg-primary-light text-primary rounded-full font-medium">
-                                            {v.vote_choices.label} 선택
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-0.5 bg-primary-light text-primary rounded-full font-medium">
+                                                {v.vote_choices.label} 선택
+                                            </span>
+                                            <span className="text-xs text-content-muted font-medium">
+                                                <span className="text-primary font-bold">{myCount.toLocaleString()}</span>표
+                                            </span>
+                                        </div>
                                     )}
-                                    {v.votes?.phase && (
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                            v.votes.phase === '진행중'
-                                                ? 'bg-green-50 text-green-700'
-                                                : 'bg-surface-subtle text-content-muted'
-                                        }`}>
-                                            {v.votes.phase}
-                                        </span>
-                                    )}
+                                    <p className="text-xs text-content-muted mt-4">{formatDate(v.created_at)}</p>
                                 </div>
-                                <p className="text-xs text-content-muted mt-1.5">{formatDate(v.created_at)}</p>
-                            </div>
-                        ))
+                            )
+                        })
                     )}
                 </div>
             )}

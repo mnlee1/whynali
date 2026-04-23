@@ -33,18 +33,21 @@ export default async function PoliticsPage() {
     ])
 
     const [
-        { data, count },
+        { data },
+        { count: totalCount },
         { count: hotCount },
         { count: controversialCount },
         { count: closedCount },
     ] = await Promise.all([
         supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '정치').order('created_at', { ascending: false }).range(0, 19),
+        supabaseAdmin.from('issues').select('*', { count: 'exact' }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).gte('heat_index', MIN_HEAT).eq('category', '정치').order('created_at', { ascending: false }).range(0, 19),
+        supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '정치'),
         supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '정치').eq('status', '점화'),
         supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '정치').eq('status', '논란중'),
         supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '정치').eq('status', '종결'),
     ])
 
-    const tabCounts = { '': count ?? 0, '점화': hotCount ?? 0, '논란중': controversialCount ?? 0, '종결': closedCount ?? 0 }
+    const tabCounts = { '': totalCount ?? 0, '점화': hotCount ?? 0, '논란중': controversialCount ?? 0, '종결': closedCount ?? 0 }
 
     return (
         <>
@@ -62,8 +65,9 @@ export default async function PoliticsPage() {
                 <h1 className="text-2xl font-bold text-content-primary mb-6">정치 이슈</h1>
                 <IssueList
                     category="정치"
-                    initialData={{ data: (data ?? []) as Issue[], total: count ?? 0 }}
+                    initialData={{ data: (data ?? []) as Issue[], total: totalCount ?? 0 }}
                     initialTabCounts={tabCounts}
+                infiniteScroll
                 />
             </div>
         </>

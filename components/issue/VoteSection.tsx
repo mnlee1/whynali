@@ -148,7 +148,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">투표</h2>
                 </div>
-                <div className="p-4 flex flex-col items-center justify-center text-center gap-2">
+                <div className="px-4 py-8 flex flex-col items-center justify-center text-center gap-2">
                     <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
                     <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
                     <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
@@ -286,21 +286,23 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                 >
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                            {vote.phase && (
-                                <span className={[
-                                    'inline-flex items-center px-2 py-0.5 rounded-full border font-medium shrink-0 text-xs',
-                                    isClosed
-                                        ? 'bg-surface-muted text-content-muted border-border'
-                                        : 'bg-purple-50 text-purple-700 border-purple-200'
-                                ].join(' ')}>
-                                    {isClosed ? '투표 마감' : '투표 진행중'}
-                                </span>
-                            )}
-                            {vote.is_ai_generated && (
-                                <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200 font-medium">
-                                    AI 생성
-                                </span>
-                            )}
+                            <div className="flex items-center gap-1">
+                                {vote.phase && (
+                                    <span className={[
+                                        'inline-flex items-center px-2 py-0.5 rounded-full border font-medium shrink-0 text-xs',
+                                        isClosed
+                                            ? 'bg-surface-muted text-content-muted border-border'
+                                            : 'bg-purple-50 text-purple-700 border-purple-200'
+                                    ].join(' ')}>
+                                        {isClosed ? '투표 마감' : '투표 진행중'}
+                                    </span>
+                                )}
+                                {vote.is_ai_generated && (
+                                    <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200 font-medium">
+                                        AI 생성
+                                    </span>
+                                )}
+                            </div>
                             {vote.title && (
                                 <p className="font-semibold text-sm">{vote.title}</p>
                             )}
@@ -312,11 +314,9 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                         )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                        {totalCount > 0 && (
-                            <span className="text-xs text-content-primary font-medium">
-                                {totalCount.toLocaleString()}표
-                            </span>
-                        )}
+                        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
+                            <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
+                        </span>
                         {isClosed && (
                             <ChevronDown 
                                 className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
