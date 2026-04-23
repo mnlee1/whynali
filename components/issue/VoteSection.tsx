@@ -148,7 +148,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">투표</h2>
                 </div>
-                <div className="p-4 flex flex-col items-center justify-center text-center gap-2">
+                <div className="px-4 py-8 flex flex-col items-center justify-center text-center gap-2">
                     <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
                     <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
                     <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
