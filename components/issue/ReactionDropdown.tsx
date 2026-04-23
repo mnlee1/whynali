@@ -6,6 +6,7 @@ import type { ReactionType } from '@/types'
 interface ReactionDropdownProps {
     issueId: string
     userId: string | null
+    align?: 'left' | 'right'
 }
 
 type CountMap = Partial<Record<ReactionType, number>>
@@ -20,7 +21,7 @@ const REACTION_META: { type: ReactionType; emoji: string; label: string }[] = [
     { type: '사이다',  emoji: '🥤', label: '사이다' },
 ]
 
-export default function ReactionDropdown({ issueId, userId }: ReactionDropdownProps) {
+export default function ReactionDropdown({ issueId, userId, align = 'left' }: ReactionDropdownProps) {
     const [open, setOpen] = useState(false)
     const [counts, setCounts] = useState<CountMap>({})
     const [userReaction, setUserReaction] = useState<ReactionType | null>(null)
@@ -160,7 +161,7 @@ export default function ReactionDropdown({ issueId, userId }: ReactionDropdownPr
 
             {/* 드롭다운 */}
             {open && (
-                <div className="absolute left-0 top-full z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px]">
+                <div className={`absolute top-full z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`}>
                     <div className="grid grid-cols-4 gap-1.5">
                         {REACTION_META.slice(0, 4).map(({ type, emoji, label }) => {
                             const count = counts[type] ?? 0

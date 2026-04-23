@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { MessageSquare, BadgeCheck, Users } from 'lucide-react'
 import StatusBadge from '@/components/common/StatusBadge'
 import ReactionDropdown from '@/components/issue/ReactionDropdown'
@@ -35,6 +35,26 @@ export default function IssueScrollHeader({ title, status, issueId, userId, init
         discussionCount: initialDiscussionCount,
     })
     const [highlightId, setHighlightId] = useState<string | null>(null)
+    const headerRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const updateOffset = () => {
+            if (!headerRef.current) return
+            const isDesktop = window.innerWidth >= 1280
+            const navTop = isDesktop ? 56 : 88
+            const extra = 24
+            const headerHeight = headerRef.current.offsetHeight
+            document.documentElement.style.setProperty('--scroll-offset', `${navTop + headerHeight + extra}px`)
+        }
+        updateOffset()
+        const observer = new ResizeObserver(updateOffset)
+        if (headerRef.current) observer.observe(headerRef.current)
+        window.addEventListener('resize', updateOffset)
+        return () => {
+            observer.disconnect()
+            window.removeEventListener('resize', updateOffset)
+        }
+    }, [])
 
     useEffect(() => {
         const target = document.getElementById('issue-title')
@@ -74,27 +94,28 @@ export default function IssueScrollHeader({ title, status, issueId, userId, init
     }
 
     return (
-        <div className={`hidden xl:block fixed left-0 right-0 z-40 bg-surface border-b border-border shadow-sm transition-all duration-200
-            xl:top-14
+        <div ref={headerRef} className={`fixed left-0 right-0 z-40 bg-surface border-b border-border shadow-sm transition-all duration-200
+            top-[88px] xl:top-14
             ${visible ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-4 opacity-0 pointer-events-none'}
         `}>
             <div className="container mx-auto px-4 max-w-2xl">
-                <div className="flex items-center justify-between gap-3 py-2">
-                    {/* 상태 라벨 + 이슈 타이틀 */}
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <StatusBadge status={status} size="sm" />
-                        <p className="text-base font-semibold text-content-primary truncate">{title}</p>
-                    </div>
 
-                    {/* 섹션 네비게이션 — IssueStatBar와 동일한 구성 */}
-                    <div className="flex items-center gap-1 shrink-0">
+                {/* 모바일/태블릿: 2줄 레이아웃 */}
+                <div className="flex sm:hidden flex-col gap-2 py-3">
+                    {/* 1행: 상태 라벨 + 타이틀 */}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <StatusBadge status={status} size="xs" />
+                        <p className="text-sm font-semibold text-content-primary truncate">{title}</p>
+                    </div>
+                    {/* 2행: 감정표현 + 섹션 이동 */}
+                    <div className="flex items-center -mx-0.5">
                         <ReactionDropdown issueId={issueId} userId={userId} />
                         {NAV_ITEMS.map(({ key, icon, scrollTo }) => (
                             <button
                                 key={key}
                                 type="button"
                                 onClick={() => handleClick(scrollTo)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
+                                className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
                             >
                                 {icon}
                                 <span>{stats[key] > 0 ? stats[key].toLocaleString() : ''}</span>
@@ -102,6 +123,29 @@ export default function IssueScrollHeader({ title, status, issueId, userId, init
                         ))}
                     </div>
                 </div>
+
+                {/* 데스크탑: 1줄 레이아웃 */}
+                <div className="hidden sm:flex items-center justify-between gap-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <StatusBadge status={status} size="sm" />
+                        <p className="text-base font-semibold text-content-primary truncate">{title}</p>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                        <ReactionDropdown issueId={issueId} userId={userId} align="right" />
+                        {NAV_ITEMS.map(({ key, icon, scrollTo }) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => handleClick(scrollTo)}
+                                className="flex items-center gap-0.5 px-2 py-1 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
+                            >
+                                {icon}
+                                <span>{stats[key] > 0 ? stats[key].toLocaleString() : ''}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
             </div>
         </div>
     )

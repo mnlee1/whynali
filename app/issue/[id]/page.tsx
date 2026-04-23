@@ -326,13 +326,13 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             <SourcesSection issueId={id} initialNews={newsData ?? []} />
 
             {/* 투표 */}
-            <div id="section-vote" style={{ scrollMarginTop: '126px' }}>
+            <div id="section-vote" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
                 <VoteSection issueId={id} userId={userId} />
             </div>
 
             {/* 관련 토론 주제 */}
             {discussionTopicsWithStats && discussionTopicsWithStats.length > 0 && (
-                <div id="section-discussion" style={{ scrollMarginTop: '126px' }}>
+                <div id="section-discussion" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
                     <div className="card overflow-hidden mb-6">
                     <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -394,7 +394,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
             {(!discussionTopicsWithStats || discussionTopicsWithStats.length === 0) && (
-                <div id="section-discussion" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '126px' }}>
+                <div id="section-discussion" className="card overflow-hidden mb-6" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
                     <div className="px-4 py-3 border-b border-border-muted">
                         <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
                     </div>
@@ -414,7 +414,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             )}
 
             {/* 감정 표현 */}
-            <div id="section-reactions" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '126px' }}>
+            <div id="section-reactions" className="card overflow-hidden mb-6" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">감정 표현</h2>
                 </div>
@@ -424,7 +424,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 댓글 */}
-            <div id="section-comments" className="card overflow-hidden" style={{ scrollMarginTop: '126px' }}>
+            <div id="section-comments" className="card overflow-hidden" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">댓글</h2>
                 </div>
