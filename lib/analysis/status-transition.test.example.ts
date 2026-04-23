@@ -26,6 +26,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(baseIssue, data)
@@ -43,6 +44,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(baseIssue, data)
@@ -64,6 +66,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(lowHeatIssue, data)
@@ -86,6 +89,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(timeoutIssue, data)
@@ -118,6 +122,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(lowHeatIssue, data)
@@ -133,6 +138,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(baseIssue, data)
@@ -148,6 +154,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 3,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(baseIssue, data)
@@ -175,6 +182,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 0,
                 rapidNewsCount: 40,
                 rapidCommunityCount: 20,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(baseIssue, data)
@@ -192,6 +200,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 5,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(baseIssue, data)
@@ -214,6 +223,7 @@ describe('evaluateTransition', () => {
                 recentCommunityCount: 1,
                 rapidNewsCount: 0,
                 rapidCommunityCount: 0,
+                hasJinjeongPoint: false,
             }
 
             const result = evaluateTransition(lowHeatIssue, data)

@@ -57,6 +57,7 @@ export interface TransitionData {
     recentCommunityCount: number
     rapidNewsCount: number
     rapidCommunityCount: number
+    hasJinjeongPoint: boolean
 }
 
 /**
@@ -68,6 +69,7 @@ export interface TransitionReason {
         | 'IGNITE_TIMEOUT'
         | 'HEAT_AND_COMMUNITY'
         | 'NO_RECENT_DATA'
+        | 'JINJEONG_DETECTED'
         | 'REIGNITE_BURST'
         | 'REIGNITE_GRADUAL'
         | 'WAITING'
@@ -103,6 +105,7 @@ async function fetchTransitionData(
         recentCommunityCount: 0,
         rapidNewsCount: 0,
         rapidCommunityCount: 0,
+        hasJinjeongPoint: false,
     }
 
     if (status === '점화') {
@@ -117,8 +120,8 @@ async function fetchTransitionData(
 
     if (status === '논란중') {
         const since = new Date(Date.now() - CLOSED_IDLE_HOURS * 60 * 60 * 1000).toISOString()
-        
-        const [newsRes, communityRes] = await Promise.all([
+
+        const [newsRes, communityRes, jinjeongRes] = await Promise.all([
             supabaseAdmin
                 .from('news_data')
                 .select('id')
@@ -129,10 +132,17 @@ async function fetchTransitionData(
                 .select('id')
                 .eq('issue_id', issueId)
                 .gte('created_at', since),
+            supabaseAdmin
+                .from('timeline_points')
+                .select('id')
+                .eq('issue_id', issueId)
+                .eq('stage', '진정')
+                .limit(1),
         ])
 
         data.recentNewsCount = newsRes.data?.length ?? 0
         data.recentCommunityCount = communityRes.data?.length ?? 0
+        data.hasJinjeongPoint = (jinjeongRes.data?.length ?? 0) > 0
     }
 
     if (status === '종결') {
@@ -288,6 +298,21 @@ export function evaluateTransition(
                         threshold: CLOSED_EXTREME_LOW_HEAT,
                     },
                     message: `화력 ${heat}점 (극단 임계값 ${CLOSED_EXTREME_LOW_HEAT} 미만) — 즉시 종결`,
+                },
+            }
+        }
+
+        // 진정 신호 감지 + 화력 미달 → 종결
+        if (data.hasJinjeongPoint && heat < IGNITE_MIN_HEAT) {
+            return {
+                newStatus: '종결',
+                reason: {
+                    code: 'JINJEONG_DETECTED',
+                    detail: {
+                        heat,
+                        threshold: IGNITE_MIN_HEAT,
+                    },
+                    message: `진정 타임라인 감지 + 화력 ${heat}점 (기준 ${IGNITE_MIN_HEAT} 미만) → 종결`,
                 },
             }
         }
