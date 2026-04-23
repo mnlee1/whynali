@@ -272,7 +272,7 @@ function CommunityContent() {
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-6">커뮤니티</h1>
+            <h1 className="text-2xl font-bold text-content-primary mb-6">커뮤니티</h1>
 
             {/* 검색 */}
             {!issueIdFilter && (
