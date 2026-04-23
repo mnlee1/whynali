@@ -61,7 +61,7 @@ function getSizeClass(size: 'sm' | 'md' | 'lg'): {
     switch (size) {
         case 'sm':
             return {
-                containerClass: 'px-2 py-0.5 gap-1',
+                containerClass: 'px-2 py-1 gap-1',
                 iconClass: 'text-xs',
                 textClass: 'text-xs'
             }
