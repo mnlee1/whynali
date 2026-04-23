@@ -31,9 +31,10 @@ import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
+import IssueScrollHeader from '@/components/issue/IssueScrollHeader'
 import ViewCounter from '@/components/issue/ViewCounter'
 import IssueStatBar from '@/components/issue/IssueStatBar'
-import { formatFullDate, formatDate } from '@/lib/utils/format-date'
+import { formatFullDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
 // ISR: 15분(900초)마다 페이지 재생성
@@ -276,13 +277,21 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
                 {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출) */}
                 <ViewCounter endpoint={`/api/issues/${id}/view`} />
+                <IssueScrollHeader
+                    title={decodeHtml(issue.title)}
+                    status={issue.status}
+                    issueId={id}
+                    userId={userId}
+                    initialVoteCount={voteCount ?? 0}
+                    initialDiscussionCount={discussionTopicsWithStats?.length ?? 0}
+                />
 
             {/* 이슈 헤더 */}
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
                     <StatusBadge status={issue.status} size="md" />
                 </div>
-                <h1 className="text-2xl md:text-3xl font-bold text-content-primary mb-3">
+                <h1 id="issue-title" className="text-2xl md:text-3xl font-bold text-content-primary mb-3">
                     {decodeHtml(issue.title)}
                 </h1>
                 <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
@@ -317,13 +326,13 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             <SourcesSection issueId={id} initialNews={newsData ?? []} />
 
             {/* 투표 */}
-            <div id="section-vote" style={{ scrollMarginTop: '80px' }}>
+            <div id="section-vote" style={{ scrollMarginTop: '126px' }}>
                 <VoteSection issueId={id} userId={userId} />
             </div>
 
             {/* 관련 토론 주제 */}
             {discussionTopicsWithStats && discussionTopicsWithStats.length > 0 && (
-                <div id="section-discussion" style={{ scrollMarginTop: '80px' }}>
+                <div id="section-discussion" style={{ scrollMarginTop: '126px' }}>
                     <div className="card overflow-hidden mb-6">
                     <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -385,7 +394,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 이 이슈의 커뮤니티 - 관련 토론 주제가 없을 때만 표시 */}
             {(!discussionTopicsWithStats || discussionTopicsWithStats.length === 0) && (
-                <div id="section-discussion" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '80px' }}>
+                <div id="section-discussion" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '126px' }}>
                     <div className="px-4 py-3 border-b border-border-muted">
                         <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
                     </div>
@@ -405,7 +414,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             )}
 
             {/* 감정 표현 */}
-            <div className="card overflow-hidden mb-6">
+            <div id="section-reactions" className="card overflow-hidden mb-6" style={{ scrollMarginTop: '126px' }}>
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">감정 표현</h2>
                 </div>
@@ -415,7 +424,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 댓글 */}
-            <div id="section-comments" className="card overflow-hidden" style={{ scrollMarginTop: '80px' }}>
+            <div id="section-comments" className="card overflow-hidden" style={{ scrollMarginTop: '126px' }}>
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">댓글</h2>
                 </div>
