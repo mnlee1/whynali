@@ -25,7 +25,7 @@ import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject, parseJsonArray } from '@/lib/ai/parse-json-response'
 import { searchNaverNewsByKeyword } from '@/lib/collectors/naver-news'
 import { checkDuplicateIssue } from '@/lib/candidate/duplicate-checker'
-import { findParentIssue } from '@/lib/candidate/parent-issue-finder'
+import { findParentIssue, countKeywordOverlap } from '@/lib/candidate/parent-issue-finder'
 import { calculateHeatIndex } from '@/lib/analysis/heat'
 import { tokenize } from '@/lib/candidate/tokenizer'
 import { getCategoryIds, getCategoryKeywords } from '@/lib/config/categories'
@@ -1220,19 +1220,25 @@ async function processTrackA(): Promise<{
                     console.log(`  → 부모 이슈에 뉴스 ${filteredNewsIds.length}건 연결`)
 
                     // 첫 번째 관련 뉴스를 타임라인 포인트로 추가
+                    // 최후 방어선: 뉴스 제목과 부모 이슈 제목 간 키워드가 1개 이상 겹쳐야만 삽입
                     const firstNews = newsItems.find(n => filteredNewsIds.includes(n.id))
                     if (firstNews) {
-                        await supabaseAdmin
-                            .from('timeline_points')
-                            .insert({
-                                issue_id: parentResult.parentIssueId,
-                                title: firstNews.title,
-                                occurred_at: firstNews.published_at,
-                                source_url: firstNews.link,
-                                stage: parentResult.stage,
-                                ai_summary: null, // update-timeline cron에서 생성
-                            })
-                        console.log(`  → 타임라인 포인트 추가 (${parentResult.stage}: "${firstNews.title}")`)
+                        const overlap = countKeywordOverlap(firstNews.title ?? '', parentResult.parentIssueTitle)
+                        if (overlap < 1) {
+                            console.warn(`  ⚠️ [타임라인 삽입 거부] 키워드 겹침 없음 — "${firstNews.title}" ↔ "${parentResult.parentIssueTitle}"`)
+                        } else {
+                            await supabaseAdmin
+                                .from('timeline_points')
+                                .insert({
+                                    issue_id: parentResult.parentIssueId,
+                                    title: firstNews.title,
+                                    occurred_at: firstNews.published_at,
+                                    source_url: firstNews.link,
+                                    stage: parentResult.stage,
+                                    ai_summary: null,
+                                })
+                            console.log(`  → 타임라인 포인트 추가 (${parentResult.stage}: "${firstNews.title}")`)
+                        }
                     }
                 }
             } catch {

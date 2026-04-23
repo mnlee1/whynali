@@ -449,11 +449,17 @@ export async function GET(request: NextRequest) {
             // 4. URL 중복 제거 후, 제목 유사도로 동일 사건 기사 필터링
             // 발단 이전 뉴스는 추가하지 않음 (발단보다 이른 파생 방지)
             // 배치 내 중복도 방지하기 위해 추가된 제목을 누적하며 체크
+            // 이슈 제목 키워드 추출 — 겹침 0개 뉴스는 오매칭 가능성이 높아 제외
+            const issueTitleKeywords = extractKeywords(issue.title)
             const seenTitles: string[] = [...existingTitles]
             const newNews = newsData.reduce<typeof newsData>((acc, n) => {
                 if (!n.link || existingUrls.has(n.link)) return acc
                 if (baldanAt && n.published_at && n.published_at < baldanAt) return acc
                 if (n.title && isSimilarTitle(n.title, seenTitles)) return acc
+                // 이슈 제목과 키워드 겹침이 하나도 없으면 오매칭 가능성이 높으므로 제외
+                const newsKeywords = extractKeywords(n.title ?? '')
+                const overlap = [...newsKeywords].filter(kw => issueTitleKeywords.has(kw)).length
+                if (overlap === 0) return acc
                 acc.push(n)
                 if (n.title) seenTitles.push(n.title)
                 return acc

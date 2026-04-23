@@ -26,8 +26,43 @@ export interface ParentIssueResult {
     reason: string
 }
 
-const PARENT_CONFIDENCE_THRESHOLD = 92
+const PARENT_CONFIDENCE_THRESHOLD = parseInt(
+    process.env.PARENT_CONFIDENCE_THRESHOLD ?? '95'
+)
 const MAX_CANDIDATE_ISSUES = 15
+
+// 의미 없는 한국어 단어 (조사, 부사, 일반 명사 등)
+const STOPWORDS = new Set([
+    '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과', '이나', '나',
+    '도', '만', '까지', '부터', '에서', '에게', '한', '하는', '하고', '하여', '해서',
+    '이다', '있다', '없다', '하다', '되다', '이고', '하며', '이라', '라', '것', '수',
+    '등', '및', '또', '그', '더', '이후', '앞서', '관련', '대해', '위해', '따라',
+    '통해', '대한', '위한', '같은', '지난', '현재', '오늘', '내일', '어제', '해당',
+    '논란', '이슈', '사건', '사고', '화제', '소식',
+])
+
+/** 제목에서 의미 있는 키워드 추출 (2글자 이상, 불용어 제외) */
+function extractKeywords(title: string): Set<string> {
+    return new Set(
+        title
+            .split(/[\s\[\]()「」『』<>【】·,./…!?"']+/)
+            .map(t => t.trim())
+            .filter(t => t.length >= 2 && !STOPWORDS.has(t))
+    )
+}
+
+/**
+ * countKeywordOverlap - 두 제목 간 겹치는 키워드 수 반환
+ */
+export function countKeywordOverlap(titleA: string, titleB: string): number {
+    const keywordsA = extractKeywords(titleA)
+    const keywordsB = extractKeywords(titleB)
+    let count = 0
+    for (const kw of keywordsA) {
+        if (keywordsB.has(kw)) count++
+    }
+    return count
+}
 
 // 인스턴스 재사용 (호출마다 키 로딩 방지)
 let groqProvider: GroqProvider | null = null
@@ -60,8 +95,16 @@ export async function findParentIssue(
 
     if (error || !activeIssues || activeIssues.length === 0) return null
 
-    const issueList = activeIssues
-        .map((iss: { id: string; title: string }, i: number) => `${i + 1}. ${iss.title}`)
+    // 키워드 프리필터: AI 호출 전에 제목 키워드가 1개 이상 겹치는 이슈만 후보로 좁힘
+    // → 카테고리만 같고 내용이 전혀 다른 이슈가 AI 후보에 올라가는 것을 차단
+    const MIN_KEYWORD_OVERLAP = parseInt(process.env.PARENT_MIN_KEYWORD_OVERLAP ?? '1')
+    const filteredIssues = (activeIssues as Array<{ id: string; title: string }>)
+        .filter(iss => countKeywordOverlap(newTitle, iss.title) >= MIN_KEYWORD_OVERLAP)
+
+    if (filteredIssues.length === 0) return null
+
+    const issueList = filteredIssues
+        .map((iss, i) => `${i + 1}. ${iss.title}`)
         .join('\n')
 
     const prompt = `새 이벤트가 아래 기존 이슈들 중 하나의 후속/파생 사건인지 판단하세요.
@@ -77,23 +120,24 @@ ${issueList}
 - 별개: 이름/키워드만 겹치는 완전히 다른 사건 → isDerivative: false
 
 ## 중요 판단 원칙 (반드시 준수)
-- 주인공 인물·장소·사건이 다르면 무조건 별개 (isDerivative: false)
-- 단순히 같은 시기에 화제인 것만으로는 파생이 아님
+- 주인공 인물·장소·사건이 실질적으로 동일해야만 전개/파생으로 판단
+- 같은 인물이라도 완전히 다른 사건이면 무조건 별개 (isDerivative: false)
+- 단순히 같은 시기에 화제이거나 카테고리가 같다는 이유만으로는 파생이 아님
 - 확신이 없으면 반드시 isDerivative: false
-- 신뢰도 90% 미만이면 반드시 isDerivative: false
+- 신뢰도 95% 미만이면 반드시 isDerivative: false
 
 응답 형식 (JSON만):
 {
   "isDerivative": true,
   "parentIndex": 1,
   "stage": "전개",
-  "confidence": 92,
+  "confidence": 95,
   "reason": "판단 이유 (한 줄)"
 }`
 
     try {
         const content = await getGroq().complete(prompt, {
-            model: 'llama-3.1-8b-instant',
+            model: 'llama-3.3-70b-versatile',
             temperature: 0.2,
             maxTokens: 200,
         })
@@ -110,7 +154,7 @@ ${issueList}
             return null
         }
 
-        const parent = activeIssues[result.parentIndex - 1]
+        const parent = filteredIssues[result.parentIndex - 1]
         if (!parent) return null
 
         return {

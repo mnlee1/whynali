@@ -40,6 +40,7 @@ export interface TimelinePoint {
     source_url: string | null // null 허용 (컴포넌트에서 null 체크 필요)
     stage: TimelineStage
     title?: string | null  // 이벤트 한 줄 요약
+    ai_summary?: string | null  // AI가 생성한 유저 노출용 요약 (bullet 소스)
     created_at: string
 }
 
