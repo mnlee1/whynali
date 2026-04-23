@@ -49,7 +49,7 @@ export async function PATCH(
         if (action === '처리완료') {
             const { data: comment } = await supabaseAdmin
                 .from('comments')
-                .select('content')
+                .select('body')
                 .eq('id', report.comment_id)
                 .single()
 
@@ -59,12 +59,18 @@ export async function PATCH(
                 .eq('id', report.comment_id)
 
             logAction = '신고 댓글 삭제'
-            logDetails = comment?.content ? `삭제된 댓글: "${comment.content}"` : null
+            logDetails = comment?.body ? `삭제된 댓글: "${comment.body}"` : null
         }
 
         /* 무시: pending_reason='report'인 댓글만 visibility를 public으로 복구 */
         /* pending_reason='safety'(금칙어)인 댓글은 세이프티봇 영역이므로 복구하지 않음 */
         if (action === '무시') {
+            const { data: comment } = await supabaseAdmin
+                .from('comments')
+                .select('body')
+                .eq('id', report.comment_id)
+                .single()
+
             await supabaseAdmin
                 .from('comments')
                 .update({ 
@@ -77,6 +83,7 @@ export async function PATCH(
                 .eq('pending_reason', 'report')
 
             logAction = '신고 무시 (댓글 복구)'
+            logDetails = comment?.body ? `원복된 댓글: "${comment.body}"` : null
         }
 
         await writeAdminLog(logAction, 'report', id, auth.adminEmail, logDetails)
