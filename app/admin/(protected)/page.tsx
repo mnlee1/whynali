@@ -35,6 +35,7 @@ interface AiKeyStatus {
     isBlocked: boolean
     blockedUntil: string | null
     failCount: number
+    blockReason: 'rate_limit' | 'credit_depleted'
 }
 
 interface ApiCostsSummary {
@@ -45,8 +46,6 @@ interface ApiCostsSummary {
     groq: {
         today: number
         monthly: number
-        successes: number
-        failures: number
         keyStatus: AiKeyStatus | null
     }
     claude: {
@@ -68,8 +67,6 @@ interface ApiCostsSummary {
                 total: number
             }
         }
-        successes: number
-        failures: number
         keyStatus: AiKeyStatus | null
     }
     total: {
@@ -387,48 +384,30 @@ export default function AdminDashboardPage() {
 
                                 <div className="pt-3 border-t border-orange-200">
                                     {(() => {
-                                        const total = apiCosts.claude.successes + apiCosts.claude.failures
-                                        const isNormal = total === 0 || apiCosts.claude.failures === 0
-                                        const rate = total > 0 ? apiCosts.claude.successes / total : 1
-                                        const isWarning = !isNormal && rate >= 0.9
-                                        const successRate = total > 0 ? ((rate * 100).toFixed(1)) : '0.0'
                                         const keyStatus = apiCosts.claude.keyStatus
+                                        const isCreditDepleted = keyStatus?.blockReason === 'credit_depleted'
                                         const blockedUntil = keyStatus?.blockedUntil
                                             ? new Date(keyStatus.blockedUntil)
                                             : null
                                         const secsLeft = blockedUntil
                                             ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / 1000))
                                             : 0
+                                        const label = !keyStatus
+                                            ? '정상'
+                                            : isCreditDepleted
+                                            ? '크레딧 소진'
+                                            : `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
                                         return (
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-sm text-content-secondary">AI 상태</span>
-                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                        keyStatus ? 'text-red-600' : isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
-                                                    }`}>
-                                                        <span className={`w-2 h-2 rounded-full ${
-                                                            keyStatus ? 'bg-red-500' : isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
-                                                        }`} />
-                                                        {keyStatus
-                                                            ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
-                                                            : isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.claude.failures}건)` : `오류 (${apiCosts.claude.failures}건)`}
-                                                    </span>
-                                                </div>
-                                                {!isNormal && total > 0 && (
-                                                    <div className="flex items-center justify-between text-xs text-content-muted">
-                                                        <span>성공률: {successRate}% ({apiCosts.claude.successes}/{total})</span>
-                                                        {!keyStatus && (
-                                                            <a
-                                                                href="https://vercel.com/dashboard"
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-orange-600 font-medium hover:underline"
-                                                            >
-                                                                Vercel 로그 확인 →
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-content-secondary">AI 상태</span>
+                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                    keyStatus ? 'text-red-600' : 'text-green-600'
+                                                }`}>
+                                                    <span className={`w-2 h-2 rounded-full ${
+                                                        keyStatus ? 'bg-red-500' : 'bg-green-500'
+                                                    }`} />
+                                                    {label}
+                                                </span>
                                             </div>
                                         )
                                     })()}
@@ -471,11 +450,6 @@ export default function AdminDashboardPage() {
 
                                 <div className="pt-3 border-t border-green-200">
                                     {(() => {
-                                        const total = (apiCosts.groq?.successes ?? 0) + (apiCosts.groq?.failures ?? 0)
-                                        const isNormal = total === 0 || (apiCosts.groq?.failures ?? 0) === 0
-                                        const rate = total > 0 ? (apiCosts.groq?.successes ?? 0) / total : 1
-                                        const isWarning = !isNormal && rate >= 0.9
-                                        const successRate = total > 0 ? ((rate * 100).toFixed(1)) : '0.0'
                                         const keyStatus = apiCosts.groq?.keyStatus
                                         const blockedUntil = keyStatus?.blockedUntil
                                             ? new Date(keyStatus.blockedUntil)
@@ -484,35 +458,18 @@ export default function AdminDashboardPage() {
                                             ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / 1000))
                                             : 0
                                         return (
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-sm text-content-secondary">AI 상태</span>
-                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                        keyStatus ? 'text-red-600' : isNormal ? 'text-green-600' : isWarning ? 'text-yellow-600' : 'text-red-600'
-                                                    }`}>
-                                                        <span className={`w-2 h-2 rounded-full ${
-                                                            keyStatus ? 'bg-red-500' : isNormal ? 'bg-green-500' : isWarning ? 'bg-yellow-500' : 'bg-red-500'
-                                                        }`} />
-                                                        {keyStatus
-                                                            ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
-                                                            : isNormal ? '정상' : isWarning ? `일부 오류 (${apiCosts.groq?.failures}건)` : `오류 (${apiCosts.groq?.failures}건)`}
-                                                    </span>
-                                                </div>
-                                                {!isNormal && total > 0 && (
-                                                    <div className="flex items-center justify-between text-xs text-content-muted">
-                                                        <span>성공률: {successRate}% ({apiCosts.groq?.successes}/{total})</span>
-                                                        {!keyStatus && (
-                                                            <a
-                                                                href="https://vercel.com/dashboard"
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-orange-600 font-medium hover:underline"
-                                                            >
-                                                                Vercel 로그 확인 →
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-content-secondary">AI 상태</span>
+                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                    keyStatus ? 'text-red-600' : 'text-green-600'
+                                                }`}>
+                                                    <span className={`w-2 h-2 rounded-full ${
+                                                        keyStatus ? 'bg-red-500' : 'bg-green-500'
+                                                    }`} />
+                                                    {keyStatus
+                                                        ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
+                                                        : '정상'}
+                                                </span>
                                             </div>
                                         )
                                     })()}
