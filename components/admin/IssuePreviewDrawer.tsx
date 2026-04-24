@@ -333,7 +333,7 @@ export default function IssuePreviewDrawer({
                                     onClick={handleRegenerateSummary}
                                     disabled={isRegenerating}
                                     className="text-xs px-2.5 py-1 border border-border rounded-lg text-content-muted hover:text-content-secondary hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    title="현재 포인트 기준으로 AI 요약을 다시 생성합니다"
+                                    title="AI가 각 포인트의 stage를 재분류하고 요약을 새로 작성합니다"
                                 >
                                     {isRegenerating ? '재생성 중...' : '요약 재생성'}
                                 </button>
