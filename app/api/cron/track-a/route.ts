@@ -439,7 +439,7 @@ ${postTitlesText}
             const content = await callGroq(
                 [{ role: 'user', content: prompt }],
                 {
-                    model: 'claude-sonnet-4-6',
+                    model: 'llama-3.3-70b-versatile',
                     temperature: 0.2,
                     max_tokens: 500,
                 }
@@ -572,7 +572,7 @@ ${postTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'claude-sonnet-4-6',
+                model: 'llama-3.3-70b-versatile',
                 temperature: 0.1,
                 max_tokens: 300,
             }
@@ -653,7 +653,7 @@ ${newsTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'claude-sonnet-4-6',
+                model: 'llama-3.3-70b-versatile',
                 temperature: 0.1,
                 max_tokens: 300,
             }
@@ -747,7 +747,7 @@ ${newsTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'claude-sonnet-4-6',
+                model: 'llama-3.3-70b-versatile',
                 temperature: 0.2,
                 max_tokens: 200,
             }
@@ -906,7 +906,7 @@ ${sampleTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'claude-sonnet-4-6',
+                model: 'llama-3.3-70b-versatile',
                 temperature: 0.2,
                 max_tokens: 500,
             }
