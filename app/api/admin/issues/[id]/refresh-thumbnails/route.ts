@@ -3,7 +3,7 @@
  *
  * [관리자 - 이슈 이미지 재검색 API]
  *
- * Unsplash에서 새로운 이미지 3개를 다시 검색합니다.
+ * Pixabay에서 새로운 이미지 3개를 다시 검색합니다.
  * primary_thumbnail_index는 0으로 초기화됩니다.
  */
 

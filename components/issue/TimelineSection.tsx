@@ -150,6 +150,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, 
 
     return (
         <div className="space-y-0">
+
             {/* AI 안내 문구 */}
             <div className="mb-4 flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                 <Bot className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />

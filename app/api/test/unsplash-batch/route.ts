@@ -1,26 +1,25 @@
 /**
  * app/api/test/unsplash-batch/route.ts
  *
- * [테스트 전용] 기존 이슈 일괄 Unsplash 이미지 적용
- * 사용 후 이 파일 삭제할 것
+ * [임시] thumbnail_urls 없는 이슈 일괄 Pixabay 이미지 적용
  *
  * 사용법:
- * GET /api/test/unsplash-batch?limit=45
- * → thumbnail_urls 없는 이슈를 limit개만큼 처리
- * → Unsplash 데모 플랜 한도(50회/시간) 고려해 기본값 45
+ * GET /api/test/pixabay-batch?limit=20
+ * → thumbnail_urls 없는 이슈를 최신순으로 limit개 처리
+ * → Pixabay 5000회/시간 한도, Groq rate limit 방지를 위해 이슈당 2초 대기
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { fetchUnsplashImages } from '@/lib/unsplash'
+import { fetchPixabayImages } from '@/lib/pixabay'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 export async function GET(request: NextRequest) {
-    const limit = parseInt(request.nextUrl.searchParams.get('limit') ?? '45')
+    const limit = parseInt(request.nextUrl.searchParams.get('limit') ?? '20')
 
-    // thumbnail_urls 없는 이슈 조회 (모든 상태 포함)
+    // thumbnail_urls 없는 이슈 조회 (승인 상태 포함, 최신순)
     const { data: issues, error } = await supabaseAdmin
         .from('issues')
         .select('id, title, category')
@@ -39,12 +38,12 @@ export async function GET(request: NextRequest) {
     const results: Array<{ id: string; title: string; success: boolean; count: number }> = []
 
     for (const issue of issues) {
-        const thumbnailUrls = await fetchUnsplashImages(issue.title, issue.category)
+        const thumbnailUrls = await fetchPixabayImages(issue.title, issue.category)
 
         if (thumbnailUrls.length > 0) {
             await supabaseAdmin
                 .from('issues')
-                .update({ 
+                .update({
                     thumbnail_urls: thumbnailUrls,
                     primary_thumbnail_index: 0,
                 })
@@ -58,8 +57,8 @@ export async function GET(request: NextRequest) {
             count: thumbnailUrls.length,
         })
 
-        // Groq rate limit 방지: 3초 대기
-        await new Promise(resolve => setTimeout(resolve, 3000))
+        // Groq rate limit 방지: 2초 대기
+        await new Promise(resolve => setTimeout(resolve, 2000))
     }
 
     const successCount = results.filter(r => r.success).length

@@ -17,7 +17,7 @@ import { config } from 'dotenv'
 config({ path: '.env.local' })
 
 import { createClient } from '@supabase/supabase-js'
-import { fetchUnsplashImages } from '../lib/unsplash'
+import { fetchPixabayImages } from '../lib/pixabay'
 
 const prodUrl = process.env.NEXT_PUBLIC_SUPABASE_PRODUCTION_URL
 const prodKey = process.env.SUPABASE_PRODUCTION_SERVICE_ROLE_KEY
@@ -92,7 +92,7 @@ async function main() {
         
         try {
             // 새 이미지 검색 (중복 체크 포함)
-            const newUrls = await fetchUnsplashImages(issue.title, issue.category)
+            const newUrls = await fetchPixabayImages(issue.title, issue.category)
             
             if (newUrls.length > 0) {
                 console.log(`  ✅ 새 이미지 ${newUrls.length}개 찾음`)
@@ -136,7 +136,7 @@ async function main() {
                 }
             }
             
-            // Rate limit 방지 (Unsplash: 50회/시간, Groq: 매우 여유)
+            // Rate limit 방지 (Pixabay: 5000회/시간, Groq: 매우 여유)
             await new Promise(resolve => setTimeout(resolve, 3000))
             
         } catch (error) {

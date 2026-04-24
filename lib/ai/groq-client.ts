@@ -9,7 +9,9 @@
  * 내부적으로 aiClient (GroqProvider)를 사용하여 다중 키 순환을 지원합니다.
  */
 
-import { aiClient } from './ai-client'
+import { GroqProvider } from './groq-provider'
+
+const groqProvider = new GroqProvider()
 
 export interface GroqMessage {
     role: 'system' | 'user' | 'assistant'
@@ -43,7 +45,7 @@ export async function callGroq(
     
     const userPrompt = userMessages.map(m => m.content).join('\n\n')
     
-    const content = await aiClient.complete(userPrompt, {
+    const content = await groqProvider.complete(userPrompt, {
         model,
         temperature,
         maxTokens,
