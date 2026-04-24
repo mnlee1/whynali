@@ -88,7 +88,7 @@ export async function findParentIssue(
         .from('issues')
         .select('id, title')
         .in('status', ['점화', '논란중', '대기'])
-        .eq('approval_status', '승인')
+        .in('approval_status', ['승인', '대기'])
         .eq('category', category)
         .order('heat_index', { ascending: false })
         .limit(MAX_CANDIDATE_ISSUES)

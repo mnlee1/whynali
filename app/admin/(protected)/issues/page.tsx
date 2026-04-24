@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Issue } from '@/types/issue'
 import IssuePreviewDrawer from '@/components/admin/IssuePreviewDrawer'
+import IssueMergeModal from '@/components/admin/IssueMergeModal'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
 import CategoryBadge from '@/components/common/CategoryBadge'
@@ -46,6 +47,10 @@ export default function AdminIssuesPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
+    const [mergeSourceIssue, setMergeSourceIssue] = useState<Issue | null>(null)
+    const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
+    const [editingTitleValue, setEditingTitleValue] = useState('')
+    const [savingTitle, setSavingTitle] = useState(false)
     const [criteriaOpen, setCriteriaOpen] = useState(false)
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -213,6 +218,50 @@ export default function AdminIssuesPage() {
             loadTabCounts()
         } catch (err) {
             alert(err instanceof Error ? err.message : '복구 실패')
+        }
+    }
+
+    const startEditTitle = (issue: Issue) => {
+        setEditingTitleId(issue.id)
+        setEditingTitleValue(decodeHtml(issue.title))
+    }
+
+    const cancelEditTitle = () => {
+        setEditingTitleId(null)
+        setEditingTitleValue('')
+    }
+
+    const saveTitle = async (id: string) => {
+        if (!editingTitleValue.trim()) return
+        setSavingTitle(true)
+        try {
+            const res = await fetch(`/api/admin/issues/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: editingTitleValue.trim() }),
+            })
+            if (!res.ok) throw new Error('제목 수정 실패')
+            setEditingTitleId(null)
+            setEditingTitleValue('')
+            fetchIssues()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '제목 수정 실패')
+        } finally {
+            setSavingTitle(false)
+        }
+    }
+
+    const handleDelete = async (issue: Issue) => {
+        if (!confirm(`"${decodeHtml(issue.title)}"\n\n이 이슈를 영구 삭제하시겠습니까?\n연결된 뉴스·커뮤니티·타임라인 등 모든 데이터가 함께 삭제됩니다.`)) return
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}`, {
+                method: 'DELETE',
+            })
+            if (!res.ok) throw new Error('삭제 실패')
+            fetchIssues()
+            loadTabCounts()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '삭제 실패')
         }
     }
 
@@ -532,7 +581,7 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-2 py-3 text-left text-sm font-medium text-content-muted uppercase w-40">
+                            <th className="px-2 py-3 text-left text-sm font-medium text-content-muted uppercase w-52">
                                 액션
                             </th>
                         </tr>
@@ -541,13 +590,54 @@ export default function AdminIssuesPage() {
                         {issues.map((issue) => (
                             <tr key={issue.id} className="hover:bg-surface-subtle">
                                 <td className="px-4 py-3 text-sm font-medium">
-                                    <a
-                                        href={`/issue/${issue.id}`}
-                                        target="_blank"
-                                        className="text-primary hover:underline line-clamp-2 inline-block max-w-full"
-                                    >
-                                        {decodeHtml(issue.title)}
-                                    </a>
+                                    {editingTitleId === issue.id ? (
+                                        <div className="flex items-center gap-1.5">
+                                            <input
+                                                type="text"
+                                                value={editingTitleValue}
+                                                onChange={e => setEditingTitleValue(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') saveTitle(issue.id)
+                                                    if (e.key === 'Escape') cancelEditTitle()
+                                                }}
+                                                className="flex-1 px-2 py-1 text-sm border border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={() => saveTitle(issue.id)}
+                                                disabled={savingTitle}
+                                                className="text-xs px-2 py-1 bg-primary text-white rounded-lg hover:bg-primary/90 whitespace-nowrap disabled:opacity-50"
+                                            >
+                                                저장
+                                            </button>
+                                            <button
+                                                onClick={cancelEditTitle}
+                                                className="text-xs px-2 py-1 bg-surface-subtle border border-border text-content-secondary rounded-lg hover:bg-surface-muted whitespace-nowrap"
+                                            >
+                                                취소
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 group">
+                                            <a
+                                                href={`/issue/${issue.id}`}
+                                                target="_blank"
+                                                className="text-primary hover:underline line-clamp-2 inline-block max-w-full"
+                                            >
+                                                {decodeHtml(issue.title)}
+                                            </a>
+                                            <button
+                                                onClick={() => startEditTitle(issue)}
+                                                className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-content-muted hover:text-content-secondary transition-opacity"
+                                                title="제목 수정"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="px-4 py-3 w-24 whitespace-nowrap">
                                     <CategoryBadge category={issue.category} size="sm" />
@@ -638,6 +728,20 @@ export default function AdminIssuesPage() {
                                                 복구
                                             </button>
                                         )}
+
+                                        <button
+                                            onClick={() => setMergeSourceIssue(issue)}
+                                            className="text-xs px-2.5 py-1.5 bg-purple-500 text-white rounded-full hover:bg-purple-600 whitespace-nowrap"
+                                        >
+                                            병합
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleDelete(issue)}
+                                            className="text-xs px-2.5 py-1.5 bg-red-600 text-white rounded-full hover:bg-red-700 whitespace-nowrap"
+                                        >
+                                            삭제
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -657,6 +761,18 @@ export default function AdminIssuesPage() {
                 onReject={handleReject}
                 onIssueUpdate={fetchIssues}
             />
+
+            {mergeSourceIssue && (
+                <IssueMergeModal
+                    sourceIssue={mergeSourceIssue}
+                    onClose={() => setMergeSourceIssue(null)}
+                    onSuccess={() => {
+                        setMergeSourceIssue(null)
+                        fetchIssues()
+                        loadTabCounts()
+                    }}
+                />
+            )}
         </div>
     )
 }
