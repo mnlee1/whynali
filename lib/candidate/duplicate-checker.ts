@@ -291,7 +291,7 @@ export async function checkDuplicateIssue(
             .from('issues')
             .select('id, title, status, created_at')
             .in('status', ['점화', '논란중'])
-            .eq('approval_status', '승인')
+            .in('approval_status', ['승인', '대기'])
             .order('updated_at', { ascending: false }),
         supabaseAdmin
             .from('issues')
@@ -337,7 +337,7 @@ export async function checkDuplicateIssue(
         const commonCount = newKeywords.filter(k => 
             existingKeywords.includes(k)
         ).length
-        return commonCount >= 2
+        return commonCount >= 1
     })
     
     filterStats.candidates = candidates.length

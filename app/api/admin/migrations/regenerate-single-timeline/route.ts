@@ -1,7 +1,14 @@
 /**
  * app/api/admin/migrations/regenerate-single-timeline/route.ts
  *
- * 단일 이슈의 타임라인 요약을 재생성하는 API
+ * 단일 이슈의 타임라인을 재분류 + 재생성하는 API
+ *
+ * 동작:
+ *  1. timeline_points 전체 조회 (id, stage, title, occurred_at)
+ *  2. AI(70b)에게 각 포인트 stage 재분류 + 단계별 요약 + 브리핑 한 번에 요청
+ *  3. stage별 그룹 UPDATE로 timeline_points.stage 일괄 갱신
+ *  4. timeline_summaries upsert
+ *  5. issues.brief_summary 업데이트
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,6 +19,7 @@ import { parseJsonObject } from '@/lib/ai/parse-json-response'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+const VALID_STAGES = new Set(['발단', '전개', '파생', '진정'])
 const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
 
 export async function POST(request: NextRequest) {
@@ -25,7 +33,7 @@ export async function POST(request: NextRequest) {
 
         const { data: issue } = await supabaseAdmin
             .from('issues')
-            .select('id, title')
+            .select('id, title, topic_description')
             .eq('id', issueId)
             .single()
 
@@ -35,106 +43,147 @@ export async function POST(request: NextRequest) {
 
         const { data: points } = await supabaseAdmin
             .from('timeline_points')
-            .select('stage, title, occurred_at')
+            .select('id, stage, title, occurred_at')
             .eq('issue_id', issueId)
             .order('occurred_at', { ascending: true })
 
         if (!points || points.length === 0) {
-            // 포인트가 전부 삭제된 경우 — 남아있는 summaries도 함께 정리
-            await supabaseAdmin
-                .from('timeline_summaries')
-                .delete()
-                .eq('issue_id', issueId)
-            return NextResponse.json({ 
-                success: true,
-                title: issue.title,
-                stages: 0,
-                bullets: 0,
-            })
+            await supabaseAdmin.from('timeline_summaries').delete().eq('issue_id', issueId)
+            return NextResponse.json({ success: true, title: issue.title, stages: 0, bullets: 0 })
         }
 
-        const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
-        for (const p of points) {
-            if (!grouped.has(p.stage)) grouped.set(p.stage, [])
-            grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
-        }
+        // 인덱스 기반 포인트 목록
+        const pointsList = points
+            .map((p, i) => `[${i}] ${p.occurred_at?.slice(0, 10)} | ${p.title ?? '(제목 없음)'}`)
+            .join('\n')
 
-        const stages = [...grouped.keys()].sort(
-            (a, b) => (STAGE_ORDER[a] ?? 9) - (STAGE_ORDER[b] ?? 9)
-        )
+        // 커뮤니티 게시글 — 발단 원인 추론용
+        const { data: communityPosts } = await supabaseAdmin
+            .from('community_data')
+            .select('title, source_site')
+            .eq('issue_id', issueId)
+            .order('written_at', { ascending: true })
+            .limit(15)
 
-        const stagesText = stages.map(stage => {
-            const titles = grouped.get(stage)!.map(i => `- ${i.title}`).join('\n')
-            return `[${stage}]\n${titles}`
-        }).join('\n\n')
+        const backgroundLine = issue.topic_description
+            ? `이슈 배경: "${issue.topic_description}"\n`
+            : ''
+
+        const communitySection = communityPosts && communityPosts.length > 0
+            ? `\n## 커뮤니티 게시글 (발단 원인 추론 참고용)\n더쿠·네이트판 등 커뮤니티 반응입니다. 미확인 정보가 포함될 수 있으므로 사실로 단정하지 말고 맥락 파악에만 활용하세요:\n${communityPosts.map(p => `- [${p.source_site}] ${p.title}`).join('\n')}`
+            : ''
 
         const prompt = `이슈: "${issue.title}"
+${backgroundLine}
+아래 타임라인 포인트들은 여러 이슈가 병합되어 stage 분류가 뒤섞여 있습니다.
+날짜 순서와 사건의 인과 흐름을 고려해 각 포인트를 올바르게 재분류하고, 단계별 상세 요약을 작성해주세요.
+${communitySection}
 
-다음은 이 이슈와 관련된 뉴스 기사 제목들입니다.
-각 단계는 [발단], [전개], [파생], [진정]으로 구분되어 있습니다.
+## 포인트 목록 (인덱스 | 날짜 | 제목)
+${pointsList}
 
-${stagesText}
+## stage 정의
+- 발단: 논란의 원인이 된 최초 사건·발언 (타임라인 초반, 소수만 해당)
+- 전개: 논란이 확산·심화되는 후속 보도·반응 (대부분의 포인트)
+- 파생: 메인 논란과 연관되지만 별도로 파생된 사건
+- 진정: 논란이 수습·해소되거나 당사자가 공식 입장을 표명하는 국면
 
-## 중요: 단계별 독립 요약 원칙
-- **각 단계는 해당 단계의 뉴스만 사용**해서 요약하세요
-- 예: [발단] 요약 시 [전개]나 [파생]의 뉴스는 절대 사용하지 마세요
-- **중복된 내용의 뉴스는 하나만 선택**하세요 (예: "본격화" 제목이 3개면 1개만 사용)
-- **bullets 개수는 해당 단계의 뉴스 개수를 초과하지 마세요**
+## 단계별 요약 원칙
+- 각 단계는 해당 단계에 배정된 포인트만 사용해 요약하세요
+- 포인트 제목을 그대로 복사하지 말고 내용을 재구성해서 서술하세요
+- 비슷한 내용의 포인트는 하나로 통합하세요
+- bullets 개수: 해당 단계 포인트 수 이하, 최대 5개
+- stageTitle: 단계명 없이 이 단계의 핵심을 담은 짧은 제목 (예: "결자해지 압박" O, "[발단] 결자해지 압박" X)
+- 각 bullet은 완결된 한 문장으로, 주어·서술어를 갖춰 구체적으로 작성하세요
 
-## 법적 안전성 준수
-- 위 기사 제목에 있는 내용만 사용하세요
-- 기사 본문은 없으므로 제목에 없는 내용을 추측하지 마세요
+## [발단] 작성 특별 지침
+- 발단 포인트와 커뮤니티 게시글을 함께 참고해 논란의 실제 원인을 추론하세요
+- 사과문·해명·활동중단 같은 결과/후속 내용은 발단 bullets에서 제외하세요
+- 누가, 어디서(플랫폼/장소), 어떤 발언이나 행동이 문제가 됐는지 구체적으로 서술하세요
+- 커뮤니티 게시글은 미확인 정보일 수 있으므로 "~했다는 의혹이 제기됐다", "~한 것으로 알려졌다" 같이 헤징 표현을 사용하세요
+- 좋은 예: "강원 현장에서 김진태가 장동혁에게 결자해지를 요구하며 쓴소리를 했다"
+- 나쁜 예: "논란이 시작됐다" (너무 모호)
 
-## 요청사항
-위 원칙을 엄격히 지켜 각 단계를 독립적으로 요약해주세요.
+## 브리핑
+- intro: "~가 ~해서 논란이야" 형식으로 논란의 핵심을 한 문장에 담아 서술
+- bullets: 전체 타임라인을 이해하는 데 필수적인 팩트 3~5개 (포인트 제목 그대로 복사 금지)
+- conclusion: 현재 상황이나 최종 결과를 담은 한 줄 결론
 
-**출력 형식:**
-1. 각 단계를 "발단/전개/파생/진정" 중 하나로 분류
-2. 각 단계의 핵심 사건들을 bullet points로 (1~5개, 해당 단계 뉴스 개수 이하)
-3. 각 bullet은 한 문장으로 간결하게
-4. 제목에서 확인할 수 있는 사실만 작성
-5. stageTitle에는 단계명을 붙이지 말고 내용만 작성 (예: "녹대 탈출" O, "[발단] 녹대 탈출" X)
-
-**브리핑:**
-- intro: 이슈를 한 문장으로 (예: "~가 ~해서 논란이야")
-- bullets: 핵심 팩트 3~5개
-- conclusion: 한 줄 결론 (예: "👉 ~한 상황이야")
-
-JSON 응답:
+JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
 {
+  "reclassify": {"0":"발단","1":"전개"},
   "summaries": [
-    {"stage":"발단","stageTitle":"제목","bullets":["사건1","사건2"]},
-    {"stage":"전개","stageTitle":"제목","bullets":["후속1","후속2"]}
+    {"stage":"발단","stageTitle":"핵심 사건 제목","bullets":["누가 어디서 무엇을 해서 논란이 됐는지 구체적 서술"]},
+    {"stage":"전개","stageTitle":"핵심 전개 제목","bullets":["후속 사건 상세 서술1","후속 사건 상세 서술2"]}
   ],
-  "brief": {"intro":"한 문장","bullets":["팩트1","팩트2"],"conclusion":"결론"}
+  "brief": {"intro":"~가 ~해서 논란이야","bullets":["팩트1","팩트2","팩트3"],"conclusion":"결론"}
 }`
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 2000 },
+            { model: 'llama-3.3-70b-versatile', temperature: 0.15, max_tokens: 4000 },
         )
 
         const parsed = parseJsonObject<{
+            reclassify: Record<string, string>
             summaries: Array<{ stage: string; stageTitle: string; bullets: string[] }>
             brief: { intro: string; bullets: string[]; conclusion: string }
         }>(content)
 
         if (!parsed?.summaries) {
-            return NextResponse.json({ 
+            return NextResponse.json({
                 error: 'Failed to parse AI response',
-                title: issue.title 
+                title: issue.title,
             }, { status: 500 })
         }
 
+        // ── 1. timeline_points stage 재분류 ──────────────────────────
+        if (parsed.reclassify && Object.keys(parsed.reclassify).length > 0) {
+            // stage별로 그룹핑 → 최대 4번의 UPDATE로 처리
+            const stageGroups: Record<string, string[]> = {}
+            for (const [idxStr, stage] of Object.entries(parsed.reclassify)) {
+                const idx = parseInt(idxStr, 10)
+                const point = points[idx]
+                if (!point || !VALID_STAGES.has(stage)) continue
+                if (!stageGroups[stage]) stageGroups[stage] = []
+                stageGroups[stage].push(point.id)
+            }
+            for (const [stage, ids] of Object.entries(stageGroups)) {
+                await supabaseAdmin
+                    .from('timeline_points')
+                    .update({ stage })
+                    .in('id', ids)
+            }
+
+            // 재분류 후 points 배열 갱신 (summaries 생성에 반영)
+            for (const [idxStr, stage] of Object.entries(parsed.reclassify)) {
+                const idx = parseInt(idxStr, 10)
+                if (points[idx] && VALID_STAGES.has(stage)) {
+                    points[idx] = { ...points[idx], stage }
+                }
+            }
+        }
+
+        // ── 2. 재분류된 stage 기준으로 그룹핑 ───────────────────────
+        const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
+        for (const p of points) {
+            if (!grouped.has(p.stage)) grouped.set(p.stage, [])
+            grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
+        }
+        const stages = [...grouped.keys()].sort(
+            (a, b) => (STAGE_ORDER[a] ?? 9) - (STAGE_ORDER[b] ?? 9)
+        )
+
+        // ── 3. timeline_summaries 행 구성 ────────────────────────────
         const now = new Date().toISOString()
         const rows = stages.map(stage => {
             const items = grouped.get(stage)!
             const dates = items.map(i => i.occurred_at).sort()
             const ai = parsed.summaries.find(s => s.stage === stage)
-            
-            let bullets = ai?.bullets ?? []
-            
-            // 중복 제거
+
+            let bullets: string[] = ai?.bullets ?? []
+            bullets = bullets.filter((b: unknown) => typeof b === 'string' && (b as string).trim().length > 0)
+
             const uniqueBullets: string[] = []
             for (const bullet of bullets) {
                 const normalized = bullet.toLowerCase().trim()
@@ -145,12 +194,9 @@ JSON 응답:
                     const longer = normalized.length >= existingNormalized.length ? normalized : existingNormalized
                     return longer.includes(shorter) && shorter.length / longer.length > 0.9
                 })
-                
-                if (!isDuplicate) {
-                    uniqueBullets.push(bullet)
-                }
+                if (!isDuplicate) uniqueBullets.push(bullet)
             }
-            
+
             return {
                 issue_id: issueId,
                 stage,
@@ -163,8 +209,7 @@ JSON 응답:
             }
         })
 
-        // 현재 active stage 이외의 orphan 행만 삭제 → 그 후 upsert
-        // delete-then-insert 방식은 insert 실패 시 빈 타임라인이 될 수 있어 이 순서가 더 안전함
+        // ── 4. timeline_summaries upsert ──────────────────────────────
         const activeStages = rows.map(r => r.stage)
         await supabaseAdmin
             .from('timeline_summaries')
@@ -172,19 +217,19 @@ JSON 응답:
             .eq('issue_id', issueId)
             .not('stage', 'in', `(${activeStages.join(',')})`)
 
-        const { error } = await supabaseAdmin
+        const { error: upsertError } = await supabaseAdmin
             .from('timeline_summaries')
             .upsert(rows, { onConflict: 'issue_id,stage' })
 
-        if (error) {
-            return NextResponse.json({ 
+        if (upsertError) {
+            return NextResponse.json({
                 error: 'Failed to save summaries',
-                details: error.message,
-                title: issue.title 
+                details: upsertError.message,
+                title: issue.title,
             }, { status: 500 })
         }
 
-        // 브리핑 저장
+        // ── 5. 브리핑 저장 ────────────────────────────────────────────
         if (parsed.brief) {
             await supabaseAdmin
                 .from('issues')
@@ -192,18 +237,21 @@ JSON 응답:
                 .eq('id', issueId)
         }
 
+        const reclassifiedCount = parsed.reclassify ? Object.keys(parsed.reclassify).length : 0
+
         return NextResponse.json({
             success: true,
             title: issue.title,
             stages: rows.length,
-            bullets: rows.reduce((sum, r) => sum + r.bullets.length, 0)
+            bullets: rows.reduce((sum, r) => sum + r.bullets.length, 0),
+            reclassified: reclassifiedCount,
         })
 
     } catch (error) {
         console.error('[regenerate-single-timeline] Error:', error)
-        return NextResponse.json({ 
+        return NextResponse.json({
             error: 'Internal server error',
-            details: error instanceof Error ? error.message : String(error)
+            details: error instanceof Error ? error.message : String(error),
         }, { status: 500 })
     }
 }
