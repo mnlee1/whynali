@@ -193,6 +193,9 @@ JSON 응답:
 
             let bullets = ai?.bullets ?? []
 
+            // 문자열이 아닌 항목 제거 (AI가 객체·null 등을 반환하는 경우 방어)
+            bullets = bullets.filter((b: unknown) => typeof b === 'string' && (b as string).trim().length > 0)
+
             if (bullets.length > items.length) {
                 console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)
             }
