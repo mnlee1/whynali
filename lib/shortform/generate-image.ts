@@ -172,7 +172,6 @@ export async function generateShortformImage(job: ShortformJob | GenerateImageIn
         video_path: null,
         approval_status: 'pending',
         upload_status: null,
-        ai_validation: null,
         trigger_type: 'daily_batch',
         created_at: '',
         updated_at: '',

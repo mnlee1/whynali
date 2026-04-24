@@ -15,6 +15,7 @@ import { fetch3StockImages } from '@/lib/shortform/fetch-stock-images'
 type Params = { params: Promise<{ id: string }> }
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function GET(request: NextRequest, { params }: Params) {
     const auth = await requireAdmin()

@@ -211,11 +211,12 @@ export async function create3SceneVideo(
         }
 
         // STEP 2: Scene별 개별 비디오 생성
+        const encodeOpts = `-c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p`
         if (textAnimPaths) {
             console.log('[FFmpeg] Scene별 비디오 생성 중 (Sharp 타이핑 애니메이션)...')
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg1Path}" -loop 1 -i "${text1Path}" -i "${textAnimPaths[0]}" -filter_complex "${buildSceneFilter(1, [], true)}" -c:v libx264 -pix_fmt yuv420p -t ${sceneDuration} -y "${video1Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg2Path}" -loop 1 -i "${text2Path}" -i "${textAnimPaths[1]}" -filter_complex "${buildSceneFilter(2, [], true)}" -c:v libx264 -pix_fmt yuv420p -t ${sceneDuration} -y "${video2Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg3Path}" -loop 1 -i "${text3Path}" -i "${textAnimPaths[2]}" -filter_complex "${buildSceneFilter(3, [], true)}" -c:v libx264 -pix_fmt yuv420p -t ${sceneDuration} -y "${video3Path}"`)
+            await exec(`"${ffmpegPath}" -loop 1 -i "${bg1Path}" -loop 1 -i "${text1Path}" -i "${textAnimPaths[0]}" -filter_complex "${buildSceneFilter(1, [], true)}" ${encodeOpts} -t ${sceneDuration} -y "${video1Path}"`)
+            await exec(`"${ffmpegPath}" -loop 1 -i "${bg2Path}" -loop 1 -i "${text2Path}" -i "${textAnimPaths[1]}" -filter_complex "${buildSceneFilter(2, [], true)}" ${encodeOpts} -t ${sceneDuration} -y "${video2Path}"`)
+            await exec(`"${ffmpegPath}" -loop 1 -i "${bg3Path}" -loop 1 -i "${text3Path}" -i "${textAnimPaths[2]}" -filter_complex "${buildSceneFilter(3, [], true)}" ${encodeOpts} -t ${sceneDuration} -y "${video3Path}"`)
         } else {
             // 레거시 drawtext 경로
             const fontPath = resolveDrawtextFontPath()
@@ -228,14 +229,12 @@ export async function create3SceneVideo(
                 ]
             }
             console.log('[FFmpeg] Scene별 비디오 3개 생성 중 (drawtext 레거시)...')
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg1Path}" -loop 1 -i "${text1Path}" -filter_complex "${buildSceneFilter(1, drawtextFilters[0])}" -c:v libx264 -pix_fmt yuv420p -t ${sceneDuration} -y "${video1Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg2Path}" -loop 1 -i "${text2Path}" -filter_complex "${buildSceneFilter(2, drawtextFilters[1])}" -c:v libx264 -pix_fmt yuv420p -t ${sceneDuration} -y "${video2Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg3Path}" -loop 1 -i "${text3Path}" -filter_complex "${buildSceneFilter(3, drawtextFilters[2])}" -c:v libx264 -pix_fmt yuv420p -t ${sceneDuration} -y "${video3Path}"`)
+            await exec(`"${ffmpegPath}" -loop 1 -i "${bg1Path}" -loop 1 -i "${text1Path}" -filter_complex "${buildSceneFilter(1, drawtextFilters[0])}" ${encodeOpts} -t ${sceneDuration} -y "${video1Path}"`)
+            await exec(`"${ffmpegPath}" -loop 1 -i "${bg2Path}" -loop 1 -i "${text2Path}" -filter_complex "${buildSceneFilter(2, drawtextFilters[1])}" ${encodeOpts} -t ${sceneDuration} -y "${video2Path}"`)
+            await exec(`"${ffmpegPath}" -loop 1 -i "${bg3Path}" -loop 1 -i "${text3Path}" -filter_complex "${buildSceneFilter(3, drawtextFilters[2])}" ${encodeOpts} -t ${sceneDuration} -y "${video3Path}"`)
         }
 
         // STEP 3: xfade로 슬라이드 전환 합성
-        // offset1: 씬1 끝 0.25초 전
-        // offset2: [v01](=2*scene-transition) 끝 0.25초 전 — 첫 번째 xfade 겹침 반영
         const offset1 = sceneDuration - 0.25
         const offset2 = 2 * sceneDuration - transitionDuration - 0.25
 
@@ -244,7 +243,7 @@ export async function create3SceneVideo(
             `"${ffmpegPath}" -i "${video1Path}" -i "${video2Path}" -i "${video3Path}" ` +
             `-filter_complex "[0:v][1:v]xfade=transition=slideright:duration=${transitionDuration}:offset=${offset1}[v01];` +
             `[v01][2:v]xfade=transition=slideleft:duration=${transitionDuration}:offset=${offset2}[vout]" ` +
-            `-map "[vout]" -c:v libx264 -pix_fmt yuv420p -movflags +faststart -y "${outputPath}"`
+            `-map "[vout]" ${encodeOpts} -movflags +faststart -y "${outputPath}"`
         )
 
         const { readFile } = await import('fs/promises')

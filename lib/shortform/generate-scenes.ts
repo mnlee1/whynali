@@ -16,8 +16,8 @@ const WIDTH = 1080
 const HEIGHT = 1920
 
 // ── 레이아웃 단위 ──────────────────────────────────────────────
-const LOGO_W = 240
-const LOGO_H = 95
+const LOGO_W = 280
+const LOGO_H = 110
 const LOGO_TEXT_GAP = 55     // 로고 bottom → 타이틀 top
 const TITLE_FONTSIZE = 92
 const TITLE_LINE_HEIGHT = 130  // 타이틀 줄 간격 (폰트 92 × 1.41)
@@ -36,7 +36,7 @@ interface SceneLayout {
     buttonY: number   // -1 if scene 1 or 2
 }
 
-/** 단어 경계 기준 줄바꿈 */
+/** 단어 경계 기준 줄바꿈 + 마지막 줄 orphan 방지 */
 function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
     const words = text.split(' ').filter(w => w.length > 0)
     if (words.length === 0) return ['']
@@ -52,6 +52,24 @@ function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
         }
     }
     if (current) lines.push(current)
+
+    // 마지막 줄이 4자 이하(orphan)이면 앞 줄 마지막 단어를 당겨서 균형 맞춤
+    if (lines.length >= 2) {
+        const lastLine = lines[lines.length - 1]
+        if (lastLine.length <= 4) {
+            const prevWords = lines[lines.length - 2].split(' ')
+            if (prevWords.length >= 2) {
+                const moved = prevWords[prevWords.length - 1]
+                const newPrev = prevWords.slice(0, -1).join(' ')
+                const newLast = `${moved} ${lastLine}`
+                if (newPrev.length <= maxCharsPerLine && newLast.length <= maxCharsPerLine) {
+                    lines[lines.length - 2] = newPrev
+                    lines[lines.length - 1] = newLast
+                }
+            }
+        }
+    }
+
     return lines
 }
 
@@ -118,25 +136,24 @@ function getOTFont(): any {
 
 /**
  * 타이핑 애니메이션 한 프레임 렌더링.
- * opentype.js로 텍스트를 SVG path로 변환 → Sharp 렌더링.
- * fontconfig 불필요, 한국어 100% 보장.
+ * 최종 줄 구조를 고정하고 단어 수(visibleCount)만큼만 표시 → 줄 점프 없음.
  */
 async function renderTypingStatePNG(
-    titleVisible: string,
-    descVisible: string,
+    visibleCount: number,
     sceneNumber: number,
-    layout: SceneLayout
+    layout: SceneLayout,
+    titleFinalLines: string[],
+    descFinalLines: string[],
+    titleWordCount: number
 ): Promise<Buffer> {
     const font = getOTFont()
-    const titleLines = titleVisible ? wordWrapLines(titleVisible, 13) : []
-    const descLines = descVisible ? wordWrapLines(descVisible, 16) : []
     const svgPaths: string[] = []
 
     if (font) {
-        // 한 줄 텍스트를 SVG path 2개로 변환 (검은 테두리 → 흰 fill)
         function addLinePaths(
             line: string, x: number, y: number,
-            fontSize: number, fillColor: string, strokeW: number
+            fontSize: number, fillColor: string, strokeW: number,
+            boldBoost = true
         ) {
             if (strokeW > 0) {
                 const sp = font.getPath(line, x, y, fontSize)
@@ -145,32 +162,54 @@ async function renderTypingStatePNG(
                 sp.strokeWidth = strokeW
                 svgPaths.push(sp.toSVG(2))
             }
+            // 검정 stroke로 굵기 보강
+            if (boldBoost) {
+                const bp = font.getPath(line, x, y, fontSize)
+                bp.fill = fillColor
+                bp.stroke = '#000000'
+                bp.strokeWidth = 10
+                svgPaths.push(bp.toSVG(2))
+            }
             const fp = font.getPath(line, x, y, fontSize)
             fp.fill = fillColor
             fp.stroke = null
             svgPaths.push(fp.toSVG(2))
         }
 
-        // 폰트 ascender → 베이스라인 Y 계산 (top → baseline 변환)
         const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
         const ascD = Math.round(font.ascender * DESC_FONTSIZE / font.unitsPerEm)
 
-        // 타이틀 라인
-        for (let i = 0; i < titleLines.length; i++) {
-            if (!titleLines[i].trim()) continue
-            const w = font.getAdvanceWidth(titleLines[i], TITLE_FONTSIZE)
-            const x = Math.floor((WIDTH - w) / 2)
-            const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
-            addLinePaths(titleLines[i], x, y, TITLE_FONTSIZE, '#ffffff', 8)
+        // 타이틀: 최종 줄 위치 고정, 줄 내 단어만 점진적 표시
+        let rendered = 0
+        for (let i = 0; i < titleFinalLines.length; i++) {
+            if (rendered >= visibleCount) break
+            const lineWords = titleFinalLines[i].split(' ').filter(Boolean)
+            const visibleInLine = Math.min(lineWords.length, visibleCount - rendered)
+            const text = lineWords.slice(0, visibleInLine).join(' ')
+            if (text.trim()) {
+                const w = font.getAdvanceWidth(text, TITLE_FONTSIZE)
+                const x = Math.floor((WIDTH - w) / 2)
+                const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
+                addLinePaths(text, x, y, TITLE_FONTSIZE, '#ffffff', 8)
+            }
+            rendered += lineWords.length
         }
 
-        // 설명 라인
-        for (let i = 0; i < descLines.length; i++) {
-            if (!descLines[i].trim()) continue
-            const w = font.getAdvanceWidth(descLines[i], DESC_FONTSIZE)
-            const x = Math.floor((WIDTH - w) / 2)
-            const y = layout.descStartY + i * DESC_LINE_HEIGHT + ascD
-            addLinePaths(descLines[i], x, y, DESC_FONTSIZE, '#E5E7EB', 5)
+        // 설명: 타이틀 완료 후 시작, 동일하게 줄 위치 고정
+        const descVisible = Math.max(0, visibleCount - titleWordCount)
+        rendered = 0
+        for (let i = 0; i < descFinalLines.length; i++) {
+            if (rendered >= descVisible) break
+            const lineWords = descFinalLines[i].split(' ').filter(Boolean)
+            const visibleInLine = Math.min(lineWords.length, descVisible - rendered)
+            const text = lineWords.slice(0, visibleInLine).join(' ')
+            if (text.trim()) {
+                const w = font.getAdvanceWidth(text, DESC_FONTSIZE)
+                const x = Math.floor((WIDTH - w) / 2)
+                const y = layout.descStartY + i * DESC_LINE_HEIGHT + ascD
+                addLinePaths(text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
+            }
+            rendered += lineWords.length
         }
 
         // CTA 버튼 텍스트 (씬 3만)
@@ -178,10 +217,11 @@ async function renderTypingStatePNG(
             const CTA_SIZE = 58
             const ctaText = '지금 바로 확인하기'
             const ascC = Math.round(font.ascender * CTA_SIZE / font.unitsPerEm)
+            const descC = Math.round(Math.abs(font.descender) * CTA_SIZE / font.unitsPerEm)
             const w = font.getAdvanceWidth(ctaText, CTA_SIZE)
             const x = Math.floor((WIDTH - w) / 2)
-            const y = layout.buttonY + Math.floor(BUTTON_H / 2) + Math.floor(ascC / 2)
-            addLinePaths(ctaText, x, y, CTA_SIZE, '#ffffff', 0)
+            const y = layout.buttonY + Math.floor(BUTTON_H / 2) + Math.floor((ascC - descC) / 2)
+            addLinePaths(ctaText, x, y, CTA_SIZE, '#ffffff', 0, false)
         }
     }
 
@@ -194,10 +234,8 @@ async function renderTypingStatePNG(
 }
 
 /**
- * 씬별 타이핑 애니메이션 프레임 배열 생성 (drawtext 대체).
- * 단어 하나씩 누적해서 보여주는 PNG 시퀀스 반환.
- *
- * @returns { buffer, duration }[] — 각 프레임 PNG와 표시 시간(초)
+ * 씬별 타이핑 애니메이션 프레임 배열 생성.
+ * 최종 줄 구조를 미리 계산 후 고정 → 줄 점프 없이 단어만 순차 등장.
  */
 export async function createTypingFrames(
     title: string,
@@ -207,12 +245,16 @@ export async function createTypingFrames(
 ): Promise<{ buffer: Buffer; duration: number }[]> {
     const layout = computeLayout(title, desc, sceneNumber)
 
-    const titleWords = title.split(' ').filter(w => w.length > 0)
-    const descWords = desc.split(' ').filter(w => w.length > 0)
+    // 최종 줄 구조 사전 계산 (orphan 방지 포함) — 전체 애니메이션에서 고정
+    const titleFinalLines = title ? wordWrapLines(title, 13) : []
+    const descFinalLines = desc ? wordWrapLines(desc, 16) : []
+
+    const titleWords = titleFinalLines.flatMap(l => l.split(' ').filter(Boolean))
+    const descWords = descFinalLines.flatMap(l => l.split(' ').filter(Boolean))
     const totalWords = titleWords.length + descWords.length
 
     if (totalWords === 0) {
-        const empty = await renderTypingStatePNG('', '', sceneNumber, layout)
+        const empty = await renderTypingStatePNG(0, sceneNumber, layout, [], [], 0)
         return [{ buffer: empty, duration: sceneDuration }]
     }
 
@@ -220,17 +262,13 @@ export async function createTypingFrames(
     const frames: { buffer: Buffer; duration: number }[] = []
 
     for (let n = 1; n <= totalWords; n++) {
-        const titleVisible = titleWords.slice(0, Math.min(n, titleWords.length)).join(' ')
-        const descVisible = n > titleWords.length
-            ? descWords.slice(0, n - titleWords.length).join(' ')
-            : ''
-
-        const buffer = await renderTypingStatePNG(titleVisible, descVisible, sceneNumber, layout)
+        const buffer = await renderTypingStatePNG(
+            n, sceneNumber, layout, titleFinalLines, descFinalLines, titleWords.length
+        )
         const isLast = n === totalWords
         const duration = isLast
             ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
             : wordDelay
-
         frames.push({ buffer, duration })
     }
 
@@ -318,7 +356,7 @@ export async function createBackgroundScene(backgroundUrl: string): Promise<Buff
 
     const svg = `
         <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-            <rect width="${WIDTH}" height="${HEIGHT}" fill="black" opacity="0.35"/>
+            <rect width="${WIDTH}" height="${HEIGHT}" fill="black" opacity="0.2"/>
         </svg>
     `
 
@@ -349,7 +387,7 @@ export async function createSceneTextOverlay(
     const svg = `
         <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
             ${logoBase64 ? `<image href="${logoBase64}" x="${logoX}" y="${layout.logoY}" width="${LOGO_W}" height="${LOGO_H}" preserveAspectRatio="xMidYMid meet"/>` : ''}
-            ${sceneNumber === 3 && layout.buttonY > 0 ? `<rect x="${ctaX}" y="${layout.buttonY}" width="${BUTTON_W}" height="${BUTTON_H}" rx="${Math.floor(BUTTON_H / 2)}" fill="#1E40AF"/>` : ''}
+            ${sceneNumber === 3 && layout.buttonY > 0 ? `<rect x="${ctaX}" y="${layout.buttonY}" width="${BUTTON_W}" height="${BUTTON_H}" rx="${Math.floor(BUTTON_H / 2)}" fill="#a308e2"/>` : ''}
         </svg>
     `
 
