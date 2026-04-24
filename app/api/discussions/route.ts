@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     let query = admin
         .from('discussion_topics')
-        .select('*, issues(id, title)', { count: 'exact' })
+        .select('*, issues(id, title, merged_into_id)', { count: 'exact' })
 
     // status 파라미터가 있으면 해당 상태만, 없으면 진행중/마감 둘 다
     if (status) {
@@ -58,8 +58,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 토론 주제별 의견(댓글) 수 — 단건 N회 → 1회 배치 조회로 개선
-    const topicIds = (data || []).map((t) => t.id)
+    // 병합된 이슈에 연결된 토론 제외 (기존 병합 데이터 정합성 보완)
+    const filteredData = (data || []).filter(topic => !topic.issues?.merged_into_id)
+    const topicIds = filteredData.map((t) => t.id)
     const countMap: Record<string, number> = {}
 
     if (topicIds.length > 0) {
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const mapped = (data || []).map((topic) => ({
+    const mapped = filteredData.map((topic) => ({
         ...topic,
         opinionCount: countMap[topic.id] ?? 0,
         viewCount: topic.view_count ?? 0,
