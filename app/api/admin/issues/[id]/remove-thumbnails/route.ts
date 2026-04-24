@@ -1,10 +1,11 @@
 /**
  * app/api/admin/issues/[id]/remove-thumbnails/route.ts
  *
- * [관리자 - 이슈 이미지 제거 API]
+ * [관리자 - 대표 이미지 해제 API]
  *
- * thumbnail_urls를 빈 배열로 설정하여 이미지를 제거합니다.
- * 슬라이드에서는 그라디언트 배경이 표시됩니다.
+ * primary_thumbnail_index를 -1로 설정하여 대표 이미지 선택을 해제합니다.
+ * thumbnail_urls는 삭제하지 않고 유지합니다.
+ * 슬라이드에서는 그라디언트 배경이 표시되며, 이미지를 다시 선택하면 복원됩니다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -26,8 +27,7 @@ export async function POST(
         const { error } = await supabaseAdmin
             .from('issues')
             .update({
-                thumbnail_urls: [],
-                primary_thumbnail_index: 0,
+                primary_thumbnail_index: -1,
             })
             .eq('id', id)
 

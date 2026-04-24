@@ -21,168 +21,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { callGroq } from '@/lib/ai/groq-client'
-import { parseJsonArray, parseJsonObject } from '@/lib/ai/parse-json-response'
+import { parseJsonArray } from '@/lib/ai/parse-json-response'
 import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
-
-/**
- * generateAndCacheSummaries - 이슈 타임라인 AI 요약 생성 후 DB 저장
- * update-timeline cron에서 새 포인트 추가 후 호출
- * 유저 요청 시에는 이 캐시만 읽으므로 Groq 호출 없음
- */
-async function generateAndCacheSummaries(issueId: string, issueTitle: string): Promise<void> {
-    const { data: points } = await supabaseAdmin
-        .from('timeline_points')
-        .select('stage, title, occurred_at')
-        .eq('issue_id', issueId)
-        .order('occurred_at', { ascending: true })
-
-    if (!points || points.length === 0) return
-
-    const STAGE_ORDER_MAP: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
-
-    const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
-    for (const p of points) {
-        if (!grouped.has(p.stage)) grouped.set(p.stage, [])
-        grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
-    }
-
-    const stages = [...grouped.keys()].sort(
-        (a, b) => (STAGE_ORDER_MAP[a] ?? 9) - (STAGE_ORDER_MAP[b] ?? 9)
-    )
-
-    const stagesText = stages.map(stage => {
-        const titles = grouped.get(stage)!.map(i => `- ${i.title}`).join('\n')
-        return `[${stage}]\n${titles}`
-    }).join('\n\n')
-
-    const prompt = `이슈: "${issueTitle}"
-
-다음은 이 이슈와 관련된 뉴스 기사 제목들입니다.
-각 단계는 [발단], [전개], [파생], [진정]으로 구분되어 있습니다.
-
-${stagesText}
-
-## 중요: 단계별 독립 요약 원칙
-- **각 단계는 해당 단계의 뉴스만 사용**해서 요약하세요
-- 예: [발단] 요약 시 [전개]나 [파생]의 뉴스는 절대 사용하지 마세요
-- **중복된 내용의 뉴스는 하나만 선택**하세요 (예: "본격화" 제목이 3개면 1개만 사용)
-- **bullets 개수는 해당 단계의 뉴스 개수를 초과하지 마세요**
-
-## 법적 안전성 준수
-- 위 기사 제목에 있는 내용만 사용하세요
-- 기사 본문은 없으므로 제목에 없는 내용을 추측하지 마세요
-
-## 요청사항
-위 원칙을 엄격히 지켜 각 단계를 독립적으로 요약해주세요.
-
-**출력 형식:**
-1. 각 단계를 "발단/전개/파생/진정" 중 하나로 분류
-2. 각 단계의 핵심 사건들을 bullet points로 (1~5개, 해당 단계 뉴스 개수 이하)
-3. 각 bullet은 한 문장으로 간결하게
-4. 제목에서 확인할 수 있는 사실만 작성
-5. stageTitle에는 단계명을 붙이지 말고 내용만 작성 (예: "녹대 탈출" O, "[발단] 녹대 탈출" X)
-
-**브리핑:**
-- intro: 이슈를 한 문장으로 (예: "~가 ~해서 논란이야")
-- bullets: 핵심 팩트 3~5개
-- conclusion: 한 줄 결론 (예: "👉 ~한 상황이야")
-
-JSON 응답:
-{
-  "summaries": [
-    {"stage":"발단","stageTitle":"제목","bullets":["사건1","사건2"]},
-    {"stage":"전개","stageTitle":"제목","bullets":["후속1","후속2"]}
-  ],
-  "brief": {"intro":"한 문장","bullets":["팩트1","팩트2"],"conclusion":"결론"}
-}`
-
-    try {
-        const content = await callGroq(
-            [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 1500 },
-        )
-
-        const parsed = parseJsonObject<{
-            summaries: Array<{ stage: string; stageTitle: string; summary: string; bullets: string[] }>
-            brief: { intro: string; bullets: string[]; conclusion: string }
-        }>(content)
-        if (!parsed) return
-
-        // 단계별 요약 저장 (중복 제거 및 검증)
-        const rows = stages.map(stage => {
-            const items = grouped.get(stage)!
-            const dates = items.map(i => i.occurred_at).sort()
-            const ai = parsed.summaries?.find((p: { stage: string }) => p.stage === stage)
-            
-            let bullets = ai?.bullets ?? []
-            
-            // 검증 1: bullets 개수가 해당 단계 뉴스 개수를 초과하는 경우 경고
-            if (bullets.length > items.length) {
-                console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)
-            }
-            
-            // 검증 2: 중복된 bullets 제거 (완전 일치 + 유사도 높은 것)
-            const uniqueBullets: string[] = []
-            for (const bullet of bullets) {
-                const normalized = bullet.toLowerCase().trim()
-                const isDuplicate = uniqueBullets.some(existing => {
-                    const existingNormalized = existing.toLowerCase().trim()
-                    // 완전 일치
-                    if (normalized === existingNormalized) return true
-                    // 90% 이상 유사 (간단한 포함 관계 체크)
-                    const shorter = normalized.length < existingNormalized.length ? normalized : existingNormalized
-                    const longer = normalized.length >= existingNormalized.length ? normalized : existingNormalized
-                    return longer.includes(shorter) && shorter.length / longer.length > 0.9
-                })
-                
-                if (!isDuplicate) {
-                    uniqueBullets.push(bullet)
-                }
-            }
-            
-            if (uniqueBullets.length < bullets.length) {
-                console.log(`  ✓ [중복 제거] ${issueTitle} - ${stage}: ${bullets.length}개 → ${uniqueBullets.length}개`)
-            }
-            
-            return {
-                issue_id: issueId,
-                stage,
-                stage_title: ai?.stageTitle ?? stage,
-                bullets: uniqueBullets,
-                summary: uniqueBullets.join(' '), // 호환성을 위해 summary도 저장
-                date_start: dates[0],
-                date_end: dates[dates.length - 1],
-                generated_at: new Date().toISOString(),
-            }
-        })
-
-        const { error: summaryError } = await supabaseAdmin
-            .from('timeline_summaries')
-            .upsert(rows, { onConflict: 'issue_id,stage' })
-
-        if (summaryError) {
-            console.warn(`  ⚠️ [요약 캐시 저장 실패] ${issueTitle}: ${summaryError.message}`)
-        } else {
-            console.log(`  ✓ [요약 캐시 저장] ${issueTitle}: ${rows.length}개 단계`)
-        }
-
-        // 브리핑 저장
-        if (parsed.brief) {
-            const { error: briefError } = await supabaseAdmin
-                .from('issues')
-                .update({ brief_summary: parsed.brief })
-                .eq('id', issueId)
-
-            if (briefError) {
-                console.warn(`  ⚠️ [브리핑 저장 실패] ${issueTitle}: ${briefError.message}`)
-            } else {
-                console.log(`  ✓ [브리핑 저장] ${issueTitle}`)
-            }
-        }
-    } catch (err) {
-        console.warn(`  ⚠️ [요약 생성 실패] ${issueTitle}:`, err)
-    }
-}
+import { generateAndCacheSummaries } from '@/lib/ai/generate-timeline-summary'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -338,14 +179,14 @@ export async function GET(request: NextRequest) {
         const [activeIssues, reigniteIssues] = await Promise.all([
             supabaseAdmin
                 .from('issues')
-                .select('id, title, status')
+                .select('id, title, status, topic_description')
                 .in('status', ['점화', '논란중'])
                 .in('approval_status', ['승인', '대기'])
                 .order('updated_at', { ascending: false })
                 .limit(50),
             supabaseAdmin
                 .from('issues')
-                .select('id, title, status')
+                .select('id, title, status, topic_description')
                 .eq('status', '종결')
                 .gte('updated_at', reigniteWindowSince)
                 .order('updated_at', { ascending: false })
@@ -362,7 +203,7 @@ export async function GET(request: NextRequest) {
 
         const { data: closedIssues } = await supabaseAdmin
             .from('issues')
-            .select('id, title, status')
+            .select('id, title, status, topic_description')
             .eq('status', '종결')
             .eq('approval_status', '승인')
             .order('updated_at', { ascending: false })
@@ -478,7 +319,7 @@ export async function GET(request: NextRequest) {
                 // timeline_points는 있는데 summaries가 없으면 backfill
                 if (existingCount > 0 && !issuesWithSummaries.has(issue.id)) {
                     console.log(`  [${issue.title}] summaries 누락 → backfill 실행`)
-                    await generateAndCacheSummaries(issue.id, issue.title)
+                    await generateAndCacheSummaries(issue.id, issue.title, issue.topic_description)
                     issuesWithSummaries.add(issue.id)
                     updatedCount++
                 } else {
@@ -520,7 +361,7 @@ export async function GET(request: NextRequest) {
                 console.log(`  ✓ [타임라인 업데이트 완료] ${issue.title}: ${newPoints.length}개 추가`)
                 updatedCount++
                 // 포인트 추가 후 즉시 요약 캐시 갱신 (유저 요청 시 Groq 호출 없음)
-                await generateAndCacheSummaries(issue.id, issue.title)
+                await generateAndCacheSummaries(issue.id, issue.title, issue.topic_description)
             }
 
         }

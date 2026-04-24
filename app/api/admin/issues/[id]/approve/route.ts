@@ -48,7 +48,7 @@ export async function POST(
 
         if (error) throw error
 
-        // Unsplash 이미지 검색 (이미지가 없을 때만)
+        // Pixabay 이미지 검색 (이미지가 없을 때만)
         // 트랙 A에서 이미 이미지가 생성되었으면 건너뜀
         const hasThumbnails = data.thumbnail_urls && Array.isArray(data.thumbnail_urls) && data.thumbnail_urls.length > 0
         

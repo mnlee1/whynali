@@ -151,7 +151,7 @@ export default function IssuePreviewDrawer({
 
     const handleRemoveThumbnails = async () => {
         if (!issue) return
-        if (!confirm('이미지를 제거하시겠습니까?\n슬라이드에서 그라디언트 배경이 표시됩니다.')) return
+        if (!confirm('대표 이미지 선택을 해제하고 그라데이션 배경을 사용하겠습니까?\n이미지는 삭제되지 않으며 다시 클릭해 선택할 수 있습니다.')) return
 
         try {
             const res = await fetch(`/api/admin/issues/${issue.id}/remove-thumbnails`, {
@@ -160,14 +160,14 @@ export default function IssuePreviewDrawer({
 
             if (!res.ok) {
                 const error = await res.json()
-                throw new Error(error.message || '이미지 제거 실패')
+                throw new Error(error.message || '이미지 해제 실패')
             }
 
-            alert('이미지가 제거되었습니다')
+            setSelectedThumbnailIndex(-1)
             onIssueUpdate?.()
         } catch (error) {
-            console.error('이미지 제거 에러:', error)
-            alert(error instanceof Error ? error.message : '이미지 제거에 실패했습니다')
+            console.error('이미지 해제 에러:', error)
+            alert(error instanceof Error ? error.message : '이미지 해제에 실패했습니다')
         }
     }
 
@@ -221,36 +221,50 @@ export default function IssuePreviewDrawer({
                     </div>
 
                     {/* 이미지 미리보기 */}
-                    {localThumbnailUrls.length > 0 && (
-                        <div className="card overflow-hidden">
-                            <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
-                                <h2 className="text-sm font-bold text-content-primary">
-                                    대표 이미지
+                    <div className="card overflow-hidden">
+                        <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
+                            <h2 className="text-sm font-bold text-content-primary">
+                                대표 이미지
+                                {localThumbnailUrls.length > 0 && (
                                     <span className="ml-2 text-xs font-normal text-content-muted">({localThumbnailUrls.length}개)</span>
-                                </h2>
-                                <div className="flex items-center gap-2">
-                                    {refreshSuccess && (
-                                        <span className="text-xs text-green-600 font-medium">✓ 완료</span>
-                                    )}
-                                    <button
-                                        onClick={handleRefreshThumbnails}
-                                        disabled={isRefreshing}
-                                        className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg disabled:opacity-50"
-                                    >
-                                        {isRefreshing ? '검색 중...' : '이미지 재검색'}
-                                    </button>
+                                )}
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                {refreshSuccess && (
+                                    <span className="text-xs text-green-600 font-medium">✓ 완료</span>
+                                )}
+                                <button
+                                    onClick={handleRefreshThumbnails}
+                                    disabled={isRefreshing}
+                                    className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg disabled:opacity-50"
+                                >
+                                    {isRefreshing ? '검색 중...' : localThumbnailUrls.length > 0 ? '이미지 재검색' : '이미지 검색'}
+                                </button>
+                                {localThumbnailUrls.length > 0 && selectedThumbnailIndex >= 0 && (
                                     <button
                                         onClick={handleRemoveThumbnails}
-                                        className="px-3 py-1.5 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 rounded-lg"
+                                        className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg"
                                     >
-                                        이미지 제거
+                                        그라데이션 배경 사용
                                     </button>
-                                </div>
+                                )}
                             </div>
-                            <div className="p-4 space-y-3">
+                        </div>
+                        <div className="p-4 space-y-3">
+                            {localThumbnailUrls.length === 0 ? (
+                                <p className="text-xs text-content-muted text-center py-4">
+                                    이미지가 없습니다. &apos;이미지 검색&apos; 버튼을 눌러 Pixabay에서 검색하세요.
+                                </p>
+                            ) : selectedThumbnailIndex < 0 ? (
+                                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                                    그라데이션 배경 사용 중 — 이미지를 클릭하면 대표로 설정됩니다
+                                </p>
+                            ) : (
                                 <p className="text-xs text-content-muted">
                                     슬라이드에 표시할 대표 이미지를 선택하세요
                                 </p>
+                            )}
+                            {localThumbnailUrls.length > 0 && (
                                 <div className="grid grid-cols-3 gap-3">
                                     {localThumbnailUrls.map((url, i) => (
                                         <label key={url} className="block cursor-pointer group">
@@ -274,9 +288,9 @@ export default function IssuePreviewDrawer({
                                         </label>
                                     ))}
                                 </div>
-                            </div>
+                            )}
                         </div>
-                    )}
+                    </div>
 
                     {/* 타임라인 — 유저뷰/포인트 관리 탭 */}
                     <div className="card overflow-hidden">
