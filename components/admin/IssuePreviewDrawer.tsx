@@ -85,11 +85,20 @@ export default function IssuePreviewDrawer({
                 `/api/admin/migrations/regenerate-single-timeline?issueId=${issue.id}`,
                 { method: 'POST' }
             )
-            if (!res.ok) throw new Error('재생성 실패')
+            if (!res.ok) {
+                let msg = `HTTP ${res.status}`
+                try {
+                    const body = await res.json()
+                    msg += `: ${body.error ?? body.message ?? JSON.stringify(body)}`
+                } catch {
+                    msg += ` (응답 파싱 실패)`
+                }
+                throw new Error(msg)
+            }
             setSummaryKey(k => k + 1)
             setTimelineTab('preview')
-        } catch {
-            alert('요약 재생성에 실패했습니다.')
+        } catch (e) {
+            alert(`요약 재생성 실패\n${e instanceof Error ? e.message : String(e)}`)
         } finally {
             setIsRegenerating(false)
         }
