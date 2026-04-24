@@ -9,15 +9,15 @@
  */
 
 const CATEGORY_FALLBACK: Record<string, string> = {
-    '연예': 'entertainment stage concert',
-    '스포츠': 'sports stadium field',
-    '정치': 'politics building architecture',
-    '사회': 'society cityscape urban',
-    '경제': 'economy business skyline',
-    'IT과학': 'technology abstract circuit',
-    '기술': 'technology abstract circuit',
-    '생활문화': 'lifestyle architecture interior',
-    '세계': 'world landmark architecture',
+    '연예': 'stage spotlight neon',
+    '스포츠': 'stadium lights aerial',
+    '정치': 'marble columns government',
+    '사회': 'city street urban blur',
+    '경제': 'financial skyline glass',
+    'IT과학': 'server room digital blue',
+    '기술': 'server room digital blue',
+    '생활문화': 'cafe interior warm light',
+    '세계': 'ocean horizon earth',
 }
 
 /**
@@ -40,29 +40,35 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
                 messages: [
                     {
                         role: 'user',
-                        content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords for the visual background image, then add ::dark or ::bright based on the issue tone.
+                        content: `You pick a Pixabay background photo mood for Korean news thumbnails.
+Output 2 simple visual/atmospheric English words + ::dark or ::bright tone.
+Focus on ATMOSPHERE, not news content. Avoid person/face keywords.
 
-Rules:
-- ::dark → controversy, scandal, accident, crime, conflict, death, protest, crisis, defeat
-- ::bright → comeback, release, achievement, award, victory, celebration, debut
+Tone rules:
+- ::dark → scandal, accident, crime, conflict, death, protest, crisis, defeat, controversy
+- ::bright → achievement, award, victory, celebration, debut, record, comeback, release
 
 Category: ${category}
 Examples:
-- [연예] "BTS 새 앨범 발매" → "music concert stage::bright"
-- [연예] "지수 친오빠 크레딧 삭제 논란" → "music studio silhouette::dark"
-- [연예] "아이유 콘서트 매진" → "concert spotlight stage::bright"
-- [연예] "배우 음주운전 적발" → "night city road::dark"
-- [스포츠] "토트넘 강등 위기" → "soccer stadium empty::dark"
-- [스포츠] "손흥민 골든부트 수상" → "soccer trophy celebration::bright"
-- [정치] "국회의원 막말 논란" → "parliament building shadow::dark"
-- [사회] "이태원 참사 추모" → "memorial candles vigil::dark"
-- [경제] "삼성전자 노조 파업" → "factory gate protest::dark"
-- [경제] "코스피 사상 최고치" → "stock market graph::bright"
-- [기술] "AI 주식 투자 열풍" → "stock market technology::bright"
-- [세계] "이스라엘 레바논 공습" → "war conflict destruction::dark"
+- [연예] "BTS 새 앨범 발매" → "neon bokeh::bright"
+- [연예] "지수 크레딧 삭제 논란" → "dark smoke::dark"
+- [연예] "아이유 콘서트 매진" → "stage spotlight::bright"
+- [연예] "배우 음주운전 적발" → "night rain::dark"
+- [스포츠] "토트넘 강등 위기" → "stadium fog::dark"
+- [스포츠] "손흥민 골든부트 수상" → "stadium golden::bright"
+- [정치] "국회의원 막말 논란" → "marble shadow::dark"
+- [정치] "대통령 취임식" → "flag sunrise::bright"
+- [사회] "이태원 참사 추모" → "candles dark::dark"
+- [사회] "산불 피해 확산" → "fire smoke::dark"
+- [경제] "삼성전자 노조 파업" → "factory smoke::dark"
+- [경제] "코스피 사상 최고치" → "skyline sunrise::bright"
+- [기술] "AI 스타트업 투자 열풍" → "circuit blue::bright"
+- [세계] "이스라엘 공습" → "ruins smoke::dark"
+- [세계] "G7 정상회담" → "marble columns::bright"
+- [생활문화] "카페 창업 열풍" → "cafe warm::bright"
 
 Korean headline: "${title}"
-Reply with ONLY the keywords::tone format, nothing else.`,
+Reply with ONLY the 2-word keywords::tone format, nothing else.`,
                     },
                 ],
                 max_tokens: 25,
@@ -96,9 +102,10 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         q: query,
         image_type: 'photo',
         orientation: 'horizontal',
-        per_page: '30',
+        per_page: '50',
         safesearch: 'true',
-        min_width: '640',
+        min_width: '1280',
+        order: 'popular',
     })
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
@@ -119,8 +126,8 @@ async function searchPixabay(query: string, apiKey: string): Promise<string[]> {
         return !personTags.some(t => tags.includes(t))
     })
 
-    // 관련도 상위 15개 중 랜덤 3개 — 품질 유지 + 매번 다른 이미지
-    const pool = (filtered.length > 0 ? filtered : hits).slice(0, 15)
+    // 인기순 상위 20개 중 랜덤 3개 — 품질 유지 + 매번 다른 이미지
+    const pool = (filtered.length > 0 ? filtered : hits).slice(0, 20)
     const shuffled = [...pool].sort(() => Math.random() - 0.5)
     return shuffled
         .slice(0, Math.min(3, shuffled.length))

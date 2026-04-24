@@ -77,6 +77,24 @@ export default function IssuePreviewDrawer({
         }
     }
 
+    const handleRegenerateSummary = async () => {
+        if (!issue || isRegenerating) return
+        setIsRegenerating(true)
+        try {
+            const res = await fetch(
+                `/api/admin/migrations/regenerate-single-timeline?issueId=${issue.id}`,
+                { method: 'POST' }
+            )
+            if (!res.ok) throw new Error('재생성 실패')
+            setSummaryKey(k => k + 1)
+            setTimelineTab('preview')
+        } catch {
+            alert('요약 재생성에 실패했습니다.')
+        } finally {
+            setIsRegenerating(false)
+        }
+    }
+
     /* ESC 키로 닫기 */
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -301,27 +319,37 @@ export default function IssuePreviewDrawer({
                                     <span className="text-xs text-content-muted animate-pulse">요약 재생성 중...</span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1 bg-surface-muted rounded-lg p-0.5">
+                            <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => setTimelineTab('preview')}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                                        timelineTab === 'preview'
-                                            ? 'bg-surface text-content-primary shadow-sm'
-                                            : 'text-content-muted hover:text-content-secondary'
-                                    }`}
+                                    onClick={handleRegenerateSummary}
+                                    disabled={isRegenerating}
+                                    className="text-xs px-2.5 py-1 border border-border rounded-lg text-content-muted hover:text-content-secondary hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    title="현재 포인트 기준으로 AI 요약을 다시 생성합니다"
                                 >
-                                    유저뷰
+                                    {isRegenerating ? '재생성 중...' : '요약 재생성'}
                                 </button>
-                                <button
-                                    onClick={() => setTimelineTab('manage')}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                                        timelineTab === 'manage'
-                                            ? 'bg-surface text-content-primary shadow-sm'
-                                            : 'text-content-muted hover:text-content-secondary'
-                                    }`}
-                                >
-                                    포인트 관리
-                                </button>
+                                <div className="flex items-center gap-1 bg-surface-muted rounded-lg p-0.5">
+                                    <button
+                                        onClick={() => setTimelineTab('preview')}
+                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                                            timelineTab === 'preview'
+                                                ? 'bg-surface text-content-primary shadow-sm'
+                                                : 'text-content-muted hover:text-content-secondary'
+                                        }`}
+                                    >
+                                        유저뷰
+                                    </button>
+                                    <button
+                                        onClick={() => setTimelineTab('manage')}
+                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                                            timelineTab === 'manage'
+                                                ? 'bg-surface text-content-primary shadow-sm'
+                                                : 'text-content-muted hover:text-content-secondary'
+                                        }`}
+                                    >
+                                        포인트 관리
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div className="p-4">
