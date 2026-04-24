@@ -90,16 +90,8 @@ export async function POST(
             )
         }
 
-        const results: Record<string, number> = {}
-
         // 1. news_data
-        const { count: newsCount } = await supabaseAdmin
-            .from('news_data')
-            .update({ issue_id: targetId })
-            .eq('issue_id', sourceId)
-            .select('id', { count: 'exact', head: true })
         await supabaseAdmin.from('news_data').update({ issue_id: targetId }).eq('issue_id', sourceId)
-        results.news = newsCount ?? 0
 
         // 2. community_data
         await supabaseAdmin.from('community_data').update({ issue_id: targetId }).eq('issue_id', sourceId)
