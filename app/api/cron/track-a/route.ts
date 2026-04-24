@@ -20,7 +20,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 300
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject, parseJsonArray } from '@/lib/ai/parse-json-response'
 import { searchNaverNewsByKeyword } from '@/lib/collectors/naver-news'
@@ -36,6 +36,7 @@ import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 import { validateIssueCreation, validateTrackAIssue } from '@/lib/validation/issue-creation'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
+import { searchAndLinkCauseArticles } from '@/lib/candidate/cause-article-searcher'
 
 const BURST_THRESHOLD = parseInt(process.env.COMMUNITY_BURST_THRESHOLD ?? '3')
 const WINDOW_MINUTES = parseInt(process.env.COMMUNITY_BURST_WINDOW_MINUTES ?? '10')
@@ -1321,7 +1322,7 @@ async function processTrackA(): Promise<{
         const { data: newIssue, error: createError } = await supabaseAdmin
             .from('issues')
             .insert(issueValidation.validated!)
-            .select('id')
+            .select('id, created_at')
             .single()
         
         if (createError || !newIssue) {
@@ -1501,6 +1502,15 @@ async function processTrackA(): Promise<{
         }
         
         console.log(`  ✓ [타임라인 생성 완료] ${timelinePoints.length}개 포인트`)
+
+        // 원인 기사 역방향 탐색 (비동기 — 실패해도 이슈 생성에 영향 없음)
+        searchAndLinkCauseArticles(
+            newIssue.id,
+            finalIssueTitle,
+            topicDescription ?? null,
+            newIssue.created_at,
+            category,
+        ).catch(err => console.warn(`  ⚠️ [원인탐색 비동기 실패]`, err))
 
         // 요약 캐시 저장 (유저 접속 시 Groq 호출 없이 바로 노출)
         if (timelineSummaryRows.length > 0) {

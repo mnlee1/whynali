@@ -5,7 +5,7 @@
  * - PIXABAY_API_KEY 없으면 빈 배열 반환 (안전하게 스킵)
  * - 이미지 파일 저장 없음, URL만 반환
  * - 라이선스: Pixabay License (상업적 이용 가능, 출처 표기 불필요)
- * - API 한도: 5,000회/시간 (Unsplash 데모 50회/시간 대비 100배)
+ * - API 한도: 5,000회/시간
  */
 
 const CATEGORY_FALLBACK: Record<string, string> = {

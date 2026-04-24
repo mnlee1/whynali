@@ -119,7 +119,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                     <SwiperSlide key={issue.id}>
                         <Link href={`/issue/${issue.id}`}>
                             <article className={`relative h-full ${heroImage ? '' : `bg-gradient-to-br ${gradient}`} cursor-pointer group ring-2 ring-transparent group-hover:ring-primary-muted/70 transition-all overflow-hidden`}>
-                                {/* Unsplash 이미지 배경 (있을 때만) */}
+                                {/* 이미지 배경 (있을 때만) */}
                                 {heroImage && (
                                     <Image
                                         src={heroImage}
