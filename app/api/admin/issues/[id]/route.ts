@@ -51,6 +51,14 @@ export async function PATCH(
 
         if (error) throw error
 
+        // title 변경 시 shortform_jobs 스냅샷 동기화
+        if (updates.title) {
+            await supabaseAdmin
+                .from('shortform_jobs')
+                .update({ issue_title: updates.title })
+                .eq('issue_id', id)
+        }
+
         await writeAdminLog(
             `이슈 수정: ${Object.keys(updates).join(', ')}`,
             'issue',

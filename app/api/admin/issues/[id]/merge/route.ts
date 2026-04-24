@@ -127,6 +127,15 @@ export async function POST(
         // 6. votes — 소스 votes를 타깃으로 이동 (vote_choices는 vote_id 기반이라 그대로 유지)
         await supabaseAdmin.from('votes').update({ issue_id: targetId }).eq('issue_id', sourceId)
 
+        // 6-1. discussion_topics — 소스 이슈의 토론을 타깃으로 이동
+        await supabaseAdmin.from('discussion_topics').update({ issue_id: targetId }).eq('issue_id', sourceId)
+
+        // 6-2. shortform_jobs — issue_id 및 issue_title 스냅샷 동기화
+        await supabaseAdmin
+            .from('shortform_jobs')
+            .update({ issue_id: targetId, issue_title: targetIssue.title })
+            .eq('issue_id', sourceId)
+
         // 7. 소스 이슈 병합됨 처리
         await supabaseAdmin
             .from('issues')
