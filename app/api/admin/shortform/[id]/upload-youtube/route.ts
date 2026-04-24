@@ -28,7 +28,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
         // 1. Job 조회
         const { data: job, error: selectError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('*')
+            .select('*, issues(category)')
             .eq('id', id)
             .single()
 
@@ -103,11 +103,12 @@ export async function POST(_request: NextRequest, { params }: Params) {
             '세계': '#세계 #해외이슈 #글로벌',
             '생활문화': '#생활 #문화 #라이프',
         }
-        const categoryTag = CATEGORY_HASHTAGS[job.issue_category ?? ''] ?? ''
+        const issueCategory = (job.issues as any)?.category ?? ''
+        const categoryTag = CATEGORY_HASHTAGS[issueCategory] ?? ''
 
         // 이슈 제목 파생 키워드 (Groq)
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
-        const titleTags = titleKeywords.map((k: string) => `#${k}`).join(' ')
+        const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags} #Shorts`.replace(/\s+/g, ' ').trim()
 

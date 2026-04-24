@@ -11,7 +11,6 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 import { generate3SceneShortform } from '@/lib/shortform/generate-image'
-import { validateShortformImage } from '@/lib/shortform/ai-validate'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -98,27 +97,10 @@ export async function POST(request: NextRequest, { params }: Params) {
             .from('shortform')
             .getPublicUrl(storagePath)
 
-        // 5. AI 자동 검증 실행
-        let aiValidation = null
-        try {
-            if (process.env.GEMINI_API_KEY) {
-                aiValidation = await validateShortformImage(urlData.publicUrl, job.issue_title)
-                console.log('[AI 검증 완료]', aiValidation)
-            } else {
-                console.warn('[AI 검증 스킵] GEMINI_API_KEY 없음')
-            }
-        } catch (aiError) {
-            console.error('[AI 검증 실패]', aiError)
-            // AI 검증 실패해도 동영상 생성은 완료 (검증은 보조 기능)
-        }
-
-        // 6. Job의 video_path + ai_validation 업데이트
+        // 5. Job의 video_path 업데이트
         const { error: updateError } = await supabaseAdmin
             .from('shortform_jobs')
-            .update({ 
-                video_path: storagePath,
-                ai_validation: aiValidation,
-            })
+            .update({ video_path: storagePath })
             .eq('id', id)
 
         if (updateError) {
@@ -135,8 +117,7 @@ export async function POST(request: NextRequest, { params }: Params) {
             'shortform_job',
             id,
             auth.adminEmail,
-            `이슈: "${job.issue_title}" → ${filename}` + 
-            (aiValidation ? ` (AI: ${aiValidation.status})` : '')
+            `이슈: "${job.issue_title}" → ${filename}`
         )
 
         return NextResponse.json({
@@ -144,7 +125,6 @@ export async function POST(request: NextRequest, { params }: Params) {
             path: storagePath,
             publicUrl: urlData.publicUrl,
             filename,
-            aiValidation,
         })
     } catch (error) {
         console.error('숏폼 동영상 생성 에러:', error)
