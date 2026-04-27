@@ -75,16 +75,9 @@ export async function POST(
             }
             videoBuffer = Buffer.from(await res.arrayBuffer())
         } else {
-            const fileName = job.video_path.split('/').pop()
-            if (!fileName) {
-                return NextResponse.json(
-                    { error: 'INVALID_VIDEO_PATH', message: '동영상 경로가 올바르지 않습니다' },
-                    { status: 400 }
-                )
-            }
             const { data: videoData, error: downloadError } = await supabaseAdmin.storage
                 .from('shortform')
-                .download(fileName)
+                .download(job.video_path)
             if (downloadError || !videoData) {
                 console.error('[upload-tiktok] Storage 다운로드 실패:', downloadError)
                 return NextResponse.json(
@@ -114,8 +107,7 @@ export async function POST(
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
-        const shortId = issueId.substring(0, 8)
-        const shortUrl = shortId ? ` https://whynali.com/i/${shortId}` : ''
+        const shortUrl = issueId ? ` https://whynali.com/i/${issueId}` : ''
 
         const tiktokTitle = `${job.issue_title} | 왜난리${shortUrl} #왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
 

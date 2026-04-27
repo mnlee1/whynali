@@ -18,7 +18,7 @@ export interface InstagramUploadOptions {
 }
 
 const GRAPH_API = 'https://graph.instagram.com/v21.0'
-const MAX_POLL = 20          // 최대 폴링 횟수
+const MAX_POLL = 36          // 최대 폴링 횟수 (36 × 5초 = 180초)
 const POLL_INTERVAL = 5000   // 폴링 간격 (5초)
 
 /**
@@ -74,7 +74,7 @@ async function waitForReady(creationId: string, accessToken: string): Promise<vo
         }
     }
 
-    throw new Error('Instagram 미디어 처리 시간 초과 (최대 100초)')
+    throw new Error('Instagram 미디어 처리 시간 초과 (최대 180초)')
 }
 
 /**
