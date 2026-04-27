@@ -1373,35 +1373,8 @@ async function processTrackA(): Promise<{
 
         after(async () => {
             try {
-                const { fetchPixabayImages } = await import('@/lib/pixabay')
-                let thumbnailUrls = await fetchPixabayImages(_issueTitle, _category)
-
-                // Pixabay 결과 없으면 연결된 뉴스 기사에서 og:image 추출
-                if (thumbnailUrls.length === 0 && _newsLinks.length > 0) {
-                    const ogImages: string[] = []
-
-                    for (const link of _newsLinks) {
-                        if (ogImages.length >= 3) break
-                        try {
-                            const res = await fetch(link, {
-                                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WhyNaliBot/1.0)' },
-                                signal: AbortSignal.timeout(5000),
-                            })
-                            if (!res.ok) continue
-                            const html = await res.text()
-                            const match = html.match(/<meta[^>]+(?:property="og:image"|name="og:image")[^>]+content="([^"]+)"/i)
-                                ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+(?:property="og:image"|name="og:image")/i)
-                            const imgUrl = match?.[1]
-                            if (imgUrl && imgUrl.startsWith('http') && !ogImages.includes(imgUrl)) {
-                                ogImages.push(imgUrl)
-                            }
-                        } catch {
-                            // 개별 기사 fetch 실패는 무시
-                        }
-                    }
-
-                    if (ogImages.length > 0) thumbnailUrls = ogImages
-                }
+                const { fetchPexelsImages } = await import('@/lib/pexels')
+                const thumbnailUrls = await fetchPexelsImages(_issueTitle, _category)
 
                 if (thumbnailUrls.length > 0) {
                     await supabaseAdmin

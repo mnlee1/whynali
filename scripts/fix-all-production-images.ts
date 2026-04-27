@@ -1,23 +1,23 @@
 /**
  * scripts/fix-all-production-images.ts
- * 
- * 프로덕션 DB의 모든 이슈 이미지를 재검색합니다.
- * 이미지를 찾을 수 없는 경우 이미지를 제거합니다.
- * 
+ *
+ * 프로덕션 DB의 모든 이슈 이미지를 Pexels 이미지로 교체합니다.
+ * (Unsplash, Pixabay 포함 전체 교체)
+ *
  * 사용법:
  * npx tsx scripts/fix-all-production-images.ts --dry-run  # 미리보기만
  * npx tsx scripts/fix-all-production-images.ts             # 실제 수정
- * 
+ *
  * 옵션:
- * --dry-run : 실제 수정 없이 미리보기만
- * --limit=N : 처리할 이슈 수 제한
+ * --dry-run  : 실제 수정 없이 미리보기만
+ * --limit=N  : 처리할 이슈 수 제한 (기본값: 전체)
  */
 
 import { config } from 'dotenv'
 config({ path: '.env.local' })
 
 import { createClient } from '@supabase/supabase-js'
-import { fetchPixabayImages } from '../lib/pixabay'
+import { fetchPexelsImages } from '../lib/pexels'
 
 const prodUrl = process.env.NEXT_PUBLIC_SUPABASE_PRODUCTION_URL
 const prodKey = process.env.SUPABASE_PRODUCTION_SERVICE_ROLE_KEY
@@ -29,7 +29,15 @@ if (!prodUrl || !prodKey) {
     process.exit(1)
 }
 
+if (!process.env.PEXELS_API_KEY) {
+    console.error('PEXELS_API_KEY가 .env.local에 없습니다.')
+    process.exit(1)
+}
+
 const supabase = createClient(prodUrl, prodKey)
+
+// Pexels 200회/시간 제한 — 18초 간격으로 안전하게 유지
+const DELAY_MS = 20_000
 
 interface Issue {
     id: string
@@ -41,118 +49,84 @@ interface Issue {
 async function main() {
     const isDryRun = process.argv.includes('--dry-run')
     const limitArg = process.argv.find(arg => arg.startsWith('--limit='))
-    const limit = limitArg ? parseInt(limitArg.split('=')[1]) : 1000
-    
-    console.log('=== 프로덕션 DB 이미지 일괄 재검색 ===')
+    const limit = limitArg ? parseInt(limitArg.split('=')[1]) : 10000
+
+    console.log('=== 프로덕션 이슈 이미지 전체 Pexels 교체 ===')
     console.log(`모드: ${isDryRun ? '미리보기 (수정 안 함)' : '실제 수정'}`)
-    console.log(`최대 처리: ${limit}개\n`)
-    
-    // 이미지가 없는 모든 이슈 조회 (빈 배열 또는 null)
-    const { data: allIssues, error } = await supabase
+    console.log(`최대 처리: ${limit}개`)
+    console.log(`요청 간격: ${DELAY_MS / 1000}초 (Pexels 200회/시간 제한)\n`)
+
+    const { data: issues, error } = await supabase
         .from('issues')
         .select('id, title, category, thumbnail_urls')
         .order('created_at', { ascending: false })
         .limit(limit)
-    
+
     if (error) {
         console.error('이슈 조회 실패:', error)
         return
     }
-    
-    if (!allIssues || allIssues.length === 0) {
+
+    if (!issues || issues.length === 0) {
         console.log('이슈가 없습니다.')
         return
     }
-    
-    // 이미지가 없는 이슈만 필터링 (null 또는 빈 배열)
-    const issuesWithoutImages = (allIssues as Issue[]).filter(issue => {
-        return !issue.thumbnail_urls || 
-               !Array.isArray(issue.thumbnail_urls) || 
-               issue.thumbnail_urls.length === 0
-    })
-    
-    if (issuesWithoutImages.length === 0) {
-        console.log('이미지가 필요한 이슈가 없습니다. 모든 이슈에 이미지가 있습니다.')
-        return
-    }
-    
-    console.log(`총 ${issuesWithoutImages.length}개 이슈에 이미지를 추가합니다...\n`)
-    
-    const issues = issuesWithoutImages
-    
+
+    const estimatedMinutes = Math.ceil((issues.length * DELAY_MS) / 60000)
+    console.log(`총 ${issues.length}개 이슈 처리 예정 (예상 소요 시간: 약 ${estimatedMinutes}분)\n`)
+
     let successCount = 0
-    let removedCount = 0
     let failedCount = 0
-    
+
     for (let i = 0; i < issues.length; i++) {
-        const issue = issues[i]
+        const issue = issues[i] as Issue
         const progress = `[${i + 1}/${issues.length}]`
-        
-        console.log(`${progress} ${issue.title.substring(0, 40)}...`)
-        
+        const currentUrls = issue.thumbnail_urls ?? []
+        const source = currentUrls[0]?.includes('unsplash') ? 'Unsplash'
+            : currentUrls[0]?.includes('pixabay') ? 'Pixabay'
+            : currentUrls[0]?.includes('pexels') ? 'Pexels'
+            : '없음'
+
+        process.stdout.write(`${progress} [${source}] "${issue.title.substring(0, 35)}"... `)
+
         try {
-            // 새 이미지 검색 (중복 체크 포함)
-            const newUrls = await fetchPixabayImages(issue.title, issue.category)
-            
-            if (newUrls.length > 0) {
-                console.log(`  ✅ 새 이미지 ${newUrls.length}개 찾음`)
-                
-                if (!isDryRun) {
-                    const { error: updateError } = await supabase
-                        .from('issues')
-                        .update({
-                            thumbnail_urls: newUrls
-                        })
-                        .eq('id', issue.id)
-                    
-                    if (updateError) {
-                        console.log(`  ❌ DB 업데이트 실패:`, updateError.message)
-                        failedCount++
-                    } else {
-                        successCount++
-                    }
+            const newUrls = await fetchPexelsImages(issue.title, issue.category)
+
+            if (newUrls.length === 0) {
+                console.log('⚠️  이미지 없음 (스킵)')
+                failedCount++
+            } else if (isDryRun) {
+                console.log(`✅ ${newUrls.length}개 (미리보기)`)
+                successCount++
+            } else {
+                const { error: updateError } = await supabase
+                    .from('issues')
+                    .update({ thumbnail_urls: newUrls, primary_thumbnail_index: 0 })
+                    .eq('id', issue.id)
+
+                if (updateError) {
+                    console.log(`❌ DB 오류: ${updateError.message}`)
+                    failedCount++
                 } else {
+                    console.log(`✅ ${newUrls.length}개 교체 완료`)
                     successCount++
                 }
-            } else {
-                console.log(`  ⚠️  이미지를 찾을 수 없음 → 이미지 제거`)
-                
-                if (!isDryRun) {
-                    const { error: updateError } = await supabase
-                        .from('issues')
-                        .update({
-                            thumbnail_urls: []
-                        })
-                        .eq('id', issue.id)
-                    
-                    if (updateError) {
-                        console.log(`  ❌ DB 업데이트 실패:`, updateError.message)
-                        failedCount++
-                    } else {
-                        removedCount++
-                    }
-                } else {
-                    removedCount++
-                }
             }
-            
-            // Rate limit 방지 (Pixabay: 5000회/시간, Groq: 매우 여유)
-            await new Promise(resolve => setTimeout(resolve, 3000))
-            
-        } catch (error) {
-            console.log(`  ❌ 에러:`, error)
+        } catch (e) {
+            console.log(`❌ 오류: ${e}`)
             failedCount++
         }
+
+        if (i < issues.length - 1) {
+            await new Promise(r => setTimeout(r, DELAY_MS))
+        }
     }
-    
-    console.log('\n=== 처리 완료 ===')
-    console.log(`처리한 이슈: ${issues.length}개`)
-    console.log(`새 이미지로 교체: ${successCount}개`)
-    console.log(`이미지 제거: ${removedCount}개`)
-    console.log(`실패: ${failedCount}개`)
-    
+
+    console.log('\n' + '='.repeat(50))
+    console.log(`완료 — 성공: ${successCount}개 / 실패: ${failedCount}개 / 전체: ${issues.length}개`)
+
     if (isDryRun) {
-        console.log('\n⚠️  미리보기 모드였습니다. 실제 수정하려면:')
+        console.log('\n⚠️  미리보기 모드였습니다. 실제 교체하려면:')
         console.log('npx tsx scripts/fix-all-production-images.ts')
     }
 }
