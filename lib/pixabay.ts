@@ -91,12 +91,21 @@ Reply with ONLY the 2-word keywords::tone format, nothing else.`,
     }
 }
 
+// 항상 충분한 결과가 보장되는 범용 쿼리 (최후 보루)
+const SAFE_FALLBACK_QUERIES = [
+    'nature landscape',
+    'abstract bokeh blur',
+    'sky clouds sunlight',
+    'city night lights',
+]
+
+const PERSON_TAGS = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'crowd', 'girl', 'boy', 'child']
+
 /**
- * Pixabay 검색 후 결과 중 랜덤 3개 URL 반환
- * 사람 관련 태그가 포함된 이미지는 자동 제외
- * 톤은 키워드 자체(shadow, night 등)로 반영 — colors 필터 미사용 (결과 다양성 확보)
+ * Pixabay 검색 후 랜덤 URL 배열 반환 (최대 needed개)
+ * 사람 관련 태그 이미지는 우선 제외 (3개 미만이면 포함)
  */
-async function searchPixabay(query: string, apiKey: string, seed?: number): Promise<string[]> {
+async function searchPixabay(query: string, apiKey: string, needed: number, seed?: number): Promise<string[]> {
     const params = new URLSearchParams({
         key: apiKey,
         q: query,
@@ -117,14 +126,9 @@ async function searchPixabay(query: string, apiKey: string, seed?: number): Prom
     const hits: Array<{ webformatURL: string; largeImageURL: string; tags: string }> = data.hits ?? []
     if (hits.length === 0) return []
 
-    // 사람 관련 태그 포함 이미지 제외 (3개 이상 확보 가능한 경우만 적용)
-    const personTags = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'crowd', 'girl', 'boy', 'child']
-    const filtered = hits.filter(h => !personTags.some(t => h.tags.toLowerCase().includes(t)))
+    const filtered = hits.filter(h => !PERSON_TAGS.some(t => h.tags.toLowerCase().includes(t)))
+    const pool = filtered.length >= needed ? filtered : hits
 
-    // filtered 3개 미만이면 전체 hits 사용 (연예·인물 이슈 대응)
-    const pool = filtered.length >= 3 ? filtered : hits
-
-    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
     const shuffled = [...pool]
@@ -133,13 +137,13 @@ async function searchPixabay(query: string, apiKey: string, seed?: number): Prom
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    // webformatURL(640px): 직접 접근 가능 / largeImageURL: 고해상도지만 서버 차단 가능성 있음
-    return shuffled.slice(0, 3).map(h => h.webformatURL || h.largeImageURL).filter(Boolean)
+    return shuffled.slice(0, needed).map(h => h.webformatURL || h.largeImageURL).filter(Boolean)
 }
 
 /**
- * 이슈 제목과 카테고리로 Pixabay 이미지 URL 최대 3개 반환
- * @returns 이미지 URL 배열 (최대 3개) — 실패 시 빈 배열
+ * 이슈 제목과 카테고리로 Pixabay 이미지 URL 3개 반환
+ * 여러 쿼리를 순차 시도해 반드시 3개를 채움:
+ *   1차: Groq 키워드 → 2차: 카테고리 폴백 → 3차: 범용 안전 쿼리들
  */
 export async function fetchPixabayImages(title: string, category: string, seed?: number): Promise<string[]>
 export async function fetchPixabayImages(title: string, category: string, debug: true): Promise<{ urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }>
@@ -149,23 +153,59 @@ export async function fetchPixabayImages(title: string, category: string, seedOr
     const apiKey = process.env.PIXABAY_API_KEY
     if (!apiKey) return debug ? { urls: [], keyword: '', isDark: false, source: 'fallback' } : []
 
+    const TARGET = 3
+    const collected: string[] = []
+    const addUnique = (urls: string[]) => {
+        for (const u of urls) {
+            if (!collected.includes(u) && collected.length < TARGET) collected.push(u)
+        }
+    }
+
+    let firstKeyword = ''
+    let firstIsDark = false
+    let source: 'groq' | 'fallback' = 'fallback'
+
     // 1차: Groq로 영어 키워드 + 톤 추출 후 검색
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const urls = await searchPixabay(groqResult.keywords, apiKey, seed)
-            if (urls.length > 0) return debug ? { urls, keyword: groqResult.keywords, isDark: groqResult.isDark, source: 'groq' } : urls
+            const urls = await searchPixabay(groqResult.keywords, apiKey, TARGET, seed)
+            addUnique(urls)
+            if (urls.length > 0) {
+                firstKeyword = groqResult.keywords
+                firstIsDark = groqResult.isDark
+                source = 'groq'
+            }
         } catch {
-            // 실패 시 카테고리 폴백으로 진행
+            // 실패 시 다음 단계로
         }
     }
 
-    // 2차 폴백: 카테고리 영어 키워드로 재검색 (톤 미적용)
-    const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
-    try {
-        const urls = await searchPixabay(fallbackQuery, apiKey, seed)
-        return debug ? { urls, keyword: fallbackQuery, isDark: false, source: 'fallback' } : urls
-    } catch {
-        return debug ? { urls: [], keyword: fallbackQuery, isDark: false, source: 'fallback' } : []
+    // 2차: 카테고리 폴백 키워드
+    if (collected.length < TARGET) {
+        const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
+        try {
+            const urls = await searchPixabay(fallbackQuery, apiKey, TARGET - collected.length, seed)
+            addUnique(urls)
+            if (!firstKeyword && urls.length > 0) firstKeyword = fallbackQuery
+        } catch {
+            // 실패 시 다음 단계로
+        }
     }
+
+    // 3차: 범용 안전 쿼리 순차 시도 (항상 결과 충분)
+    if (collected.length < TARGET) {
+        for (const q of SAFE_FALLBACK_QUERIES) {
+            if (collected.length >= TARGET) break
+            try {
+                const urls = await searchPixabay(q, apiKey, TARGET - collected.length, seed)
+                addUnique(urls)
+            } catch {
+                // 계속 다음 쿼리 시도
+            }
+        }
+    }
+
+    if (debug) return { urls: collected, keyword: firstKeyword, isDark: firstIsDark, source }
+    return collected
 }
