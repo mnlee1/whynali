@@ -7,7 +7,6 @@
  * 1. 날짜 기준 자동 종료
  *    - 종결 이슈 연결 투표: 마감 당일 24시간 내 참여 발생 시 +1일 연장, 없으면 마감
  *    - 일반 투표: auto_end_date 경과 즉시 마감
- * 2. 참여자 수 기준 자동 종료: auto_end_participants 목표 달성 시 마감
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -89,44 +88,11 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        /* 2. 참여자 수 기준 자동 종료 */
-        const { data: participantVotes, error: participantError } = await admin
-            .from('votes')
-            .select('id, auto_end_participants, vote_choices(count)')
-            .eq('phase', '진행중')
-            .not('auto_end_participants', 'is', null)
-
-        if (participantError) throw participantError
-
-        const votesToClose: string[] = []
-        if (participantVotes) {
-            for (const vote of participantVotes) {
-                const totalParticipants = (vote.vote_choices as any[])?.reduce(
-                    (sum, choice) => sum + (choice.count || 0),
-                    0
-                ) || 0
-
-                if (vote.auto_end_participants && totalParticipants >= vote.auto_end_participants) {
-                    votesToClose.push(vote.id)
-                }
-            }
-        }
-
-        if (votesToClose.length > 0) {
-            const { error: updateError } = await admin
-                .from('votes')
-                .update({ phase: '마감', ended_at: nowIso })
-                .in('id', votesToClose)
-
-            if (updateError) throw updateError
-            closedCount += votesToClose.length
-        }
-
         return NextResponse.json({
             success: true,
             closedCount,
             extendedCount,
-            message: `마감 ${closedCount}개, 연장 ${extendedCount}개 처리 완료`,
+            message: `마감 ${closedCount}개, 연장 ${extendedCount}개 처리`,
         })
     } catch (e) {
         const message = e instanceof Error ? e.message : '자동 종료 실패'

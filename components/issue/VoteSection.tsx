@@ -258,12 +258,8 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
 
     // 자동 종료 정보 계산
     const autoEndDate = vote.auto_end_date ? new Date(vote.auto_end_date) : null
-    const autoEndParticipants = vote.auto_end_participants
     const timeRemaining = autoEndDate ? autoEndDate.getTime() - Date.now() : null
     const isEndingSoon = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000
-    const participantProgress = autoEndParticipants
-        ? Math.min(Math.round((totalCount / autoEndParticipants) * 100), 100)
-        : null
 
     // 남은 시간 표시
     const getTimeRemainingText = () => {
@@ -380,30 +376,14 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                 </div>
 
                 {/* 카드 하단 — 자동 종료 안내 */}
-                {!isClosed && (autoEndDate || autoEndParticipants) && (
+                {!isClosed && autoEndDate && !isEndingSoon && (
                     <div className="mt-3 text-xs text-content-secondary">
-                        {autoEndDate && !isEndingSoon && (
-                            <div className="flex justify-end">
-                                <span className="flex items-center gap-1">
-                                    <Calendar className="w-3 h-3 shrink-0" strokeWidth={1.8} />
-                                    {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료
-                                </span>
-                            </div>
-                        )}
-                        {autoEndParticipants && (
-                            <div className="mt-2">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span>목표 {autoEndParticipants.toLocaleString()}명</span>
-                                    <span className="font-semibold">{participantProgress}%</span>
-                                </div>
-                                <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-gray-400 rounded-full transition-all duration-500"
-                                        style={{ width: `${participantProgress}%` }}
-                                    />
-                                </div>
-                            </div>
-                        )}
+                        <div className="flex justify-end">
+                            <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3 shrink-0" strokeWidth={1.8} />
+                                {new Date(autoEndDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 자동 종료
+                            </span>
+                        </div>
                     </div>
                 )}
                 </div>
