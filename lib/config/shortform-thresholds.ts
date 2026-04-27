@@ -11,9 +11,9 @@ import type { HeatGrade } from '@/types/shortform'
 /** 숏폼 배치 기능 활성화 여부 */
 export const SHORTFORM_ENABLED = process.env.SHORTFORM_ENABLED === 'true'
 
-/** 하루 최대 숏폼 job 생성 개수 (기본값 10개) */
+/** 하루 최대 숏폼 job 생성 개수 (기본값 1개) */
 export const SHORTFORM_DAILY_MAX = parseInt(
-    process.env.SHORTFORM_DAILY_MAX ?? '10'
+    process.env.SHORTFORM_DAILY_MAX ?? '1'
 )
 
 /** 숏폼 job 생성 최소 화력 지수 (기본값 30) */
