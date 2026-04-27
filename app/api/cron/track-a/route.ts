@@ -22,6 +22,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 import { callGroq } from '@/lib/ai/groq-client'
+import { callClaude } from '@/lib/ai/claude-client'
 import { parseJsonObject, parseJsonArray } from '@/lib/ai/parse-json-response'
 import { searchNaverNewsByKeyword } from '@/lib/collectors/naver-news'
 import { checkDuplicateIssue } from '@/lib/candidate/duplicate-checker'
@@ -903,15 +904,15 @@ ${sampleTitlesText}
   "topicDescription": "배우 옥택연이 10년 사귄 연인과 4월 24일 결혼한다. 비공개 결혼식으로 진행되며, 팬들의 축하가 이어지고 있다."
 }`
 
-        const content = await callGroq(
+        const content = await callClaude(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.3-70b-versatile',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.2,
                 max_tokens: 500,
             }
         )
-        
+
         // 성공 기록
         recordRateLimitSuccess()
         
