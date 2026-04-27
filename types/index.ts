@@ -53,7 +53,6 @@ export interface Vote {
     started_at?: string | null
     ended_at?: string | null
     auto_end_date?: string | null
-    auto_end_participants?: number | null
     created_at: string
 }
 
