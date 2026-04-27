@@ -103,8 +103,7 @@ export async function POST(
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
-        const shortId = issueId.substring(0, 8)
-        const publicIssueUrl = shortId ? `https://whynali.com/i/${shortId}` : 'https://whynali.com'
+        const publicIssueUrl = issueId ? `https://whynali.com/i/${issueId}` : 'https://whynali.com'
 
         const caption = [
             `${job.issue_title} | 왜난리`,
