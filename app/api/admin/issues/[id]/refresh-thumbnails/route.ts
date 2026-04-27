@@ -3,14 +3,14 @@
  *
  * [관리자 - 이슈 이미지 재검색 API]
  *
- * Pixabay에서 새로운 이미지 3개를 다시 검색합니다.
+ * Pexels에서 새로운 이미지 3개를 다시 검색합니다.
  * primary_thumbnail_index는 0으로 초기화됩니다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
-import { fetchPixabayImages } from '@/lib/pixabay'
+import { fetchPexelsImages } from '@/lib/pexels'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,7 @@ export async function POST(
 
         if (fetchError) throw fetchError
 
-        const thumbnailUrls = await fetchPixabayImages(issue.title, issue.category)
+        const thumbnailUrls = await fetchPexelsImages(issue.title, issue.category)
 
         if (thumbnailUrls.length === 0) {
             return NextResponse.json(
