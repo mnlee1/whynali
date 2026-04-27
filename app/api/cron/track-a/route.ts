@@ -439,7 +439,7 @@ ${postTitlesText}
             const content = await callGroq(
                 [{ role: 'user', content: prompt }],
                 {
-                    model: 'llama-3.3-70b-versatile',
+                    model: 'llama-3.1-8b-instant',
                     temperature: 0.2,
                     max_tokens: 500,
                 }

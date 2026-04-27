@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     try {
         let query = supabaseAdmin
             .from('discussion_topics')
-            .select('*, issues(id, title)', { count: 'exact' })
+            .select('*, issues(id, title, merged_into_id)', { count: 'exact' })
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
         const { data, error, count } = await query
         if (error) throw error
 
-        return NextResponse.json({ data: data ?? [], total: count ?? 0 })
+        // 병합된 이슈에 연결된 토론 제외
+        const filtered = (data ?? []).filter(t => !t.issues?.merged_into_id)
+
+        return NextResponse.json({ data: filtered, total: count ?? 0 })
     } catch (e) {
         return NextResponse.json({ error: '토론 주제 조회 실패' }, { status: 500 })
     }

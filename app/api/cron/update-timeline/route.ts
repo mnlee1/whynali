@@ -25,6 +25,19 @@ import { parseJsonArray } from '@/lib/ai/parse-json-response'
 import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
 import { generateAndCacheSummaries } from '@/lib/ai/generate-timeline-summary'
 
+/** Groq 키 차단 여부를 DB에서 확인 — 차단 중이면 루프를 조기 종료하기 위해 사용 */
+async function isGroqBlocked(): Promise<boolean> {
+    const now = new Date().toISOString()
+    const { data } = await supabaseAdmin
+        .from('ai_key_status')
+        .select('blocked_until')
+        .eq('provider', 'groq')
+        .eq('is_blocked', true)
+        .maybeSingle()
+    if (!data?.blocked_until) return false
+    return data.blocked_until > now
+}
+
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
@@ -136,7 +149,7 @@ ${existingSummaries || '(없음)'}
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: 1200 },
+            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 800 },
         )
 
         const parsed = parseJsonArray<{ index: number; stage: string; pointSummary: string }>(content)
@@ -209,14 +222,18 @@ export async function GET(request: NextRequest) {
             .order('updated_at', { ascending: false })
             .limit(100)
 
+        // 백필: 1회 실행당 최대 3건만 순차 처리 (Rate Limit 방지)
         const backfillTargets = (closedIssues ?? [])
             .filter(i => !closedWithSummary.has(i.id))
-            .slice(0, 20)
+            .slice(0, 3)
 
         for (const issue of backfillTargets) {
-            generateCloseSummary(issue.id, issue.title).catch(err =>
+            try {
+                await generateCloseSummary(issue.id, issue.title)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+            } catch (err) {
                 console.warn(`[종결 요약 백필] ${issue.title} 실패:`, err)
-            )
+            }
         }
         if (backfillTargets.length > 0) {
             console.log(`[update-timeline] 종결 요약 백필: ${backfillTargets.length}건`)
@@ -308,11 +325,13 @@ export async function GET(request: NextRequest) {
                 return acc
             }, [])
 
-            // 종결 이슈에 종결 요약이 없으면 백필 (새 뉴스 없어도 실행)
+            // 종결 이슈에 종결 요약이 없으면 백필 (새 뉴스 없어도 실행, 순차 처리)
             if (issue.status === '종결') {
-                generateCloseSummary(issue.id, issue.title).catch(err =>
+                try {
+                    await generateCloseSummary(issue.id, issue.title)
+                } catch (err) {
                     console.warn(`[종결 요약 백필] ${issue.title} 실패:`, err)
-                )
+                }
             }
 
             if (newNews.length === 0) {
@@ -333,6 +352,15 @@ export async function GET(request: NextRequest) {
             const newsToAdd = newNews.slice(0, allowedCount)
 
             console.log(`  [${issue.title}] 새 뉴스 ${newNews.length}건 → ${newsToAdd.length}건 추가 예정`)
+
+            // Groq 차단 상태 확인 — 차단 중이면 나머지 이슈 스킵
+            if (await isGroqBlocked()) {
+                console.log(`[update-timeline] Groq Rate Limit 차단 중 — 루프 중단 (처리: ${updatedCount}, 스킵: ${skippedCount})`)
+                break
+            }
+
+            // Groq Rate Limit 방지: 이슈 간 2초 대기
+            await new Promise(resolve => setTimeout(resolve, 2000))
 
             // 5. Groq으로 전개/파생 분류 + AI 요약 생성
             const { stageMap, summaryMap } = await classifyAndSummarizeNewPoints(
@@ -360,6 +388,8 @@ export async function GET(request: NextRequest) {
             } else {
                 console.log(`  ✓ [타임라인 업데이트 완료] ${issue.title}: ${newPoints.length}개 추가`)
                 updatedCount++
+                // Groq Rate Limit 방지: 요약 생성 전 2초 대기
+                await new Promise(resolve => setTimeout(resolve, 2000))
                 // 포인트 추가 후 즉시 요약 캐시 갱신 (유저 요청 시 Groq 호출 없음)
                 await generateAndCacheSummaries(issue.id, issue.title, issue.topic_description)
             }

@@ -143,6 +143,16 @@ export class GroqProvider implements AIProvider {
         const blockedUntil = new Date(Date.now() + blockDuration).toISOString()
         const now = new Date().toISOString()
 
+        // 기존 fail_count 조회 후 누적 (upsert는 항상 1로 리셋하므로 별도 처리)
+        const { data: existing } = await supabaseAdmin
+            .from('ai_key_status')
+            .select('fail_count')
+            .eq('provider', 'groq')
+            .eq('key_hash', keyHash)
+            .maybeSingle()
+
+        const nextFailCount = (existing?.fail_count ?? 0) + 1
+
         const { error } = await supabaseAdmin
             .from('ai_key_status')
             .upsert(
@@ -151,7 +161,7 @@ export class GroqProvider implements AIProvider {
                     key_hash: keyHash,
                     is_blocked: true,
                     blocked_until: blockedUntil,
-                    fail_count: 1,
+                    fail_count: nextFailCount,
                     updated_at: now,
                 },
                 {
