@@ -109,6 +109,19 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '이슈를 찾을 수 없습니다.' }, { status: 404 })
         }
 
+        const { count: existingCount } = await supabaseAdmin
+            .from('votes')
+            .select('id', { count: 'exact', head: true })
+            .eq('issue_id', issue_id)
+            .in('phase', ['대기', '진행중'])
+
+        if ((existingCount ?? 0) >= 3) {
+            return NextResponse.json(
+                { error: '이 이슈에는 이미 투표가 3개 있습니다. 기존 투표를 마감하거나 삭제한 후 생성해주세요.' },
+                { status: 422 }
+            )
+        }
+
         // 자동 종료 옵션 준비
         const voteData: any = {
             issue_id,

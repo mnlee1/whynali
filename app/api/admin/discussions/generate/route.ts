@@ -62,6 +62,20 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        // 이슈당 토론 상한 체크 (대기+진행중 합산 3개)
+        const { count: existingCount } = await supabaseAdmin
+            .from('discussion_topics')
+            .select('id', { count: 'exact', head: true })
+            .eq('issue_id', issue_id)
+            .in('approval_status', ['대기', '진행중'])
+
+        if ((existingCount ?? 0) >= 3) {
+            return NextResponse.json(
+                { error: '이 이슈에는 이미 토론 주제가 3개 있습니다. 기존 주제를 마감하거나 삭제한 후 생성해주세요.' },
+                { status: 422 }
+            )
+        }
+
         // 관련 뉴스 헤드라인 조회 (최신 5개, 제목만)
         const { data: newsData } = await supabaseAdmin
             .from('news_data')

@@ -53,6 +53,19 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        const { count: existingCount } = await supabaseAdmin
+            .from('discussion_topics')
+            .select('id', { count: 'exact', head: true })
+            .eq('issue_id', issue_id)
+            .in('approval_status', ['대기', '진행중'])
+
+        if ((existingCount ?? 0) >= 3) {
+            return NextResponse.json(
+                { error: '이 이슈에는 이미 토론 주제가 3개 있습니다. 기존 주제를 마감하거나 삭제한 후 생성해주세요.' },
+                { status: 422 }
+            )
+        }
+
         const validStatuses = ['대기', '승인', '반려', '진행중', '마감']
         if (!validStatuses.includes(approval_status)) {
             return NextResponse.json(
