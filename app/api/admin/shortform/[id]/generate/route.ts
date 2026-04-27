@@ -64,6 +64,8 @@ export async function POST(request: NextRequest, { params }: Params) {
         // 2. issues 정보 별도 조회 (컬럼 없어도 실패하지 않음)
         let issueCategory = '사회'
         let issueDescription: string | undefined
+        let briefBullets: string[] | undefined
+        let briefConclusion: string | undefined
         try {
             const { data: issue } = await supabaseAdmin
                 .from('issues')
@@ -72,10 +74,36 @@ export async function POST(request: NextRequest, { params }: Params) {
                 .single()
             if (issue) {
                 issueCategory = (issue as any).category ?? '사회'
-                issueDescription =
-                    (issue as any).topic_description ||
-                    (issue as any).brief_summary?.intro ||
-                    undefined
+
+                const brief = (issue as any).brief_summary as {
+                    intro?: string
+                    bullets?: string[]
+                    conclusion?: string
+                } | null | undefined
+
+                if (brief) {
+                    // 모든 brief 내용을 순서대로 수집 (intro → bullets → conclusion)
+                    const allPieces: string[] = []
+                    if (brief.intro?.trim()) allPieces.push(brief.intro.trim())
+                    brief.bullets?.filter(Boolean).forEach(b => {
+                        if (b.trim()) allPieces.push(b.trim())
+                    })
+                    if (brief.conclusion?.trim()) allPieces.push(brief.conclusion.trim())
+
+                    // 씬2: 첫 번째 내용, 씬3: 마지막 내용 (같으면 undefined로 폴백)
+                    briefBullets = allPieces.length > 0 ? [allPieces[0]] : undefined
+                    briefConclusion = allPieces.length > 1
+                        ? allPieces[allPieces.length - 1]
+                        : undefined
+
+                    // issueDescription: Groq 컨텍스트용 전체 조합
+                    issueDescription = allPieces.join(' ') || undefined
+                }
+
+                // brief_summary 없으면 topic_description 폴백
+                if (!issueDescription) {
+                    issueDescription = (issue as any).topic_description || undefined
+                }
             }
         } catch {
             // issues 조회 실패 시 기본값으로 진행
@@ -91,6 +119,8 @@ export async function POST(request: NextRequest, { params }: Params) {
             communityCount: job.source_count?.community ?? 0,
             issueUrl: job.issue_url,
             issueDescription,
+            briefBullets,
+            briefConclusion,
         }, 10, previewImages)
         const filename = `shortform-${job.id}-${Date.now()}.mp4`
 

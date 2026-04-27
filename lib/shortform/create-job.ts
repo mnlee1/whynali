@@ -13,7 +13,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase/server'
-import { SHORTFORM_DAILY_MAX, SHORTFORM_MIN_HEAT_GRADE, SHORTFORM_COOLDOWN_HOURS } from '@/lib/config/shortform-thresholds'
+import { SHORTFORM_DAILY_MAX, SHORTFORM_MIN_HEAT_GRADE } from '@/lib/config/shortform-thresholds'
 import type { ShortformTriggerType, HeatGrade, ShortformSourceCount } from '@/types/shortform'
 
 export interface CreateShortformJobInput {
@@ -62,21 +62,23 @@ function isHeatGradeAboveOrEqual(gradeA: HeatGrade, gradeB: HeatGrade): boolean 
 export async function createShortformJob(input: CreateShortformJobInput): Promise<string | null> {
     const { issueId, triggerType, skipFilters = false } = input
 
-    // 1-1. 하루 최대 개수 체크
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    
-    const { count: todayCount, error: todayCountError } = await supabaseAdmin
-        .from('shortform_jobs')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', todayStart.toISOString())
+    // 1-1. 하루 최대 개수 체크 (수동 생성 시 스킵)
+    if (!skipFilters) {
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
 
-    if (todayCountError) {
-        throw new Error('오늘 생성된 job 수 조회 실패')
-    }
+        const { count: todayCount, error: todayCountError } = await supabaseAdmin
+            .from('shortform_jobs')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString())
 
-    if ((todayCount ?? 0) >= SHORTFORM_DAILY_MAX) {
-        return null
+        if (todayCountError) {
+            throw new Error('오늘 생성된 job 수 조회 실패')
+        }
+
+        if ((todayCount ?? 0) >= SHORTFORM_DAILY_MAX) {
+            return null
+        }
     }
 
     // 1-2. 이슈 정보 조회

@@ -111,6 +111,13 @@ export async function POST(request: NextRequest) {
 
         const jobId = await createShortformJob({ issueId, triggerType, skipFilters: true })
 
+        if (!jobId) {
+            return NextResponse.json(
+                { error: 'CREATE_BLOCKED', message: '숏폼 job 생성이 차단되었습니다' },
+                { status: 422 }
+            )
+        }
+
         await writeAdminLog(
             '숏폼 job 수동 생성',
             'shortform_job',
