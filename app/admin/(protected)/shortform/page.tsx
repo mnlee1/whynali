@@ -283,6 +283,22 @@ export default function AdminShortformPage() {
         fetchPreviewImages(imagePreview.jobId, Math.floor(Math.random() * 1000))
     }
 
+    const handleDeleteStorage = async (id: string) => {
+        if (!window.confirm('Supabase Storage의 영상 파일만 삭제합니다. DB 기록은 유지됩니다. 계속하시겠습니까?')) return
+
+        setProcessingId(id)
+        try {
+            const res = await fetch(`/api/admin/shortform/${id}/delete-storage`, { method: 'DELETE' })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            await loadJobs(filter, page)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Storage 삭제 실패')
+        } finally {
+            setProcessingId(null)
+        }
+    }
+
     const handleDelete = async (id: string) => {
         if (!window.confirm('이 숏폼 job을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
 
@@ -723,124 +739,138 @@ export default function AdminShortformPage() {
                                                     )}
                                                 </div>
                                             )}
-                                            {job.approval_status === 'approved' && !job.video_path && (
-                                                <button
-                                                    onClick={() => handleGenerate(job.id)}
-                                                    disabled={isProcessing}
-                                                    className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50 whitespace-nowrap"
-                                                >
-                                                    동영상 생성
-                                                </button>
-                                            )}
-                                            {job.approval_status === 'approved' && job.video_path && (
-                                                (() => {
-                                                    const youtubeStatus = (job.upload_status as any)?.youtube?.status
-                                                    const youtubeUrl = (job.upload_status as any)?.youtube?.url
-                                                    const isYoutubeUploaded = youtubeStatus === 'success'
+                                            {job.approval_status === 'approved' && (() => {
+                                                const youtubeStatus = (job.upload_status as any)?.youtube?.status
+                                                const youtubeUrl = (job.upload_status as any)?.youtube?.url
+                                                const isYoutubeUploaded = youtubeStatus === 'success'
 
-                                                    const tiktokStatus = (job.upload_status as any)?.tiktok?.status
-                                                    const tiktokProfileUrl = (job.upload_status as any)?.tiktok?.profileUrl
-                                                    const isTiktokUploaded = tiktokStatus === 'success'
+                                                const tiktokStatus = (job.upload_status as any)?.tiktok?.status
+                                                const tiktokProfileUrl = (job.upload_status as any)?.tiktok?.profileUrl
+                                                const isTiktokUploaded = tiktokStatus === 'success'
 
-                                                    const instagramStatus = (job.upload_status as any)?.instagram?.status
-                                                    const instagramProfileUrl = (job.upload_status as any)?.instagram?.profileUrl
-                                                    const isInstagramUploaded = instagramStatus === 'success'
+                                                const instagramStatus = (job.upload_status as any)?.instagram?.status
+                                                const instagramProfileUrl = (job.upload_status as any)?.instagram?.profileUrl
+                                                const isInstagramUploaded = instagramStatus === 'success'
 
-                                                    const allUploaded = isYoutubeUploaded && isTiktokUploaded && isInstagramUploaded
-                                                    const uploadTargets = {
-                                                        youtube: !isYoutubeUploaded,
-                                                        tiktok: !isTiktokUploaded,
-                                                        instagram: !isInstagramUploaded,
-                                                    }
+                                                const hasAnySuccessfulUpload = isYoutubeUploaded || isTiktokUploaded || isInstagramUploaded
+                                                const allUploaded = isYoutubeUploaded && isTiktokUploaded && isInstagramUploaded
+                                                const uploadTargets = {
+                                                    youtube: !isYoutubeUploaded,
+                                                    tiktok: !isTiktokUploaded,
+                                                    instagram: !isInstagramUploaded,
+                                                }
 
+                                                // 업로드 이력 없고 영상도 없으면 → 동영상 생성
+                                                if (!job.video_path && !hasAnySuccessfulUpload) {
                                                     return (
-                                                        <div className="flex flex-col gap-1.5 min-w-max">
-                                                            {/* 전체 업로드 */}
-                                                            {!allUploaded && (
-                                                                <button
-                                                                    onClick={() => handleAllUpload(job.id, uploadTargets)}
-                                                                    disabled={isProcessing}
-                                                                    className="text-xs px-2.5 py-1.5 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 whitespace-nowrap"
-                                                                >
-                                                                    {isProcessing && uploadingAction === 'all' ? '업로드 중...' : '전체 업로드'}
-                                                                </button>
-                                                            )}
+                                                        <button
+                                                            onClick={() => handleGenerate(job.id)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:bg-primary-dark disabled:opacity-50 whitespace-nowrap"
+                                                        >
+                                                            동영상 생성
+                                                        </button>
+                                                    )
+                                                }
 
-                                                            {/* YouTube */}
-                                                            {isYoutubeUploaded ? (
-                                                                <a
-                                                                    href={youtubeUrl}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
-                                                                >
-                                                                    YouTube 완료 ✓
-                                                                </a>
-                                                            ) : (
+                                                return (
+                                                    <div className="flex flex-col gap-1.5 min-w-max">
+                                                        {/* 전체 업로드 (영상 있을 때만) */}
+                                                        {job.video_path && !allUploaded && (
+                                                            <button
+                                                                onClick={() => handleAllUpload(job.id, uploadTargets)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                {isProcessing && uploadingAction === 'all' ? '업로드 중...' : '전체 업로드'}
+                                                            </button>
+                                                        )}
+
+                                                        {/* YouTube */}
+                                                        {isYoutubeUploaded ? (
+                                                            <a
+                                                                href={youtubeUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
+                                                            >
+                                                                YouTube 완료 ✓
+                                                            </a>
+                                                        ) : job.video_path ? (
+                                                            <button
+                                                                onClick={() => handleYoutubeUpload(job.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                {isProcessing && uploadingAction === 'youtube' ? 'YouTube 업로드 중...' : 'YouTube 업로드'}
+                                                            </button>
+                                                        ) : null}
+
+                                                        {/* TikTok */}
+                                                        {isTiktokUploaded ? (
+                                                            <a
+                                                                href={tiktokProfileUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
+                                                            >
+                                                                TikTok 완료 ✓
+                                                            </a>
+                                                        ) : job.video_path ? (
+                                                            <button
+                                                                onClick={() => handleTiktokUpload(job.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-cyan-500 text-white rounded-full hover:bg-cyan-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                {isProcessing && uploadingAction === 'tiktok' ? 'TikTok 업로드 중...' : 'TikTok 업로드'}
+                                                            </button>
+                                                        ) : null}
+
+                                                        {/* Instagram */}
+                                                        {isInstagramUploaded ? (
+                                                            <a
+                                                                href={instagramProfileUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
+                                                            >
+                                                                Instagram 완료 ✓
+                                                            </a>
+                                                        ) : job.video_path ? (
+                                                            <button
+                                                                onClick={() => handleInstagramUpload(job.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-pink-500 text-white rounded-full hover:bg-pink-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                {isProcessing && uploadingAction === 'instagram' ? 'Instagram 업로드 중...' : 'Instagram 업로드'}
+                                                            </button>
+                                                        ) : null}
+
+                                                        {/* 업로드 후: Storage 삭제 + job 삭제 / 업로드 전: 승인 취소 */}
+                                                        {hasAnySuccessfulUpload ? (
+                                                            <>
+                                                                {allUploaded && job.video_path && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteStorage(job.id)}
+                                                                        disabled={isProcessing}
+                                                                        className="text-xs px-2.5 py-1.5 bg-gray-500 text-white rounded-full hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
+                                                                    >
+                                                                        Storage 삭제
+                                                                    </button>
+                                                                )}
                                                                 <button
-                                                                    onClick={() => handleYoutubeUpload(job.id)}
+                                                                    onClick={() => handleDelete(job.id)}
                                                                     disabled={isProcessing}
                                                                     className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
                                                                 >
-                                                                    {isProcessing && uploadingAction === 'youtube' ? 'YouTube 업로드 중...' : 'YouTube 업로드'}
+                                                                    삭제
                                                                 </button>
-                                                            )}
-
-                                                            {/* TikTok */}
-                                                            {isTiktokUploaded ? (
-                                                                <a
-                                                                    href={tiktokProfileUrl}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
-                                                                >
-                                                                    TikTok 완료 ✓
-                                                                </a>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={() => handleTiktokUpload(job.id)}
-                                                                    disabled={isProcessing}
-                                                                    className="text-xs px-2.5 py-1.5 bg-cyan-500 text-white rounded-full hover:bg-cyan-600 disabled:opacity-50 whitespace-nowrap"
-                                                                >
-                                                                    {isProcessing && uploadingAction === 'tiktok' ? 'TikTok 업로드 중...' : 'TikTok 업로드'}
-                                                                </button>
-                                                            )}
-
-                                                            {/* Instagram */}
-                                                            {isInstagramUploaded ? (
-                                                                <a
-                                                                    href={instagramProfileUrl}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-full hover:bg-green-200 text-center whitespace-nowrap"
-                                                                >
-                                                                    Instagram 완료 ✓
-                                                                </a>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={() => handleInstagramUpload(job.id)}
-                                                                    disabled={isProcessing}
-                                                                    className="text-xs px-2.5 py-1.5 bg-pink-500 text-white rounded-full hover:bg-pink-600 disabled:opacity-50 whitespace-nowrap"
-                                                                >
-                                                                    {isProcessing && uploadingAction === 'instagram' ? 'Instagram 업로드 중...' : 'Instagram 업로드'}
-                                                                </button>
-                                                            )}
-
-                                                            {/* 업로드 전: 승인 취소 / 업로드 후: 삭제 */}
-                                                            {isYoutubeUploaded || isTiktokUploaded || isInstagramUploaded ? (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleDelete(job.id)}
-                                                                        disabled={isProcessing}
-                                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
-                                                                    >
-                                                                        삭제
-                                                                    </button>
-                                                                    <p className="text-xs text-content-muted leading-snug">
-                                                                        ※ 업로드된 게시물은 각 플랫폼에서 직접 삭제해야 합니다.
-                                                                    </p>
-                                                                </>
-                                                            ) : (
+                                                                <p className="text-xs text-content-muted leading-snug">
+                                                                    ※ 업로드된 게시물은 각 플랫폼에서 직접 삭제해야 합니다.
+                                                                </p>
+                                                            </>
+                                                        ) : (
+                                                            job.video_path && (
                                                                 <button
                                                                     onClick={() => handleUnapprove(job.id)}
                                                                     disabled={isProcessing}
@@ -848,11 +878,11 @@ export default function AdminShortformPage() {
                                                                 >
                                                                     승인 취소
                                                                 </button>
-                                                            )}
-                                                        </div>
-                                                    )
-                                                })()
-                                            )}
+                                                            )
+                                                        )}
+                                                    </div>
+                                                )
+                                            })()}
                                             {job.approval_status === 'rejected' && (
                                                 <button
                                                     onClick={() => handleDelete(job.id)}
@@ -920,8 +950,23 @@ export default function AdminShortformPage() {
                         {!imagePreview.loading && !imagePreview.error && imagePreview.images.length > 0 && (
                             <div className="grid grid-cols-3 gap-3">
                                 {imagePreview.images.map((url, i) => (
-                                    <div key={i} className="aspect-[9/16] rounded-xl overflow-hidden border border-border">
-                                        <img src={`/api/admin/shortform/image-proxy?url=${encodeURIComponent(url)}`} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
+                                    <div key={i} className="aspect-[9/16] rounded-xl overflow-hidden border border-border bg-surface-muted flex items-center justify-center">
+                                        <img
+                                            src={`/api/admin/shortform/image-proxy?url=${encodeURIComponent(url)}`}
+                                            alt={`이미지 ${i + 1}`}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                const img = e.currentTarget
+                                                img.style.display = 'none'
+                                                const parent = img.parentElement
+                                                if (parent && !parent.querySelector('.img-error-msg')) {
+                                                    const msg = document.createElement('span')
+                                                    msg.className = 'img-error-msg text-xs text-content-muted text-center px-2'
+                                                    msg.textContent = '이미지 로딩 실패'
+                                                    parent.appendChild(msg)
+                                                }
+                                            }}
+                                        />
                                     </div>
                                 ))}
                             </div>
