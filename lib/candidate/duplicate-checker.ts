@@ -17,8 +17,7 @@
  * - DUPLICATE_CHECK_WINDOW_HOURS: 비교 대상 시간 창 (기본 1시간)
  */
 
-import { incrementApiUsage } from '@/lib/api-usage-tracker'
-import { callGroq } from '@/lib/ai/groq-client'
+import { callClaude } from '@/lib/ai/claude-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { tokenize } from './tokenizer'
 
@@ -228,10 +227,10 @@ async function compareByAI(
   "reason": "판단 이유 (한 줄)"
 }`
 
-        const content = await callGroq(
+        const content = await callClaude(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.3-70b-versatile',
+                model: 'claude-sonnet-4-6',
                 temperature: 0.2,
                 max_tokens: 200,
             }
@@ -242,8 +241,6 @@ async function compareByAI(
             return { isDuplicate: false, confidence: 0, reason: 'JSON 파싱 실패' }
         }
         
-        await incrementApiUsage('groq', { calls: 1, successes: 1 })
-        
         return {
             isDuplicate: result.isDuplicate && result.confidence >= AI_CONFIDENCE_THRESHOLD,
             confidence: result.confidence,
@@ -252,7 +249,6 @@ async function compareByAI(
         
     } catch (error) {
         console.error('[AI 중복 체크 에러]', error)
-        await incrementApiUsage('groq', { calls: 1, failures: 1 })
         
         return { isDuplicate: false, confidence: 0, reason: `에러: ${error}` }
     }
