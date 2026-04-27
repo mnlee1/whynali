@@ -152,7 +152,9 @@ export interface GenerateImageInput {
     newsCount: number
     communityCount: number
     issueUrl: string
-    issueDescription?: string  // issues.topic_description
+    issueDescription?: string
+    briefBullets?: string[]    // brief_summary.bullets — 씬2 desc 직접 사용
+    briefConclusion?: string   // brief_summary.conclusion — 씬3 desc 직접 사용
 }
 
 /**
@@ -233,6 +235,8 @@ export async function generate3SceneShortform(
         newsCount: input.newsCount,
         communityCount: input.communityCount,
         issueDescription: input.issueDescription,
+        briefBullets: input.briefBullets,
+        briefConclusion: input.briefConclusion,
     })
 
     console.log('[생성된 Scene 자막]', generatedText)
