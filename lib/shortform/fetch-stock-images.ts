@@ -13,12 +13,25 @@ export async function fetch3StockImages(category: string, issueTitle?: string, s
 }
 
 /**
- * 이미지 URL 다운로드
+ * 이미지 URL 다운로드 (429 등 일시적 오류 시 최대 3회 재시도)
  */
 export async function downloadImage(url: string): Promise<Buffer> {
-    const response = await fetch(url)
-    if (!response.ok) {
+    const MAX_RETRIES = 3
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+            await new Promise(r => setTimeout(r, attempt * 1500))
+        }
+        const response = await fetch(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WhyNali/1.0)' },
+        })
+        if (response.ok) {
+            return Buffer.from(await response.arrayBuffer())
+        }
+        if (response.status === 429 && attempt < MAX_RETRIES - 1) {
+            console.warn(`[downloadImage] 429 rate limit, ${attempt + 1}회 재시도 예정`)
+            continue
+        }
         throw new Error(`이미지 다운로드 실패: ${response.status}`)
     }
-    return Buffer.from(await response.arrayBuffer())
+    throw new Error('이미지 다운로드 실패: 최대 재시도 초과')
 }

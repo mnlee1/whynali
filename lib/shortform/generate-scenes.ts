@@ -18,13 +18,13 @@ const HEIGHT = 1920
 // ── 레이아웃 단위 ──────────────────────────────────────────────
 const LOGO_W = 280
 const LOGO_H = 110
-const LOGO_TEXT_GAP = 55     // 로고 bottom → 타이틀 top
+const LOGO_TOP_Y = 140       // 로고 상단 고정 Y
 const TITLE_FONTSIZE = 92
 const TITLE_LINE_HEIGHT = 130  // 타이틀 줄 간격 (폰트 92 × 1.41)
-const TEXT_GAP = 56          // 타이틀 bottom → 설명 top
-const DESC_FONTSIZE = 54
-const DESC_LINE_HEIGHT = 82   // 설명 줄 간격 (폰트 54 × 1.52)
-const BUTTON_GAP = 80        // 설명 bottom → 버튼 top (scene 3만)
+
+const DESC_FONTSIZE = 64
+const DESC_LINE_HEIGHT = 97   // 설명 줄 간격 (폰트 64 × 1.52)
+const BUTTON_GAP = 130       // 설명 bottom → 버튼 top (scene 3만)
 const BUTTON_H = 130
 const BUTTON_W = 660
 // ─────────────────────────────────────────────────────────────
@@ -74,24 +74,21 @@ function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
 }
 
 /**
- * 로고·타이틀·설명·버튼을 하나의 그룹으로 수직 중앙 정렬.
- * scene 3에만 버튼 포함.
+ * 상단: 로고 + 타이틀 (씬1,2,3 공통 고정)
+ * 하단: 이슈 설명 + CTA 버튼 (씬3만 버튼)
  */
-function computeLayout(title: string, desc: string, sceneNumber: number): SceneLayout {
-    const titleLineCount = Math.max(1, wordWrapLines(title, 13).length)
+function computeLayout(_title: string, desc: string, sceneNumber: number): SceneLayout {
     const descLineCount = Math.max(1, wordWrapLines(desc, 16).length)
-
-    const titleHeight = (titleLineCount - 1) * TITLE_LINE_HEIGHT + TITLE_FONTSIZE
     const descHeight = (descLineCount - 1) * DESC_LINE_HEIGHT + DESC_FONTSIZE
 
-    let totalHeight = LOGO_H + LOGO_TEXT_GAP + titleHeight + TEXT_GAP + descHeight
-    if (sceneNumber === 3) totalHeight += BUTTON_GAP + BUTTON_H
+    // 로고: 상단 고정
+    const logoY = LOGO_TOP_Y
 
-    const startY = Math.floor((HEIGHT - totalHeight) / 2)
+    // 타이틀: 로고 바로 아래 (씬1,2,3 공통)
+    const titleStartY = LOGO_TOP_Y + LOGO_H + 60
 
-    const logoY = startY
-    const titleStartY = startY + LOGO_H + LOGO_TEXT_GAP
-    const descStartY = titleStartY + titleHeight + TEXT_GAP
+    // 설명: 하단 고정
+    const descStartY = Math.floor(HEIGHT * 0.60)
     const buttonY = sceneNumber === 3 ? descStartY + descHeight + BUTTON_GAP : -1
 
     return { logoY, titleStartY, descStartY, buttonY }
@@ -134,70 +131,76 @@ function getOTFont(): any {
     }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function addLinePaths(
+    font: any,
+    svgPaths: string[],
+    line: string, x: number, y: number,
+    fontSize: number, fillColor: string, strokeW: number,
+    boldBoost = true
+) {
+    if (strokeW > 0) {
+        const sp = font.getPath(line, x, y, fontSize)
+        sp.fill = 'none'
+        sp.stroke = '#000000'
+        sp.strokeWidth = strokeW
+        svgPaths.push(sp.toSVG(2))
+    }
+    if (boldBoost) {
+        const bp = font.getPath(line, x, y, fontSize)
+        bp.fill = fillColor
+        bp.stroke = '#000000'
+        bp.strokeWidth = 10
+        svgPaths.push(bp.toSVG(2))
+    }
+    const fp = font.getPath(line, x, y, fontSize)
+    fp.fill = fillColor
+    fp.stroke = null
+    svgPaths.push(fp.toSVG(2))
+}
+
 /**
  * 타이핑 애니메이션 한 프레임 렌더링.
- * 최종 줄 구조를 고정하고 단어 수(visibleCount)만큼만 표시 → 줄 점프 없음.
+ * - 씬1: titleFinalLines 전달 시 타이틀+설명 순서로 애니메이션
+ * - 씬2,3: descFinalLines만 애니메이션 (타이틀은 정적 레이어에서 처리)
  */
 async function renderTypingStatePNG(
     visibleCount: number,
     sceneNumber: number,
     layout: SceneLayout,
-    titleFinalLines: string[],
     descFinalLines: string[],
-    titleWordCount: number
+    showButton = false,
+    titleFinalLines: string[] = [],
+    titleWordCount = 0
 ): Promise<Buffer> {
     const font = getOTFont()
     const svgPaths: string[] = []
 
     if (font) {
-        function addLinePaths(
-            line: string, x: number, y: number,
-            fontSize: number, fillColor: string, strokeW: number,
-            boldBoost = true
-        ) {
-            if (strokeW > 0) {
-                const sp = font.getPath(line, x, y, fontSize)
-                sp.fill = 'none'
-                sp.stroke = '#000000'
-                sp.strokeWidth = strokeW
-                svgPaths.push(sp.toSVG(2))
-            }
-            // 검정 stroke로 굵기 보강
-            if (boldBoost) {
-                const bp = font.getPath(line, x, y, fontSize)
-                bp.fill = fillColor
-                bp.stroke = '#000000'
-                bp.strokeWidth = 10
-                svgPaths.push(bp.toSVG(2))
-            }
-            const fp = font.getPath(line, x, y, fontSize)
-            fp.fill = fillColor
-            fp.stroke = null
-            svgPaths.push(fp.toSVG(2))
-        }
-
         const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
         const ascD = Math.round(font.ascender * DESC_FONTSIZE / font.unitsPerEm)
 
-        // 타이틀: 최종 줄 위치 고정, 줄 내 단어만 점진적 표시
-        let rendered = 0
-        for (let i = 0; i < titleFinalLines.length; i++) {
-            if (rendered >= visibleCount) break
-            const lineWords = titleFinalLines[i].split(' ').filter(Boolean)
-            const visibleInLine = Math.min(lineWords.length, visibleCount - rendered)
-            const text = lineWords.slice(0, visibleInLine).join(' ')
-            if (text.trim()) {
-                const w = font.getAdvanceWidth(text, TITLE_FONTSIZE)
-                const x = Math.floor((WIDTH - w) / 2)
-                const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
-                addLinePaths(text, x, y, TITLE_FONTSIZE, '#ffffff', 8)
+        // 타이틀 애니메이션 (씬1만, titleFinalLines 전달 시)
+        if (titleFinalLines.length > 0) {
+            let rendered = 0
+            for (let i = 0; i < titleFinalLines.length; i++) {
+                if (rendered >= visibleCount) break
+                const lineWords = titleFinalLines[i].split(' ').filter(Boolean)
+                const visibleInLine = Math.min(lineWords.length, visibleCount - rendered)
+                const text = lineWords.slice(0, visibleInLine).join(' ')
+                if (text.trim()) {
+                    const w = font.getAdvanceWidth(text, TITLE_FONTSIZE)
+                    const x = Math.floor((WIDTH - w) / 2)
+                    const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
+                    addLinePaths(font, svgPaths, text, x, y, TITLE_FONTSIZE, '#ffffff', 8)
+                }
+                rendered += lineWords.length
             }
-            rendered += lineWords.length
         }
 
-        // 설명: 타이틀 완료 후 시작, 동일하게 줄 위치 고정
+        // 설명: 줄 위치 고정, 단어 수만큼 표시 (타이틀 완료 후 시작)
         const descVisible = Math.max(0, visibleCount - titleWordCount)
-        rendered = 0
+        let rendered = 0
         for (let i = 0; i < descFinalLines.length; i++) {
             if (rendered >= descVisible) break
             const lineWords = descFinalLines[i].split(' ').filter(Boolean)
@@ -207,13 +210,13 @@ async function renderTypingStatePNG(
                 const w = font.getAdvanceWidth(text, DESC_FONTSIZE)
                 const x = Math.floor((WIDTH - w) / 2)
                 const y = layout.descStartY + i * DESC_LINE_HEIGHT + ascD
-                addLinePaths(text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
+                addLinePaths(font, svgPaths, text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
             }
             rendered += lineWords.length
         }
 
-        // CTA 버튼 텍스트 (씬 3만)
-        if (sceneNumber === 3 && layout.buttonY > 0) {
+        // CTA 버튼: 씬3, showButton 플래그가 true일 때만 표시
+        if (sceneNumber === 3 && layout.buttonY > 0 && showButton) {
             const CTA_SIZE = 58
             const ctaText = '지금 바로 확인하기'
             const ascC = Math.round(font.ascender * CTA_SIZE / font.unitsPerEm)
@@ -221,12 +224,18 @@ async function renderTypingStatePNG(
             const w = font.getAdvanceWidth(ctaText, CTA_SIZE)
             const x = Math.floor((WIDTH - w) / 2)
             const y = layout.buttonY + Math.floor(BUTTON_H / 2) + Math.floor((ascC - descC) / 2)
-            addLinePaths(ctaText, x, y, CTA_SIZE, '#ffffff', 0, false)
+            addLinePaths(font, svgPaths, ctaText, x, y, CTA_SIZE, '#ffffff', 0, false)
         }
     }
 
+    // 씬3 버튼 rect (showButton 플래그 기준)
+    const buttonRectSvg = (sceneNumber === 3 && layout.buttonY > 0 && showButton)
+        ? `<rect x="${Math.floor(WIDTH / 2 - BUTTON_W / 2)}" y="${layout.buttonY}" width="${BUTTON_W}" height="${BUTTON_H}" rx="${Math.floor(BUTTON_H / 2)}" fill="#a308e2"/>`
+        : ''
+
     const svg =
         `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">` +
+        buttonRectSvg +
         svgPaths.join('') +
         `</svg>`
 
@@ -245,8 +254,8 @@ export async function createTypingFrames(
 ): Promise<{ buffer: Buffer; duration: number }[]> {
     const layout = computeLayout(title, desc, sceneNumber)
 
-    // 최종 줄 구조 사전 계산 (orphan 방지 포함) — 전체 애니메이션에서 고정
-    const titleFinalLines = title ? wordWrapLines(title, 13) : []
+    // 씬1: 타이틀+설명 모두 애니메이션 / 씬2,3: 설명만 애니메이션 (타이틀은 정적 레이어)
+    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, 13) : []
     const descFinalLines = desc ? wordWrapLines(desc, 16) : []
 
     const titleWords = titleFinalLines.flatMap(l => l.split(' ').filter(Boolean))
@@ -254,22 +263,35 @@ export async function createTypingFrames(
     const totalWords = titleWords.length + descWords.length
 
     if (totalWords === 0) {
-        const empty = await renderTypingStatePNG(0, sceneNumber, layout, [], [], 0)
+        const empty = await renderTypingStatePNG(0, sceneNumber, layout, [], false, titleFinalLines, titleWords.length)
         return [{ buffer: empty, duration: sceneDuration }]
     }
 
+    const BUTTON_DELAY = 0.2  // 텍스트 완료 후 버튼 등장까지 딜레이 (초)
     const wordDelay = Math.min(0.4, (sceneDuration * 0.78) / totalWords)
     const frames: { buffer: Buffer; duration: number }[] = []
 
     for (let n = 1; n <= totalWords; n++) {
-        const buffer = await renderTypingStatePNG(
-            n, sceneNumber, layout, titleFinalLines, descFinalLines, titleWords.length
-        )
         const isLast = n === totalWords
-        const duration = isLast
-            ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
-            : wordDelay
+        const showButton = isLast && sceneNumber !== 3  // 씬3는 별도 버튼 프레임에서 처리
+        const buffer = await renderTypingStatePNG(
+            n, sceneNumber, layout, descFinalLines, showButton, titleFinalLines, titleWords.length
+        )
+        const duration = isLast && sceneNumber === 3
+            ? BUTTON_DELAY  // 씬3 마지막 단어 프레임: 딜레이 시간만 유지
+            : isLast
+                ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
+                : wordDelay
         frames.push({ buffer, duration })
+    }
+
+    // 씬3: 딜레이 후 버튼 등장 프레임 추가
+    if (sceneNumber === 3 && totalWords > 0) {
+        const buttonBuffer = await renderTypingStatePNG(
+            totalWords, sceneNumber, layout, descFinalLines, true, titleFinalLines, titleWords.length
+        )
+        const remaining = Math.max(sceneDuration - (totalWords - 1) * wordDelay - BUTTON_DELAY, wordDelay)
+        frames.push({ buffer: buttonBuffer, duration: remaining })
     }
 
     return frames
@@ -382,12 +404,27 @@ export async function createSceneTextOverlay(
     const layout = computeLayout(title, desc, sceneNumber)
     const logoBase64 = getLogoBase64()
     const logoX = Math.floor(WIDTH / 2 - LOGO_W / 2)
-    const ctaX = Math.floor(WIDTH / 2 - BUTTON_W / 2)
+    const font = getOTFont()
+    const svgPaths: string[] = []
+
+    // 타이틀 정적 렌더링 (씬2,3만 — 씬1은 타이핑 애니메이션으로 처리)
+    if (font && title && sceneNumber !== 1) {
+        const titleLines = wordWrapLines(title, 13)
+        const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
+        for (let i = 0; i < titleLines.length; i++) {
+            const line = titleLines[i]
+            if (!line.trim()) continue
+            const w = font.getAdvanceWidth(line, TITLE_FONTSIZE)
+            const x = Math.floor((WIDTH - w) / 2)
+            const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
+            addLinePaths(font, svgPaths, line, x, y, TITLE_FONTSIZE, '#ffffff', 8)
+        }
+    }
 
     const svg = `
         <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
             ${logoBase64 ? `<image href="${logoBase64}" x="${logoX}" y="${layout.logoY}" width="${LOGO_W}" height="${LOGO_H}" preserveAspectRatio="xMidYMid meet"/>` : ''}
-            ${sceneNumber === 3 && layout.buttonY > 0 ? `<rect x="${ctaX}" y="${layout.buttonY}" width="${BUTTON_W}" height="${BUTTON_H}" rx="${Math.floor(BUTTON_H / 2)}" fill="#a308e2"/>` : ''}
+            ${svgPaths.join('')}
         </svg>
     `
 

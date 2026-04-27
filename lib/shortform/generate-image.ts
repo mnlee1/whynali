@@ -152,6 +152,7 @@ export interface GenerateImageInput {
     newsCount: number
     communityCount: number
     issueUrl: string
+    issueDescription?: string  // issues.topic_description
 }
 
 /**
@@ -231,6 +232,7 @@ export async function generate3SceneShortform(
         heatGrade: input.heatGrade,
         newsCount: input.newsCount,
         communityCount: input.communityCount,
+        issueDescription: input.issueDescription,
     })
 
     console.log('[생성된 Scene 자막]', generatedText)
@@ -254,8 +256,8 @@ export async function generate3SceneShortform(
     
     // 4. Scene별 구조 레이어 생성 (로고 + CTA 버튼 rect) — title/desc로 수직 중앙 위치 계산
     const text1 = await createSceneTextOverlay(1, generatedText.scene1Title, generatedText.scene1Desc)
-    const text2 = await createSceneTextOverlay(2, generatedText.scene2Title, generatedText.scene2Desc)
-    const text3 = await createSceneTextOverlay(3, generatedText.scene3Title, generatedText.scene3Desc)
+    const text2 = await createSceneTextOverlay(2, generatedText.scene1Title, generatedText.scene2Desc)
+    const text3 = await createSceneTextOverlay(3, generatedText.scene1Title, generatedText.scene3Desc)
 
     // 5. 동영상 합성 (씬 슬라이드 전환 + FFmpeg drawtext로 Pretendard 텍스트 렌더링)
     const sceneContents: [SceneContent, SceneContent, SceneContent] = [
