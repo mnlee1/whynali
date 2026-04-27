@@ -252,6 +252,8 @@ export async function GET(request: NextRequest) {
 
         let updatedCount = 0
         let skippedCount = 0
+        let groqCallCount = 0
+        const MAX_GROQ_CALLS_PER_RUN = 5  // 런당 Groq 호출 상한 (TPM 한도 보호)
 
         // summaries 보유 현황 배치 조회 (backfill 판단용)
         const { data: summaryCheck } = await supabaseAdmin
@@ -326,9 +328,11 @@ export async function GET(request: NextRequest) {
             }, [])
 
             // 종결 이슈에 종결 요약이 없으면 백필 (새 뉴스 없어도 실행, 순차 처리)
-            if (issue.status === '종결') {
+            if (issue.status === '종결' && groqCallCount < MAX_GROQ_CALLS_PER_RUN) {
                 try {
                     await generateCloseSummary(issue.id, issue.title)
+                    groqCallCount++
+                    await new Promise(resolve => setTimeout(resolve, 2000))
                 } catch (err) {
                     console.warn(`[종결 요약 백필] ${issue.title} 실패:`, err)
                 }
@@ -336,14 +340,23 @@ export async function GET(request: NextRequest) {
 
             if (newNews.length === 0) {
                 // timeline_points는 있는데 summaries가 없으면 backfill
-                if (existingCount > 0 && !issuesWithSummaries.has(issue.id)) {
+                if (existingCount > 0 && !issuesWithSummaries.has(issue.id) && groqCallCount < MAX_GROQ_CALLS_PER_RUN) {
                     console.log(`  [${issue.title}] summaries 누락 → backfill 실행`)
                     await generateAndCacheSummaries(issue.id, issue.title, issue.topic_description)
+                    groqCallCount++
                     issuesWithSummaries.add(issue.id)
                     updatedCount++
+                    await new Promise(resolve => setTimeout(resolve, 2000))
                 } else {
                     skippedCount++
                 }
+                continue
+            }
+
+            // Groq 호출 상한 초과 시 나머지 이슈 스킵
+            if (groqCallCount >= MAX_GROQ_CALLS_PER_RUN) {
+                console.log(`[update-timeline] Groq 호출 상한(${MAX_GROQ_CALLS_PER_RUN}회) 도달 — 루프 중단`)
+                skippedCount++
                 continue
             }
 
@@ -359,8 +372,8 @@ export async function GET(request: NextRequest) {
                 break
             }
 
-            // Groq Rate Limit 방지: 이슈 간 2초 대기
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            // Groq Rate Limit 방지: 이슈 간 3초 대기
+            await new Promise(resolve => setTimeout(resolve, 3000))
 
             // 5. Groq으로 전개/파생 분류 + AI 요약 생성
             const { stageMap, summaryMap } = await classifyAndSummarizeNewPoints(
@@ -368,6 +381,7 @@ export async function GET(request: NextRequest) {
                 newsToAdd.map(n => ({ id: n.id, title: n.title ?? '' })),
                 existingPoints ?? [],
             )
+            groqCallCount++
 
             // 6. 새 포인트 생성 (전개/파생/진정)
             const newPoints = newsToAdd.map((news) => ({
@@ -388,10 +402,13 @@ export async function GET(request: NextRequest) {
             } else {
                 console.log(`  ✓ [타임라인 업데이트 완료] ${issue.title}: ${newPoints.length}개 추가`)
                 updatedCount++
-                // Groq Rate Limit 방지: 요약 생성 전 2초 대기
-                await new Promise(resolve => setTimeout(resolve, 2000))
-                // 포인트 추가 후 즉시 요약 캐시 갱신 (유저 요청 시 Groq 호출 없음)
-                await generateAndCacheSummaries(issue.id, issue.title, issue.topic_description)
+                if (groqCallCount < MAX_GROQ_CALLS_PER_RUN) {
+                    // Groq Rate Limit 방지: 요약 생성 전 3초 대기
+                    await new Promise(resolve => setTimeout(resolve, 3000))
+                    // 포인트 추가 후 즉시 요약 캐시 갱신 (유저 요청 시 Groq 호출 없음)
+                    await generateAndCacheSummaries(issue.id, issue.title, issue.topic_description)
+                    groqCallCount++
+                }
             }
 
         }
