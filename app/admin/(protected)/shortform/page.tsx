@@ -225,9 +225,7 @@ export default function AdminShortformPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            const nextFilter = action === 'approve' ? 'approved' : 'rejected'
-            setFilter(nextFilter)
-            await loadTabCounts()
+            await Promise.all([loadJobs(filter, page), loadTabCounts()])
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
@@ -416,8 +414,7 @@ export default function AdminShortformPage() {
             const res = await fetch(`/api/admin/shortform/${id}/unapprove`, { method: 'PATCH' })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            setFilter('pending')
-            await loadTabCounts()
+            await Promise.all([loadJobs(filter, page), loadTabCounts()])
         } catch (e) {
             alert(e instanceof Error ? e.message : '승인 취소 실패')
         } finally {
@@ -903,7 +900,7 @@ export default function AdminShortformPage() {
                             <button
                                 onClick={() => { if (!imagePreview.generating) setImagePreview((prev) => ({ ...prev, open: false })) }}
                                 disabled={imagePreview.generating}
-                                className="w-8 h-8 bg-surface-muted text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle flex-shrink-0 disabled:opacity-40"
+                                className="w-8 h-8 bg-transparent text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle flex-shrink-0 disabled:opacity-40"
                             >
                                 ✕
                             </button>
@@ -924,7 +921,7 @@ export default function AdminShortformPage() {
                             <div className="grid grid-cols-3 gap-3">
                                 {imagePreview.images.map((url, i) => (
                                     <div key={i} className="aspect-[9/16] rounded-xl overflow-hidden border border-border">
-                                        <img src={url} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
+                                        <img src={`/api/admin/shortform/image-proxy?url=${encodeURIComponent(url)}`} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
                                     </div>
                                 ))}
                             </div>
@@ -989,7 +986,7 @@ export default function AdminShortformPage() {
                     >
                         <button
                             onClick={() => setPreviewJob(null)}
-                            className="absolute top-3 right-3 z-10 w-8 h-8 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80"
+                            className="absolute top-3 right-3 z-10 w-8 h-8 bg-transparent text-white rounded-full flex items-center justify-center hover:bg-black/40"
                         >
                             ✕
                         </button>

@@ -18,6 +18,7 @@ export interface ShortformTextInput {
     heatGrade: string
     newsCount: number
     communityCount: number
+    issueDescription?: string  // issues.topic_description (이슈 설명 컨텍스트)
 }
 
 export interface ShortformTextOutput {
@@ -91,7 +92,8 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
     }
 
     // Scene 1은 이슈 제목 전체 사용 (동영상 렌더러가 자동 줄바꿈 처리)
-    const scene1Title = input.title.replace(/^\[.*?\]\s*/, '').trim()
+    const rawTitle = input.title.replace(/^\[.*?\]\s*/, '').trim()
+    const scene1Title = `"${rawTitle}"`
     const scene1Desc = ''  // 씬1 설명 없음
 
     // 카테고리별 민감도 분류
@@ -112,9 +114,10 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
 - 특정인 비방·명예훼손 표현 금지`
 
     const prompt = `당신은 숏폼 SNS 콘텐츠 기획자입니다.
-아래 이슈 제목을 보고 Scene 2, 3에 들어갈 파생 텍스트를 생성하세요.
+아래 이슈 제목과 설명을 보고 Scene 2, 3에 들어갈 파생 텍스트를 생성하세요.
 
 이슈 제목: "${input.title}"
+이슈 설명: "${input.issueDescription ?? ''}"
 카테고리: ${input.category}${isSensitiveCategory ? ' (민감 카테고리 — 표현 제한 적용)' : ''}
 
 공통 규칙:
@@ -144,11 +147,11 @@ ${isSensitiveCategory
 
 scene2 (핵심 쟁점):
 - scene2Title: 15자 이내, 완결된 명사구 또는 의문형 (2줄 가능)
-- scene2Desc: 28자 이내, 완결된 명사구 또는 서술형 종결어미 (2줄 가능)
+- scene2Desc: 48자 이내, 완결된 명사구 또는 서술형 종결어미 (3줄 가능, 이슈 설명 내용을 구체적으로 반영)
 
 scene3 (마무리):
 - scene3Title: 15자 이내, 완결된 명사구 또는 의문형 (2줄 가능)
-- scene3Desc: 28자 이내, 완결된 명사구 또는 서술형 종결어미 (2줄 가능)
+- scene3Desc: 48자 이내, 완결된 명사구 또는 서술형 종결어미 (3줄 가능, 이슈 설명 내용을 구체적으로 반영)
 
 JSON으로만 응답 (다른 텍스트 없음):
 {"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
@@ -219,9 +222,9 @@ JSON으로만 응답 (다른 텍스트 없음):
                 scene1Title: clean(scene1Title),
                 scene1Desc:  scene1Desc,
                 scene2Title: safeText(parsed.scene2Title, fallback.scene2Title, 15),
-                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  28),
+                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  48),
                 scene3Title: safeText(parsed.scene3Title, fallback.scene3Title, 15),
-                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  28),
+                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  48),
             }
         } catch (error) {
             console.error(`[Groq 텍스트 실패] key=...${apiKey.slice(-6)}:`, error)

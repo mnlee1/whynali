@@ -117,32 +117,23 @@ async function searchPixabay(query: string, apiKey: string, seed?: number): Prom
     const hits: Array<{ webformatURL: string; largeImageURL: string; tags: string }> = data.hits ?? []
     if (hits.length === 0) return []
 
-    // 사람 관련 태그 포함 이미지 제외 (가능한 경우만)
+    // 사람 관련 태그 포함 이미지 제외 (3개 이상 확보 가능한 경우만 적용)
     const personTags = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'crowd', 'girl', 'boy', 'child']
-    const filtered = hits.filter(h => {
-        const tags = h.tags.toLowerCase()
-        return !personTags.some(t => tags.includes(t))
-    })
+    const filtered = hits.filter(h => !personTags.some(t => h.tags.toLowerCase().includes(t)))
 
-    // seed 기반 셔플 (재생성 시 다른 결과)
+    // filtered 3개 미만이면 전체 hits 사용 (연예·인물 이슈 대응)
+    const pool = filtered.length >= 3 ? filtered : hits
+
+    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
-    const seededRandom = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
-
-    // 필터 후 3개 미만이면 원본 hits로 부족분 보충 (항상 3개 반환)
-    const shuffledFiltered = [...filtered].sort(() => seededRandom() - 0.5)
-    const selected = shuffledFiltered.slice(0, 3)
-    if (selected.length < 3) {
-        const usedSet = new Set(selected.map(h => h.largeImageURL || h.webformatURL))
-        const extras = [...hits]
-            .sort(() => seededRandom() - 0.5)
-            .filter(h => !usedSet.has(h.largeImageURL || h.webformatURL))
-            .slice(0, 3 - selected.length)
-        selected.push(...extras)
+    const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
+    const shuffled = [...pool]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(nextRng() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return selected
-        .map(h => h.largeImageURL || h.webformatURL)
-        .filter(Boolean)
+    return shuffled.slice(0, 3).map(h => h.largeImageURL || h.webformatURL).filter(Boolean)
 }
 
 /**
