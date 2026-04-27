@@ -111,11 +111,11 @@ export async function POST(
 
         // 이슈 제목 파생 키워드 (Groq) — YouTube와 동일 로직
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
-        const titleTags = titleKeywords.map((k: string) => `#${k}`).join(' ')
+        const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
         const shortId = issueId.substring(0, 8)
-        const shortUrl = shortId ? ` whynali.com/i/${shortId}` : ''
+        const shortUrl = shortId ? ` https://whynali.com/i/${shortId}` : ''
 
         const tiktokTitle = `${job.issue_title} | 왜난리${shortUrl} #왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
 

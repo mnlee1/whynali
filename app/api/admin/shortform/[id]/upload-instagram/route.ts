@@ -100,7 +100,7 @@ export async function POST(
 
         // 이슈 제목 파생 키워드 (Groq)
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
-        const titleTags = titleKeywords.map((k: string) => `#${k}`).join(' ')
+        const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
         const shortId = issueId.substring(0, 8)

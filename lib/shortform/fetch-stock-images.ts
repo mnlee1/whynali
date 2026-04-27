@@ -8,8 +8,8 @@
 
 import { fetchPixabayImages } from '@/lib/pixabay'
 
-export async function fetch3StockImages(category: string, issueTitle?: string, _seed?: number): Promise<string[]> {
-    return fetchPixabayImages(issueTitle ?? '', category)
+export async function fetch3StockImages(category: string, issueTitle?: string, seed?: number): Promise<string[]> {
+    return fetchPixabayImages(issueTitle ?? '', category, seed)
 }
 
 /**

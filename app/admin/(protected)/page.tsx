@@ -458,18 +458,37 @@ export default function AdminDashboardPage() {
                                             ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / 1000))
                                             : 0
                                         return (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm text-content-secondary">AI 상태</span>
-                                                <span className={`flex items-center gap-1.5 text-sm font-semibold ${
-                                                    keyStatus ? 'text-red-600' : 'text-green-600'
-                                                }`}>
-                                                    <span className={`w-2 h-2 rounded-full ${
-                                                        keyStatus ? 'bg-red-500' : 'bg-green-500'
-                                                    }`} />
-                                                    {keyStatus
-                                                        ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
-                                                        : '정상'}
-                                                </span>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-sm text-content-secondary shrink-0">AI 상태</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${
+                                                        keyStatus ? 'text-red-600' : 'text-green-600'
+                                                    }`}>
+                                                        <span className={`w-2 h-2 rounded-full ${
+                                                            keyStatus ? 'bg-red-500' : 'bg-green-500'
+                                                        }`} />
+                                                        {keyStatus
+                                                            ? `Rate Limit (${secsLeft > 0 ? `${secsLeft}초 후 해제` : '곧 해제'})`
+                                                            : '정상'}
+                                                    </span>
+                                                    {keyStatus && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!confirm('Groq Rate Limit을 강제 해제하시겠습니까?')) return
+                                                                const res = await fetch('/api/admin/ai-key-status?provider=groq', { method: 'DELETE' })
+                                                                if (res.ok) {
+                                                                    alert('Groq Rate Limit 해제 완료')
+                                                                    fetchAll()
+                                                                } else {
+                                                                    alert('해제 실패')
+                                                                }
+                                                            }}
+                                                            className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                                                        >
+                                                            강제 해제
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         )
                                     })()}

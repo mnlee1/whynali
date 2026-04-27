@@ -14,12 +14,6 @@ import Link from 'next/link'
 import AdminPagination from '@/components/admin/AdminPagination'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
 
-interface AiValidation {
-    status: 'passed' | 'flagged'
-    reason: string
-    checked_at: string
-}
-
 interface ShortformJob {
     id: string
     issue_id: string
@@ -31,7 +25,6 @@ interface ShortformJob {
     video_path: string | null
     approval_status: 'pending' | 'approved' | 'rejected'
     upload_status: Record<string, string> | null
-    ai_validation: AiValidation | null
     trigger_type: 'issue_created' | 'status_changed' | 'daily_batch'
     created_at: string
 }
@@ -51,6 +44,7 @@ interface ImagePreviewModal {
     jobTitle: string
     images: string[]
     loading: boolean
+    generating: boolean
     error: string | null
 }
 
@@ -104,6 +98,8 @@ export default function AdminShortformPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
+    const [uploadingAction, setUploadingAction] = useState<'youtube' | 'tiktok' | 'instagram' | 'all' | null>(null)
+
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [imagePreview, setImagePreview] = useState<ImagePreviewModal>({
@@ -112,6 +108,7 @@ export default function AdminShortformPage() {
         jobTitle: '',
         images: [],
         loading: false,
+        generating: false,
         error: null,
     })
 
@@ -228,7 +225,9 @@ export default function AdminShortformPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            await Promise.all([loadJobs(filter, page), loadTabCounts()])
+            const nextFilter = action === 'approve' ? 'approved' : 'rejected'
+            setFilter(nextFilter)
+            await loadTabCounts()
         } catch (e) {
             alert(e instanceof Error ? e.message : '처리 실패')
         } finally {
@@ -278,7 +277,7 @@ export default function AdminShortformPage() {
     }
 
     const handlePreviewImages = async (job: ShortformJob) => {
-        setImagePreview({ open: true, jobId: job.id, jobTitle: job.issue_title, images: [], loading: true, error: null })
+        setImagePreview({ open: true, jobId: job.id, jobTitle: job.issue_title, images: [], loading: true, generating: false, error: null })
         await fetchPreviewImages(job.id)
     }
 
@@ -302,19 +301,6 @@ export default function AdminShortformPage() {
         }
     }
 
-    const handleAiValidate = async (id: string) => {
-        setProcessingId(id)
-        try {
-            const res = await fetch(`/api/admin/shortform/${id}/ai-validate`, { method: 'POST' })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.message || json.error)
-            await loadJobs(filter, page)
-        } catch (e) {
-            alert(e instanceof Error ? e.message : 'AI 판별 실패')
-        } finally {
-            setProcessingId(null)
-        }
-    }
 
     const handleManualCreate = async () => {
         if (!selectedIssueId) {
@@ -344,10 +330,69 @@ export default function AdminShortformPage() {
         }
     }
 
+    const handleAllUpload = async (id: string, targets: { youtube: boolean; tiktok: boolean; instagram: boolean }) => {
+        const platforms = [
+            targets.youtube && 'YouTube',
+            targets.tiktok && 'TikTok',
+            targets.instagram && 'Instagram',
+        ].filter(Boolean).join(', ')
+
+        if (!window.confirm(`${platforms}에 한번에 업로드하시겠습니까?`)) return
+
+        setProcessingId(id)
+        setUploadingAction('all')
+        const results: string[] = []
+        const errors: string[] = []
+
+        try {
+            if (targets.youtube) {
+                try {
+                    const res = await fetch(`/api/admin/shortform/${id}/upload-youtube`, { method: 'POST' })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.message || json.error)
+                    results.push(`YouTube ✓`)
+                } catch (e) {
+                    errors.push(`YouTube 실패: ${e instanceof Error ? e.message : '오류'}`)
+                }
+            }
+
+            if (targets.tiktok) {
+                try {
+                    const res = await fetch(`/api/admin/shortform/${id}/upload-tiktok`, { method: 'POST' })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.message || json.error)
+                    results.push(`TikTok ✓`)
+                } catch (e) {
+                    errors.push(`TikTok 실패: ${e instanceof Error ? e.message : '오류'}`)
+                }
+            }
+
+            if (targets.instagram) {
+                try {
+                    const res = await fetch(`/api/admin/shortform/${id}/upload-instagram`, { method: 'POST' })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.message || json.error)
+                    results.push(`Instagram ✓`)
+                } catch (e) {
+                    errors.push(`Instagram 실패: ${e instanceof Error ? e.message : '오류'}`)
+                }
+            }
+
+            const lines = [...results, ...errors]
+            if (errors.length > 0) lines.push('\n실패한 매체는 개별 업로드 버튼으로 재시도하세요.')
+            alert(lines.join('\n'))
+            await loadJobs(filter, page)
+        } finally {
+            setProcessingId(null)
+            setUploadingAction(null)
+        }
+    }
+
     const handleYoutubeUpload = async (id: string) => {
         if (!window.confirm('이 숏폼을 YouTube Shorts에 업로드하시겠습니까?')) return
 
         setProcessingId(id)
+        setUploadingAction('youtube')
         try {
             const res = await fetch(`/api/admin/shortform/${id}/upload-youtube`, { method: 'POST' })
             const json = await res.json()
@@ -359,6 +404,7 @@ export default function AdminShortformPage() {
             alert(e instanceof Error ? e.message : 'YouTube 업로드 실패')
         } finally {
             setProcessingId(null)
+            setUploadingAction(null)
         }
     }
 
@@ -370,7 +416,8 @@ export default function AdminShortformPage() {
             const res = await fetch(`/api/admin/shortform/${id}/unapprove`, { method: 'PATCH' })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            await Promise.all([loadJobs(filter, page), loadTabCounts()])
+            setFilter('pending')
+            await loadTabCounts()
         } catch (e) {
             alert(e instanceof Error ? e.message : '승인 취소 실패')
         } finally {
@@ -382,6 +429,7 @@ export default function AdminShortformPage() {
         if (!window.confirm('이 숏폼을 TikTok에 업로드하시겠습니까?')) return
 
         setProcessingId(id)
+        setUploadingAction('tiktok')
         try {
             const res = await fetch(`/api/admin/shortform/${id}/upload-tiktok`, { method: 'POST' })
             const json = await res.json()
@@ -393,6 +441,7 @@ export default function AdminShortformPage() {
             alert(e instanceof Error ? e.message : 'TikTok 업로드 실패')
         } finally {
             setProcessingId(null)
+            setUploadingAction(null)
         }
     }
 
@@ -400,6 +449,7 @@ export default function AdminShortformPage() {
         if (!window.confirm('이 숏폼을 Instagram Reels에 업로드하시겠습니까?')) return
 
         setProcessingId(id)
+        setUploadingAction('instagram')
         try {
             const res = await fetch(`/api/admin/shortform/${id}/upload-instagram`, { method: 'POST' })
             const json = await res.json()
@@ -411,6 +461,7 @@ export default function AdminShortformPage() {
             alert(e instanceof Error ? e.message : 'Instagram 업로드 실패')
         } finally {
             setProcessingId(null)
+            setUploadingAction(null)
         }
     }
 
@@ -604,24 +655,6 @@ export default function AdminShortformPage() {
                                                             </svg>
                                                         </div>
                                                     </button>
-                                                    <div className="flex flex-col gap-1">
-                                                        {job.ai_validation ? (
-                                                            <span
-                                                                title={job.ai_validation.reason}
-                                                                className={`text-xs px-2 py-0.5 rounded-full cursor-help ${
-                                                                    job.ai_validation.status === 'passed'
-                                                                        ? 'bg-green-100 text-green-700'
-                                                                        : 'bg-red-100 text-red-700'
-                                                                }`}
-                                                            >
-                                                                AI {job.ai_validation.status === 'passed' ? '적합' : '주의'}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface-muted text-content-muted">
-                                                                AI 판별 전
-                                                            </span>
-                                                        )}
-                                                    </div>
                                                 </div>
                                             )}
                                         </td>
@@ -673,60 +706,24 @@ export default function AdminShortformPage() {
                                                             이미지 확인
                                                         </button>
                                                     )}
-                                                    {job.video_path && (() => {
-                                                        const isFlagged = job.ai_validation?.status === 'flagged'
-                                                        return (
-                                                            <>
-                                                                <div className="flex flex-nowrap gap-1.5">
-                                                                    <button
-                                                                        onClick={() => handleAction(job.id, 'approve')}
-                                                                        disabled={isProcessing || isFlagged}
-                                                                        title={isFlagged ? `AI 주의: ${job.ai_validation?.reason ?? ''}` : ''}
-                                                                        className={`text-xs px-2.5 py-1.5 rounded-full whitespace-nowrap ${
-                                                                            isFlagged
-                                                                                ? 'bg-surface-muted text-content-muted cursor-not-allowed opacity-60'
-                                                                                : 'bg-green-500 text-white hover:bg-green-600 disabled:opacity-50'
-                                                                        }`}
-                                                                    >
-                                                                        승인
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleAction(job.id, 'reject')}
-                                                                        disabled={isProcessing}
-                                                                        className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
-                                                                    >
-                                                                        반려
-                                                                    </button>
-                                                                </div>
-                                                                {isFlagged && (
-                                                                    <p className="text-xs text-red-500 leading-tight">
-                                                                        AI 주의 판정<br/>재판별 후 승인 가능
-                                                                    </p>
-                                                                )}
-                                                            </>
-                                                        )
-                                                    })()}
-                                                    {job.video_path && (() => {
-                                                        const aiStatus = job.ai_validation?.status
-                                                        const isPassed = aiStatus === 'passed'
-                                                        const isFlagged = aiStatus === 'flagged'
-                                                        return (
+                                                    {job.video_path && (
+                                                        <div className="flex flex-nowrap gap-1.5">
                                                             <button
-                                                                onClick={() => handleAiValidate(job.id)}
-                                                                disabled={isProcessing || isPassed}
-                                                                title={job.ai_validation?.reason ?? 'AI 적합성 판별'}
-                                                                className={`text-xs px-2.5 py-1.5 rounded-full disabled:opacity-50 whitespace-nowrap ${
-                                                                    isFlagged
-                                                                        ? 'bg-red-500 text-white hover:bg-red-600'
-                                                                        : isPassed
-                                                                            ? 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                                                                            : 'bg-gray-500 text-white hover:bg-gray-600'
-                                                                }`}
+                                                                onClick={() => handleAction(job.id, 'approve')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:opacity-50 whitespace-nowrap"
                                                             >
-                                                                {isFlagged ? 'AI 주의 — 재판별' : isPassed ? 'AI 적합 ✓ 재판별' : 'AI 재판별'}
+                                                                승인
                                                             </button>
-                                                        )
-                                                    })()}
+                                                            <button
+                                                                onClick={() => handleAction(job.id, 'reject')}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                반려
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                             {job.approval_status === 'approved' && !job.video_path && (
@@ -752,8 +749,26 @@ export default function AdminShortformPage() {
                                                     const instagramProfileUrl = (job.upload_status as any)?.instagram?.profileUrl
                                                     const isInstagramUploaded = instagramStatus === 'success'
 
+                                                    const allUploaded = isYoutubeUploaded && isTiktokUploaded && isInstagramUploaded
+                                                    const uploadTargets = {
+                                                        youtube: !isYoutubeUploaded,
+                                                        tiktok: !isTiktokUploaded,
+                                                        instagram: !isInstagramUploaded,
+                                                    }
+
                                                     return (
                                                         <div className="flex flex-col gap-1.5 min-w-max">
+                                                            {/* 전체 업로드 */}
+                                                            {!allUploaded && (
+                                                                <button
+                                                                    onClick={() => handleAllUpload(job.id, uploadTargets)}
+                                                                    disabled={isProcessing}
+                                                                    className="text-xs px-2.5 py-1.5 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 whitespace-nowrap"
+                                                                >
+                                                                    {isProcessing && uploadingAction === 'all' ? '업로드 중...' : '전체 업로드'}
+                                                                </button>
+                                                            )}
+
                                                             {/* YouTube */}
                                                             {isYoutubeUploaded ? (
                                                                 <a
@@ -770,7 +785,7 @@ export default function AdminShortformPage() {
                                                                     disabled={isProcessing}
                                                                     className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
                                                                 >
-                                                                    YouTube 업로드
+                                                                    {isProcessing && uploadingAction === 'youtube' ? 'YouTube 업로드 중...' : 'YouTube 업로드'}
                                                                 </button>
                                                             )}
 
@@ -790,7 +805,7 @@ export default function AdminShortformPage() {
                                                                     disabled={isProcessing}
                                                                     className="text-xs px-2.5 py-1.5 bg-cyan-500 text-white rounded-full hover:bg-cyan-600 disabled:opacity-50 whitespace-nowrap"
                                                                 >
-                                                                    TikTok 업로드
+                                                                    {isProcessing && uploadingAction === 'tiktok' ? 'TikTok 업로드 중...' : 'TikTok 업로드'}
                                                                 </button>
                                                             )}
 
@@ -810,19 +825,24 @@ export default function AdminShortformPage() {
                                                                     disabled={isProcessing}
                                                                     className="text-xs px-2.5 py-1.5 bg-pink-500 text-white rounded-full hover:bg-pink-600 disabled:opacity-50 whitespace-nowrap"
                                                                 >
-                                                                    Instagram 업로드
+                                                                    {isProcessing && uploadingAction === 'instagram' ? 'Instagram 업로드 중...' : 'Instagram 업로드'}
                                                                 </button>
                                                             )}
 
                                                             {/* 업로드 전: 승인 취소 / 업로드 후: 삭제 */}
                                                             {isYoutubeUploaded || isTiktokUploaded || isInstagramUploaded ? (
-                                                                <button
-                                                                    onClick={() => handleDelete(job.id)}
-                                                                    disabled={isProcessing}
-                                                                    className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
-                                                                >
-                                                                    삭제
-                                                                </button>
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleDelete(job.id)}
+                                                                        disabled={isProcessing}
+                                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                                    >
+                                                                        삭제
+                                                                    </button>
+                                                                    <p className="text-xs text-content-muted leading-snug">
+                                                                        ※ 업로드된 게시물은 각 플랫폼에서 직접 삭제해야 합니다.
+                                                                    </p>
+                                                                </>
                                                             ) : (
                                                                 <button
                                                                     onClick={() => handleUnapprove(job.id)}
@@ -868,7 +888,7 @@ export default function AdminShortformPage() {
             {imagePreview.open && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-                    onClick={() => setImagePreview((prev) => ({ ...prev, open: false }))}
+                    onClick={() => { if (!imagePreview.generating) setImagePreview((prev) => ({ ...prev, open: false })) }}
                 >
                     <div
                         className="bg-surface rounded-xl shadow-2xl w-full max-w-2xl p-6"
@@ -881,8 +901,9 @@ export default function AdminShortformPage() {
                                 <p className="text-sm text-content-secondary mt-0.5">{imagePreview.jobTitle}</p>
                             </div>
                             <button
-                                onClick={() => setImagePreview((prev) => ({ ...prev, open: false }))}
-                                className="w-8 h-8 bg-surface-muted text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle flex-shrink-0"
+                                onClick={() => { if (!imagePreview.generating) setImagePreview((prev) => ({ ...prev, open: false })) }}
+                                disabled={imagePreview.generating}
+                                className="w-8 h-8 bg-surface-muted text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle flex-shrink-0 disabled:opacity-40"
                             >
                                 ✕
                             </button>
@@ -913,7 +934,7 @@ export default function AdminShortformPage() {
                         <div className="flex items-center justify-between mt-4">
                             <button
                                 onClick={handleRefreshImages}
-                                disabled={imagePreview.loading}
+                                disabled={imagePreview.loading || imagePreview.generating}
                                 className="flex items-center gap-1.5 text-xs text-content-secondary hover:text-content-primary disabled:opacity-40 transition-colors"
                             >
                                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -925,14 +946,30 @@ export default function AdminShortformPage() {
                                 이미지 재생성
                             </button>
                             <button
-                                onClick={() => {
-                                    setImagePreview((prev) => ({ ...prev, open: false }))
-                                    handleGenerate(imagePreview.jobId, imagePreview.images)
+                                onClick={async () => {
+                                    const jobId = imagePreview.jobId
+                                    const images = imagePreview.images
+                                    setImagePreview((prev) => ({ ...prev, generating: true }))
+                                    try {
+                                        const res = await fetch(`/api/admin/shortform/${jobId}/generate`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ images }),
+                                        })
+                                        const json = await res.json()
+                                        if (!res.ok) throw new Error(json.message || json.error)
+                                        setImagePreview((prev) => ({ ...prev, open: false, generating: false }))
+                                        alert('동영상 생성 완료!')
+                                        await loadJobs(filter, page)
+                                    } catch (e) {
+                                        setImagePreview((prev) => ({ ...prev, generating: false }))
+                                        alert(e instanceof Error ? e.message : '동영상 생성 실패')
+                                    }
                                 }}
-                                disabled={imagePreview.loading || imagePreview.images.length === 0}
-                                className="btn-primary btn-md"
+                                disabled={imagePreview.loading || imagePreview.images.length === 0 || imagePreview.generating}
+                                className="btn-primary btn-md disabled:opacity-50"
                             >
-                                동영상 생성
+                                {imagePreview.generating ? '동영상 생성 중...' : '동영상 생성'}
                             </button>
                         </div>
                     </div>
@@ -961,6 +998,8 @@ export default function AdminShortformPage() {
                             src={getStoragePublicUrl(previewJob.video_path!)}
                             className="w-full h-full object-contain"
                             controls
+                            controlsList="nodownload nofullscreen noremoteplayback"
+                            disablePictureInPicture
                             autoPlay
                             loop
                             playsInline
@@ -974,7 +1013,7 @@ export default function AdminShortformPage() {
                                 href={previewJob.issue_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-primary text-xs mt-1 block hover:underline"
+                                className="text-blue-400 text-xs mt-1 block hover:underline hover:text-blue-300"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 이슈 상세 보기 →
