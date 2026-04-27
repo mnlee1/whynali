@@ -89,8 +89,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
         // 4. YouTube 업로드 (항상 실서버 URL 사용 — 로컬 개발환경에서도 동일)
         const siteUrl = 'https://whynali.com'
         const issueId = job.issue_url.split('/issue/')[1]?.split('?')[0] ?? ''
-        const shortId = issueId.substring(0, 8)
-        const publicIssueUrl = shortId ? `${siteUrl}/i/${shortId}` : siteUrl
+        const publicIssueUrl = issueId ? `${siteUrl}/i/${issueId}` : siteUrl
 
         // 카테고리별 고정 해시태그
         const CATEGORY_HASHTAGS: Record<string, string> = {
@@ -163,6 +162,30 @@ export async function POST(_request: NextRequest, { params }: Params) {
     } catch (error) {
         console.error('YouTube 업로드 에러:', error)
         const message = error instanceof Error ? error.message : 'YouTube 업로드 실패'
+
+        // 실패 상태 DB 기록 (인스타/틱톡과 동일하게)
+        try {
+            const { data: job } = await supabaseAdmin
+                .from('shortform_jobs')
+                .select('upload_status')
+                .eq('id', id)
+                .single()
+            const failedStatus = {
+                ...(job?.upload_status || {}),
+                youtube: {
+                    status: 'failed',
+                    error: message,
+                    failedAt: new Date().toISOString(),
+                },
+            }
+            await supabaseAdmin
+                .from('shortform_jobs')
+                .update({ upload_status: failedStatus })
+                .eq('id', id)
+        } catch {
+            // 상태 기록 실패는 무시
+        }
+
         return NextResponse.json(
             { error: 'UPLOAD_ERROR', message },
             { status: 500 }
