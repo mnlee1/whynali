@@ -29,7 +29,7 @@ import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
 import { sendDoorayBatchGenerationAlert, sendDoorayShortformBatchAlert } from '@/lib/dooray-notification'
-import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT, SHORTFORM_COOLDOWN_HOURS } from '@/lib/config/shortform-thresholds'
+import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT } from '@/lib/config/shortform-thresholds'
 import type { ShortformSourceCount } from '@/types/shortform'
 
 export const dynamic = 'force-dynamic'
@@ -67,11 +67,8 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
         return { jobsGenerated: 0, issueCount: 0 }
     }
 
-    const cooldownStart = new Date()
-    cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
-
-    // 한 번에 처리할 최대 숏폼 수 (타임아웃 방지, 기본 3개)
-    const SHORTFORM_BATCH_SIZE = parseInt(process.env.SHORTFORM_BATCH_SIZE ?? '3')
+    // 한 번에 처리할 최대 숏폼 수 (타임아웃 방지, 기본 1개)
+    const SHORTFORM_BATCH_SIZE = parseInt(process.env.SHORTFORM_BATCH_SIZE ?? '1')
 
     const { data: issues, error: issuesError } = await supabaseAdmin
         .from('issues')
@@ -90,15 +87,15 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
     let jobsGenerated = 0
 
     for (const issue of issues) {
+        // 활성 job(pending/approved) 중복 체크 — 기간 제한 없이 전체 확인
         const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
             .from('shortform_jobs')
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', issue.id)
             .in('approval_status', ['pending', 'approved'])
-            .gte('created_at', cooldownStart.toISOString())
 
         if (recentJobError) {
-            console.error(`[숏폼 배치] 최근 job 조회 실패 (${issue.id}):`, recentJobError)
+            console.error(`[숏폼 배치] 활성 job 조회 실패 (${issue.id}):`, recentJobError)
             continue
         }
 

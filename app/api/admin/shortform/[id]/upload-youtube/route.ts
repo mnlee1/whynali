@@ -136,7 +136,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
         const { error: updateError } = await supabaseAdmin
             .from('shortform_jobs')
-            .update({ upload_status: newUploadStatus })
+            .update({ upload_status: newUploadStatus, video_path: null })
             .eq('id', id)
 
         if (updateError) {
@@ -145,6 +145,15 @@ export async function POST(_request: NextRequest, { params }: Params) {
                 { error: 'UPDATE_ERROR', message: 'Job 업데이트 실패' },
                 { status: 500 }
             )
+        }
+
+        // YouTube 업로드 완료 후 Supabase Storage 영상 삭제 (공간 절약)
+        if (job.video_path && !job.video_path.startsWith('http')) {
+            const { error: storageError } = await supabaseAdmin
+                .storage.from('shortform').remove([job.video_path])
+            if (storageError) {
+                console.warn('[YouTube 업로드] Storage 삭제 실패 (무시):', storageError.message)
+            }
         }
 
         await writeAdminLog(

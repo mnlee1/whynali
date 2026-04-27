@@ -96,23 +96,19 @@ export async function createShortformJob(input: CreateShortformJobInput): Promis
         return null
     }
 
-    // 1-4. 동일 이슈 쿨다운 체크 (수동 생성 시 스킵)
+    // 1-4. 동일 이슈 활성 job 중복 체크 (pending/approved가 하나라도 있으면 생성 안 함)
     if (!skipFilters) {
-        const cooldownStart = new Date()
-        cooldownStart.setHours(cooldownStart.getHours() - SHORTFORM_COOLDOWN_HOURS)
-
-        const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
+        const { count: activeJobCount, error: activeJobError } = await supabaseAdmin
             .from('shortform_jobs')
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', issueId)
             .in('approval_status', ['pending', 'approved'])
-            .gte('created_at', cooldownStart.toISOString())
 
-        if (recentJobError) {
-            throw new Error('최근 job 조회 실패')
+        if (activeJobError) {
+            throw new Error('활성 job 조회 실패')
         }
 
-        if ((recentJobCount ?? 0) > 0) {
+        if ((activeJobCount ?? 0) > 0) {
             return null
         }
     }
