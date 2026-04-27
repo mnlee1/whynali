@@ -391,18 +391,15 @@ export default function AdminIssuesPage() {
                     <div className="p-4 bg-surface border border-border rounded-xl mt-4">
                         <h3 className="font-semibold text-content-primary mb-3 text-sm flex items-center gap-2">
                             <span className="text-primary">💬</span>
-                            커뮤니티 급증 감지 (10분 주기) <span className="font-normal text-amber-600">※ 현재 임시: 1시간 주기 (AI API 비용 절감)</span>
+                            커뮤니티 급증 감지 (30분 주기)
                         </h3>
                         <div className="space-y-3 ml-4">
                             <div className="flex items-start gap-2">
                                 <span className="text-primary font-semibold text-xs">1단계:</span>
                                 <p className="text-xs text-content-primary">
-                                    커뮤니티 글에서 <span className="font-semibold">10분간 특정 키워드가 10건 이상</span> 급증하면 감지
+                                    커뮤니티 글에서 <span className="font-semibold">30분 내 특정 키워드가 5건 이상</span> 급증하면 감지
                                     <span className="block text-content-secondary mt-1">
-                                        (임계값: 10건, 시간창: 10분)
-                                    </span>
-                                    <span className="block text-amber-600 mt-1">
-                                        ※ 현재 임시 적용: 3건 (이슈 수집량 확보를 위해 완화)
+                                        (임계값: 5건, 시간창: 30분)
                                     </span>
                                 </p>
                             </div>
@@ -475,7 +472,6 @@ export default function AdminIssuesPage() {
                                 <p className="text-xs text-content-primary">
                                     화력 계산 및 최종 승인 판단
                                     <span className="block text-red-600 mt-1">• 화력 15점 미만이면 이슈 삭제 (등록하지 않음)</span>
-                                    <span className="block text-amber-600 mt-1">※ 현재 임시 적용: 8점 (이슈 수집량 확보를 위해 완화)</span>
                                     <span className="block text-content-secondary mt-1">• 화력 30점 이상 + 자동 승인 카테고리(사회/경제/기술/세계/스포츠) → 자동 승인</span>
                                     <span className="block text-amber-600 mt-1">• 그 외(연예/정치는 수동 승인 필수, 또는 화력 15-29점) → 대기 (관리자 승인 필수)</span>
                                     <span className="block text-blue-600 mt-1">• 등록 후 화력이 15점 미만으로 떨어져도 대기 상태 유지 (자동 반려 안 함)</span>
@@ -487,11 +483,11 @@ export default function AdminIssuesPage() {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
                             <p className="text-xs font-medium text-blue-800 mb-1">급증 임계값</p>
-                            <p className="text-xs text-content-primary">10분간 10건 이상 <span className="text-amber-600">(임시: 3건)</span></p>
+                            <p className="text-xs text-content-primary">30분간 5건 이상</p>
                         </div>
                         <div className="p-3 bg-surface-subtle rounded-xl border border-border">
                             <p className="text-xs font-medium text-content-secondary mb-1">화력 기준</p>
-                            <p className="text-xs text-content-primary">15점 이상 <span className="text-amber-600">(임시: 8점)</span></p>
+                            <p className="text-xs text-content-primary">15점 이상</p>
                         </div>
                         <div className="p-3 bg-green-50 rounded-xl border border-green-200">
                             <p className="text-xs font-medium text-green-800 mb-1">승인 정책</p>

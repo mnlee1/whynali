@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: prev, error: prevError } = await supabaseAdmin
         .from('votes')
-        .select('phase, approval_status, title')
+        .select('phase, approval_status, title, issue_id')
         .eq('id', id)
         .single()
 
@@ -40,13 +40,27 @@ export async function POST(request: NextRequest, { params }: Params) {
         )
     }
 
+    const { data: issue } = await supabaseAdmin
+        .from('issues')
+        .select('status')
+        .eq('id', prev.issue_id)
+        .single()
+
+    const now = new Date()
+    const updateData: Record<string, unknown> = {
+        phase: '진행중',
+        approval_status: '승인',
+        started_at: now.toISOString(),
+    }
+    if (issue?.status === '종결') {
+        const endDate = new Date(now)
+        endDate.setDate(endDate.getDate() + 3)
+        updateData.auto_end_date = endDate.toISOString()
+    }
+
     const { data, error } = await supabaseAdmin
         .from('votes')
-        .update({
-            phase: '진행중',
-            approval_status: '승인',
-            started_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id)
         .select('id, title')
         .single()

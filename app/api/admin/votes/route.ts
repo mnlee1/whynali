@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
         let query = supabaseAdmin
             .from('votes')
-            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, auto_end_participants, is_ai_generated, created_at, issues(id, title), vote_choices(id, label, count)')
+            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, is_ai_generated, created_at, issues(id, title), vote_choices(id, label, count)')
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
@@ -74,14 +74,14 @@ export async function GET(request: NextRequest) {
 }
 
 /* POST /api/admin/votes — 투표 생성 (선택지 동시 생성)
-   body: { issue_id, title?, choices: string[], auto_end_date?, auto_end_participants? } */
+   body: { issue_id, title?, choices: string[], auto_end_date? } */
 export async function POST(request: NextRequest) {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
     try {
         const body = await request.json()
-        const { issue_id, title, choices, auto_end_date, auto_end_participants, is_ai_generated = false } = body
+        const { issue_id, title, choices, auto_end_date, is_ai_generated = false } = body
 
         if (!issue_id) {
             return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
@@ -136,9 +136,6 @@ export async function POST(request: NextRequest) {
 
         if (auto_end_date) {
             voteData.auto_end_date = auto_end_date
-        }
-        if (auto_end_participants && typeof auto_end_participants === 'number') {
-            voteData.auto_end_participants = auto_end_participants
         }
 
         const { data: vote, error: voteError } = await supabaseAdmin

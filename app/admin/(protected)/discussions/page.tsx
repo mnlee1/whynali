@@ -700,7 +700,19 @@ export default function AdminDiscussionsPage() {
                                                     )}
                                                 </div>
                                             ) : (
-                                                <p className="line-clamp-2">{decodeHtml(topic.body)}</p>
+                                                <>
+                                                    <p className="line-clamp-2">{decodeHtml(topic.body)}</p>
+                                                    {topic.auto_end_date && topic.approval_status === '진행중' && (
+                                                        <span className="text-xs text-primary block mt-1">
+                                                            📅 {new Date(topic.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료예정
+                                                        </span>
+                                                    )}
+                                                    {topic.auto_end_date && topic.approval_status === '마감' && (
+                                                        <span className="text-xs text-content-muted block mt-1">
+                                                            📅 {new Date(topic.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료됨
+                                                        </span>
+                                                    )}
+                                                </>
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm max-w-xs">

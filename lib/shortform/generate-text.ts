@@ -18,12 +18,14 @@ export interface ShortformTextInput {
     heatGrade: string
     newsCount: number
     communityCount: number
-    issueDescription?: string  // issues.topic_description (이슈 설명 컨텍스트)
+    issueDescription?: string
+    briefBullets?: string[]    // brief_summary.bullets — 씬2 desc 직접 반영
+    briefConclusion?: string   // brief_summary.conclusion — 씬3 desc 직접 반영
 }
 
 export interface ShortformTextOutput {
     scene1Title: string  // 씬1 타이틀 (20자 이내)
-    scene1Desc: string   // 씬1 설명 (35자 이내)
+    scene1Desc: string   // 씬1 설명
     scene2Title: string  // 씬2 타이틀 (20자 이내)
     scene2Desc: string   // 씬2 설명 (35자 이내)
     scene3Title: string  // 씬3 타이틀 (20자 이내)
@@ -113,50 +115,57 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
 - 추측·단정 표현 금지 ("~했다" 확정형 대신 "~기대", "~가능성" 사용)
 - 특정인 비방·명예훼손 표현 금지`
 
-    const prompt = `당신은 숏폼 SNS 콘텐츠 기획자입니다.
-아래 이슈 제목과 설명을 보고 Scene 2, 3에 들어갈 파생 텍스트를 생성하세요.
+    // brief_summary 직접 내용
+    const bulletText = input.briefBullets?.filter(Boolean)[0] ?? ''
+    const conclusionText = input.briefConclusion ?? ''
+    const hasBriefContent = bulletText.length > 0 || conclusionText.length > 0
+
+    const prompt = hasBriefContent
+        ? `당신은 텍스트 편집자입니다. 아래 원문을 35자 이내 숏폼 자막으로 편집하세요.
+
+이슈 제목: "${input.title}"
+
+[scene2Desc 원문]
+"${bulletText || conclusionText}"
+
+[scene3Desc 원문]
+"${conclusionText || bulletText}"
+
+편집 규칙:
+- 원문 내용 외 새로운 내용 창작 절대 금지
+- 35자 이하면 원문 그대로 사용
+- 35자 초과면 원문의 핵심 의미만 남겨 35자 이내로 줄일 것
+- 마지막이 조사(~에 ~의 ~을 ~로 ~와 ~가)나 연결어미(~하며 ~해서 ~하면 ~이어)로 끝나지 않을 것
+- 이모지 금지, 한글과 기본 문장부호만 사용
+- scene2Desc와 scene3Desc는 서로 다른 내용이어야 함
+
+scene2Title: 15자 이내, scene2Desc 내용 기반 완결형 타이틀
+scene3Title: 15자 이내, scene3Desc 내용 기반 완결형 타이틀
+
+JSON으로만 응답:
+{"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
+        : `당신은 숏폼 SNS 콘텐츠 기획자입니다.
+아래 이슈의 Scene 2, 3 텍스트를 생성하세요.
 
 이슈 제목: "${input.title}"
 이슈 설명: "${input.issueDescription ?? ''}"
 카테고리: ${input.category}${isSensitiveCategory ? ' (민감 카테고리 — 표현 제한 적용)' : ''}
 
 공통 규칙:
-- 반드시 이슈 제목의 구체적인 내용을 반영할 것
 - 짧고 강렬하게 (이모지 절대 사용 금지)
 - 오직 한글과 기본 문장부호만 사용
-- scene2Title, scene2Desc, scene3Title, scene3Desc 4개 모두 서로 다른 표현 사용 (중복 금지)
-- scene2와 scene3은 이슈의 서로 다른 각도를 다룰 것 (scene2: 핵심 쟁점, scene3: 파급 효과·전망)
+- scene2와 scene3은 이슈의 서로 다른 각도 (scene2: 핵심 쟁점, scene3: 파급 효과·전망)
 ${isSensitiveCategory ? sensitiveRules : generalRules}
 
-끝맺음 규칙 (매우 중요):
-- Title: "~은?", "~할까", "~상황", "~결과" 처럼 명사나 의문형으로 완결
-- Desc: "~확산", "~집중", "~주목", "~기대", "~논란" 처럼 명사로 완결하거나 "~됐다", "~높다" 처럼 서술형 종결
-- 절대 금지 (뒤에 무언가 더 와야 하는 형태): "~대한", "~위한", "~관한", "~인한", "~새로운", "~이나" 같은 수식어; "~하며", "~하고", "~해서", "~하면", "~이어", "~되어" 같은 연결어미; "~에", "~의", "~을", "~로", "~와", "~가" 같은 조사
-- 생성 후 마지막 단어가 위 금지 형태이면 반드시 앞 어절로 되돌려 완결할 것
+끝맺음 규칙:
+- Title: 명사나 의문형으로 완결
+- Desc: 종결어미(-다/-주목/-관심 등)나 완결 명사로 끝낼 것
+- 절대 금지: "~대한" "~위한" 같은 수식어, "~하며" "~해서" 같은 연결어미, "~에" "~의" "~을" "~로" 같은 조사로 끝나는 것
 
-좋은 예:
-${isSensitiveCategory
-    ? `이슈: "이재명 대표 1심 선고 결과 발표"
-{"scene2Title":"1심 선고 결과 어떻게 됐나","scene2Desc":"재판부 판단에 전국민 이목이 집중됐다","scene3Title":"향후 정치 판도 어떻게 바뀔까","scene3Desc":"여야 모두 즉각 반응 정치권 파장 예상"}`
-    : `이슈: "한국은행 기준금리 0.25%p 인하 결정"
-{"scene2Title":"내 대출 이자 얼마나 줄어들까","scene2Desc":"0.25%p 인하로 이자 부담 크게 완화 전망","scene3Title":"부동산 시장 반응은 어떨까","scene3Desc":"집값 반등 기대감에 거래량 증가 주목"}`}
+scene2: scene2Title 15자 이내 / scene2Desc 35자 이내
+scene3: scene3Title 15자 이내 / scene3Desc 35자 이내
 
-나쁜 예 (이렇게 하지 말 것):
-{"scene2Desc":"국민 분노가 폭발해 감독에 대한","scene3Desc":"사임 여부와 새로운 코치진에"}
-→ 이유: "대한", "에" 처럼 연결·조사로 끝나서 문장이 잘린 것처럼 보임
-
-중복 나쁜 예 (scene2·scene3이 같은 표현 — 절대 금지):
-{"scene2Title":"향후 영향은","scene2Desc":"파장이 예상된다","scene3Title":"향후 영향은","scene3Desc":"파장이 예상된다"}
-
-scene2 (핵심 쟁점):
-- scene2Title: 15자 이내, 완결된 명사구 또는 의문형 (2줄 가능)
-- scene2Desc: 35자 이내, 반드시 종결어미(-다/-주목/-관심 등)나 완결 명사로 끝낼 것 (최대 2줄, 이슈 내용 구체 반영)
-
-scene3 (마무리):
-- scene3Title: 15자 이내, 완결된 명사구 또는 의문형 (2줄 가능)
-- scene3Desc: 35자 이내, 반드시 종결어미(-다/-주목/-관심 등)나 완결 명사로 끝낼 것 (최대 2줄, 이슈 내용 구체 반영)
-
-JSON으로만 응답 (다른 텍스트 없음):
+JSON으로만 응답:
 {"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
 
     const fallback: ShortformTextOutput = {
@@ -228,9 +237,9 @@ JSON으로만 응답 (다른 텍스트 없음):
                 scene1Title: clean(scene1Title),
                 scene1Desc:  scene1Desc,
                 scene2Title: safeText(parsed.scene2Title, fallback.scene2Title, 15),
-                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  38),
+                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  35),
                 scene3Title: safeText(parsed.scene3Title, fallback.scene3Title, 15),
-                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  38),
+                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  35),
             }
         } catch (error) {
             console.error(`[Groq 텍스트 실패] key=...${apiKey.slice(-6)}:`, error)

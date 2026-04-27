@@ -40,7 +40,6 @@ interface Vote {
     started_at: string | null
     ended_at: string | null
     auto_end_date: string | null
-    auto_end_participants: number | null
     created_at: string
     is_ai_generated?: boolean
     issues: { id: string; title: string } | null
@@ -696,14 +695,14 @@ export default function AdminVotesPage() {
                                                     시점: {vote.issue_status_snapshot}
                                                 </span>
                                             )}
-                                            {vote.auto_end_date && (
+                                            {vote.auto_end_date && vote.phase === '진행중' && (
                                                 <span className="text-xs text-primary block">
-                                                    📅 {new Date(vote.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료
+                                                    📅 {new Date(vote.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료예정
                                                 </span>
                                             )}
-                                            {vote.auto_end_participants && (
-                                                <span className="text-xs text-primary block">
-                                                    🎯 {vote.auto_end_participants}명 도달 시 종료
+                                            {vote.auto_end_date && vote.phase === '마감' && (
+                                                <span className="text-xs text-content-muted block">
+                                                    📅 {new Date(vote.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료됨
                                                 </span>
                                             )}
                                         </td>

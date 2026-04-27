@@ -4,7 +4,7 @@
  * [관리자 - 투표 재개 API]
  *
  * 마감된 투표를 다시 진행중 상태로 재개.
- * ended_at, auto_end_date, auto_end_participants를 초기화.
+ * ended_at, auto_end_date를 초기화. 이슈가 종결 상태면 auto_end_date를 3일 후로 재설정.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: vote, error: voteError } = await supabaseAdmin
         .from('votes')
-        .select('phase')
+        .select('phase, issue_id')
         .eq('id', id)
         .single()
 
@@ -43,13 +43,26 @@ export async function POST(request: NextRequest, { params }: Params) {
         )
     }
 
+    const { data: issue } = await supabaseAdmin
+        .from('issues')
+        .select('status')
+        .eq('id', vote.issue_id)
+        .single()
+
+    const now = new Date()
+    let autoEndDate: string | null = null
+    if (issue?.status === '종결') {
+        const endDate = new Date(now)
+        endDate.setDate(endDate.getDate() + 3)
+        autoEndDate = endDate.toISOString()
+    }
+
     const { error: updateError } = await supabaseAdmin
         .from('votes')
         .update({
             phase: '진행중',
             ended_at: null,
-            auto_end_date: null,
-            auto_end_participants: null,
+            auto_end_date: autoEndDate,
         })
         .eq('id', id)
 
