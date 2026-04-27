@@ -14,7 +14,7 @@
  * AI: Groq (Llama 3.1, 무료)
  */
 
-import { incrementApiUsage } from '@/lib/api-usage-tracker'
+import { callGroq } from '@/lib/ai/groq-client'
 
 export interface IssueMetadata {
     id: string
@@ -42,63 +42,25 @@ export async function generateDiscussionTopics(
     issue: IssueMetadata,
     count: number = 3
 ): Promise<GeneratedTopic[]> {
-    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
-    if (!apiKey) {
-        throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다.')
-    }
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
-            messages: [
-                {
-                    role: 'system',
-                    content:
-                        '당신은 한국 커뮤니티 사용자들이 실제로 댓글을 달고 싶어지는 토론 주제를 만드는 전문가입니다. ' +
-                        '학술적·철학적 표현은 절대 금지입니다. 균형, 경계, 가치, 정당성, 경제권익 같은 어려운 추상어 사용 금지. ' +
-                        '일반인이 바로 이해할 수 있는 쉽고 구체적인 말로 써야 합니다. ' +
-                        '반드시 완전한 문장으로 끝내고, 절대 문장 중간에서 끊지 마세요. ' +
-                        '특정인 실명이나 특정 집단을 직접 지목하는 표현은 절대 사용하지 마세요. ' +
-                        '반드시 JSON 형식으로만 응답하세요.',
-                },
-                {
-                    role: 'user',
-                    content: buildPrompt(issue, count),
-                },
-            ],
-            temperature: 0.7,
-            max_tokens: 800,
-            response_format: { type: 'json_object' }
-        }),
-    })
-
-    if (!response.ok) {
-        const errText = await response.text()
-        
-        // API 사용량 추적 (실패)
-        await incrementApiUsage('groq', {
-            calls: 1,
-            successes: 0,
-            failures: 1,
-        }).catch(err => console.error('API 사용량 추적 실패:', err))
-        
-        throw new Error(`Groq API 오류 (${response.status}): ${errText}`)
-    }
-
-    const data = await response.json()
-    const raw: string = data.choices?.[0]?.message?.content ?? ''
-
-    // API 사용량 추적 (성공)
-    await incrementApiUsage('groq', {
-        calls: 1,
-        successes: 1,
-        failures: 0,
-    }).catch(err => console.error('API 사용량 추적 실패:', err))
+    const raw = await callGroq(
+        [
+            {
+                role: 'system',
+                content:
+                    '당신은 한국 커뮤니티 사용자들이 실제로 댓글을 달고 싶어지는 토론 주제를 만드는 전문가입니다. ' +
+                    '학술적·철학적 표현은 절대 금지입니다. 균형, 경계, 가치, 정당성, 경제권익 같은 어려운 추상어 사용 금지. ' +
+                    '일반인이 바로 이해할 수 있는 쉽고 구체적인 말로 써야 합니다. ' +
+                    '반드시 완전한 문장으로 끝내고, 절대 문장 중간에서 끊지 마세요. ' +
+                    '특정인 실명이나 특정 집단을 직접 지목하는 표현은 절대 사용하지 마세요. ' +
+                    '반드시 JSON 형식으로만 응답하세요.',
+            },
+            {
+                role: 'user',
+                content: buildPrompt(issue, count),
+            },
+        ],
+        { model: 'llama-3.3-70b-versatile', temperature: 0.5, max_tokens: 800 }
+    )
 
     return parseTopics(raw)
 }

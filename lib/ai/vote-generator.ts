@@ -14,7 +14,7 @@
  * AI: Groq (Llama 3.1, 무료)
  */
 
-import { incrementApiUsage } from '@/lib/api-usage-tracker'
+import { callGroq } from '@/lib/ai/groq-client'
 
 export interface IssueMetadata {
     id: string
@@ -43,66 +43,30 @@ export async function generateVoteOptions(
     issue: IssueMetadata,
     count: number = 2
 ): Promise<GeneratedVote[]> {
-    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
-    if (!apiKey) {
-        throw new Error('GROQ_API_KEY 환경변수가 설정되지 않았습니다.')
-    }
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
-            messages: [
-                {
-                    role: 'system',
-                    content:
-                        '당신은 한국 사회 이슈에 대한 여론 투표 문항을 만드는 전문가입니다. ' +
-                        '당신은 한국 커뮤니티 사용자들이 부담 없이 참여할 수 있는 투표 문항을 만드는 전문가입니다. ' +
-                        '친근하고 가벼운 말투로 작성하세요. 반말도 괜찮습니다. ' +
-                        '단, "~냐?", "~이냐?", "~어떠냐?" 같은 거친 반말은 절대 금지입니다. ' +
-                        '"몰라", "모름" 같은 단답형 대신 "잘 모르겠어", "판단 어려워" 처럼 부드러운 표현을 사용하세요. ' +
-                        '질문은 반드시 "?"로 끝나는 의문문이어야 합니다. 선언문·권유문 금지. ' +
-                        '선택지는 10자 이하의 짧은 어구나 문장으로 작성하세요. 완전히 끝맺는 형태로. ' +
-                        '선택지끼리 공통 앞말을 반복하지 마세요. ' +
-                        '절대 문장 중간에서 끊지 마세요. ' +
-                        '특정인 실명이나 특정 집단을 직접 지목하는 표현은 절대 사용하지 마세요. ' +
-                        '반드시 JSON 형식으로만 응답하세요.',
-                },
-                {
-                    role: 'user',
-                    content: buildPrompt(issue, count),
-                },
-            ],
-            temperature: 0.7,
-            max_tokens: 1000,
-            response_format: { type: 'json_object' }
-        }),
-    })
-
-    if (!response.ok) {
-        const errText = await response.text()
-
-        await incrementApiUsage('groq', {
-            calls: 1,
-            successes: 0,
-            failures: 1,
-        }).catch(err => console.error('API 사용량 추적 실패:', err))
-
-        throw new Error(`Groq API 오류 (${response.status}): ${errText}`)
-    }
-
-    const data = await response.json()
-    const raw: string = data.choices?.[0]?.message?.content ?? ''
-
-    await incrementApiUsage('groq', {
-        calls: 1,
-        successes: 1,
-        failures: 0,
-    }).catch(err => console.error('API 사용량 추적 실패:', err))
+    const raw = await callGroq(
+        [
+            {
+                role: 'system',
+                content:
+                    '당신은 한국 사회 이슈에 대한 여론 투표 문항을 만드는 전문가입니다. ' +
+                    '당신은 한국 커뮤니티 사용자들이 부담 없이 참여할 수 있는 투표 문항을 만드는 전문가입니다. ' +
+                    '친근하고 가벼운 말투로 작성하세요. 반말도 괜찮습니다. ' +
+                    '단, "~냐?", "~이냐?", "~어떠냐?" 같은 거친 반말은 절대 금지입니다. ' +
+                    '"몰라", "모름" 같은 단답형 대신 "잘 모르겠어", "판단 어려워" 처럼 부드러운 표현을 사용하세요. ' +
+                    '질문은 반드시 "?"로 끝나는 의문문이어야 합니다. 선언문·권유문 금지. ' +
+                    '선택지는 10자 이하의 짧은 어구나 문장으로 작성하세요. 완전히 끝맺는 형태로. ' +
+                    '선택지끼리 공통 앞말을 반복하지 마세요. ' +
+                    '절대 문장 중간에서 끊지 마세요. ' +
+                    '특정인 실명이나 특정 집단을 직접 지목하는 표현은 절대 사용하지 마세요. ' +
+                    '반드시 JSON 형식으로만 응답하세요.',
+            },
+            {
+                role: 'user',
+                content: buildPrompt(issue, count),
+            },
+        ],
+        { model: 'llama-3.3-70b-versatile', temperature: 0.5, max_tokens: 1000 }
+    )
 
     return parseVotes(raw)
 }
