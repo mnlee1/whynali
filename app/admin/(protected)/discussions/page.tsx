@@ -21,6 +21,8 @@ interface DiscussionTopic {
     created_at: string
     updated_at?: string | null
     issues: { id: string; title: string } | null
+    view_count?: number
+    comment_count?: number
 }
 
 type FilterStatus = '' | '대기' | '진행중' | '마감'
@@ -406,6 +408,7 @@ export default function AdminDiscussionsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-content-primary">토론 관리</h1>
+                    <p className="text-sm text-content-muted mt-1">모든 토론 주제는 AI로 자동 생성됩니다.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
@@ -618,11 +621,14 @@ export default function AdminDiscussionsPage() {
                             <th className="w-64 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 연결 이슈
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
-                                생성 유형
-                            </th>
-                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
+                            <th className="w-20 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 승인 상태
+                            </th>
+                            <th className="w-16 px-4 py-3 text-right text-sm font-medium text-content-muted uppercase">
+                                의견수
+                            </th>
+                            <th className="w-16 px-4 py-3 text-right text-sm font-medium text-content-muted uppercase">
+                                조회수
                             </th>
                             <th className="w-32 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 생성일
@@ -636,14 +642,14 @@ export default function AdminDiscussionsPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={7} className="px-4 py-3">
+                                    <td colSpan={8} className="px-4 py-3">
                                         <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : topics.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-content-muted">
+                                <td colSpan={8} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 토론 주제가 없습니다.
                                 </td>
                             </tr>
@@ -711,20 +717,15 @@ export default function AdminDiscussionsPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            {topic.is_ai_generated ? (
-                                                <span className="text-xs px-2 py-0.5 bg-primary-light text-primary-dark rounded-full border border-primary-muted">
-                                                    AI 생성
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs px-2 py-0.5 bg-surface-muted text-content-secondary rounded-full border border-border">
-                                                    직접 생성
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3">
                                             <span className={`px-2 py-1 text-xs rounded-full ${STATUS_STYLE[topic.approval_status]}`}>
                                                 {topic.approval_status}
                                             </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-content-primary text-right font-medium">
+                                            {topic.comment_count ?? 0}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-content-primary text-right font-medium">
+                                            {(topic.view_count ?? 0).toLocaleString()}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-content-secondary">
                                             <div>{formatDate(topic.created_at)}</div>

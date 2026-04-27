@@ -31,7 +31,28 @@ export async function GET(request: NextRequest) {
         // 병합된 이슈에 연결된 토론 제외
         const filtered = (data ?? []).filter(t => !t.issues?.merged_into_id)
 
-        return NextResponse.json({ data: filtered, total: count ?? 0 })
+        // 의견수(댓글 수) 집계
+        const topicIds = filtered.map(t => t.id)
+        let commentCountMap: Record<string, number> = {}
+        if (topicIds.length > 0) {
+            const { data: commentRows } = await supabaseAdmin
+                .from('comments')
+                .select('discussion_topic_id')
+                .in('discussion_topic_id', topicIds)
+                .not('visibility', 'in', '(deleted,deleted_by_admin)')
+            for (const row of commentRows ?? []) {
+                if (row.discussion_topic_id) {
+                    commentCountMap[row.discussion_topic_id] = (commentCountMap[row.discussion_topic_id] ?? 0) + 1
+                }
+            }
+        }
+
+        const result = filtered.map(t => ({
+            ...t,
+            comment_count: commentCountMap[t.id] ?? 0,
+        }))
+
+        return NextResponse.json({ data: result, total: count ?? 0 })
     } catch (e) {
         return NextResponse.json({ error: '토론 주제 조회 실패' }, { status: 500 })
     }
