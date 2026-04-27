@@ -11,7 +11,7 @@
         },
         {
             "path": "/api/cron/track-a",
-            "schedule": "0 * * * *"
+            "schedule": "*/30 * * * *"
         },
         {
             "path": "/api/cron/update-timeline",
