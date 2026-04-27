@@ -145,20 +145,11 @@ export async function POST(
 
             const { error: updateError } = await supabaseAdmin
                 .from('shortform_jobs')
-                .update({ upload_status: newUploadStatus, video_path: null })
+                .update({ upload_status: newUploadStatus })
                 .eq('id', jobId)
 
             if (updateError) {
                 console.error('[upload-tiktok] upload_status 업데이트 실패:', updateError)
-            }
-
-            // Storage 영상 삭제 (업로드 완료 후 공간 절약)
-            if (job.video_path && !job.video_path.startsWith('http')) {
-                const { error: storageError } = await supabaseAdmin
-                    .storage.from('shortform').remove([job.video_path])
-                if (storageError) {
-                    console.warn('[upload-tiktok] Storage 삭제 실패 (무시):', storageError.message)
-                }
             }
 
             // 5. 어드민 로그

@@ -131,27 +131,30 @@ ${isSensitiveCategory ? sensitiveRules : generalRules}
 끝맺음 규칙 (매우 중요):
 - Title: "~은?", "~할까", "~상황", "~결과" 처럼 명사나 의문형으로 완결
 - Desc: "~확산", "~집중", "~주목", "~기대", "~논란" 처럼 명사로 완결하거나 "~됐다", "~높다" 처럼 서술형 종결
-- 절대 금지: "~대한", "~위한", "~관한", "~인한", "~새로운", "~이나" 처럼 뒤에 명사가 와야 하는 수식어로 끝나는 것
+- 절대 금지 (뒤에 무언가 더 와야 하는 형태): "~대한", "~위한", "~관한", "~인한", "~새로운", "~이나" 같은 수식어; "~하며", "~하고", "~해서", "~하면", "~이어", "~되어" 같은 연결어미; "~에", "~의", "~을", "~로", "~와", "~가" 같은 조사
+- 생성 후 마지막 단어가 위 금지 형태이면 반드시 앞 어절로 되돌려 완결할 것
 
 좋은 예:
 ${isSensitiveCategory
     ? `이슈: "이재명 대표 1심 선고 결과 발표"
-{"scene2Title":"1심 선고 결과 어떻게 됐나","scene2Desc":"재판부의 판단에 전국민의 이목이 집중됐다","scene3Title":"향후 정치 판도 어떻게 바뀔까","scene3Desc":"여야 모두 즉각 반응 정치권 파장 예상"}`
+{"scene2Title":"1심 선고 결과 어떻게 됐나","scene2Desc":"재판부 판단에 전국민 이목이 집중됐다","scene3Title":"향후 정치 판도 어떻게 바뀔까","scene3Desc":"여야 모두 즉각 반응 정치권 파장 예상"}`
     : `이슈: "한국은행 기준금리 0.25%p 인하 결정"
-{"scene2Title":"내 대출 이자 얼마나 줄어들까","scene2Desc":"0.25%p 인하로 이자 부담 크게 완화될 전망","scene3Title":"부동산 시장 반응은 어떨까","scene3Desc":"집값 반등 기대감 커지며 거래량 증가 주목"}`}
+{"scene2Title":"내 대출 이자 얼마나 줄어들까","scene2Desc":"0.25%p 인하로 이자 부담 크게 완화 전망","scene3Title":"부동산 시장 반응은 어떨까","scene3Desc":"집값 반등 기대감에 거래량 증가 주목"}`}
 
 나쁜 예 (이렇게 하지 말 것):
-{"scene2Title":"분노가 폭발해","scene2Desc":"국민 분노가 폭발해 감독에 대한","scene3Title":"새로운 감독과","scene3Desc":"사임 여부와 새로운 코치진"}
+{"scene2Desc":"국민 분노가 폭발해 감독에 대한","scene3Desc":"사임 여부와 새로운 코치진에"}
+→ 이유: "대한", "에" 처럼 연결·조사로 끝나서 문장이 잘린 것처럼 보임
+
 중복 나쁜 예 (scene2·scene3이 같은 표현 — 절대 금지):
 {"scene2Title":"향후 영향은","scene2Desc":"파장이 예상된다","scene3Title":"향후 영향은","scene3Desc":"파장이 예상된다"}
 
 scene2 (핵심 쟁점):
 - scene2Title: 15자 이내, 완결된 명사구 또는 의문형 (2줄 가능)
-- scene2Desc: 48자 이내, 완결된 명사구 또는 서술형 종결어미 (3줄 가능, 이슈 설명 내용을 구체적으로 반영)
+- scene2Desc: 35자 이내, 반드시 종결어미(-다/-주목/-관심 등)나 완결 명사로 끝낼 것 (최대 2줄, 이슈 내용 구체 반영)
 
 scene3 (마무리):
 - scene3Title: 15자 이내, 완결된 명사구 또는 의문형 (2줄 가능)
-- scene3Desc: 48자 이내, 완결된 명사구 또는 서술형 종결어미 (3줄 가능, 이슈 설명 내용을 구체적으로 반영)
+- scene3Desc: 35자 이내, 반드시 종결어미(-다/-주목/-관심 등)나 완결 명사로 끝낼 것 (최대 2줄, 이슈 내용 구체 반영)
 
 JSON으로만 응답 (다른 텍스트 없음):
 {"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
@@ -177,21 +180,24 @@ JSON으로만 응답 (다른 텍스트 없음):
         return lastSpace > 2 ? cut.slice(0, lastSpace) : cut
     }
 
-    // 수식어·조사로 끝나는 미완성 문장 감지 후 앞 어절로 후퇴
+    // 수식어·조사·연결어미로 끝나는 미완성 문장 감지 후 앞 어절로 후퇴 (최대 5회 반복)
     const INCOMPLETE_ENDINGS = [
         '대한', '위한', '관한', '인한', '따른', '통한', '향한', '대해',
         '이나', '이고', '이며', '이어', '새로운', '다양한', '중요한',
         '의', '에', '을', '를', '로', '와', '과', '도', '만', '은', '는',
         '이', '가', '기', '어', '아', '며', '서', '고',
+        '면', '거나', '도록',  // 조건·선택·목적 연결어미
     ]
     const fixIncomplete = (str: string): string => {
-        const trimmed = str.trim()
-        const lastSpaceIdx = trimmed.lastIndexOf(' ')
-        if (lastSpaceIdx === -1) return trimmed
-        const lastWord = trimmed.slice(lastSpaceIdx + 1)
-        const isIncomplete = INCOMPLETE_ENDINGS.some(e => lastWord === e || lastWord.endsWith(e))
-        if (isIncomplete) return trimmed.slice(0, lastSpaceIdx).trim()
-        return trimmed
+        let result = str.trim()
+        for (let pass = 0; pass < 5; pass++) {
+            const lastSpaceIdx = result.lastIndexOf(' ')
+            if (lastSpaceIdx === -1) break
+            const lastWord = result.slice(lastSpaceIdx + 1)
+            if (!INCOMPLETE_ENDINGS.some(e => lastWord === e || lastWord.endsWith(e))) break
+            result = result.slice(0, lastSpaceIdx).trim()
+        }
+        return result
     }
 
     // 키 순환: 앞 키가 실패하면 다음 키로 재시도
@@ -222,9 +228,9 @@ JSON으로만 응답 (다른 텍스트 없음):
                 scene1Title: clean(scene1Title),
                 scene1Desc:  scene1Desc,
                 scene2Title: safeText(parsed.scene2Title, fallback.scene2Title, 15),
-                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  48),
+                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  38),
                 scene3Title: safeText(parsed.scene3Title, fallback.scene3Title, 15),
-                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  48),
+                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  38),
             }
         } catch (error) {
             console.error(`[Groq 텍스트 실패] key=...${apiKey.slice(-6)}:`, error)
