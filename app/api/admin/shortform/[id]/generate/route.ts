@@ -33,10 +33,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     } catch { /* body 없거나 파싱 실패 시 무시 */ }
 
     try {
-        // 1. Job 조회 (issues 테이블의 category, topic_description, brief_summary도 함께)
+        // 1. Job 조회
         const { data: job, error: selectError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('*, issues!inner(category, topic_description, brief_summary)')
+            .select('*')
             .eq('id', id)
             .single()
 
@@ -61,15 +61,30 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        // 2. MP4 동영상 생성 (3-Scene)
-        const issueData = job.issues as any
-        // 메인 카드와 동일한 우선순위: topic_description → brief_summary.intro
-        const issueDescription: string | undefined =
-            issueData?.topic_description || issueData?.brief_summary?.intro || undefined
+        // 2. issues 정보 별도 조회 (컬럼 없어도 실패하지 않음)
+        let issueCategory = '사회'
+        let issueDescription: string | undefined
+        try {
+            const { data: issue } = await supabaseAdmin
+                .from('issues')
+                .select('category, topic_description, brief_summary')
+                .eq('id', job.issue_id)
+                .single()
+            if (issue) {
+                issueCategory = (issue as any).category ?? '사회'
+                issueDescription =
+                    (issue as any).topic_description ||
+                    (issue as any).brief_summary?.intro ||
+                    undefined
+            }
+        } catch {
+            // issues 조회 실패 시 기본값으로 진행
+        }
 
+        // 3. MP4 동영상 생성 (3-Scene)
         const videoBuffer = await generate3SceneShortform({
             issueTitle: job.issue_title,
-            issueCategory: issueData?.category ?? '사회',
+            issueCategory,
             issueStatus: job.issue_status,
             heatGrade: job.heat_grade,
             newsCount: job.source_count?.news ?? 0,

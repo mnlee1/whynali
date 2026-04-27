@@ -133,7 +133,8 @@ async function searchPixabay(query: string, apiKey: string, seed?: number): Prom
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return shuffled.slice(0, 3).map(h => h.largeImageURL || h.webformatURL).filter(Boolean)
+    // webformatURL(640px): 직접 접근 가능 / largeImageURL: 고해상도지만 서버 차단 가능성 있음
+    return shuffled.slice(0, 3).map(h => h.webformatURL || h.largeImageURL).filter(Boolean)
 }
 
 /**
