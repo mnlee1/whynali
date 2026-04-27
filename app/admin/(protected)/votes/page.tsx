@@ -391,6 +391,7 @@ export default function AdminVotesPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-content-primary">투표 관리</h1>
+                    <p className="text-sm text-content-muted mt-1">모든 투표 주제는 AI로 자동 생성됩니다.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
@@ -642,9 +643,6 @@ export default function AdminVotesPage() {
                             <th className="w-36 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 선택지
                             </th>
-                            <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
-                                생성 유형
-                            </th>
                             <th className="w-48 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 연결 이슈
                             </th>
@@ -663,14 +661,14 @@ export default function AdminVotesPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={8} className="px-4 py-3">
+                                    <td colSpan={7} className="px-4 py-3">
                                         <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : votes.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="px-4 py-12 text-center text-sm text-content-muted">
+                                <td colSpan={7} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 투표가 없습니다.
                                 </td>
                             </tr>
@@ -722,17 +720,6 @@ export default function AdminVotesPage() {
                                                     </li>
                                                 ))}
                                             </ul>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {vote.is_ai_generated ? (
-                                                <span className="text-xs px-2 py-0.5 bg-primary-light text-primary-dark rounded-full border border-primary-muted">
-                                                    AI 생성
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs px-2 py-0.5 bg-surface-muted text-content-secondary rounded-full border border-border">
-                                                    직접 생성
-                                                </span>
-                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm max-w-xs">
                                             {vote.issues ? (
