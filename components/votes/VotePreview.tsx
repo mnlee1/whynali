@@ -9,6 +9,7 @@ import 'swiper/css'
 import 'swiper/css/pagination'
 import type { Vote, VoteChoice } from '@/types/index'
 import Tooltip from '@/components/common/Tooltip'
+import { Check } from 'lucide-react'
 
 interface VoteWithChoices extends Vote {
     vote_choices: VoteChoice[]
@@ -126,10 +127,10 @@ export default function VotePreview({ initialVotes }: Props) {
 
         return (
             <div className="bg-white border border-border rounded-xl shadow-card h-full flex flex-col">
-                <div className="p-4 flex flex-col gap-3 h-full">
+                <div className="p-4 flex flex-col h-full">
 
                     {/* 상태 뱃지 + 참여 수 */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pb-3">
                         {isActive ? (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-green-200 bg-green-50 text-xs font-semibold text-green-700">
                                 <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
@@ -146,28 +147,40 @@ export default function VotePreview({ initialVotes }: Props) {
                         </span>
                     </div>
 
-                    {/* 투표 제목 */}
-                    <h3 className="text-sm font-bold text-content-primary line-clamp-2 leading-snug mt-1">
-                        {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
-                    </h3>
+                    {/* 이슈 제목 + 투표 주제 그룹 */}
+                    <div className="flex flex-col gap-1 py-3">
+                        {vote.issues && (
+                            <Link
+                                href={`/issue/${issueId}`}
+                                className="text-[11px] text-content-muted hover:text-primary transition-colors line-clamp-1"
+                            >
+                                {vote.issues.title}
+                            </Link>
+                        )}
+                        <h3 className="text-sm font-bold text-content-primary line-clamp-2 leading-snug">
+                            {vote.title ?? '이 이슈에 대해 어떻게 생각하시나요?'}
+                        </h3>
+                    </div>
 
-                    {/* 결과지: 선택지 제목 바로 아래 */}
+                    {/* 결과지: 하단 고정 */}
                     {showResults && (
-                        <div className="flex flex-col gap-3">
+                        <div className="mt-auto pt-3 flex flex-col gap-5">
                             {sortedByCount.map((choice, i) => {
                                 const ratio = totalCount > 0 ? Math.round((choice.count / totalCount) * 100) : 0
                                 const isMyChoice = choice.id === userChoiceId
                                 return (
                                     <div key={choice.id}>
                                         <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                <span className="text-[10px] text-content-muted shrink-0 w-3">{i + 1}</span>
-                                                <p className={`text-[13px] line-clamp-1 ${isMyChoice ? 'font-semibold text-primary' : 'text-content-secondary'}`}>
-                                                    {choice.label}
-                                                </p>
-                                                {isMyChoice && (
-                                                    <span className="text-[10px] text-primary shrink-0 font-bold">✓</span>
-                                                )}
+                                            <div className="flex items-center gap-0.5 min-w-0 flex-1">
+                                                <span className="text-[10px] leading-none text-content-muted shrink-0 w-3">{i + 1}</span>
+                                                <div className="flex items-center gap-0.5 min-w-0 flex-1">
+                                                    {isMyChoice && (
+                                                        <Check className="w-3.5 h-3.5 text-primary shrink-0" strokeWidth={2.5} />
+                                                    )}
+                                                    <p className={`text-[13px] leading-none line-clamp-1 ${isMyChoice ? 'font-semibold text-primary' : 'text-content-secondary'}`}>
+                                                        {choice.label}
+                                                    </p>
+                                                </div>
                                             </div>
                                             <span className={`text-xs font-bold ml-2 shrink-0 ${isMyChoice ? 'text-primary' : 'text-content-secondary'}`}>
                                                 {ratio}%
@@ -221,7 +234,7 @@ export default function VotePreview({ initialVotes }: Props) {
                     )}
 
                     {/* 푸터 액션 */}
-                    <div className="mt-auto">
+                    <div className="mt-auto pt-5">
                         {showResults ? (
                             <Link
                                 href={`/issue/${issueId}#section-vote`}

@@ -50,7 +50,7 @@ export default async function MypagePage() {
         // 투표 참여
         admin
             .from('user_votes')
-            .select('id, created_at, vote_choices(label, count), votes(id, title, phase, issues(id, title), vote_choices(count))')
+            .select('id, created_at, vote_choice_id, vote_choices(id, label, count), votes(id, title, phase, issues(id, title, category), vote_choices(id, count))')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(30),

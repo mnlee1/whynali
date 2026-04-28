@@ -22,6 +22,7 @@ import { useState, useEffect, useRef } from 'react'
 import Masonry from 'react-masonry-css'
 import { getIssues } from '@/lib/api/issues'
 import IssueCard from './IssueCard'
+import SuggestedIssues from './SuggestedIssues'
 import SearchBar from '@/components/common/SearchBar'
 import Tooltip from '@/components/common/Tooltip'
 import type { Issue } from '@/types/issue'
@@ -62,6 +63,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
+    const [suggestedIssues, setSuggestedIssues] = useState<Issue[]>([])
 
     const offsetRef = useRef(initialData?.data.length ?? 0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -122,6 +124,23 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             setIssues(response.data)
             setTotal(response.total)
             offsetRef.current = response.data.length
+
+            // 검색어 있을 때 추천 이슈 로드 (결과 있든 없든) - 중복 제외
+            if (searchQuery) {
+                const suggested = await getIssues({
+                    category,
+                    sort: 'heat',
+                    limit: 12,  // 중복 제거 후 6개 확보용
+                    offset: 0,
+                })
+                const existingIds = new Set(response.data.map(i => i.id))
+                const filtered = suggested.data
+                    .filter(i => !existingIds.has(i.id))
+                    .slice(0, 6)
+                setSuggestedIssues(filtered)
+            } else {
+                setSuggestedIssues([])
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : '목록 조회 실패')
         } finally {
@@ -186,6 +205,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                     value={searchInput}
                     onChange={handleSearchChange}
                     onSearch={handleSearch}
+                    category={category}
                 />
             )}
 
@@ -276,9 +296,15 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
             {/* 빈 목록 */}
             {!loading && issues.length === 0 && (
-                <div className="text-center py-12 text-content-secondary text-sm">
-                    이슈가 없습니다.
-                </div>
+                searchQuery ? (
+                    <p className="text-sm text-content-muted text-center py-6">
+                        &lsquo;{searchQuery}&rsquo;에 대한 결과가 없습니다.
+                    </p>
+                ) : (
+                    <div className="text-center py-12 text-content-secondary text-sm">
+                        이슈가 없습니다.
+                    </div>
+                )
             )}
 
             {/* 이슈 카드 리스트 */}
@@ -324,6 +350,11 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                         </button>
                     </div>
                 )
+            )}
+
+            {/* 추천 이슈 - 검색어 있을 때, 중복 제외한 화력 상위 이슈 */}
+            {!loading && searchQuery && (
+                <SuggestedIssues issues={suggestedIssues} />
             )}
 
         </div>

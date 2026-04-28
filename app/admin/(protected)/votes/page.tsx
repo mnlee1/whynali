@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import AdminPagination from '@/components/admin/AdminPagination'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
+import IssueSearchSelect from '@/components/admin/IssueSearchSelect'
 
 interface Issue {
     id: string
@@ -421,39 +422,18 @@ export default function AdminVotesPage() {
                     {/* 이슈 선택 */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-content-secondary">대상 이슈 (승인된 이슈만)</label>
-                        {loadingIssues ? (
-                            <p className="text-sm text-content-muted">이슈 목록 불러오는 중...</p>
-                        ) : (
-                            <div className="relative">
-                                <select
-                                    value={selectedIssue?.id ?? ''}
-                                    onChange={(e) => {
-                                        const issue = approvedIssues.find((i) => i.id === e.target.value)
-                                        setSelectedIssue(issue ?? null)
-                                        setVoteTitle('')
-                                        setVoteChoices(['찬성', '반대', '중립'])
-                                        setIsAiFilled(false)
-                                        setFormError(null)
-                                    }}
-                                    className="w-full pl-3 pr-8 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface appearance-none"
-                                >
-                                    <option value="">이슈를 선택하세요</option>
-                                    {approvedIssues.map((issue) => (
-                                        <option key={issue.id} value={issue.id}>
-                                            {issue.title}
-                                        </option>
-                                    ))}
-                                </select>
-                                <svg
-                                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 20 20"
-                                    fill="currentColor"
-                                >
-                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                        )}
+                        <IssueSearchSelect
+                            issues={approvedIssues}
+                            value={selectedIssue}
+                            loading={loadingIssues}
+                            onChange={(issue) => {
+                                setSelectedIssue(issue)
+                                setVoteTitle('')
+                                setVoteChoices(['찬성', '반대', '중립'])
+                                setIsAiFilled(false)
+                                setFormError(null)
+                            }}
+                        />
                     </div>
 
                     {/* 투표 제목 */}
@@ -636,19 +616,19 @@ export default function AdminVotesPage() {
                                     className="w-4 h-4 accent-primary"
                                 />
                             </th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
+                            <th className="w-56 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 투표 제목
                             </th>
                             <th className="w-36 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 선택지
                             </th>
-                            <th className="w-48 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
+                            <th className="w-72 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 연결 이슈
                             </th>
                             <th className="w-24 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 상태
                             </th>
-                            <th className="w-28 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
+                            <th className="w-36 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
                                 생성일
                             </th>
                             <th className="w-40 px-4 py-3 text-left text-sm font-medium text-content-muted uppercase">
@@ -709,7 +689,7 @@ export default function AdminVotesPage() {
                                         <td className="px-4 py-3 text-sm text-content-secondary">
                                             <ul className="space-y-1">
                                                 {vote.vote_choices.map((c) => (
-                                                    <li key={c.id} className="text-xs">
+                                                    <li key={c.id} className="text-xs whitespace-nowrap">
                                                         {c.label}
                                                         {vote.phase !== '대기' && (
                                                             <span className="text-content-muted ml-1">
@@ -720,12 +700,12 @@ export default function AdminVotesPage() {
                                                 ))}
                                             </ul>
                                         </td>
-                                        <td className="px-4 py-3 text-sm max-w-xs">
+                                        <td className="px-4 py-3 text-sm">
                                             {vote.issues ? (
                                                 <Link
                                                     href={`/issue/${vote.issues.id}`}
                                                     target="_blank"
-                                                    className="text-primary hover:underline line-clamp-2 break-words"
+                                                    className="text-primary hover:underline line-clamp-1"
                                                 >
                                                     {decodeHtml(vote.issues.title)}
                                                 </Link>
@@ -734,7 +714,7 @@ export default function AdminVotesPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${PHASE_STYLE[vote.phase]}`}>
+                                            <span className={`inline-block px-2 py-1 text-xs rounded-full whitespace-nowrap ${PHASE_STYLE[vote.phase]}`}>
                                                 {vote.phase}
                                             </span>
                                             {vote.phase !== '대기' && (
@@ -743,7 +723,7 @@ export default function AdminVotesPage() {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-content-secondary">
+                                        <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                             {formatDate(vote.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">

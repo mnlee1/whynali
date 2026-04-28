@@ -14,7 +14,7 @@ import { validateEmail } from '@/lib/validate-email'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 
-type IssueRef = { id: string; title: string }
+type IssueRef = { id: string; title: string; category?: string }
 
 type CommentRow = {
     id: string
@@ -41,13 +41,14 @@ type DiscussionRow = {
 type VoteRow = {
     id: string
     created_at: string
-    vote_choices: { label: string; count: number } | null
+    vote_choice_id: string | null
+    vote_choices: { id: string; label: string; count: number } | null
     votes: {
         id: string
         title: string | null
         phase: string
         issues: IssueRef | null
-        vote_choices: { count: number }[]
+        vote_choices: { id: string; count: number }[]
     } | null
 }
 
@@ -533,24 +534,27 @@ export default function MypageClient({
                         <p className="text-center text-content-muted py-12 text-sm">작성한 댓글이 없습니다.</p>
                     ) : (
                         comments.map((c) => (
-                            <div key={c.id} className="card-hover p-4">
+                            <div
+                                key={c.id}
+                                className="card-hover p-4 cursor-pointer"
+                                onClick={() => {
+                                    if (c.issues) window.location.href = `/issue/${c.issues.id}#comment-${c.id}`
+                                }}
+                            >
                                 {c.issues && (
-                                    <Link
-                                        href={`/issue/${c.issues.id}`}
-                                        className="text-[13px] font-medium text-primary hover:underline mb-1.5 block truncate"
-                                    >
-                                        {c.issues.title}
-                                    </Link>
+                                    <div className="mb-3 pb-3 border-b border-border-muted">
+                                        <p className="text-xs text-content-muted truncate">{c.issues.title}</p>
+                                    </div>
                                 )}
-                                <p className="text-sm text-content-primary line-clamp-2">{c.body}</p>
-                                <div className="flex items-center justify-between mt-4">
-                                    <p className="text-xs text-content-muted">{formatDate(c.created_at)}</p>
-                                    <div className="flex items-center gap-1">
-                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                <p className="text-sm text-content-primary line-clamp-3 mb-3">{c.body}</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-content-muted">작성일 <span className="ml-1">{formatDate(c.created_at)}</span></p>
+                                    <div className="flex items-center gap-0.5">
+                                        <div className="flex items-center gap-1 text-xs px-2 py-0.5 text-content-muted">
                                             <ThumbsUp className="w-3.5 h-3.5" />
                                             <span>{c.like_count}</span>
                                         </div>
-                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                        <div className="flex items-center gap-1 text-xs px-2 py-0.5 text-content-muted">
                                             <ThumbsDown className="w-3.5 h-3.5" />
                                             <span>{c.dislike_count}</span>
                                         </div>
@@ -569,29 +573,40 @@ export default function MypageClient({
                         <p className="text-center text-content-muted py-12 text-sm">참여한 토론이 없습니다.</p>
                     ) : (
                         discussions.map((d) => (
-                            <div key={d.id} className="card-hover p-4">
-                                {d.discussion_topics?.issues && (
-                                    <Link
-                                        href={`/issue/${d.discussion_topics.issues.id}`}
-                                        className="text-[13px] font-medium text-primary hover:underline mb-1 block truncate"
-                                    >
-                                        {d.discussion_topics.issues.title}
-                                    </Link>
+                            <div
+                                key={d.id}
+                                className="card-hover p-4 cursor-pointer"
+                                onClick={() => {
+                                    if (d.discussion_topics) window.location.href = `/community/${d.discussion_topics.id}#dc-${d.id}`
+                                }}
+                            >
+                                {(d.discussion_topics?.issues || d.discussion_topics) && (
+                                    <div className="mb-3 pb-3 border-b border-border-muted space-y-1">
+                                        {d.discussion_topics?.issues && (
+                                            <Link
+                                                href={`/issue/${d.discussion_topics.issues.id}`}
+                                                className="text-xs text-content-muted hover:underline block truncate"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {d.discussion_topics.issues.title}
+                                            </Link>
+                                        )}
+                                        {d.discussion_topics && (
+                                            <p className="text-[13px] font-medium text-content-secondary line-clamp-2">
+                                                {d.discussion_topics.body}
+                                            </p>
+                                        )}
+                                    </div>
                                 )}
-                                {d.discussion_topics && (
-                                    <p className="text-[13px] text-content-secondary mb-1.5 line-clamp-1">
-                                        토론 주제: {d.discussion_topics.body}
-                                    </p>
-                                )}
-                                <p className="text-sm text-content-primary line-clamp-2">{d.body}</p>
-                                <div className="flex items-center justify-between mt-4">
-                                    <p className="text-xs text-content-muted">{formatDate(d.created_at)}</p>
-                                    <div className="flex items-center gap-1">
-                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                <p className="text-sm text-content-primary line-clamp-3 mb-3">{d.body}</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-content-muted">작성일 <span className="ml-1">{formatDate(d.created_at)}</span></p>
+                                    <div className="flex items-center gap-0.5">
+                                        <div className="flex items-center gap-1 text-xs px-2 py-0.5 text-content-muted">
                                             <ThumbsUp className="w-3.5 h-3.5" />
                                             <span>{d.like_count}</span>
                                         </div>
-                                        <div className="flex items-center gap-1 text-xs px-2.5 py-1 text-content-secondary">
+                                        <div className="flex items-center gap-1 text-xs px-2 py-0.5 text-content-muted">
                                             <ThumbsDown className="w-3.5 h-3.5" />
                                             <span>{d.dislike_count}</span>
                                         </div>
@@ -609,48 +624,115 @@ export default function MypageClient({
                     {votes.length === 0 ? (
                         <p className="text-center text-content-muted py-12 text-sm">참여한 투표가 없습니다.</p>
                     ) : (
-                        votes.map((v) => {
+                        <>
+                        {/* 투표 통계 요약 */}
+                        {(() => {
+                            const validVotes = votes.filter(v => v.vote_choice_id && v.votes?.vote_choices?.length)
+                            const matchCount = validVotes.filter(v => {
+                                const allChoices = v.votes!.vote_choices
+                                const maxCount = Math.max(...allChoices.map((c: { id: string; count: number }) => c.count))
+                                const topChoiceId = allChoices.find((c: { id: string; count: number }) => c.count === maxCount)?.id
+                                return v.vote_choice_id === topChoiceId
+                            }).length
+                            const matchRatio = validVotes.length > 0 ? Math.round((matchCount / validVotes.length) * 100) : 0
+
+                            const categoryMap: Record<string, { total: number; match: number }> = {}
+                            validVotes.forEach(v => {
+                                const cat = v.votes?.issues?.category ?? '기타'
+                                const allChoices = v.votes!.vote_choices
+                                const maxCount = Math.max(...allChoices.map((c: { id: string; count: number }) => c.count))
+                                const topChoiceId = allChoices.find((c: { id: string; count: number }) => c.count === maxCount)?.id
+                                const isMatch = v.vote_choice_id === topChoiceId
+                                if (!categoryMap[cat]) categoryMap[cat] = { total: 0, match: 0 }
+                                categoryMap[cat].total++
+                                if (isMatch) categoryMap[cat].match++
+                            })
+
+                            return (
+                                <div className="card p-4 mb-1">
+                                    <h3 className="text-[13px] font-semibold text-content-secondary mb-3">나의 투표 성향</h3>
+                                    <div className="grid grid-cols-3 gap-2 mb-4">
+                                        <div className="bg-surface-muted rounded-xl p-3 text-center">
+                                            <p className="text-2xl font-bold text-content-primary">{validVotes.length}</p>
+                                            <p className="text-[13px] text-content-muted mt-0.5">총 참여</p>
+                                        </div>
+                                        <div className="bg-primary-light/40 rounded-xl p-3 text-center">
+                                            <p className="text-2xl font-bold text-primary">{matchRatio}%</p>
+                                            <p className="text-[13px] text-primary/70 mt-0.5">다수 의견 일치</p>
+                                        </div>
+                                        <div className="bg-surface-muted rounded-xl p-3 text-center">
+                                            <p className="text-2xl font-bold text-content-secondary">{100 - matchRatio}%</p>
+                                            <p className="text-[13px] text-content-muted mt-0.5">나만의 선택</p>
+                                        </div>
+                                    </div>
+                                    {Object.keys(categoryMap).length > 1 && (
+                                        <div>
+                                            <p className="text-[13px] font-semibold text-content-secondary mb-2">카테고리별 다수 의견 일치율</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {Object.entries(categoryMap).map(([cat, { total, match }]) => {
+                                                    const pct = Math.round((match / total) * 100)
+                                                    return (
+                                                        <div key={cat} className="bg-surface-muted rounded-xl p-3">
+                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                <span className="text-[13px] font-medium text-content-secondary">{cat}</span>
+                                                                <span className="text-[13px] font-bold text-primary">{pct}%</span>
+                                                            </div>
+                                                            <p className="text-[12px] text-content-muted">{total}번 중 {match}번 일치</p>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })()}
+                        {votes.map((v) => {
                             const myCount = v.vote_choices?.count ?? 0
                             const total = (v.votes?.vote_choices ?? []).reduce((sum, c) => sum + (c.count ?? 0), 0)
                             const ratio = total > 0 ? Math.round((myCount / total) * 100) : 0
                             return (
-                                <div key={v.id} className="card-hover p-4">
-                                    {v.votes?.issues && (
-                                        <Link
-                                            href={`/issue/${v.votes.issues.id}`}
-                                            className="text-[13px] font-medium text-primary hover:underline mb-1 block truncate"
-                                        >
-                                            {v.votes.issues.title}
-                                        </Link>
-                                    )}
-                                    <div className="flex items-center gap-2 mb-2">
-                                        {v.votes?.phase && (
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
-                                                v.votes.phase === '진행중'
-                                                    ? 'bg-green-50 text-green-700'
-                                                    : 'bg-surface-subtle text-content-muted'
-                                            }`}>
-                                                {v.votes.phase}
-                                            </span>
+                                <div key={v.id} className="card-hover p-4 cursor-pointer" onClick={() => {
+                                    if (v.votes?.issues) window.location.href = `/issue/${v.votes.issues.id}#section-vote`
+                                }}>
+                                    {/* 컨텍스트: 이슈 + 투표 정보 */}
+                                    <div className="mb-3 pb-3 border-b border-border-muted">
+                                        {v.votes?.issues && (
+                                            <p className="text-xs text-content-muted truncate mb-1.5">{v.votes.issues.title}</p>
                                         )}
-                                        {v.votes?.title && (
-                                            <p className="text-sm font-medium text-content-primary line-clamp-1">{v.votes.title}</p>
-                                        )}
-                                    </div>
-                                    {v.vote_choices && (
                                         <div className="flex items-center gap-2">
+                                            {v.votes?.phase && (
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                                                    v.votes.phase === '진행중'
+                                                        ? 'bg-green-50 text-green-700'
+                                                        : 'bg-surface-subtle text-content-muted'
+                                                }`}>
+                                                    {v.votes.phase}
+                                                </span>
+                                            )}
+                                            {v.votes?.title && (
+                                                <p className="text-[13px] font-medium text-content-primary line-clamp-2">{v.votes.title}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* 내 선택 */}
+                                    {v.vote_choices && (
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="text-xs text-content-muted shrink-0">내 선택</span>
                                             <span className="text-xs px-2 py-0.5 bg-primary-light text-primary rounded-full font-medium">
-                                                {v.vote_choices.label} 선택
+                                                {v.vote_choices.label}
                                             </span>
-                                            <span className="text-xs text-content-muted font-medium">
-                                                <span className="text-primary font-bold">{myCount.toLocaleString()}</span>표
+                                            <span className="text-xs text-content-muted ml-auto">
+                                                {myCount.toLocaleString()}표 · {ratio}%
                                             </span>
                                         </div>
                                     )}
-                                    <p className="text-xs text-content-muted mt-4">{formatDate(v.created_at)}</p>
+                                    {/* 날짜 */}
+                                    <p className="text-xs text-content-muted">투표일 <span className="ml-1">{formatDate(v.created_at)}</span></p>
                                 </div>
                             )
-                        })
+                        })}
+                        </>
                     )}
                 </div>
             )}

@@ -8,10 +8,6 @@
  * success_count / fail_count: 성공/실패 호출 수 분리 기록
  * (migration: add_api_usage_success_fail_count.sql)
  *
- * Claude 선불 크레딧 충전 주기 추적:
- * claude_credit_cycles 테이블에 충전 이력을 기록하고,
- * 현재 활성 충전 주기 기준으로 사용액/잔액/소진 예상일을 계산한다.
- * (migration: add_claude_credit_cycles.sql)
  */
 
 import { supabaseAdmin } from './supabase/server'
@@ -210,100 +206,6 @@ export function calculateNaverCost(callCount: number): number {
 }
 
 /**
- * 활성 충전 주기 기간의 Claude 사용량 집계
- *
- * claude_credit_cycles에서 현재 활성 충전건을 조회하고,
- * 충전일 이후의 api_usage를 합산해 사용액/잔액/소진 예상일을 반환한다.
- *
- * 테이블 미생성(마이그레이션 미적용) 또는 충전 이력 없음이면 null을 반환한다.
- */
-async function getClaudeCreditCycleSummary() {
-    try {
-    const { data: activeCycle, error: cycleError } = await supabaseAdmin
-        .from('claude_credit_cycles')
-        .select('*')
-        .eq('is_active', true)
-        .single()
-
-    // 테이블 미존재(PGRST116 외 에러) 또는 행 없음 모두 null 반환
-    if (cycleError || !activeCycle) return null
-
-    const today = new Date().toISOString().split('T')[0]
-    const chargedAt = activeCycle.charged_at
-
-    const { data: cycleData } = await supabaseAdmin
-        .from('api_usage')
-        .select('*')
-        .eq('api_name', 'claude')
-        .gte('date', chargedAt)
-        .order('date', { ascending: true })
-
-    let inputTokens = 0
-    let outputTokens = 0
-    let calls = 0
-    let inputTokensToday = 0
-    let outputTokensToday = 0
-
-    for (const row of cycleData || []) {
-        inputTokens += row.input_tokens || 0
-        outputTokens += row.output_tokens || 0
-        calls += row.call_count || 0
-        if (row.date === today) {
-            inputTokensToday += row.input_tokens || 0
-            outputTokensToday += row.output_tokens || 0
-        }
-    }
-
-    const usedUsd = calculateClaudeCost(inputTokens, outputTokens)
-    const amountUsd = Number(activeCycle.amount_usd)
-    const remainingUsd = Math.max(0, amountUsd - usedUsd)
-    const usedPercent = amountUsd > 0 ? Math.min(100, (usedUsd / amountUsd) * 100) : 0
-
-    // 충전일부터 오늘까지 경과 일수 (최소 1)
-    const chargedDate = new Date(chargedAt)
-    const todayDate = new Date(today)
-    const elapsedDays = Math.max(
-        1,
-        Math.floor((todayDate.getTime() - chargedDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-    )
-    const dailyAvgUsd = usedUsd / elapsedDays
-
-    // 잔액 소진 예상일 (일평균 > 0일 때만)
-    let estimatedDepletionDate: string | null = null
-    if (dailyAvgUsd > 0 && remainingUsd > 0) {
-        const daysLeft = Math.ceil(remainingUsd / dailyAvgUsd)
-        const depletionDate = new Date(todayDate)
-        depletionDate.setDate(depletionDate.getDate() + daysLeft)
-        estimatedDepletionDate = depletionDate.toISOString().split('T')[0]
-    }
-
-    return {
-        id: activeCycle.id as string,
-        chargedAt: chargedAt as string,
-        amountUsd,
-        usedUsd,
-        remainingUsd,
-        usedPercent,
-        elapsedDays,
-        dailyAvgUsd,
-        estimatedDepletionDate,
-        memo: (activeCycle.memo ?? null) as string | null,
-        calls,
-        tokens: {
-            input: inputTokens,
-            output: outputTokens,
-            total: inputTokens + outputTokens,
-        },
-        todayCost: calculateClaudeCost(inputTokensToday, outputTokensToday),
-    }
-    } catch (err) {
-        // 테이블 미생성 등 예외 상황에서도 메인 집계가 실패하지 않도록 null 반환
-        console.warn('[getClaudeCreditCycleSummary] 충전 주기 조회 실패 (마이그레이션 미적용?):', err)
-        return null
-    }
-}
-
-/**
  * AI 키 차단 상태 조회 (Rate Limit 감지용)
  */
 async function getAiKeyStatus(provider: 'claude' | 'groq') {
@@ -347,13 +249,12 @@ export async function getAllApiCostsSummary() {
 
         console.log('[getAllApiCostsSummary] 조회 기간:', { today, yesterday, monthStart })
 
-        const [monthlyResult, creditCycle, claudeKeyStatus, groqKeyStatus] = await Promise.all([
+        const [monthlyResult, claudeKeyStatus, groqKeyStatus] = await Promise.all([
             supabaseAdmin
                 .from('api_usage')
                 .select('*')
                 .gte('date', monthStart)
                 .order('date', { ascending: true }),
-            getClaudeCreditCycleSummary(),
             getAiKeyStatus('claude'),
             getAiKeyStatus('groq'),
         ])
@@ -450,8 +351,6 @@ export async function getAllApiCostsSummary() {
                 },
                 successes: claudeSuccesses,
                 failures: claudeFailures,
-                // 충전 주기별 현황 (충전 이력이 있을 때만)
-                creditCycle: creditCycle ?? null,
                 // 현재 키 차단 상태 (Rate Limit 감지용)
                 keyStatus: claudeKeyStatus,
             },

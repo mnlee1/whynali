@@ -1,5 +1,16 @@
 'use client'
 
+/**
+ * components/issue/TimelineSection.tsx
+ *
+ * [이슈 타임라인 컴포넌트]
+ *
+ * 이슈의 진행 단계(발단→전개→파생→진정→종결)를 카드 형태로 시각화합니다.
+ * 우선순위: initialPoints(날짜+내용) > initialSummaries.bullets(AI 요약 fallback)
+ * - points가 있으면 각 포인트를 날짜와 함께 카드 안에 표시
+ * - points가 없는 단계는 summaries의 bullets로 fallback
+ */
+
 import { useState, useEffect } from 'react'
 import { Bot } from 'lucide-react'
 
@@ -13,11 +24,27 @@ interface StageSummary {
     dateEnd: string
 }
 
+interface TimelinePoint {
+    stage: TimelineStage
+    title: string
+    occurredAt: string
+    aiSummary: string | null
+}
+
 interface TimelineSectionProps {
     issueId: string
     issueStatus?: string
     issueUpdatedAt?: string
     initialSummaries?: StageSummary[]
+    initialPoints?: TimelinePoint[]
+}
+
+/** "M월 D일" 형식 포맷 */
+function formatDate(dateStr: string): string {
+    if (!dateStr) return ''
+    const dt = new Date(dateStr)
+    if (isNaN(dt.getTime())) return ''
+    return `${dt.getMonth() + 1}월 ${dt.getDate()}일`
 }
 
 const STAGE_STYLES: Record<TimelineStage, {
@@ -27,6 +54,7 @@ const STAGE_STYLES: Record<TimelineStage, {
     headerText: string
     headerLine: string
     card: string
+    dateBadge: string
     bullet: string
 }> = {
     '발단': {
@@ -36,6 +64,7 @@ const STAGE_STYLES: Record<TimelineStage, {
         headerText: 'text-blue-600',
         headerLine: 'bg-blue-100',
         card: 'bg-blue-50 border-blue-200',
+        dateBadge: 'text-blue-500',
         bullet: 'bg-blue-300',
     },
     '전개': {
@@ -45,6 +74,7 @@ const STAGE_STYLES: Record<TimelineStage, {
         headerText: 'text-green-600',
         headerLine: 'bg-green-100',
         card: 'bg-green-50 border-green-200',
+        dateBadge: 'text-green-500',
         bullet: 'bg-green-300',
     },
     '파생': {
@@ -54,6 +84,7 @@ const STAGE_STYLES: Record<TimelineStage, {
         headerText: 'text-yellow-600',
         headerLine: 'bg-yellow-100',
         card: 'bg-yellow-50 border-yellow-200',
+        dateBadge: 'text-yellow-500',
         bullet: 'bg-yellow-300',
     },
     '진정': {
@@ -63,6 +94,7 @@ const STAGE_STYLES: Record<TimelineStage, {
         headerText: 'text-gray-500',
         headerLine: 'bg-gray-100',
         card: 'bg-gray-50 border-gray-200',
+        dateBadge: 'text-gray-400',
         bullet: 'bg-gray-300',
     },
     '종결': {
@@ -72,12 +104,20 @@ const STAGE_STYLES: Record<TimelineStage, {
         headerText: 'text-gray-500',
         headerLine: 'bg-gray-100',
         card: 'bg-gray-50 border-gray-200',
+        dateBadge: 'text-gray-400',
         bullet: 'bg-gray-300',
     },
 }
 
-export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, initialSummaries }: TimelineSectionProps) {
+export default function TimelineSection({
+    issueId,
+    issueStatus,
+    issueUpdatedAt,
+    initialSummaries,
+    initialPoints,
+}: TimelineSectionProps) {
     const [summaries, setSummaries] = useState<StageSummary[]>(initialSummaries ?? [])
+    const [points, setPoints] = useState<TimelinePoint[]>(initialPoints ?? [])
     const [loading, setLoading] = useState(!initialSummaries)
     const [error, setError] = useState<string | null>(null)
 
@@ -129,7 +169,7 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, 
         )
     }
 
-    if (summaries.length === 0) {
+    if (summaries.length === 0 && points.length === 0) {
         return (
             <div className="text-center py-8 space-y-3">
                 <div className="text-4xl">⏳</div>
@@ -144,9 +184,23 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, 
     }
 
     const isClosed = issueStatus === '종결'
-    const closeSummary = summaries.find(s => s.stage === '종결')
     const stageOrder: TimelineStage[] = ['발단', '전개', '파생', '진정']
-    const stages = stageOrder.filter(s => summaries.find(sum => sum.stage === s))
+
+    // summaries 기준으로 단계 목록 구성, 없으면 points에서 추출
+    const stagesFromSummaries = stageOrder.filter(s => summaries.find(sum => sum.stage === s))
+    const stagesFromPoints = stageOrder.filter(s => points.find(p => p.stage === s))
+    const stages = stagesFromSummaries.length > 0 ? stagesFromSummaries : stagesFromPoints
+
+    // 단계별 포인트 그루핑 (시간순 정렬)
+    const pointsByStage = new Map<TimelineStage, TimelinePoint[]>()
+    for (const stage of stageOrder) {
+        const stagePoints = points
+            .filter(p => p.stage === stage)
+            .sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime())
+        if (stagePoints.length > 0) pointsByStage.set(stage, stagePoints)
+    }
+
+    const closeSummary = summaries.find(s => s.stage === '종결')
 
     return (
         <div className="space-y-0">
@@ -160,9 +214,10 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, 
             </div>
 
             {stages.map((stage, index) => {
-                const summary = summaries.find(s => s.stage === stage)!
+                const summary = summaries.find(s => s.stage === stage)
                 const style = STAGE_STYLES[stage]
                 const isLast = index === stages.length - 1 && !isClosed
+                const stagePoints = pointsByStage.get(stage)
 
                 return (
                     <div key={stage}>
@@ -186,21 +241,38 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, 
                             <div className="flex-1 pb-3">
                                 <div className={`p-3 border rounded-xl ${style.card}`}>
                                     {/* 단계 타이틀 */}
-                                    {summary.stageTitle && (
+                                    {summary?.stageTitle && (
                                         <p className={`text-sm font-semibold mb-2 ${style.headerText}`}>
                                             {summary.stageTitle}
                                         </p>
                                     )}
-                                    {/* bullet points */}
-                                    {summary.bullets.length > 0 && (
-                                        <ul className="space-y-1.5">
-                                            {summary.bullets.map((bullet, i) => (
-                                                <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
-                                                    <span className={`w-1 h-1 rounded-full shrink-0 mt-2 ${style.bullet}`} />
-                                                    {bullet}
+
+                                    {/* 포인트 목록 (날짜 + 내용) */}
+                                    {stagePoints && stagePoints.length > 0 ? (
+                                        <ul className="space-y-2">
+                                            {stagePoints.map((point, i) => (
+                                                <li key={i} className="flex items-start gap-2.5">
+                                                    <span className={`text-xs font-medium shrink-0 mt-0.5 w-14 ${style.dateBadge}`}>
+                                                        {formatDate(point.occurredAt)}
+                                                    </span>
+                                                    <span className="text-sm text-content-secondary leading-relaxed">
+                                                        {point.aiSummary || point.title}
+                                                    </span>
                                                 </li>
                                             ))}
                                         </ul>
+                                    ) : (
+                                        /* 포인트 없을 때 — summaries bullets fallback */
+                                        summary && summary.bullets.length > 0 && (
+                                            <ul className="space-y-1.5">
+                                                {summary.bullets.map((bullet, i) => (
+                                                    <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
+                                                        <span className={`w-1 h-1 rounded-full shrink-0 mt-2 ${style.bullet}`} />
+                                                        {bullet}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )
                                     )}
                                 </div>
                             </div>
@@ -225,14 +297,16 @@ export default function TimelineSection({ issueId, issueStatus, issueUpdatedAt, 
                             <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
                                 {issueUpdatedAt && (
                                     <span className="text-xs text-gray-400 block mb-1">
-                                        {new Date(issueUpdatedAt).toLocaleDateString('ko-KR')}
+                                        {formatDate(issueUpdatedAt)}
                                     </span>
                                 )}
                                 {closeSummary ? (
                                     <>
-                                        <p className="text-sm font-semibold text-gray-600 mb-2">
-                                            {closeSummary.stageTitle}
-                                        </p>
+                                        {closeSummary.stageTitle && (
+                                            <p className="text-sm font-semibold text-gray-600 mb-2">
+                                                {closeSummary.stageTitle}
+                                            </p>
+                                        )}
                                         <ul className="space-y-1.5">
                                             {closeSummary.bullets.map((bullet, i) => (
                                                 <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
