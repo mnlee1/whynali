@@ -19,35 +19,45 @@ export async function GET(request: NextRequest) {
         return new NextResponse('Missing url parameter', { status: 400 })
     }
 
-    try {
-        const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://pixabay.com/',
-                'Accept': 'image/webp,image/jpeg,image/*,*/*;q=0.8',
-            },
-            redirect: 'follow',
-        })
+    const MAX_RETRIES = 3
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            if (attempt > 0) {
+                await new Promise(r => setTimeout(r, attempt * 800))
+            }
 
-        if (!response.ok) {
-            return new NextResponse('Image fetch failed', { status: 502 })
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer': 'https://pixabay.com/',
+                    'Accept': 'image/webp,image/jpeg,image/*,*/*;q=0.8',
+                },
+                redirect: 'follow',
+            })
+
+            if (!response.ok) {
+                if (attempt < MAX_RETRIES - 1) continue
+                return new NextResponse('Image fetch failed', { status: 502 })
+            }
+
+            const contentType = response.headers.get('Content-Type') || ''
+            if (!contentType.startsWith('image/')) {
+                if (attempt < MAX_RETRIES - 1) continue
+                return new NextResponse('Not an image', { status: 502 })
+            }
+
+            const buffer = Buffer.from(await response.arrayBuffer())
+
+            return new NextResponse(buffer, {
+                headers: {
+                    'Content-Type': contentType,
+                    'Cache-Control': 'public, max-age=3600',
+                },
+            })
+        } catch {
+            if (attempt < MAX_RETRIES - 1) continue
         }
-
-        const contentType = response.headers.get('Content-Type') || ''
-        if (!contentType.startsWith('image/')) {
-            // 이미지가 아닌 응답(HTML 로그인 페이지 등) 반환 시 차단
-            return new NextResponse('Not an image', { status: 502 })
-        }
-
-        const buffer = Buffer.from(await response.arrayBuffer())
-
-        return new NextResponse(buffer, {
-            headers: {
-                'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=3600',
-            },
-        })
-    } catch {
-        return new NextResponse('Image proxy error', { status: 502 })
     }
+
+    return new NextResponse('Image proxy error', { status: 502 })
 }
