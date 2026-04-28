@@ -28,6 +28,9 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
     const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
     if (!apiKey) return null
 
+    // [테스트], [속보] 등 대괄호 프리픽스 제거
+    const cleanTitle = title.replace(/^\[.*?\]\s*/, '').trim()
+
     try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -42,33 +45,42 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
                         role: 'user',
                         content: `You pick a Pixabay background photo for Korean news thumbnails.
 Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT of this news.
-Avoid person, face, crowd, portrait keywords. Focus on visually recognizable locations or objects.
+Focus on visually recognizable locations, objects, or symbolic scenes.
 
 Tone: append ::dark or ::bright based on topic sentiment.
-- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster
-- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive
+- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, tax evasion, doping, fraud
+- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, love, romance
 
 Category: ${category}
 Examples:
 - [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
-- [연예] "지수 크레딧 삭제 논란" → "music studio dark::dark"
-- [연예] "아이유 콘서트 매진" → "stage spotlight audience::bright"
+- [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
 - [연예] "배우 음주운전 적발" → "night road police::dark"
+- [연예] "아이돌 열애설 공식 인정" → "couple romantic flowers::bright"
+- [연예] "유명 유튜버 세금 탈루 의혹" → "tax document money audit::dark"
+- [연예] "연예인 사생활 폭로 논란" → "dark hallway spotlight::dark"
 - [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
 - [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
+- [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
+- [스포츠] "올림픽 금메달 획득" → "podium medal celebration::bright"
 - [정치] "국회의원 막말 논란" → "government building interior::dark"
 - [정치] "대통령 취임식" → "flag ceremony podium::bright"
+- [정치] "선거 부정 의혹" → "ballot box voting::dark"
 - [사회] "이태원 참사 추모" → "candles memorial night::dark"
 - [사회] "산불 피해 확산" → "forest fire smoke::dark"
+- [사회] "묻지마 범죄 급증" → "dark alley urban night::dark"
 - [경제] "한국은행 기준금리 인하" → "bank building finance::dark"
-- [경제] "삼성전자 노조 파업" → "factory industrial workers::dark"
+- [경제] "삼성전자 노조 파업" → "factory industrial strike::dark"
 - [경제] "코스피 사상 최고치" → "stock market graph city::bright"
+- [경제] "가상화폐 시세 폭등" → "digital currency blockchain::bright"
 - [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"
+- [기술] "개인정보 유출 사고" → "cybersecurity hacker dark::dark"
 - [세계] "이스라엘 공습" → "ruins destruction smoke::dark"
 - [세계] "G7 정상회담" → "conference hall diplomacy::bright"
 - [생활문화] "카페 창업 열풍" → "cafe interior coffee shop::bright"
+- [생활문화] "반려동물 인구 급증" → "pet dog park::bright"
 
-Korean headline: "${title}"
+Korean headline: "${cleanTitle}"
 Reply with ONLY the keywords::tone format, nothing else.`,
                     },
                 ],
@@ -111,10 +123,9 @@ async function searchPixabay(query: string, apiKey: string, needed: number, seed
         key: apiKey,
         q: query,
         image_type: 'photo',
-        orientation: 'horizontal',
         per_page: '50',
         safesearch: 'true',
-        min_width: '1280',
+        min_width: '1080',
     })
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
@@ -138,7 +149,8 @@ async function searchPixabay(query: string, apiKey: string, needed: number, seed
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return shuffled.slice(0, needed).map(h => h.webformatURL || h.largeImageURL).filter(Boolean)
+    // largeImageURL 우선 사용 (webformatURL보다 안정적인 CDN URL)
+    return shuffled.slice(0, needed).map(h => h.largeImageURL || h.webformatURL).filter(Boolean)
 }
 
 /**
