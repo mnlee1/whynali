@@ -45,6 +45,7 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
     )
     const [loading, setLoading] = useState(!initialIssues)
     const [activeIndex, setActiveIndex] = useState(0)
+    const [failedImages, setFailedImages] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
         if (initialIssues) return
@@ -136,15 +137,30 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                                         </div>
 
                                         {/* 썸네일 */}
-                                        {issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0] && (
-                                            <Image
-                                                src={issue.thumbnail_urls[issue.primary_thumbnail_index ?? 0]!}
-                                                alt=""
-                                                width={56}
-                                                height={56}
-                                                className="shrink-0 w-11 h-11 rounded-lg object-cover"
-                                            />
-                                        )}
+                                        {(() => {
+                                            const gradients = [
+                                                'from-pink-400 via-purple-400 to-indigo-400',
+                                                'from-blue-400 via-cyan-400 to-teal-400',
+                                                'from-red-400 via-orange-400 to-amber-400',
+                                                'from-emerald-400 via-teal-400 to-cyan-400',
+                                                'from-violet-400 via-blue-400 to-cyan-400',
+                                            ]
+                                            const gradient = gradients[issues.indexOf(issue) % gradients.length]
+                                            const thumbUrl = issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0]
+                                            const showImage = thumbUrl && !failedImages[issue.id]
+                                            return showImage ? (
+                                                <Image
+                                                    src={thumbUrl}
+                                                    alt=""
+                                                    width={56}
+                                                    height={56}
+                                                    className="shrink-0 w-11 h-11 rounded-lg object-cover"
+                                                    onError={() => setFailedImages(prev => ({ ...prev, [issue.id]: true }))}
+                                                />
+                                            ) : (
+                                                <div className={`shrink-0 w-11 h-11 rounded-lg bg-gradient-to-br ${gradient}`} />
+                                            )
+                                        })()}
                                     </article>
                                 </Link>
                             </li>

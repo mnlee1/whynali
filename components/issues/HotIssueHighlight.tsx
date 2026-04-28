@@ -35,6 +35,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
     const [issues, setIssues] = useState<Issue[]>(initialIssues ?? [])
     const [loading, setLoading] = useState(!initialIssues)
     const [discussionCounts, setDiscussionCounts] = useState<Record<string, number>>({})
+    const [failedImages, setFailedImages] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
         if (initialIssues) return
@@ -113,7 +114,8 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                 ]
                 const gradient = gradients[index % gradients.length]
 
-                const heroImage = issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0] ?? null
+                const rawImage = issue.thumbnail_urls?.[issue.primary_thumbnail_index ?? 0] ?? null
+                const heroImage = rawImage && !failedImages[issue.id] ? rawImage : null
 
                 return (
                     <SwiperSlide key={issue.id}>
@@ -128,6 +130,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
                                         className="object-cover"
                                         priority
                                         sizes="100vw"
+                                        onError={() => setFailedImages(prev => ({ ...prev, [issue.id]: true }))}
                                     />
                                 )}
 

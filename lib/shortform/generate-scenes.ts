@@ -24,7 +24,7 @@ const TITLE_LINE_HEIGHT = 130  // 타이틀 줄 간격 (폰트 92 × 1.41)
 
 const DESC_FONTSIZE = 64
 const DESC_LINE_HEIGHT = 97   // 설명 줄 간격 (폰트 64 × 1.52)
-const BUTTON_GAP = 130       // 설명 bottom → 버튼 top (scene 3만)
+const BUTTON_GAP = 60        // 설명 bottom → 버튼 top (scene 3만)
 const BUTTON_H = 130
 const BUTTON_W = 660
 // ─────────────────────────────────────────────────────────────
