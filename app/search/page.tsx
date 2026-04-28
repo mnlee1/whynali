@@ -1,21 +1,18 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
 import SearchHeader from '@/components/search/SearchHeader'
+import SuggestedIssues from '@/components/issues/SuggestedIssues'
 import { ChevronRight, Eye, MessageSquare, BadgeCheck, Users, MessageCircleMore } from 'lucide-react'
+import type { Issue } from '@/types/issue'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
 
 async function SearchResults({ query }: { query: string }) {
-    if (!query || query.length < 2) {
-        return (
-            <p className="text-sm text-content-secondary">검색어를 2자 이상 입력해 주세요.</p>
-        )
-    }
-
     const admin = createSupabaseAdminClient()
 
     const keywords = query.split(/\s+/).filter((k) => k.length >= 2)
@@ -110,13 +107,31 @@ async function SearchResults({ query }: { query: string }) {
         }
     }
 
+    // 추천 이슈 조회 - 검색 결과와 중복 제외, heat_index 기준 상위 6개
+    let suggestedQuery = admin
+        .from('issues')
+        .select('*')
+        .eq('approval_status', '승인')
+        .order('heat_index', { ascending: false, nullsFirst: false })
+        .limit(matchedIssueIds.length + 6)
+
+    if (matchedIssueIds.length > 0) {
+        suggestedQuery = suggestedQuery.not('id', 'in', `(${matchedIssueIds.join(',')})`)
+    }
+
+    const suggestedResult = await suggestedQuery
+    const suggestedIssues = (suggestedResult.data ?? []).slice(0, 6) as Issue[]
+
     const totalCount = issues.length + discussions.length + votes.length
 
     if (totalCount === 0) {
         return (
-            <p className="text-sm text-content-muted text-center py-12">
-                "{query}"에 대한 검색 결과가 없습니다.
-            </p>
+            <div className="space-y-8">
+                <p className="text-sm text-content-muted text-center py-6">
+                    &ldquo;{query}&rdquo;에 대한 검색 결과가 없습니다.
+                </p>
+                <SuggestedIssues issues={suggestedIssues} />
+            </div>
         )
     }
 
@@ -305,6 +320,13 @@ async function SearchResults({ query }: { query: string }) {
                     </div>
                 </section>
             )}
+
+            {/* 추천 이슈 */}
+            {suggestedIssues.length > 0 && (
+                <div className="mt-12">
+                    <SuggestedIssues issues={suggestedIssues} />
+                </div>
+            )}
         </>
     )
 }
@@ -316,6 +338,11 @@ export default async function SearchPage({
 }) {
     const { q } = await searchParams
     const query = q?.trim() ?? ''
+
+    // 검색어 없이 직접 접근하면 홈으로 리다이렉트
+    if (!query) {
+        redirect('/')
+    }
 
     return (
         <div className="container mx-auto px-4 py-6 md:py-8">

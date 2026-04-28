@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
+import IssueSearchSelect from '@/components/admin/IssueSearchSelect'
 
 interface Issue {
     id: string
@@ -440,38 +441,17 @@ export default function AdminDiscussionsPage() {
                     {/* 이슈 선택 */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-content-secondary">대상 이슈 (승인된 이슈만)</label>
-                        {loadingIssues ? (
-                            <p className="text-sm text-content-muted">이슈 목록 로딩 중...</p>
-                        ) : (
-                            <div className="relative">
-                                <select
-                                    value={selectedIssue?.id ?? ''}
-                                    onChange={(e) => {
-                                        const issue = approvedIssues.find((i) => i.id === e.target.value)
-                                        setSelectedIssue(issue ?? null)
-                                        setNewContent('')
-                                        setIsAiFilled(false)
-                                        setFormError(null)
-                                    }}
-                                    className="w-full pl-3 pr-8 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface appearance-none"
-                                >
-                                    <option value="">이슈를 선택하세요</option>
-                                    {approvedIssues.map((issue) => (
-                                        <option key={issue.id} value={issue.id}>
-                                            {issue.title}
-                                        </option>
-                                    ))}
-                                </select>
-                                <svg
-                                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 20 20"
-                                    fill="currentColor"
-                                >
-                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                        )}
+                        <IssueSearchSelect
+                            issues={approvedIssues}
+                            value={selectedIssue}
+                            loading={loadingIssues}
+                            onChange={(issue) => {
+                                setSelectedIssue(issue)
+                                setNewContent('')
+                                setIsAiFilled(false)
+                                setFormError(null)
+                            }}
+                        />
                     </div>
 
                     {/* 토론 주제 내용 */}

@@ -19,6 +19,8 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 const RETAIN_DAYS = parseInt(process.env.CLEANUP_RETAIN_DAYS ?? '7')
 const STALE_PENDING_HOURS = parseInt(process.env.STALE_PENDING_HOURS ?? '168')
 const STALE_PENDING_MAX_HEAT = parseInt(process.env.STALE_PENDING_MAX_HEAT ?? '15')
+const STALE_PENDING_TOPIC_HOURS = parseInt(process.env.STALE_PENDING_TOPIC_HOURS ?? '168')
+const STALE_PENDING_VOTE_HOURS = parseInt(process.env.STALE_PENDING_VOTE_HOURS ?? '168')
 
 export interface CleanupResult {
     deletedNews: number
@@ -100,6 +102,50 @@ export async function cleanupStalePendingIssues(): Promise<number> {
     if (data && data.length > 0) {
         console.log(`[대기 이슈 정리] ${data.length}개 삭제:`)
         data.forEach(issue => console.log(`  - "${issue.title}" (${issue.id})`))
+    }
+
+    return data?.length ?? 0
+}
+
+export async function cleanupStalePendingDiscussions(): Promise<number> {
+    const cutoff = new Date(Date.now() - STALE_PENDING_TOPIC_HOURS * 60 * 60 * 1000).toISOString()
+
+    const { data, error } = await supabaseAdmin
+        .from('discussion_topics')
+        .delete()
+        .eq('approval_status', '대기')
+        .lt('created_at', cutoff)
+        .select('id, body')
+
+    if (error) {
+        console.error('대기 토론 정리 에러:', error)
+        return 0
+    }
+
+    if (data && data.length > 0) {
+        console.log(`[대기 토론 정리] ${data.length}개 삭제`)
+    }
+
+    return data?.length ?? 0
+}
+
+export async function cleanupStalePendingVotes(): Promise<number> {
+    const cutoff = new Date(Date.now() - STALE_PENDING_VOTE_HOURS * 60 * 60 * 1000).toISOString()
+
+    const { data, error } = await supabaseAdmin
+        .from('votes')
+        .delete()
+        .eq('approval_status', '대기')
+        .lt('created_at', cutoff)
+        .select('id, title')
+
+    if (error) {
+        console.error('대기 투표 정리 에러:', error)
+        return 0
+    }
+
+    if (data && data.length > 0) {
+        console.log(`[대기 투표 정리] ${data.length}개 삭제`)
     }
 
     return data?.length ?? 0

@@ -110,6 +110,15 @@ export default function CommentsSection({
         setSafetyBotEnabled(stored !== 'false')
     }, [])
 
+    /* URL hash(#comment-{id})로 진입 시 해당 댓글로 스크롤 */
+    useEffect(() => {
+        if (loading) return
+        const hash = window.location.hash
+        if (!hash.startsWith('#comment-')) return
+        const el = document.getElementById(hash.slice(1))
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, [loading])
+
     /* 내가 신고한 댓글 ID 초기화 */
     useEffect(() => {
         if (!userId) return
@@ -812,11 +821,15 @@ function CommentItem({
     }, [menuOpen])
 
     return (
-        <li className={[
-            'py-4',
-            isBest ? 'px-3 bg-amber-50/50 rounded-xl border border-amber-100' : '',
-            isReply ? 'py-3' : '',
-        ].join(' ')}>
+        <li
+            id={!isReply ? `comment-${comment.id}` : undefined}
+            className={[
+                'py-4',
+                isBest ? 'px-3 bg-amber-50/50 rounded-xl border border-amber-100' : '',
+                isReply ? 'py-3' : '',
+            ].join(' ')}
+            style={!isReply ? { scrollMarginTop: 'var(--scroll-offset, 126px)' } : undefined}
+        >
             {/* 작성자 + 시간 + 본인 액션 + ... 메뉴 */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-1.5">

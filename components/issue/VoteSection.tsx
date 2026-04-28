@@ -258,19 +258,6 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
 
     // 자동 종료 정보 계산
     const autoEndDate = vote.auto_end_date ? new Date(vote.auto_end_date) : null
-    const timeRemaining = autoEndDate ? autoEndDate.getTime() - Date.now() : null
-    const isEndingSoon = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000
-
-    // 남은 시간 표시
-    const getTimeRemainingText = () => {
-        if (!timeRemaining || timeRemaining <= 0) return null
-        const hours = Math.floor(timeRemaining / (1000 * 60 * 60))
-        const days = Math.floor(hours / 24)
-        if (days > 0) return `${days}일 후 종료`
-        if (hours > 0) return `${hours}시간 후 종료`
-        const minutes = Math.floor(timeRemaining / (1000 * 60))
-        return `${minutes}분 후 종료`
-    }
 
     return (
         <div className="rounded-xl transition-all p-4 border border-border">
@@ -314,11 +301,6 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                     {/* 2행: 투표 제목 */}
                     {vote.title && (
                         <p className="font-semibold text-sm">{vote.title}</p>
-                    )}
-                    {!isClosed && isEndingSoon && (
-                        <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-medium animate-pulse">
-                            🔥 {getTimeRemainingText()}
-                        </span>
                     )}
                 </div>
             </div>
@@ -376,7 +358,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                 </div>
 
                 {/* 카드 하단 — 자동 종료 안내 */}
-                {!isClosed && autoEndDate && !isEndingSoon && (
+                {!isClosed && autoEndDate && (
                     <div className="mt-3 text-xs text-content-secondary">
                         <div className="flex justify-end">
                             <span className="flex items-center gap-1">
