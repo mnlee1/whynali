@@ -43,8 +43,15 @@ async function generateSummariesForIssue(
     )
 
     const stagesText = stages.map(stage => {
-        const titles = grouped.get(stage)!.map(i => `- ${i.title}`).join('\n')
-        return `[${stage}]\n${titles}`
+        const items = grouped.get(stage)!
+        const lines = items.map(i => {
+            const dt = new Date(i.occurred_at)
+            const dateStr = !isNaN(dt.getTime())
+                ? `${dt.getMonth() + 1}월 ${dt.getDate()}일`
+                : ''
+            return dateStr ? `- [${dateStr}] ${i.title}` : `- ${i.title}`
+        }).join('\n')
+        return `[${stage}]\n${lines}`
     }).join('\n\n')
 
     const prompt = `이슈: "${issueTitle}"
@@ -73,6 +80,7 @@ ${stagesText}
 3. 각 bullet은 한 문장으로 간결하게
 4. 제목에서 확인할 수 있는 사실만 작성
 5. stageTitle에는 단계명을 붙이지 말고 내용만 작성 (예: "녹대 탈출" O, "[발단] 녹대 탈출" X)
+6. 각 bullet의 date는 해당 뉴스의 [날짜]를 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
 
 **브리핑:**
 - intro: 이슈를 한 문장으로 (예: "~가 ~해서 논란이야")
@@ -82,8 +90,8 @@ ${stagesText}
 JSON 응답:
 {
   "summaries": [
-    {"stage":"발단","stageTitle":"제목","bullets":["사건1","사건2"]},
-    {"stage":"전개","stageTitle":"제목","bullets":["후속1","후속2"]}
+    {"stage":"발단","stageTitle":"제목","bullets":[{"date":"4월 25일","text":"사건1"},{"date":"4월 26일","text":"사건2"}]},
+    {"stage":"전개","stageTitle":"제목","bullets":[{"date":"4월 26일","text":"후속1"},{"date":"4월 27일","text":"후속2"}]}
   ],
   "brief": {"intro":"한 문장","bullets":["팩트1","팩트2"],"conclusion":"결론"}
 }`
@@ -94,42 +102,48 @@ JSON 응답:
     )
 
     const parsed = parseJsonObject<{
-        summaries: Array<{ stage: string; stageTitle: string; bullets: string[] }>
+        summaries: Array<{ stage: string; stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>
         brief: { intro: string; bullets: string[]; conclusion: string }
     }>(content)
 
     if (!parsed?.summaries) return 0
 
+    type BulletItem = { date: string; text: string }
     const now = new Date().toISOString()
     const rows = stages.map(stage => {
         const items = grouped.get(stage)!
         const dates = items.map(i => i.occurred_at).sort()
         const ai = parsed.summaries.find(s => s.stage === stage)
         
-        let bullets = ai?.bullets ?? []
+        const rawBullets: Array<string | BulletItem> = ai?.bullets ?? []
+        let bullets: BulletItem[] = rawBullets
+            .map((b): BulletItem | null => {
+                if (typeof b === 'string') {
+                    const text = b.trim()
+                    return text ? { date: '', text } : null
+                }
+                if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
+                    return { date: (b.date ?? '').trim(), text: b.text.trim() }
+                }
+                return null
+            })
+            .filter((b): b is BulletItem => b !== null)
         
-        // 검증 1: bullets 개수가 해당 단계 뉴스 개수를 초과하는 경우 경고
         if (bullets.length > items.length) {
             console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)
         }
         
-        // 검증 2: 중복된 bullets 제거 (완전 일치 + 유사도 높은 것)
-        const uniqueBullets: string[] = []
+        const uniqueBullets: BulletItem[] = []
         for (const bullet of bullets) {
-            const normalized = bullet.toLowerCase().trim()
+            const normalized = bullet.text.toLowerCase().trim()
             const isDuplicate = uniqueBullets.some(existing => {
-                const existingNormalized = existing.toLowerCase().trim()
-                // 완전 일치
+                const existingNormalized = existing.text.toLowerCase().trim()
                 if (normalized === existingNormalized) return true
-                // 90% 이상 유사 (간단한 포함 관계 체크)
                 const shorter = normalized.length < existingNormalized.length ? normalized : existingNormalized
                 const longer = normalized.length >= existingNormalized.length ? normalized : existingNormalized
                 return longer.includes(shorter) && shorter.length / longer.length > 0.9
             })
-            
-            if (!isDuplicate) {
-                uniqueBullets.push(bullet)
-            }
+            if (!isDuplicate) uniqueBullets.push(bullet)
         }
         
         if (uniqueBullets.length < bullets.length) {
@@ -141,7 +155,7 @@ JSON 응답:
             stage,
             stage_title: ai?.stageTitle ?? stage,
             bullets: uniqueBullets,
-            summary: uniqueBullets.join(' '), // 호환성을 위해 summary도 저장
+            summary: uniqueBullets.map(b => b.text).join(' '),
             date_start: dates[0],
             date_end: dates[dates.length - 1],
             generated_at: now,

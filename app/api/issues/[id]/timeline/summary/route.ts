@@ -20,7 +20,7 @@ const STAGE_ORDER: Record<TimelineStage, number> = {
 export interface StageSummary {
     stage: TimelineStage
     stageTitle: string
-    bullets: string[]
+    bullets: Array<string | { date: string; text: string }>
     dateStart: string
     dateEnd: string
 }
