@@ -203,14 +203,22 @@ JSON 응답:
             type BulletItem = { date: string; text: string }
             const rawBullets: Array<string | BulletItem> = ai?.bullets ?? []
 
+            // date가 비어있을 때 사용할 fallback: 단계 내 첫 번째 유효 날짜
+            const fallbackDate = (() => {
+                const first = dates.find(d => d)
+                if (!first) return ''
+                const dt = new Date(first)
+                return !isNaN(dt.getTime()) ? `${dt.getMonth() + 1}월 ${dt.getDate()}일` : ''
+            })()
+
             let bullets: BulletItem[] = rawBullets
                 .map((b): BulletItem | null => {
                     if (typeof b === 'string') {
                         const text = b.trim()
-                        return text ? { date: '', text } : null
+                        return text ? { date: fallbackDate, text } : null
                     }
                     if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
-                        return { date: (b.date ?? '').trim(), text: b.text.trim() }
+                        return { date: (b.date ?? '').trim() || fallbackDate, text: b.text.trim() }
                     }
                     return null
                 })

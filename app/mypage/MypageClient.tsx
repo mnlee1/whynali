@@ -22,6 +22,7 @@ type CommentRow = {
     created_at: string
     like_count: number
     dislike_count: number
+    parent_id: string | null
     issues: IssueRef | null
 }
 
@@ -31,6 +32,7 @@ type DiscussionRow = {
     created_at: string
     like_count: number
     dislike_count: number
+    parent_id: string | null
     discussion_topics: {
         id: string
         body: string
@@ -538,7 +540,12 @@ export default function MypageClient({
                                 key={c.id}
                                 className="card-hover p-4 cursor-pointer"
                                 onClick={() => {
-                                    if (c.issues) window.location.href = `/issue/${c.issues.id}#comment-${c.id}`
+                                    if (!c.issues) return
+                                    const anchor = `#comment-${c.id}`
+                                    const base = `/issue/${c.issues.id}`
+                                    window.location.href = c.parent_id
+                                        ? `${base}?reply_parent=${c.parent_id}${anchor}`
+                                        : `${base}${anchor}`
                                 }}
                             >
                                 {c.issues && (
@@ -577,7 +584,12 @@ export default function MypageClient({
                                 key={d.id}
                                 className="card-hover p-4 cursor-pointer"
                                 onClick={() => {
-                                    if (d.discussion_topics) window.location.href = `/community/${d.discussion_topics.id}#dc-${d.id}`
+                                    if (!d.discussion_topics) return
+                                    const anchor = `#dc-${d.id}`
+                                    const base = `/community/${d.discussion_topics.id}`
+                                    window.location.href = d.parent_id
+                                        ? `${base}?reply_parent=${d.parent_id}${anchor}`
+                                        : `${base}${anchor}`
                                 }}
                             >
                                 {(d.discussion_topics?.issues || d.discussion_topics) && (

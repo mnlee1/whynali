@@ -206,13 +206,22 @@ export async function GET(request: NextRequest) {
                 .limit(20),
         ])
 
-        // 종결 요약 백필: 종결 요약이 없는 이슈를 매 크론마다 5개씩 자동 처리
+        // 종결 요약 백필: 날짜 형식 불릿({ date, text })이 없는 이슈도 재생성
         const { data: existingCloseSummaries } = await supabaseAdmin
             .from('timeline_summaries')
-            .select('issue_id')
+            .select('issue_id, bullets')
             .eq('stage', '종결')
 
-        const closedWithSummary = new Set((existingCloseSummaries ?? []).map(r => r.issue_id))
+        // 날짜 형식 불릿을 이미 가진 이슈는 재생성 불필요
+        const closedWithDateBullets = new Set(
+            (existingCloseSummaries ?? [])
+                .filter(r => {
+                    const bullets = r.bullets as Array<string | { date: string; text: string }> | null
+                    if (!bullets || bullets.length === 0) return false
+                    return bullets.some(b => typeof b === 'object' && b !== null && 'date' in b)
+                })
+                .map(r => r.issue_id)
+        )
 
         const { data: closedIssues } = await supabaseAdmin
             .from('issues')
@@ -222,14 +231,14 @@ export async function GET(request: NextRequest) {
             .order('updated_at', { ascending: false })
             .limit(100)
 
-        // 백필: 1회 실행당 최대 3건만 순차 처리 (Rate Limit 방지)
+        // 백필: 날짜 형식 불릿이 없는 종결 이슈 (기존 요약 있어도 포함), 1회 3건
         const backfillTargets = (closedIssues ?? [])
-            .filter(i => !closedWithSummary.has(i.id))
+            .filter(i => !closedWithDateBullets.has(i.id))
             .slice(0, 3)
 
         for (const issue of backfillTargets) {
             try {
-                await generateCloseSummary(issue.id, issue.title)
+                await generateCloseSummary(issue.id, issue.title, true) // force=true: 기존 요약 있어도 재생성
                 await new Promise(resolve => setTimeout(resolve, 2000))
             } catch (err) {
                 console.warn(`[종결 요약 백필] ${issue.title} 실패:`, err)
