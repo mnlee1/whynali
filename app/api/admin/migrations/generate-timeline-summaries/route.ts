@@ -189,31 +189,33 @@ export async function POST(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url)
         const force = searchParams.get('force') === 'true'
+        const limit = parseInt(searchParams.get('limit') ?? '20', 10)
+        const offset = parseInt(searchParams.get('offset') ?? '0', 10)
 
         let issues: Array<{ id: string; title: string }>
 
         if (force) {
-            // force=true: 전체 이슈 조회하여 재생성
+            // force=true: limit/offset으로 배치 처리
             const { data } = await supabaseAdmin
                 .from('issues')
                 .select('id, title')
                 .in('approval_status', ['승인', '대기'])
                 .order('created_at', { ascending: false })
-                .limit(200)
+                .range(offset, offset + limit - 1)
             issues = data ?? []
         } else {
             // force=false: 미생성 이슈만 조회
             const { data } = await supabaseAdmin
-                .rpc('get_issues_without_summaries', { limit_count: 30 })
+                .rpc('get_issues_without_summaries', { limit_count: limit })
             issues = data ?? []
         }
 
         if (issues.length === 0) {
-            return NextResponse.json({ success: true, message: '처리할 이슈 없음' })
+            return NextResponse.json({ success: true, message: '처리할 이슈 없음', hasMore: false })
         }
 
         const targets = issues
-        console.log(`[generate-timeline-summaries] 대상: ${targets.length}건 ${force ? '(재생성 모드)' : '(미생성 이슈만)'}`)
+        console.log(`[generate-timeline-summaries] 대상: ${targets.length}건 offset=${offset} ${force ? '(재생성 모드)' : '(미생성 이슈만)'}`)
 
         let successCount = 0
         let skippedCount = 0
@@ -243,8 +245,11 @@ export async function POST(request: NextRequest) {
             processed: successCount,
             skipped: skippedCount,
             errors: errorCount,
+            offset,
+            limit,
+            hasMore: force ? issues.length === limit : false,
             failedIssues: failedIssues.length > 0 ? failedIssues : undefined,
-            message: `${successCount}개 이슈 요약 생성 완료${errorCount > 0 ? `, ${errorCount}개 실패` : ''}`,
+            message: `[offset ${offset}] ${successCount}개 이슈 요약 생성 완료${errorCount > 0 ? `, ${errorCount}개 실패` : ''}`,
         })
     } catch (error) {
         console.error('[generate-timeline-summaries] 에러:', error)
