@@ -111,8 +111,15 @@ export async function generateAndCacheSummaries(
     )
 
     const stagesText = stages.map(stage => {
-        const titles = grouped.get(stage)!.map(i => `- ${i.title}`).join('\n')
-        return `[${stage}]\n${titles}`
+        const items = grouped.get(stage)!
+        const lines = items.map(i => {
+            const dt = new Date(i.occurred_at)
+            const dateStr = !isNaN(dt.getTime())
+                ? `${dt.getMonth() + 1}월 ${dt.getDate()}일`
+                : ''
+            return dateStr ? `- [${dateStr}] ${i.title}` : `- ${i.title}`
+        }).join('\n')
+        return `[${stage}]\n${lines}`
     }).join('\n\n')
 
     const backgroundLine = topicDescription
@@ -166,23 +173,24 @@ ${stagesText}
 2. 핵심 사건들을 bullet points로 (1~5개, 해당 단계 뉴스 개수 이하)
 3. 각 bullet은 한 문장으로 간결하게
 4. stageTitle에는 단계명 없이 내용만 작성 (예: "녹대 탈출" O, "[발단] 녹대 탈출" X)
+5. 각 bullet의 date는 해당 뉴스의 [날짜]를 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
 
 JSON 응답:
 {
   "summaries": [
-    {"stage":"발단","stageTitle":"제목","bullets":["사건1","사건2"]},
-    {"stage":"전개","stageTitle":"제목","bullets":["후속1","후속2"]}
+    {"stage":"발단","stageTitle":"제목","bullets":[{"date":"4월 25일","text":"사건1"},{"date":"4월 26일","text":"사건2"}]},
+    {"stage":"전개","stageTitle":"제목","bullets":[{"date":"4월 26일","text":"후속1"},{"date":"4월 27일","text":"후속2"}]}
   ]
 }`
 
     try {
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 800 },
+            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 2000 },
         )
 
         const parsed = parseJsonObject<{
-            summaries: Array<{ stage: string; stageTitle: string; summary: string; bullets: string[] }>
+            summaries: Array<{ stage: string; stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>
         }>(content)
         if (!parsed) return
 
@@ -191,20 +199,32 @@ JSON 응답:
             const dates = items.map(i => i.occurred_at).sort()
             const ai = parsed.summaries?.find((p: { stage: string }) => p.stage === stage)
 
-            let bullets = ai?.bullets ?? []
+            // string | {date, text} 양쪽 모두 처리 (backward compat + 새 형식)
+            type BulletItem = { date: string; text: string }
+            const rawBullets: Array<string | BulletItem> = ai?.bullets ?? []
 
-            // 문자열이 아닌 항목 제거 (AI가 객체·null 등을 반환하는 경우 방어)
-            bullets = bullets.filter((b: unknown) => typeof b === 'string' && (b as string).trim().length > 0)
+            let bullets: BulletItem[] = rawBullets
+                .map((b): BulletItem | null => {
+                    if (typeof b === 'string') {
+                        const text = b.trim()
+                        return text ? { date: '', text } : null
+                    }
+                    if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
+                        return { date: (b.date ?? '').trim(), text: b.text.trim() }
+                    }
+                    return null
+                })
+                .filter((b): b is BulletItem => b !== null)
 
             if (bullets.length > items.length) {
                 console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)
             }
 
-            const uniqueBullets: string[] = []
+            const uniqueBullets: BulletItem[] = []
             for (const bullet of bullets) {
-                const normalized = bullet.toLowerCase().trim()
+                const normalized = bullet.text.toLowerCase().trim()
                 const isDuplicate = uniqueBullets.some(existing => {
-                    const existingNormalized = existing.toLowerCase().trim()
+                    const existingNormalized = existing.text.toLowerCase().trim()
                     if (normalized === existingNormalized) return true
                     const shorter = normalized.length < existingNormalized.length ? normalized : existingNormalized
                     const longer = normalized.length >= existingNormalized.length ? normalized : existingNormalized
@@ -222,7 +242,7 @@ JSON 응답:
                 stage,
                 stage_title: ai?.stageTitle ?? stage,
                 bullets: uniqueBullets,
-                summary: uniqueBullets.join(' '),
+                summary: uniqueBullets.map(b => b.text).join(' '),
                 date_start: dates[0],
                 date_end: dates[dates.length - 1],
                 generated_at: new Date().toISOString(),

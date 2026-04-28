@@ -19,33 +19,18 @@ type TimelineStage = '발단' | '전개' | '파생' | '진정' | '종결'
 interface StageSummary {
     stage: TimelineStage
     stageTitle: string
-    bullets: string[]
+    bullets: Array<string | { date: string; text: string }>
     dateStart: string
     dateEnd: string
-}
-
-interface TimelinePoint {
-    stage: TimelineStage
-    title: string
-    occurredAt: string
-    aiSummary: string | null
 }
 
 interface TimelineSectionProps {
     issueId: string
     issueStatus?: string
-    issueUpdatedAt?: string
     initialSummaries?: StageSummary[]
-    initialPoints?: TimelinePoint[]
 }
 
-/** "M월 D일" 형식 포맷 */
-function formatDate(dateStr: string): string {
-    if (!dateStr) return ''
-    const dt = new Date(dateStr)
-    if (isNaN(dt.getTime())) return ''
-    return `${dt.getMonth() + 1}월 ${dt.getDate()}일`
-}
+/** "M월 D일" 형식 포맷은 generate-timeline-summary.ts에서 생성 시 포함되므로 UI에서 별도 변환 불필요 */
 
 const STAGE_STYLES: Record<TimelineStage, {
     dot: string
@@ -112,12 +97,9 @@ const STAGE_STYLES: Record<TimelineStage, {
 export default function TimelineSection({
     issueId,
     issueStatus,
-    issueUpdatedAt,
     initialSummaries,
-    initialPoints,
 }: TimelineSectionProps) {
     const [summaries, setSummaries] = useState<StageSummary[]>(initialSummaries ?? [])
-    const [points, setPoints] = useState<TimelinePoint[]>(initialPoints ?? [])
     const [loading, setLoading] = useState(!initialSummaries)
     const [error, setError] = useState<string | null>(null)
 
@@ -169,7 +151,7 @@ export default function TimelineSection({
         )
     }
 
-    if (summaries.length === 0 && points.length === 0) {
+    if (summaries.length === 0) {
         return (
             <div className="text-center py-8 space-y-3">
                 <div className="text-4xl">⏳</div>
@@ -184,23 +166,13 @@ export default function TimelineSection({
     }
 
     const isClosed = issueStatus === '종결'
-    const stageOrder: TimelineStage[] = ['발단', '전개', '파생', '진정']
+    const stageOrder: TimelineStage[] = ['발단', '전개', '파생', '진정', '종결']
 
-    // summaries 기준으로 단계 목록 구성, 없으면 points에서 추출
-    const stagesFromSummaries = stageOrder.filter(s => summaries.find(sum => sum.stage === s))
-    const stagesFromPoints = stageOrder.filter(s => points.find(p => p.stage === s))
-    const stages = stagesFromSummaries.length > 0 ? stagesFromSummaries : stagesFromPoints
-
-    // 단계별 포인트 그루핑 (시간순 정렬)
-    const pointsByStage = new Map<TimelineStage, TimelinePoint[]>()
-    for (const stage of stageOrder) {
-        const stagePoints = points
-            .filter(p => p.stage === stage)
-            .sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime())
-        if (stagePoints.length > 0) pointsByStage.set(stage, stagePoints)
-    }
-
-    const closeSummary = summaries.find(s => s.stage === '종결')
+    // summaries 기준으로 단계 목록 구성, 종결은 isClosed일 때만 포함
+    const stages = stageOrder.filter(s => {
+        if (s === '종결') return isClosed
+        return summaries.find(sum => sum.stage === s)
+    })
 
     return (
         <div className="space-y-0">
@@ -216,8 +188,7 @@ export default function TimelineSection({
             {stages.map((stage, index) => {
                 const summary = summaries.find(s => s.stage === stage)
                 const style = STAGE_STYLES[stage]
-                const isLast = index === stages.length - 1 && !isClosed
-                const stagePoints = pointsByStage.get(stage)
+                const isLast = index === stages.length - 1
 
                 return (
                     <div key={stage}>
@@ -247,33 +218,32 @@ export default function TimelineSection({
                                         </p>
                                     )}
 
-                                    {/* 포인트 목록 (날짜 + 내용) */}
-                                    {stagePoints && stagePoints.length > 0 ? (
+                                    {/* bullets 렌더링: {date, text} 형식(새 데이터) 또는 string(구 데이터) 모두 처리 */}
+                                    {summary && summary.bullets.length > 0 ? (
                                         <ul className="space-y-2">
-                                            {stagePoints.map((point, i) => (
-                                                <li key={i} className="flex items-start gap-2.5">
-                                                    <span className={`text-xs font-medium shrink-0 mt-0.5 w-14 ${style.dateBadge}`}>
-                                                        {formatDate(point.occurredAt)}
-                                                    </span>
-                                                    <span className="text-sm text-content-secondary leading-relaxed">
-                                                        {point.aiSummary || point.title}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        /* 포인트 없을 때 — summaries bullets fallback */
-                                        summary && summary.bullets.length > 0 && (
-                                            <ul className="space-y-1.5">
-                                                {summary.bullets.map((bullet, i) => (
-                                                    <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
-                                                        <span className={`w-1 h-1 rounded-full shrink-0 mt-2 ${style.bullet}`} />
-                                                        {bullet}
+                                            {summary.bullets.map((bullet, i) => {
+                                                const isObj = typeof bullet === 'object' && bullet !== null
+                                                const text = isObj ? (bullet as { date: string; text: string }).text : bullet as string
+                                                const date = isObj ? (bullet as { date: string; text: string }).date : ''
+                                                return (
+                                                    <li key={i} className="flex items-start gap-2.5">
+                                                        {date ? (
+                                                            <span className={`text-xs font-medium shrink-0 mt-0.5 w-14 ${style.dateBadge}`}>
+                                                                {date}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`w-1 h-1 rounded-full shrink-0 mt-2 ${style.bullet}`} />
+                                                        )}
+                                                        <span className="text-sm text-content-secondary leading-relaxed">
+                                                            {text}
+                                                        </span>
                                                     </li>
-                                                ))}
-                                            </ul>
-                                        )
-                                    )}
+                                                )
+                                            })}
+                                        </ul>
+                                    ) : stage === '종결' ? (
+                                        <p className="text-sm font-medium text-gray-500">이슈 종결</p>
+                                    ) : null}
                                 </div>
                             </div>
                         </div>
@@ -281,49 +251,6 @@ export default function TimelineSection({
                 )
             })}
 
-            {/* 종결 */}
-            {isClosed && (
-                <div>
-                    <div className="flex items-center gap-2 mb-3 mt-5">
-                        <div className="w-[3px] h-[0.8rem] rounded-full shrink-0 bg-gray-400" />
-                        <span className="text-sm font-semibold text-gray-500">종결</span>
-                        <div className="flex-1 h-px bg-gray-100" />
-                    </div>
-                    <div className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                            <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-3.5 bg-gray-400" />
-                        </div>
-                        <div className="flex-1 pb-3">
-                            <div className="p-3 border border-gray-200 rounded-xl bg-gray-50">
-                                {issueUpdatedAt && (
-                                    <span className="text-xs text-gray-400 block mb-1">
-                                        {formatDate(issueUpdatedAt)}
-                                    </span>
-                                )}
-                                {closeSummary ? (
-                                    <>
-                                        {closeSummary.stageTitle && (
-                                            <p className="text-sm font-semibold text-gray-600 mb-2">
-                                                {closeSummary.stageTitle}
-                                            </p>
-                                        )}
-                                        <ul className="space-y-1.5">
-                                            {closeSummary.bullets.map((bullet, i) => (
-                                                <li key={i} className="flex items-start gap-2 text-sm text-content-secondary leading-relaxed">
-                                                    <span className="w-1 h-1 rounded-full shrink-0 mt-2 bg-gray-300" />
-                                                    {bullet}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                ) : (
-                                    <p className="text-sm font-medium text-gray-500">이슈 종결</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
