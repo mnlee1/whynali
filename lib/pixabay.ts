@@ -40,38 +40,39 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
                 messages: [
                     {
                         role: 'user',
-                        content: `You pick a Pixabay background photo mood for Korean news thumbnails.
-Output 2 simple visual/atmospheric English words + ::dark or ::bright tone.
-Focus on ATMOSPHERE, not news content. Avoid person/face keywords.
+                        content: `You pick a Pixabay background photo for Korean news thumbnails.
+Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT of this news.
+Avoid person, face, crowd, portrait keywords. Focus on visually recognizable locations or objects.
 
-Tone rules:
-- ::dark → scandal, accident, crime, conflict, death, protest, crisis, defeat, controversy
-- ::bright → achievement, award, victory, celebration, debut, record, comeback, release
+Tone: append ::dark or ::bright based on topic sentiment.
+- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster
+- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive
 
 Category: ${category}
 Examples:
-- [연예] "BTS 새 앨범 발매" → "neon bokeh::bright"
-- [연예] "지수 크레딧 삭제 논란" → "dark smoke::dark"
-- [연예] "아이유 콘서트 매진" → "stage spotlight::bright"
-- [연예] "배우 음주운전 적발" → "night rain::dark"
-- [스포츠] "토트넘 강등 위기" → "stadium fog::dark"
-- [스포츠] "손흥민 골든부트 수상" → "stadium golden::bright"
-- [정치] "국회의원 막말 논란" → "marble shadow::dark"
-- [정치] "대통령 취임식" → "flag sunrise::bright"
-- [사회] "이태원 참사 추모" → "candles dark::dark"
-- [사회] "산불 피해 확산" → "fire smoke::dark"
-- [경제] "삼성전자 노조 파업" → "factory smoke::dark"
-- [경제] "코스피 사상 최고치" → "skyline sunrise::bright"
-- [기술] "AI 스타트업 투자 열풍" → "circuit blue::bright"
-- [세계] "이스라엘 공습" → "ruins smoke::dark"
-- [세계] "G7 정상회담" → "marble columns::bright"
-- [생활문화] "카페 창업 열풍" → "cafe warm::bright"
+- [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
+- [연예] "지수 크레딧 삭제 논란" → "music studio dark::dark"
+- [연예] "아이유 콘서트 매진" → "stage spotlight audience::bright"
+- [연예] "배우 음주운전 적발" → "night road police::dark"
+- [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
+- [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
+- [정치] "국회의원 막말 논란" → "government building interior::dark"
+- [정치] "대통령 취임식" → "flag ceremony podium::bright"
+- [사회] "이태원 참사 추모" → "candles memorial night::dark"
+- [사회] "산불 피해 확산" → "forest fire smoke::dark"
+- [경제] "한국은행 기준금리 인하" → "bank building finance::dark"
+- [경제] "삼성전자 노조 파업" → "factory industrial workers::dark"
+- [경제] "코스피 사상 최고치" → "stock market graph city::bright"
+- [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"
+- [세계] "이스라엘 공습" → "ruins destruction smoke::dark"
+- [세계] "G7 정상회담" → "conference hall diplomacy::bright"
+- [생활문화] "카페 창업 열풍" → "cafe interior coffee shop::bright"
 
 Korean headline: "${title}"
-Reply with ONLY the 2-word keywords::tone format, nothing else.`,
+Reply with ONLY the keywords::tone format, nothing else.`,
                     },
                 ],
-                max_tokens: 25,
+                max_tokens: 40,
                 temperature: 0,
             }),
         })

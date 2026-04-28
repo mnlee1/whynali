@@ -75,35 +75,28 @@ export async function POST(request: NextRequest, { params }: Params) {
             if (issue) {
                 issueCategory = (issue as any).category ?? '사회'
 
-                const brief = (issue as any).brief_summary as {
-                    intro?: string
-                    bullets?: string[]
-                    conclusion?: string
-                } | null | undefined
+                const topicDesc = ((issue as any).topic_description as string | null | undefined)?.trim()
 
-                if (brief) {
-                    // 모든 brief 내용을 순서대로 수집 (intro → bullets → conclusion)
-                    const allPieces: string[] = []
-                    if (brief.intro?.trim()) allPieces.push(brief.intro.trim())
-                    brief.bullets?.filter(Boolean).forEach(b => {
-                        if (b.trim()) allPieces.push(b.trim())
-                    })
-                    if (brief.conclusion?.trim()) allPieces.push(brief.conclusion.trim())
-
-                    // 씬2: 첫 번째 내용, 씬3: 마지막 내용 (같으면 undefined로 폴백)
-                    briefBullets = allPieces.length > 0 ? [allPieces[0]] : undefined
-                    briefConclusion = allPieces.length > 1
-                        ? allPieces[allPieces.length - 1]
-                        : undefined
-
-                    // issueDescription: Groq 컨텍스트용 전체 조합
-                    issueDescription = allPieces.join(' ') || undefined
+                if (!topicDesc) {
+                    return NextResponse.json(
+                        { error: 'NO_TOPIC_DESCRIPTION', message: '이슈 설명(topic_description)이 없어 숏폼을 생성할 수 없습니다.\n이슈 상세 페이지에서 내용이 생성된 후 다시 시도해 주세요.' },
+                        { status: 422 }
+                    )
                 }
 
-                // brief_summary 없으면 topic_description 폴백
-                if (!issueDescription) {
-                    issueDescription = (issue as any).topic_description || undefined
+                issueDescription = topicDesc
+                // 마침표·물음표·느낌표·따옴표 기준으로 첫 문장과 나머지 분리
+                // 씬2: 첫 번째 문장, 씬3: 나머지 문장들
+                const sentenceMatch = topicDesc.match(/^(.+?[.!?""])\s+(.+)/)
+                if (sentenceMatch) {
+                    briefBullets = [sentenceMatch[1].trim()]
+                    briefConclusion = sentenceMatch[2].trim()
+                } else {
+                    briefBullets = [topicDesc]
+                    briefConclusion = undefined
                 }
+                console.log(`[숏폼 생성] 씬2:`, briefBullets[0])
+                console.log(`[숏폼 생성] 씬3:`, briefConclusion)
             }
         } catch {
             // issues 조회 실패 시 기본값으로 진행

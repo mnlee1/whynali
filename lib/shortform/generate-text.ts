@@ -3,10 +3,9 @@
  *
  * 숏폼 텍스트 자동 생성 (Groq)
  *
- * 이슈 메타데이터를 기반으로 SNS 최적화된 텍스트를 생성합니다.
- * 본문은 사용하지 않으며 제목·카테고리·화력 등 메타데이터만 사용합니다.
- *
- * 생성 텍스트: 씬별 타이틀(20자) + 설명(35자) 쌍 × 3
+ * brief_summary가 있으면 desc를 코드에서 직접 처리 (원문 그대로 사용, Groq 미경유)
+ * title은 항상 Groq로 생성.
+ * brief_summary가 없으면 Groq 프리 생성.
  */
 
 import Groq from 'groq-sdk'
@@ -19,16 +18,16 @@ export interface ShortformTextInput {
     newsCount: number
     communityCount: number
     issueDescription?: string
-    briefBullets?: string[]    // brief_summary.bullets — 씬2 desc 직접 반영
-    briefConclusion?: string   // brief_summary.conclusion — 씬3 desc 직접 반영
+    briefBullets?: string[]    // brief_summary 첫 번째 내용 — 씬2 desc 직접 사용
+    briefConclusion?: string   // brief_summary 마지막 내용 — 씬3 desc 직접 사용
 }
 
 export interface ShortformTextOutput {
     scene1Title: string  // 씬1 타이틀 (20자 이내)
     scene1Desc: string   // 씬1 설명
-    scene2Title: string  // 씬2 타이틀 (20자 이내)
+    scene2Title: string  // 씬2 타이틀 (15자 이내)
     scene2Desc: string   // 씬2 설명 (35자 이내)
-    scene3Title: string  // 씬3 타이틀 (20자 이내)
+    scene3Title: string  // 씬3 타이틀 (15자 이내)
     scene3Desc: string   // 씬3 설명 (35자 이내)
 }
 
@@ -83,9 +82,6 @@ JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
 
 /**
  * 숏폼 텍스트 자동 생성
- *
- * @param input - 이슈 메타데이터
- * @returns 씬별 타이틀+설명 6종
  */
 export async function generateShortformText(input: ShortformTextInput): Promise<ShortformTextOutput> {
     const apiKeys = (process.env.GROQ_API_KEY ?? '').split(',').map(k => k.trim()).filter(Boolean)
@@ -93,12 +89,10 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
         throw new Error('GROQ_API_KEY가 설정되지 않았습니다')
     }
 
-    // Scene 1은 이슈 제목 전체 사용 (동영상 렌더러가 자동 줄바꿈 처리)
     const rawTitle = input.title.replace(/^\[.*?\]\s*/, '').trim()
     const scene1Title = `"${rawTitle}"`
-    const scene1Desc = ''  // 씬1 설명 없음
+    const scene1Desc = ''
 
-    // 카테고리별 민감도 분류
     const isSensitiveCategory = ['정치', '연예'].includes(input.category)
 
     const sensitiveRules = `
@@ -108,80 +102,16 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
 - 특정인을 주어로 한 부정적 서술 금지
 허용 표현만 사용:
 - "~로 알려져", "~전해져", "~에 따르면" 등 인용형
-- "~가능성", "~기대", "~관심" 등 완화형
-- 이슈 자체의 사실관계(날짜·장소·공식 발표)만 서술`
+- "~가능성", "~기대", "~관심" 등 완화형`
 
     const generalRules = `
 - 추측·단정 표현 금지 ("~했다" 확정형 대신 "~기대", "~가능성" 사용)
 - 특정인 비방·명예훼손 표현 금지`
 
-    // brief_summary 직접 내용
-    const bulletText = input.briefBullets?.filter(Boolean)[0] ?? ''
-    const conclusionText = input.briefConclusion ?? ''
-    const hasBriefContent = bulletText.length > 0 || conclusionText.length > 0
-
-    const prompt = hasBriefContent
-        ? `당신은 텍스트 편집자입니다. 아래 원문을 35자 이내 숏폼 자막으로 편집하세요.
-
-이슈 제목: "${input.title}"
-
-[scene2Desc 원문]
-"${bulletText || conclusionText}"
-
-[scene3Desc 원문]
-"${conclusionText || bulletText}"
-
-편집 규칙:
-- 원문 내용 외 새로운 내용 창작 절대 금지
-- 35자 이하면 원문 그대로 사용
-- 35자 초과면 원문의 핵심 의미만 남겨 35자 이내로 줄일 것
-- 마지막이 조사(~에 ~의 ~을 ~로 ~와 ~가)나 연결어미(~하며 ~해서 ~하면 ~이어)로 끝나지 않을 것
-- 이모지 금지, 한글과 기본 문장부호만 사용
-- scene2Desc와 scene3Desc는 서로 다른 내용이어야 함
-
-scene2Title: 15자 이내, scene2Desc 내용 기반 완결형 타이틀
-scene3Title: 15자 이내, scene3Desc 내용 기반 완결형 타이틀
-
-JSON으로만 응답:
-{"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
-        : `당신은 숏폼 SNS 콘텐츠 기획자입니다.
-아래 이슈의 Scene 2, 3 텍스트를 생성하세요.
-
-이슈 제목: "${input.title}"
-이슈 설명: "${input.issueDescription ?? ''}"
-카테고리: ${input.category}${isSensitiveCategory ? ' (민감 카테고리 — 표현 제한 적용)' : ''}
-
-공통 규칙:
-- 짧고 강렬하게 (이모지 절대 사용 금지)
-- 오직 한글과 기본 문장부호만 사용
-- scene2와 scene3은 이슈의 서로 다른 각도 (scene2: 핵심 쟁점, scene3: 파급 효과·전망)
-${isSensitiveCategory ? sensitiveRules : generalRules}
-
-끝맺음 규칙:
-- Title: 명사나 의문형으로 완결
-- Desc: 종결어미(-다/-주목/-관심 등)나 완결 명사로 끝낼 것
-- 절대 금지: "~대한" "~위한" 같은 수식어, "~하며" "~해서" 같은 연결어미, "~에" "~의" "~을" "~로" 같은 조사로 끝나는 것
-
-scene2: scene2Title 15자 이내 / scene2Desc 35자 이내
-scene3: scene3Title 15자 이내 / scene3Desc 35자 이내
-
-JSON으로만 응답:
-{"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
-
-    const fallback: ShortformTextOutput = {
-        scene1Title,
-        scene1Desc,
-        scene2Title: '왜 이게 터진 걸까',
-        scene2Desc: '온라인이 완전히 달아올랐다',
-        scene3Title: '지금 여론은',
-        scene3Desc: '의견이 완전히 갈렸다',
-    }
-
-    // 이모지 및 특수문자 제거 함수
+    // ── 공통 텍스트 처리 유틸 ──
     const clean = (str: string) =>
-        str.replace(/[\u{1F000}-\u{1FFFF}]/gu, '').replace(/[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\u0020-\u007E]/g, '').trim()
+        str.replace(/[\u{1F000}-\u{1FFFF}]/gu, '').replace(/[^가-힣ᄀ-ᇿ㄰-㆏ -~]/g, '').trim()
 
-    // 단어 경계 기준 최대 글자 수 truncation
     const truncate = (str: string, maxLen: number): string => {
         if (str.length <= maxLen) return str
         const cut = str.slice(0, maxLen)
@@ -189,16 +119,16 @@ JSON으로만 응답:
         return lastSpace > 2 ? cut.slice(0, lastSpace) : cut
     }
 
-    // 수식어·조사·연결어미로 끝나는 미완성 문장 감지 후 앞 어절로 후퇴 (최대 5회 반복)
     const INCOMPLETE_ENDINGS = [
         '대한', '위한', '관한', '인한', '따른', '통한', '향한', '대해',
         '이나', '이고', '이며', '이어', '새로운', '다양한', '중요한',
         '의', '에', '을', '를', '로', '와', '과', '도', '만', '은', '는',
         '이', '가', '기', '어', '아', '며', '서', '고',
-        '면', '거나', '도록',  // 조건·선택·목적 연결어미
+        '면', '거나', '도록',
     ]
     const fixIncomplete = (str: string): string => {
         let result = str.trim()
+        if (result.endsWith('.') || result.endsWith('。')) result = result.slice(0, -1).trim()
         for (let pass = 0; pass < 5; pass++) {
             const lastSpaceIdx = result.lastIndexOf(' ')
             if (lastSpaceIdx === -1) break
@@ -209,41 +139,133 @@ JSON으로만 응답:
         return result
     }
 
-    // 키 순환: 앞 키가 실패하면 다음 키로 재시도
+    // brief_summary 원문을 코드에서 직접 70자 이내로 처리 (Groq 미경유)
+    const processDesc = (raw: string): string => fixIncomplete(truncate(clean(raw), 70))
+
+    const safeT = (raw: unknown, fb: string) => fixIncomplete(truncate(clean(String(raw ?? fb)), 15))
+    const safeD = (raw: unknown, fb: string) => fixIncomplete(truncate(clean(String(raw ?? fb)), 35))
+
+    const fallback: ShortformTextOutput = {
+        scene1Title,
+        scene1Desc,
+        scene2Title: '왜 이게 터진 걸까',
+        scene2Desc: '온라인이 완전히 달아올랐다',
+        scene3Title: '지금 여론은',
+        scene3Desc: '의견이 완전히 갈렸다',
+    }
+
+    // brief_summary 직접 내용 추출
+    const rawDesc2 = (input.briefBullets?.filter(Boolean)[0] ?? '').trim()
+    const rawDesc3 = (input.briefConclusion ?? '').trim()
+    const hasBriefContent = rawDesc2.length > 0 || rawDesc3.length > 0
+
+    // ── brief 내용 있는 경우 ──
+    // 타이틀: 이슈 제목 그대로 (Groq 불필요)
+    // desc ≤35자: 코드 직접 처리
+    // desc >35자: Groq 압축 전용 콜 (새 창작 없이 줄이기만)
+    if (hasBriefContent) {
+        const d2Base = rawDesc2 || rawDesc3
+        const d3Base = rawDesc3 && rawDesc3 !== rawDesc2 ? rawDesc3 : rawDesc2  // scene3 항상 존재
+
+        const sceneTitle = clean(rawTitle)
+
+        const d2Code = d2Base.length <= 70 ? processDesc(d2Base) : null
+        const d3Code = d3Base.length <= 70 ? processDesc(d3Base) : null
+
+        // 둘 다 35자 이하 → Groq 불필요
+        if (d2Code !== null && d3Code !== null) {
+            console.log('[brief 코드 처리]', { scene2Desc: d2Code, scene3Desc: d3Code })
+            return {
+                scene1Title: clean(scene1Title), scene1Desc,
+                scene2Title: sceneTitle, scene2Desc: d2Code,
+                scene3Title: sceneTitle, scene3Desc: d3Code,
+            }
+        }
+
+        // 35자 초과 항목 → Groq 압축 전용 콜
+        for (const apiKey of apiKeys) {
+            try {
+                const groq = new Groq({ apiKey })
+
+                const s2Inst = d2Code
+                    ? `씬2 (확정): "${d2Code}"`
+                    : `씬2 (압축 필요): "${d2Base}" → 35자 이내, 원문 의미 보존, 새 내용 금지`
+                const s3Inst = d3Code
+                    ? `씬3 (확정): "${d3Code}"`
+                    : `씬3 (압축 필요): "${d3Base}" → 35자 이내, 원문 의미 보존, 새 내용 금지`
+
+                const r = await groq.chat.completions.create({
+                    model: 'llama-3.1-8b-instant',
+                    messages: [{ role: 'user', content:
+                        `숏폼 씬 설명 텍스트를 처리하세요.\n\n${s2Inst}\n${s3Inst}\n\n규칙: 이모지 금지, 한글과 기본 문장부호만, 조사/연결어미로 끝나지 말 것\n\nJSON으로만 응답: {"scene2Desc":"...","scene3Desc":"..."}` }],
+                    temperature: 0.2, max_tokens: 150,
+                })
+                const parsed = JSON.parse((r.choices[0]?.message?.content?.match(/\{[\s\S]*\}/) ?? ['{}'])[0])
+
+                const scene2Desc = d2Code ?? safeD(parsed.scene2Desc, fallback.scene2Desc)
+                const scene3Desc = d3Code ?? safeD(parsed.scene3Desc, fallback.scene3Desc)
+
+                console.log('[brief Groq 압축]', { d2Base, d3Base, scene2Desc, scene3Desc })
+                return {
+                    scene1Title: clean(scene1Title), scene1Desc,
+                    scene2Title: sceneTitle, scene2Desc,
+                    scene3Title: sceneTitle, scene3Desc,
+                }
+            } catch (error) {
+                console.error(`[Groq 압축 실패] key=...${apiKey.slice(-6)}:`, error)
+            }
+        }
+        // 모든 키 실패 → 코드 truncate 폴백
+        return {
+            scene1Title: clean(scene1Title), scene1Desc,
+            scene2Title: sceneTitle, scene2Desc: d2Code ?? processDesc(d2Base),
+            scene3Title: sceneTitle, scene3Desc: d3Code ?? processDesc(d3Base),
+        }
+    }
+
+    // ── brief 내용 없는 경우: Groq 프리 생성 ──
+    const freeGenPrompt = `당신은 숏폼 SNS 콘텐츠 기획자입니다.
+아래 이슈의 Scene 2, 3 텍스트를 생성하세요.
+
+이슈 제목: "${input.title}"
+이슈 설명: "${input.issueDescription ?? ''}"
+카테고리: ${input.category}${isSensitiveCategory ? ' (민감 카테고리 — 표현 제한 적용)' : ''}
+
+규칙:
+- 짧고 강렬하게, 이모지 금지, 한글과 기본 문장부호만
+- scene2와 scene3은 서로 다른 각도 (scene2: 핵심 쟁점, scene3: 파급 효과·전망)
+${isSensitiveCategory ? sensitiveRules : generalRules}
+- Title: 명사나 의문형으로 완결
+- Desc: 종결어미(-다/-주목 등)나 완결 명사로 끝낼 것, 조사/연결어미 끝 금지
+
+scene2: scene2Title 15자 이내 / scene2Desc 35자 이내
+scene3: scene3Title 15자 이내 / scene3Desc 35자 이내
+
+JSON으로만 응답:
+{"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
+
     for (const apiKey of apiKeys) {
         try {
             const groq = new Groq({ apiKey })
             const completion = await groq.chat.completions.create({
                 model: 'llama-3.1-8b-instant',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.3,
-                max_tokens: 300,
+                messages: [{ role: 'user', content: freeGenPrompt }],
+                temperature: 0.3, max_tokens: 300,
             })
-
             const text = completion.choices[0]?.message?.content?.trim() ?? ''
-            console.log(`[Groq 텍스트 응답] key=...${apiKey.slice(-6)}:`, text)
-
+            console.log(`[Groq 프리 생성] key=...${apiKey.slice(-6)}:`, text)
             const jsonMatch = text.match(/\{[\s\S]*\}/)
-            if (!jsonMatch) {
-                console.warn('[Groq] JSON 파싱 실패, 다음 키 시도')
-                continue
-            }
-
+            if (!jsonMatch) { console.warn('[Groq] JSON 파싱 실패'); continue }
             const parsed = JSON.parse(jsonMatch[0])
-            const safeText = (raw: unknown, fallbackVal: string, maxLen: number) =>
-                fixIncomplete(truncate(clean(String(raw ?? fallbackVal)), maxLen))
-
             return {
-                scene1Title: clean(scene1Title),
-                scene1Desc:  scene1Desc,
-                scene2Title: safeText(parsed.scene2Title, fallback.scene2Title, 15),
-                scene2Desc:  safeText(parsed.scene2Desc,  fallback.scene2Desc,  35),
-                scene3Title: safeText(parsed.scene3Title, fallback.scene3Title, 15),
-                scene3Desc:  safeText(parsed.scene3Desc,  fallback.scene3Desc,  35),
+                scene1Title: clean(scene1Title), scene1Desc,
+                scene2Title: safeT(parsed.scene2Title, fallback.scene2Title),
+                scene2Desc:  safeD(parsed.scene2Desc,  fallback.scene2Desc),
+                scene3Title: safeT(parsed.scene3Title, fallback.scene3Title),
+                scene3Desc:  safeD(parsed.scene3Desc,  fallback.scene3Desc),
             }
         } catch (error) {
-            console.error(`[Groq 텍스트 실패] key=...${apiKey.slice(-6)}:`, error)
-            // 다음 키로 계속
+            console.error(`[Groq 프리 생성 실패] key=...${apiKey.slice(-6)}:`, error)
         }
     }
 
