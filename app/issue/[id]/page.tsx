@@ -143,7 +143,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         { count: voteCount },
         sessionClient,
         { data: timelineSummariesRaw },
-        { data: timelinePointsRaw },
         { data: newsData },
     ] = await Promise.all([
         getIssue(id),
@@ -164,11 +163,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .select('stage, stage_title, bullets, date_start, date_end')
             .eq('issue_id', id),
         supabaseAdmin
-            .from('timeline_points')
-            .select('stage, title, occurred_at, ai_summary')
-            .eq('issue_id', id)
-            .order('occurred_at', { ascending: true }),
-        supabaseAdmin
             .from('news_data')
             .select('id, title, link, source, published_at, issue_id, created_at')
             .eq('issue_id', id)
@@ -185,13 +179,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             dateStart: row.date_start,
             dateEnd: row.date_end,
         }))
-
-    const timelinePoints = (timelinePointsRaw ?? []).map(row => ({
-        stage: row.stage as '발단' | '전개' | '파생' | '진정' | '종결',
-        title: row.title ?? '',
-        occurredAt: row.occurred_at,
-        aiSummary: row.ai_summary ?? null,
-    }))
 
     /* 토론 주제별 의견(댓글) 수 집계 */
     const topicIds = (discussionTopics ?? []).map((t) => t.id)
@@ -329,9 +316,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <TimelineSection
                         issueId={id}
                         issueStatus={issue.status}
-                        issueUpdatedAt={issue.updated_at}
                         initialSummaries={timelineSummaries}
-                        initialPoints={timelinePoints}
                     />
                 </div>
             </div>

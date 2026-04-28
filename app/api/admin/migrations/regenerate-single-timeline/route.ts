@@ -126,7 +126,7 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
 
         const parsed = parseJsonObject<{
             reclassify: Record<string, string>
-            summaries: Array<{ stage: string; stageTitle: string; bullets: string[] }>
+            summaries: Array<{ stage: string; stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>
             brief: { intro: string; bullets: string[]; conclusion: string }
         }>(content)
 
@@ -176,19 +176,33 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
 
         // ── 3. timeline_summaries 행 구성 ────────────────────────────
         const now = new Date().toISOString()
+        type BulletItem = { date: string; text: string }
         const rows = stages.map(stage => {
             const items = grouped.get(stage)!
             const dates = items.map(i => i.occurred_at).sort()
             const ai = parsed.summaries.find(s => s.stage === stage)
 
-            let bullets: string[] = ai?.bullets ?? []
-            bullets = bullets.filter((b: unknown) => typeof b === 'string' && (b as string).trim().length > 0)
+            const rawBullets: Array<string | BulletItem> = ai?.bullets ?? []
+            let bullets: BulletItem[] = rawBullets
+                .map((b): BulletItem | null => {
+                    if (typeof b === 'string') {
+                        const text = b.trim()
+                        return text ? { date: '', text } : null
+                    }
+                    if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
+                        return { date: (b.date ?? '').trim(), text: b.text.trim() }
+                    }
+                    return null
+                })
+                .filter((b): b is BulletItem => b !== null)
 
-            const uniqueBullets: string[] = []
+            bullets = bullets.filter((b) => b.text.trim().length > 0)
+
+            const uniqueBullets: BulletItem[] = []
             for (const bullet of bullets) {
-                const normalized = bullet.toLowerCase().trim()
+                const normalized = bullet.text.toLowerCase().trim()
                 const isDuplicate = uniqueBullets.some(existing => {
-                    const existingNormalized = existing.toLowerCase().trim()
+                    const existingNormalized = existing.text.toLowerCase().trim()
                     if (normalized === existingNormalized) return true
                     const shorter = normalized.length < existingNormalized.length ? normalized : existingNormalized
                     const longer = normalized.length >= existingNormalized.length ? normalized : existingNormalized
@@ -202,7 +216,7 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
                 stage,
                 stage_title: ai?.stageTitle ?? stage,
                 bullets: uniqueBullets,
-                summary: uniqueBullets.join(' '),
+                summary: uniqueBullets.map(b => b.text).join(' '),
                 date_start: dates[0],
                 date_end: dates[dates.length - 1],
                 generated_at: now,

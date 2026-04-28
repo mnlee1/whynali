@@ -367,7 +367,6 @@ export default function IssuePreviewDrawer({
                                     key={summaryKey}
                                     issueId={issue.id}
                                     issueStatus={issue.status}
-                                    issueUpdatedAt={issue.updated_at}
                                 />
                             ) : (
                                 <TimelineEditor

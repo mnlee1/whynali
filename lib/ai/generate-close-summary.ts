@@ -31,17 +31,24 @@ export async function generateCloseSummary(issueId: string, issueTitle: string):
     if (!points || points.length === 0) return
 
     const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
-    const grouped = new Map<string, string[]>()
+    const grouped = new Map<string, Array<{ title: string; occurred_at: string | null }>>()
     for (const p of points) {
         if (!grouped.has(p.stage)) grouped.set(p.stage, [])
-        grouped.get(p.stage)!.push(p.title ?? '')
+        grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
     }
 
     const stagesText = [...grouped.keys()]
         .sort((a, b) => (STAGE_ORDER[a] ?? 9) - (STAGE_ORDER[b] ?? 9))
         .map(stage => {
-            const titles = grouped.get(stage)!.map(t => `- ${t}`).join('\n')
-            return `[${stage}]\n${titles}`
+            const items = grouped.get(stage)!
+            const lines = items.map(item => {
+                const dt = new Date(item.occurred_at ?? '')
+                const dateStr = !isNaN(dt.getTime())
+                    ? `${dt.getMonth() + 1}월 ${dt.getDate()}일`
+                    : ''
+                return dateStr ? `- [${dateStr}] ${item.title}` : `- ${item.title}`
+            }).join('\n')
+            return `[${stage}]\n${lines}`
         }).join('\n\n')
 
     const allDates = points.map(p => p.occurred_at).filter(Boolean).sort()
@@ -63,10 +70,11 @@ ${stagesText}
 - 기사 제목에 나온 사실만 사용하세요 (추측 금지)
 - stageTitle: 이 이슈의 마무리를 한 구절로 (예: "공식 사과로 일단락", "결론 없이 자연 소멸")
 - bullets: 마무리 과정의 핵심 포인트 2~3개 (한 문장씩)
+- 각 bullet의 date는 해당 뉴스의 [날짜]를 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
 - 기사가 적거나 결론이 불분명하면 솔직하게 "관심 감소로 자연 소멸" 등으로 표현
 
 JSON 응답:
-{"stageTitle":"마무리 제목","bullets":["포인트1","포인트2"]}`
+{"stageTitle":"마무리 제목","bullets":[{"date":"4월 26일","text":"포인트1"},{"date":"4월 27일","text":"포인트2"}]}`
 
     try {
         const content = await callGroq(
@@ -74,8 +82,24 @@ JSON 응답:
             { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 400 },
         )
 
-        const parsed = parseJsonObject<{ stageTitle: string; bullets: string[] }>(content)
+        const parsed = parseJsonObject<{ stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>(content)
         if (!parsed?.stageTitle || !parsed?.bullets?.length) return
+
+        type BulletItem = { date: string; text: string }
+        const lastDate = allDates.length > 0 ? (() => {
+            const dt = new Date(allDates[allDates.length - 1])
+            return !isNaN(dt.getTime()) ? `${dt.getMonth() + 1}월 ${dt.getDate()}일` : ''
+        })() : ''
+
+        const bullets: BulletItem[] = (parsed.bullets ?? [])
+            .map((b): BulletItem | null => {
+                if (typeof b === 'string') return b.trim() ? { date: lastDate, text: b.trim() } : null
+                if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
+                    return { date: (b.date ?? '').trim() || lastDate, text: b.text.trim() }
+                }
+                return null
+            })
+            .filter((b): b is BulletItem => b !== null)
 
         const { error } = await supabaseAdmin
             .from('timeline_summaries')
@@ -83,8 +107,8 @@ JSON 응답:
                 issue_id: issueId,
                 stage: '종결',
                 stage_title: parsed.stageTitle,
-                bullets: parsed.bullets,
-                summary: parsed.bullets.join(' '),
+                bullets,
+                summary: bullets.map(b => b.text).join(' '),
                 date_start: allDates[allDates.length - 1] ?? closedAt,
                 date_end: closedAt,
                 generated_at: closedAt,
