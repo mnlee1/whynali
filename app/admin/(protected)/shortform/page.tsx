@@ -9,7 +9,7 @@
  * 승인된 job은 영상 생성 후 플랫폼 업로드 대상이 됩니다.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import AdminPagination from '@/components/admin/AdminPagination'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
@@ -61,16 +61,10 @@ const APPROVAL_STATUS_STYLE: Record<string, string> = {
     'rejected': 'bg-red-100 text-red-700',
 }
 
-const HEAT_GRADE_STYLE: Record<string, string> = {
-    '높음': 'bg-red-100 text-red-700',
-    '보통': 'bg-yellow-100 text-yellow-700',
-    '낮음': 'bg-gray-100 text-gray-600',
-}
-
 const TRIGGER_TYPE_LABEL: Record<string, string> = {
-    'issue_created': '이슈 승인',
-    'status_changed': '상태 전환',
-    'daily_batch': '일일 배치',
+    'issue_created': '수동 생성',
+    'status_changed': '수동 생성',
+    'daily_batch': '자동 생성',
 }
 
 function formatDate(dateString: string): string {
@@ -119,6 +113,9 @@ export default function AdminShortformPage() {
     const [manualCreateError, setManualCreateError] = useState<string | null>(null)
     const [issueOptions, setIssueOptions] = useState<IssueOption[]>([])
     const [issueOptionsLoading, setIssueOptionsLoading] = useState(false)
+    const [issueSearchQuery, setIssueSearchQuery] = useState('')
+    const [issueDropdownOpen, setIssueDropdownOpen] = useState(false)
+    const issueDropdownRef = useRef<HTMLDivElement>(null)
 
     const loadTabCounts = useCallback(async () => {
         const tabParams: { value: FilterStatus; params: Record<string, string> }[] = [
@@ -190,6 +187,24 @@ export default function AdminShortformPage() {
             setIssueOptionsLoading(false)
         }
     }, [])
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (issueDropdownRef.current && !issueDropdownRef.current.contains(e.target as Node)) {
+                setIssueDropdownOpen(false)
+            }
+        }
+        if (issueDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [issueDropdownOpen])
+
+    const filteredIssueOptions = issueOptions.filter((issue) =>
+        issue.title.toLowerCase().includes(issueSearchQuery.toLowerCase())
+    )
+
+    const selectedIssueObj = issueOptions.find((issue) => issue.id === selectedIssueId)
 
     useEffect(() => {
         loadTabCounts()
@@ -484,9 +499,7 @@ export default function AdminShortformPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-content-primary">숏폼 관리</h1>
-                    <p className="text-sm text-content-secondary mt-1">
-                        이슈 승인/상태 전환 시 자동 생성된 숏폼 job 목록
-                    </p>
+                    <p className="text-sm text-content-muted mt-1">숏폼 Job은 일일 배치로 자동 생성되거나 수동으로 직접 생성할 수 있습니다.</p>
                 </div>
                 <button
                     onClick={handleToggleManualCreate}
@@ -518,24 +531,24 @@ export default function AdminShortformPage() {
                         {issueOptionsLoading ? (
                             <p className="text-sm text-content-muted">이슈 목록 불러오는 중...</p>
                         ) : (
-                            <div className="relative">
-                                <select
-                                    value={selectedIssueId}
+                            <div className="relative" ref={issueDropdownRef}>
+                                <input
+                                    type="text"
+                                    value={issueDropdownOpen ? issueSearchQuery : (selectedIssueObj?.title ?? '')}
                                     onChange={(e) => {
-                                        setSelectedIssueId(e.target.value)
+                                        setIssueSearchQuery(e.target.value)
+                                        setSelectedIssueId('')
                                         setManualCreateError(null)
                                     }}
+                                    onFocus={() => {
+                                        setIssueDropdownOpen(true)
+                                        setIssueSearchQuery('')
+                                    }}
+                                    placeholder="이슈를 검색하세요"
                                     disabled={manualCreateLoading}
-                                    className="w-full pl-3 pr-8 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface appearance-none"
-                                >
-                                    <option value="">이슈를 선택하세요</option>
-                                    {issueOptions.map((issue) => (
-                                        <option key={issue.id} value={issue.id}>
-                                            {issue.title}
-                                            {issue.heat_index != null ? ` (화력 ${issue.heat_index})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                    className="w-full pl-3 pr-8 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
+                                    readOnly={!issueDropdownOpen}
+                                />
                                 <svg
                                     className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted"
                                     xmlns="http://www.w3.org/2000/svg"
@@ -544,6 +557,31 @@ export default function AdminShortformPage() {
                                 >
                                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                                 </svg>
+                                {issueDropdownOpen && (
+                                    <div className="absolute z-20 w-full mt-1 bg-surface border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                        {filteredIssueOptions.length === 0 ? (
+                                            <div className="px-3 py-2 text-sm text-content-muted">검색 결과 없음</div>
+                                        ) : (
+                                            filteredIssueOptions.map((issue) => (
+                                                <div
+                                                    key={issue.id}
+                                                    onMouseDown={() => {
+                                                        setSelectedIssueId(issue.id)
+                                                        setIssueSearchQuery('')
+                                                        setIssueDropdownOpen(false)
+                                                        setManualCreateError(null)
+                                                    }}
+                                                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-surface-subtle ${selectedIssueId === issue.id ? 'bg-primary-light/20 text-primary' : 'text-content-primary'}`}
+                                                >
+                                                    {issue.title}
+                                                    {issue.heat_index != null && (
+                                                        <span className="text-content-muted ml-1">(화력 {issue.heat_index})</span>
+                                                    )}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                         {!issueOptionsLoading && issueOptions.length === 0 && (
@@ -596,16 +634,13 @@ export default function AdminShortformPage() {
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 이슈 정보
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
-                                화력/출처
-                            </th>
                             <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
-                                트리거
+                                생성 타입
                             </th>
                             <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 상태
                             </th>
-                            <th className="w-32 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                            <th className="w-44 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 생성일
                             </th>
                             <th className="w-48 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
@@ -617,14 +652,14 @@ export default function AdminShortformPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={6} className="px-4 py-3">
+                                    <td colSpan={5} className="px-4 py-3">
                                         <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : jobs.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-content-muted">
+                                <td colSpan={5} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 숏폼 job이 없습니다.
                                 </td>
                             </tr>
@@ -634,21 +669,21 @@ export default function AdminShortformPage() {
                                 return (
                                     <tr key={job.id} className="hover:bg-surface-subtle">
                                         <td className="px-4 py-3 text-sm">
-                                            <Link
-                                                href={`/issue/${job.issue_id}`}
-                                                target="_blank"
-                                                className="text-primary hover:underline font-medium inline-block max-w-full mb-1"
-                                            >
-                                                {job.issue_title}
-                                            </Link>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
                                                     job.issue_status === '점화' ? 'bg-orange-100 text-orange-700' :
                                                     job.issue_status === '논란중' ? 'bg-red-100 text-red-700' :
                                                     'bg-surface-muted text-content-secondary'
                                                 }`}>
                                                     {job.issue_status}
                                                 </span>
+                                                <Link
+                                                    href={`/issue/${job.issue_id}`}
+                                                    target="_blank"
+                                                    className="text-primary hover:underline font-medium"
+                                                >
+                                                    {job.issue_title}
+                                                </Link>
                                             </div>
                                             {job.video_path && (
                                                 <div className="mt-2 flex items-start gap-2">
@@ -670,14 +705,6 @@ export default function AdminShortformPage() {
                                                     </button>
                                                 </div>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <span className={`inline-block px-2 py-1 text-xs rounded-full mb-1 ${HEAT_GRADE_STYLE[job.heat_grade]}`}>
-                                                화력 {job.heat_grade}
-                                            </span>
-                                            <div className="text-sm text-content-secondary">
-                                                뉴스 {job.source_count.news}건 / 커뮤니티 {job.source_count.community}건
-                                            </div>
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-200">
@@ -704,7 +731,7 @@ export default function AdminShortformPage() {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-content-secondary">
+                                        <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">
                                             {formatDate(job.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
