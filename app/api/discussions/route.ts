@@ -36,12 +36,21 @@ export async function GET(request: NextRequest) {
         query = query.eq('issue_id', issue_id)
     }
     if (q) {
-        const { data: matchingIssues } = await admin
-            .from('issues')
-            .select('id')
-            .ilike('title', `%${q}%`)
+        // 전체 검색어 + 각 토큰(단어)으로 이슈 제목 검색
+        // 예: "국회의원 막말 거부" → "국회의원 막말 거부" 전체 + "국회의원", "막말", "거부" 각각 검색
+        const tokens = q.split(/\s+/).filter(t => t.length >= 2)
+        const searchTerms = [q, ...tokens]
 
-        const matchingIssueIds = (matchingIssues ?? []).map((i) => i.id)
+        const issueResults = await Promise.all(
+            searchTerms.map(term =>
+                admin.from('issues').select('id').ilike('title', `%${term}%`)
+            )
+        )
+        const matchingIssueIds = [
+            ...new Set(
+                issueResults.flatMap(r => (r.data ?? []).map(i => i.id))
+            )
+        ]
 
         if (matchingIssueIds.length > 0) {
             query = query.or(

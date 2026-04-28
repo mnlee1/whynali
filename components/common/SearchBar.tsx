@@ -23,7 +23,8 @@ interface SearchBarProps {
     onChange: (value: string) => void
     onSearch?: () => void
     placeholder?: string
-    category?: string  // 카테고리 키워드 추천용 (연예, 스포츠 등)
+    category?: string          // 카테고리 키워드 추천용 (연예, 스포츠 등)
+    keywordSource?: 'issues' | 'discussions'  // 키워드 출처 (기본: 'issues')
 }
 
 interface SuggestedKeyword {
@@ -37,31 +38,46 @@ export default function SearchBar({
     onSearch,
     placeholder = '이슈 검색',
     category,
+    keywordSource = 'issues',
 }: SearchBarProps) {
     const [showDropdown, setShowDropdown] = useState(false)
     const [keywords, setKeywords] = useState<SuggestedKeyword[]>([])
     const wrapperRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
-    // 카테고리 기반 추천 키워드 로드
+    // 카테고리/출처 기반 추천 키워드 로드
     useEffect(() => {
         async function loadKeywords() {
             try {
-                const url = category
-                    ? `/api/issues?sort=heat&limit=15&category=${encodeURIComponent(category)}`
-                    : `/api/issues?sort=heat&limit=15`
-                const res = await fetch(url)
-                const data = await res.json()
-                if (!data.data) return
+                let titles: string[] = []
+
+                if (keywordSource === 'discussions') {
+                    // 커뮤니티: 인기 토론 주제의 관련 이슈 제목에서 키워드 추출
+                    const res = await fetch('/api/discussions?sort=popular&limit=15')
+                    const data = await res.json()
+                    titles = (data.data ?? [])
+                        .map((t: { issues?: { title?: string } | null; body?: string }) =>
+                            t.issues?.title ?? t.body ?? ''
+                        )
+                        .filter(Boolean)
+                } else {
+                    // 이슈: 카테고리 화력 상위 이슈 제목에서 키워드 추출
+                    const url = category
+                        ? `/api/issues?sort=heat&limit=15&category=${encodeURIComponent(category)}`
+                        : `/api/issues?sort=heat&limit=15`
+                    const res = await fetch(url)
+                    const data = await res.json()
+                    titles = (data.data ?? []).map((issue: { title?: string }) => {
+                        return (issue.title ?? '')
+                            .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+                            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                    })
+                }
 
                 const result: SuggestedKeyword[] = []
                 const used = new Set<string>()
-
-                for (const issue of data.data) {
+                for (const title of titles) {
                     if (result.length >= 5) break
-                    const title = (issue.title ?? '')
-                        .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-                        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
                     const keyword = extractKeyword(title)
                     if (keyword && !used.has(keyword)) {
                         result.push({ keyword, rank: result.length + 1 })
@@ -74,7 +90,7 @@ export default function SearchBar({
             }
         }
         loadKeywords()
-    }, [category])
+    }, [category, keywordSource])
 
     // 외부 클릭 시 드롭다운 닫기
     useEffect(() => {
@@ -126,7 +142,10 @@ export default function SearchBar({
                 <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-xl shadow-card z-50">
                     <div className="px-3 pt-2.5 pb-1">
                         <p className="text-[11px] text-content-muted mb-1.5">
-                            {category ? `${category} 인기 키워드` : '인기 키워드'}
+                            {keywordSource === 'discussions'
+                                ? '커뮤니티 인기 키워드'
+                                : category ? `${category} 인기 키워드` : '인기 키워드'
+                            }
                         </p>
                     </div>
                     <ul className="pb-1.5">
