@@ -47,7 +47,16 @@ export async function GET(request: NextRequest) {
         }
 
         if (q && q.trim()) {
-            query = query.ilike('title', `%${q.trim()}%`)
+            const tokens = q.trim().split(/\s+/).filter(t => t.length >= 2)
+            if (tokens.length > 1) {
+                // 복합 키워드: 각 토큰을 AND 조건으로 적용
+                // 예: "국회의원 막말 거부" → title에 세 단어가 모두 포함된 이슈
+                for (const token of tokens) {
+                    query = query.ilike('title', `%${token}%`)
+                }
+            } else {
+                query = query.ilike('title', `%${q.trim()}%`)
+            }
         }
 
         if (sort === 'heat') {
