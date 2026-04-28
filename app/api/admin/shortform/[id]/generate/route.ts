@@ -61,21 +61,31 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        // 2. issues 정보 별도 조회 (컬럼 없어도 실패하지 않음)
+        // 2. issues 정보 별도 조회
         let issueCategory = '사회'
         let issueDescription: string | undefined
         let briefBullets: string[] | undefined
         let briefConclusion: string | undefined
         try {
-            const { data: issue } = await supabaseAdmin
+            const { data: issue, error: issueError } = await supabaseAdmin
                 .from('issues')
                 .select('category, topic_description, brief_summary')
                 .eq('id', job.issue_id)
                 .single()
+
+            if (issueError) {
+                console.error('[숏폼 생성] issues 조회 오류:', issueError)
+                return NextResponse.json(
+                    { error: 'ISSUE_FETCH_ERROR', message: `이슈 정보 조회 실패: ${issueError.message}` },
+                    { status: 500 }
+                )
+            }
+
             if (issue) {
                 issueCategory = (issue as any).category ?? '사회'
 
                 const topicDesc = ((issue as any).topic_description as string | null | undefined)?.trim()
+                console.log(`[숏폼 생성] topic_description:`, topicDesc ? topicDesc.slice(0, 80) + '...' : '(없음)')
 
                 if (!topicDesc) {
                     return NextResponse.json(
@@ -98,8 +108,12 @@ export async function POST(request: NextRequest, { params }: Params) {
                 console.log(`[숏폼 생성] 씬2:`, briefBullets[0])
                 console.log(`[숏폼 생성] 씬3:`, briefConclusion)
             }
-        } catch {
-            // issues 조회 실패 시 기본값으로 진행
+        } catch (issueErr) {
+            console.error('[숏폼 생성] issues 조회 예외:', issueErr)
+            return NextResponse.json(
+                { error: 'ISSUE_FETCH_ERROR', message: '이슈 정보 조회 중 예외가 발생했습니다.' },
+                { status: 500 }
+            )
         }
 
         // 3. MP4 동영상 생성 (3-Scene)
