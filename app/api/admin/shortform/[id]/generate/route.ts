@@ -69,7 +69,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         try {
             const { data: issue, error: issueError } = await supabaseAdmin
                 .from('issues')
-                .select('category, topic_description, brief_summary')
+                .select('category, topic_description')
                 .eq('id', job.issue_id)
                 .single()
 
