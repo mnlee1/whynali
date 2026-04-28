@@ -35,14 +35,6 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
             )
         }
 
-        // pending 상태는 삭제 불가 (실수 방지)
-        if (job.approval_status === 'pending') {
-            return NextResponse.json(
-                { error: 'INVALID_STATUS', message: '대기 중인 job은 삭제할 수 없습니다. 반려 후 삭제해주세요.' },
-                { status: 422 }
-            )
-        }
-
         // Storage에 영상 파일이 있으면 함께 삭제
         if (job.video_path) {
             const { error: storageError } = await supabaseAdmin
