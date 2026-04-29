@@ -258,19 +258,28 @@ export async function GET(request: NextRequest) {
         // 토론 주제 생성
         if (!hasDiscussion && canDiscussion) {
             try {
-                const topics = await generateDiscussionTopics(metadata, 3)
-                if (topics.length > 0) {
-                    const { error: insertErr } = await supabaseAdmin
-                        .from('discussion_topics')
-                        .insert(topics.map(t => ({
-                            issue_id: issue.id,
-                            body: t.content,
-                            is_ai_generated: true,
-                            approval_status: '대기',
-                        })))
-                    if (!insertErr) {
-                        discussionGenerated += topics.length
-                        console.log(`  ✓ [토론] "${issue.title}" — ${topics.length}건 생성`)
+                // track-a와의 race condition 방어: AI 호출 전 DB 재확인
+                const { count: existingDiscussionCount } = await supabaseAdmin
+                    .from('discussion_topics')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('issue_id', issue.id)
+                if ((existingDiscussionCount ?? 0) > 0) {
+                    console.log(`  ↩ [토론 스킵] "${issue.title}" — 이미 존재 (race condition 감지)`)
+                } else {
+                    const topics = await generateDiscussionTopics(metadata, 3)
+                    if (topics.length > 0) {
+                        const { error: insertErr } = await supabaseAdmin
+                            .from('discussion_topics')
+                            .insert(topics.map(t => ({
+                                issue_id: issue.id,
+                                body: t.content,
+                                is_ai_generated: true,
+                                approval_status: '대기',
+                            })))
+                        if (!insertErr) {
+                            discussionGenerated += topics.length
+                            console.log(`  ✓ [토론] "${issue.title}" — ${topics.length}건 생성`)
+                        }
                     }
                 }
             } catch (e) {
@@ -281,31 +290,40 @@ export async function GET(request: NextRequest) {
         // 투표 생성
         if (!hasVote && canVote) {
             try {
-                const votes = await generateVoteOptions(metadata, 1)
-                if (votes.length > 0) {
-                    const vote = votes[0]
-                    const { data: newVote, error: voteErr } = await supabaseAdmin
-                        .from('votes')
-                        .insert({
-                            issue_id: issue.id,
-                            title: vote.title,
-                            phase: '대기',
-                            approval_status: '대기',
-                            is_ai_generated: true,
-                            issue_status_snapshot: issue.status ?? null,
-                        })
-                        .select('id')
-                        .single()
+                // track-a와의 race condition 방어: AI 호출 전 DB 재확인
+                const { count: existingVoteCount } = await supabaseAdmin
+                    .from('votes')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('issue_id', issue.id)
+                if ((existingVoteCount ?? 0) > 0) {
+                    console.log(`  ↩ [투표 스킵] "${issue.title}" — 이미 존재 (race condition 감지)`)
+                } else {
+                    const votes = await generateVoteOptions(metadata, 1)
+                    if (votes.length > 0) {
+                        const vote = votes[0]
+                        const { data: newVote, error: voteErr } = await supabaseAdmin
+                            .from('votes')
+                            .insert({
+                                issue_id: issue.id,
+                                title: vote.title,
+                                phase: '대기',
+                                approval_status: '대기',
+                                is_ai_generated: true,
+                                issue_status_snapshot: issue.status ?? null,
+                            })
+                            .select('id')
+                            .single()
 
-                    if (!voteErr && newVote) {
-                        await supabaseAdmin
-                            .from('vote_choices')
-                            .insert(vote.choices.map(label => ({
-                                vote_id: newVote.id,
-                                label,
-                            })))
-                        voteGenerated += 1
-                        console.log(`  ✓ [투표] "${issue.title}" — "${vote.title}"`)
+                        if (!voteErr && newVote) {
+                            await supabaseAdmin
+                                .from('vote_choices')
+                                .insert(vote.choices.map(label => ({
+                                    vote_id: newVote.id,
+                                    label,
+                                })))
+                            voteGenerated += 1
+                            console.log(`  ✓ [투표] "${issue.title}" — "${vote.title}"`)
+                        }
                     }
                 }
             } catch (e) {
