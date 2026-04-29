@@ -279,9 +279,9 @@ export async function checkDuplicateIssue(
         Date.now() - CLOSED_CHECK_DAYS * 24 * 60 * 60 * 1000
     ).toISOString()
 
-    // 활성 이슈: 상태 기준 (기간 무관) — 점화/논란중 중인 이슈는 언제든 연결 대상
-    // 대기 이슈: 14일 이내 — 관리자 승인 전이지만 연결 대상 (7일 지나면 저화력 이슈는 정리됨)
-    // 종결 이슈: 승인된 것만, 종결 후 14일 이내 (재점화 연결 대상)
+    // 활성 이슈: 기간 무관, 승인·대기만 포함 (반려·병합됨 제외)
+    // 대기 이슈: 14일 이내, 승인·대기만 포함
+    // 종결 이슈: 30일 이내, 승인·대기 포함 (병합 타깃이 대기 상태일 수 있으므로 대기도 포함)
     const [activeResult, pendingResult, closedResult] = await Promise.all([
         supabaseAdmin
             .from('issues')
@@ -300,7 +300,7 @@ export async function checkDuplicateIssue(
             .from('issues')
             .select('id, title, status, created_at')
             .eq('status', '종결')
-            .eq('approval_status', '승인')
+            .in('approval_status', ['승인', '대기'])
             .gte('updated_at', closedCutoff)
             .order('updated_at', { ascending: false }),
     ])
