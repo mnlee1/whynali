@@ -16,11 +16,13 @@
  *  5. 캐시 무효화
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
+import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
+import { generateAndCacheSummaries } from '@/lib/ai/generate-timeline-summary'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,7 +82,7 @@ export async function POST(
 
         const { data: targetIssue, error: tgtErr } = await supabaseAdmin
             .from('issues')
-            .select('id, title')
+            .select('id, title, status, topic_description')
             .eq('id', targetId)
             .single()
         if (tgtErr || !targetIssue) {
@@ -136,7 +138,20 @@ export async function POST(
             .update({ issue_id: targetId, issue_title: targetIssue.title })
             .eq('issue_id', sourceId)
 
-        // 7. 소스 이슈 병합됨 처리
+        // 7. 타임라인 요약 정리
+        // 소스 요약 삭제 (소스 이슈가 사라지므로 불필요)
+        await supabaseAdmin.from('timeline_summaries').delete().eq('issue_id', sourceId)
+        // 타깃이 종결 상태이면 종결 요약 삭제:
+        // 소스 데이터가 합산되어 화력이 오를 수 있고, 타임라인도 바뀌므로 기존 요약은 무효
+        if (targetIssue.status === '종결') {
+            await supabaseAdmin
+                .from('timeline_summaries')
+                .delete()
+                .eq('issue_id', targetId)
+                .eq('stage', '종결')
+        }
+
+        // 8. 소스 이슈 병합됨 처리
         await supabaseAdmin
             .from('issues')
             .update({
@@ -156,6 +171,20 @@ export async function POST(
         revalidatePath('/')
         revalidatePath(`/issue/${sourceId}`)
         revalidatePath(`/issue/${targetId}`)
+
+        // 응답 후 백그라운드에서 타임라인 요약 즉시 재생성
+        // 종결 요약 + 단계별 요약(발단/전개/파생) 모두 갱신
+        // 종결 이슈도 단계별 요약은 항상 갱신 필요 (소스 포인트가 추가됐으므로)
+        after(async () => {
+            try {
+                if (targetIssue.status === '종결') {
+                    await generateCloseSummary(targetIssue.id, targetIssue.title, true)
+                }
+                await generateAndCacheSummaries(targetIssue.id, targetIssue.title, targetIssue.topic_description)
+            } catch (e) {
+                console.error(`[병합 후 타임라인 재생성 실패] ${targetIssue.title}:`, e)
+            }
+        })
 
         return NextResponse.json({
             success: true,
