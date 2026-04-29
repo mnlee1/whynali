@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
                                     )
                                 }
 
-                                // 재점화(종결 → 논란중)되면 마감 예약 취소
+                                // 재점화(종결 → 논란중)되면 마감 예약 취소 + 타임라인 정리
                                 if (oldStatus === '종결' && transition.newStatus === '논란중') {
                                     const { count: voteCount } = await cancelVoteScheduledClose(issue.id)
                                     if (voteCount > 0) {
@@ -255,6 +255,19 @@ export async function GET(request: NextRequest) {
                                     const { count: discussionCount } = await cancelDiscussionScheduledClose(issue.id)
                                     if (discussionCount > 0) {
                                         console.log(`[토론 마감 취소] 이슈 ${issue.id} 재점화 → ${discussionCount}개 토론 마감 예약 취소`)
+                                    }
+
+                                    // 종결 요약 삭제: 논란이 재개됐으므로 더 이상 유효하지 않음
+                                    // 진정 포인트는 그대로 유지 — 그 시점에 실제 있었던 사실이므로 변경하지 않음
+                                    // 이슈가 다시 종결될 때 전체 타임라인을 반영한 새 요약이 생성됨
+                                    const { data: deletedSummary, error: summaryDeleteError } = await supabaseAdmin
+                                        .from('timeline_summaries')
+                                        .delete()
+                                        .eq('issue_id', issue.id)
+                                        .eq('stage', '종결')
+                                        .select('id')
+                                    if (!summaryDeleteError && (deletedSummary?.length ?? 0) > 0) {
+                                        console.log(`[타임라인 정리] 이슈 ${issue.id} 재점화 → 종결 요약 삭제`)
                                     }
                                 }
                                 
