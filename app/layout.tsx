@@ -32,6 +32,14 @@ export const metadata: Metadata = {
     },
 }
 
+const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: '왜난리',
+    url: 'https://whynali.com',
+    logo: 'https://whynali.com/whynali-logo.png',
+}
+
 export default function RootLayout({
     children,
 }: {
@@ -40,6 +48,10 @@ export default function RootLayout({
     return (
         <html lang="ko">
             <body className="min-h-screen bg-surface-muted text-content-primary antialiased font-pretendard">
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+                />
                 <NextTopLoader color="#a202e3" showSpinner={false} />
                 <Header />
                 <main className="min-h-screen flex flex-col pb-8 md:pb-14 xl:pb-24">
