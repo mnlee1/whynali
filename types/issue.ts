@@ -8,6 +8,7 @@ export type TimelineStage = '발단' | '전개' | '파생' | '진정'
 
 export interface Issue {
     id: string
+    short_code?: string // 6-8자 짧은 코드 (예: aBc123) - 숏URL용 (마이그레이션 후 생성)
     title: string
     status: IssueStatus
     category: IssueCategory

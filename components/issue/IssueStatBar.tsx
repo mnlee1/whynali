@@ -3,12 +3,16 @@
 import { useState, useEffect } from 'react'
 import { Eye, MessageSquare, BadgeCheck, Users } from 'lucide-react'
 import ReactionDropdown from '@/components/issue/ReactionDropdown'
+import ShareButton from '@/components/issue/ShareButton'
 
 interface IssueStatBarProps {
     issueId: string
     userId: string | null
     initialVoteCount: number
     initialDiscussionCount: number
+    shortCode?: string
+    title?: string
+    thumbnailUrl?: string
 }
 
 interface Stats {
@@ -45,7 +49,7 @@ const STATS_META = [
     },
 ]
 
-export default function IssueStatBar({ issueId, userId, initialVoteCount, initialDiscussionCount }: IssueStatBarProps) {
+export default function IssueStatBar({ issueId, userId, initialVoteCount, initialDiscussionCount, shortCode, title, thumbnailUrl }: IssueStatBarProps) {
     const [stats, setStats] = useState<Stats>({
         viewCount: 0,
         commentCount: 0,
@@ -118,13 +122,24 @@ export default function IssueStatBar({ issueId, userId, initialVoteCount, initia
                 })}
             </div>
 
-            {/* 우측 그룹: 조회수 */}
-            {viewStat && (
-                <span className="flex items-center gap-1 pl-2.5 py-1 text-xs text-content-secondary">
-                    {viewStat.icon}
-                    <span>{stats.viewCount.toLocaleString()}</span>
-                </span>
-            )}
+            {/* 우측 그룹: 조회수, 공유 */}
+            <div className="flex items-center gap-1">
+                {viewStat && (
+                    <span className="flex items-center gap-1 pl-2.5 py-1 text-xs text-content-secondary">
+                        {viewStat.icon}
+                        <span>{stats.viewCount.toLocaleString()}</span>
+                    </span>
+                )}
+                {shortCode && title && (
+                    <ShareButton
+                        issueId={issueId}
+                        shortCode={shortCode}
+                        title={title}
+                        thumbnailUrl={thumbnailUrl}
+                        compact={true}
+                    />
+                )}
+            </div>
         </div>
     )
 }
