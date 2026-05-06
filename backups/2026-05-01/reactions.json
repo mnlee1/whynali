@@ -1,0 +1,100 @@
+[
+  {
+    "id": "6695dc1c-c13c-4224-963d-931ccf42f5c4",
+    "issue_id": "6bcd0ed4-1822-41d4-8798-6fe5ab0a9177",
+    "user_id": "a3f5cf25-005c-455a-b984-b6e9a8a6ecd9",
+    "type": "화나요",
+    "created_at": "2026-04-24T04:57:55.352578+00:00"
+  },
+  {
+    "id": "46a21707-fccf-41f6-a49c-244727c4eb8a",
+    "issue_id": "d46e82d2-62c8-4ac3-afb1-f26ee6b09ee5",
+    "user_id": "c7e8b77c-36af-4622-a3f3-cafcd153ff14",
+    "type": "화나요",
+    "created_at": "2026-04-23T04:52:39.032848+00:00"
+  },
+  {
+    "id": "9ae14a13-d983-4328-9a13-65e6ef42a511",
+    "issue_id": "9e662c32-6886-46fd-8af8-0a6fefc95f47",
+    "user_id": "1be6f52a-f320-4f62-ae77-7631c72a2290",
+    "type": "좋아요",
+    "created_at": "2026-04-23T04:49:57.668154+00:00"
+  },
+  {
+    "id": "1eae6dc7-7b06-4370-9a13-dde8df6bbcfa",
+    "issue_id": "bbaf16af-b36e-4fc7-a0e9-94fa91bffc64",
+    "user_id": "1240323a-f089-4106-87ac-2a25d574217f",
+    "type": "좋아요",
+    "created_at": "2026-04-21T06:32:12.792563+00:00"
+  },
+  {
+    "id": "d4057fdc-765c-49cb-aa48-263e55e21534",
+    "issue_id": "2ec03833-9c8a-4485-a39b-2e635dffb1f8",
+    "user_id": "1240323a-f089-4106-87ac-2a25d574217f",
+    "type": "좋아요",
+    "created_at": "2026-04-21T05:15:56.106977+00:00"
+  },
+  {
+    "id": "96954433-31ed-4176-894f-505b1774a5ea",
+    "issue_id": "9e662c32-6886-46fd-8af8-0a6fefc95f47",
+    "user_id": "1240323a-f089-4106-87ac-2a25d574217f",
+    "type": "좋아요",
+    "created_at": "2026-04-17T02:35:38.86231+00:00"
+  },
+  {
+    "id": "20206e14-a719-437b-a4c4-5cdd18fa5191",
+    "issue_id": "feddd571-ea5d-4ffa-a23b-44e15cc3ef93",
+    "user_id": "89315ef5-8ee8-4177-abea-aef3b0febb00",
+    "type": "좋아요",
+    "created_at": "2026-04-15T07:53:38.519604+00:00"
+  },
+  {
+    "id": "98eac2bb-ad71-44f5-bc77-46489de2c57f",
+    "issue_id": "d4e4e1b2-ca79-4a25-ac5d-f9afae72de6f",
+    "user_id": "64c31011-e5fd-43c7-984a-f41d78db40a3",
+    "type": "좋아요",
+    "created_at": "2026-04-15T05:50:23.438496+00:00"
+  },
+  {
+    "id": "2ac85976-64ce-4d7e-a1ef-08acfe4fdc52",
+    "issue_id": "04279130-016b-4a1a-8066-39d56e1a570e",
+    "user_id": "0f5ffc2b-6825-4767-81d7-2ece8649ff1d",
+    "type": "싫어요",
+    "created_at": "2026-04-14T00:50:18.110063+00:00"
+  },
+  {
+    "id": "d98ffba4-c3f2-449b-bf1f-19f874ed9769",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "user_id": "0f5ffc2b-6825-4767-81d7-2ece8649ff1d",
+    "type": "싫어요",
+    "created_at": "2026-04-14T00:49:04.218913+00:00"
+  },
+  {
+    "id": "9813cb9c-7e89-4b43-84fa-38aac9ef2e77",
+    "issue_id": "7719c0ae-b9bf-40c5-bf26-7321d105f447",
+    "user_id": "0f5ffc2b-6825-4767-81d7-2ece8649ff1d",
+    "type": "좋아요",
+    "created_at": "2026-04-14T00:47:34.937151+00:00"
+  },
+  {
+    "id": "26d9af2a-43ed-4d2d-9006-b78c48f02a3b",
+    "issue_id": "787e37ad-7bca-4add-ae7a-eb99b242dcf2",
+    "user_id": "1240323a-f089-4106-87ac-2a25d574217f",
+    "type": "좋아요",
+    "created_at": "2026-04-13T07:17:25.906162+00:00"
+  },
+  {
+    "id": "8de7c727-db5a-4083-9f43-20ac520a2000",
+    "issue_id": "46a1662b-cefe-4601-b57b-eb7a3e0cf974",
+    "user_id": "0457f020-34d5-4a60-bba6-5184c2574ccb",
+    "type": "좋아요",
+    "created_at": "2026-04-10T06:10:21.818133+00:00"
+  },
+  {
+    "id": "cebc56ca-d44c-4a60-961e-8b862e84fd34",
+    "issue_id": "7a35af5e-635d-491a-b49d-30aadf2646c9",
+    "user_id": "0457f020-34d5-4a60-bba6-5184c2574ccb",
+    "type": "화나요",
+    "created_at": "2026-04-09T06:45:32.62167+00:00"
+  }
+]

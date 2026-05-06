@@ -738,13 +738,22 @@ export default function AdminShortformPage() {
                                             {job.approval_status === 'pending' && (
                                                 <div className="flex flex-col gap-1.5 min-w-max">
                                                     {!job.video_path && (
-                                                        <button
-                                                            onClick={() => handlePreviewImages(job)}
-                                                            disabled={isProcessing}
-                                                            className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
-                                                        >
-                                                            이미지 확인
-                                                        </button>
+                                                        <div className="flex flex-nowrap gap-1.5">
+                                                            <button
+                                                                onClick={() => handlePreviewImages(job)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                이미지 확인
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(job.id)}
+                                                                disabled={isProcessing}
+                                                                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                삭제
+                                                            </button>
+                                                        </div>
                                                     )}
                                                     {job.video_path && (
                                                         <div className="flex flex-nowrap gap-1.5">
