@@ -278,6 +278,47 @@ Vercel 대시보드 → Settings → Environment Variables:
 
 ---
 
+## Perplexity 전환 대비
+
+### 프로바이더 추가 방법
+
+1. `PerplexityProvider` 구현
+
+```typescript
+// lib/ai/perplexity-provider.ts
+export class PerplexityProvider implements AIProvider {
+    readonly providerName = 'perplexity'
+    
+    async complete(prompt: string, options?: AIOptions): Promise<string> {
+        // Perplexity API 호출
+    }
+}
+```
+
+2. `ai-client.ts`에 추가
+
+```typescript
+switch (providerName) {
+    case 'groq':
+        return new GroqProvider()
+    case 'perplexity':
+        return new PerplexityProvider()  // 추가
+    default:
+        throw new Error(`지원하지 않는 AI 프로바이더: ${providerName}`)
+}
+```
+
+3. 환경변수 변경
+
+```env
+AI_PROVIDER=perplexity
+PERPLEXITY_API_KEY=your_key
+```
+
+기존 코드 수정 불필요 (추상화 레이어가 자동 처리)
+
+---
+
 ## 추가 조정 옵션
 
 ### 옵션 A: 크론 주기 늘리기

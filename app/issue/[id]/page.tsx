@@ -34,6 +34,7 @@ import StatusBadge from '@/components/common/StatusBadge'
 import IssueScrollHeader from '@/components/issue/IssueScrollHeader'
 import ViewCounter from '@/components/issue/ViewCounter'
 import IssueStatBar from '@/components/issue/IssueStatBar'
+import ShareButton from '@/components/issue/ShareButton'
 import { formatFullDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
@@ -78,24 +79,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     const keywords = ['이슈', '논란', '왜난리', issue.title, issue.category, ...(categoryKeywords[issue.category] || [])]
 
-    const relativeTime = (date: string) => {
-        const now = new Date()
-        const past = new Date(date)
-        const diffMs = now.getTime() - past.getTime()
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-        const diffDays = Math.floor(diffHours / 24)
-
-        if (diffHours < 1) return '방금 전'
-        if (diffHours < 24) return `${diffHours}시간 전`
-        if (diffDays < 7) return `${diffDays}일 전`
-        return `${Math.floor(diffDays / 7)}주 전`
-    }
-
-    const updatedDescription = `${description} (마지막 업데이트: ${relativeTime(issue.updated_at)})`
-
     return {
         title,
-        description: updatedDescription,
+        description,
         keywords,
         openGraph: {
             type: 'article',
@@ -103,7 +89,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             url: `/issue/${id}`,
             siteName: '왜난리',
             title,
-            description: updatedDescription,
+            description,
             publishedTime: issue.created_at,
             modifiedTime: issue.updated_at,
             section: issue.category,
@@ -120,7 +106,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
         twitter: {
             card: 'summary_large_image',
             title,
-            description: updatedDescription,
+            description,
             images: ['/og-image.png'],
         },
         alternates: {
@@ -262,6 +248,11 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     const articleSchema = generateArticleSchema(issue)
     const breadcrumbSchema = generateBreadcrumbSchema(breadcrumbItems)
 
+    // 대표 이미지 선택 (카카오톡 공유용)
+    const thumbnailUrl = issue.thumbnail_urls && issue.thumbnail_urls.length > 0
+        ? issue.thumbnail_urls[issue.primary_thumbnail_index ?? 0]
+        : undefined
+
     return (
         <>
             <Script
@@ -284,6 +275,8 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     userId={userId}
                     initialVoteCount={voteCount ?? 0}
                     initialDiscussionCount={discussionTopicsWithStats?.length ?? 0}
+                    shortCode={issue.short_code}
+                    thumbnailUrl={thumbnailUrl}
                 />
 
             {/* 이슈 헤더 */}
@@ -304,6 +297,9 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     userId={userId}
                     initialVoteCount={voteCount ?? 0}
                     initialDiscussionCount={discussionTopicsWithStats?.length ?? 0}
+                    shortCode={issue.short_code}
+                    title={issue.title}
+                    thumbnailUrl={thumbnailUrl}
                 />
             </div>
 

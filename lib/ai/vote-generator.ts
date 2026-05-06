@@ -142,8 +142,10 @@ function parseVotes(raw: string): GeneratedVote[] {
 
         // 거친 반말 어미만 차단 (~냐 계열)
         const COLLOQUIAL = /[이]?냐\?*$|어떠냐\?*$/
-        // ASCII/한자 외 비정상 문자 포함 여부
-        const ABNORMAL = /[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF\u0020-\u007E·–—\-·…,]/
+        // 의문형 끝맺음 허용 패턴 (ASCII/전각 ? 및 한국어 의문 어미)
+        const QUESTION_ENDINGS = /[?？]$|는가\??$|인가\??$|ㄴ가\??$|겠는가\??$|있나\??$|하나\??$/
+        // ASCII/한자 외 비정상 문자 포함 여부 (전각 ?！ 추가 허용)
+        const ABNORMAL = /[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF\u0020-\u007E·–—\-·…,?！？]/
 
         return votesArray
             .filter((item): item is { title: string; choices: string[] } =>
@@ -154,7 +156,7 @@ function parseVotes(raw: string): GeneratedVote[] {
                 typeof item.title === 'string' &&
                 item.title.trim().length > 0 &&
                 item.title.trim().length <= 35 &&  // 초과 시 필터링 (잘리지 않도록)
-                item.title.trim().endsWith('?') &&  // 반드시 의문문
+                QUESTION_ENDINGS.test(item.title.trim()) &&  // 의문형 끝맺음 (유연하게)
                 !COLLOQUIAL.test(item.title.trim()) && // 구어체 차단
                 !ABNORMAL.test(item.title.trim()) &&   // 한자·이상 문자 차단
                 Array.isArray(item.choices) &&
