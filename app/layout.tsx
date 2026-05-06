@@ -47,6 +47,9 @@ export default function RootLayout({
 }) {
     return (
         <html lang="ko">
+            <head>
+                <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" async></script>
+            </head>
             <body className="min-h-screen bg-surface-muted text-content-primary antialiased font-pretendard">
                 <script
                     type="application/ld+json"

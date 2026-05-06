@@ -43,6 +43,7 @@ export default function robots(): MetadataRoute.Robots {
                     '/mypage',
                     '/login',
                     '/debug-env',
+                    '/i/*',
                 ],
             },
         ],

@@ -144,7 +144,7 @@ export default function AdminVotesPage() {
             const res = await fetch('/api/admin/votes/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ issue_id: selectedIssue.id, count: 1 }),
+                body: JSON.stringify({ issue_id: selectedIssue.id, count: 2 }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)

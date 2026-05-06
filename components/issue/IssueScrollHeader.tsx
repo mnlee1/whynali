@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { MessageSquare, BadgeCheck, Users } from 'lucide-react'
 import StatusBadge from '@/components/common/StatusBadge'
 import ReactionDropdown from '@/components/issue/ReactionDropdown'
+import ShareButton from '@/components/issue/ShareButton'
 import type { IssueStatus } from '@/types/issue'
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
     userId: string | null
     initialVoteCount: number
     initialDiscussionCount: number
+    shortCode?: string
+    thumbnailUrl?: string
 }
 
 interface Stats {
@@ -27,7 +30,7 @@ const NAV_ITEMS = [
     { key: 'discussionCount' as keyof Stats, icon: <Users className="w-4 h-4" strokeWidth={1.8} />,          scrollTo: 'section-discussion' },
 ]
 
-export default function IssueScrollHeader({ title, status, issueId, userId, initialVoteCount, initialDiscussionCount }: Props) {
+export default function IssueScrollHeader({ title, status, issueId, userId, initialVoteCount, initialDiscussionCount, shortCode, thumbnailUrl }: Props) {
     const [visible, setVisible] = useState(false)
     const [stats, setStats] = useState<Stats>({
         commentCount: 0,
@@ -107,20 +110,30 @@ export default function IssueScrollHeader({ title, status, issueId, userId, init
                         <StatusBadge status={status} size="xs" />
                         <p className="text-sm font-semibold text-content-primary truncate">{title}</p>
                     </div>
-                    {/* 2행: 감정표현 + 섹션 이동 */}
-                    <div className="flex items-center -mx-0.5">
-                        <ReactionDropdown issueId={issueId} userId={userId} />
-                        {NAV_ITEMS.map(({ key, icon, scrollTo }) => (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => handleClick(scrollTo)}
-                                className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
-                            >
-                                {icon}
-                                <span>{stats[key] > 0 ? stats[key].toLocaleString() : ''}</span>
-                            </button>
-                        ))}
+                    {/* 2행: 감정표현 + 섹션 이동 + 공유 */}
+                    <div className="flex items-center justify-between -mx-0.5">
+                        <div className="flex items-center">
+                            <ReactionDropdown issueId={issueId} userId={userId} />
+                            {NAV_ITEMS.map(({ key, icon, scrollTo }) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => handleClick(scrollTo)}
+                                    className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
+                                >
+                                    {icon}
+                                    <span>{stats[key] > 0 ? stats[key].toLocaleString() : ''}</span>
+                                </button>
+                            ))}
+                        </div>
+                        {shortCode && (
+                            <ShareButton
+                                issueId={issueId}
+                                shortCode={shortCode}
+                                title={title}
+                                compact={true}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -143,6 +156,15 @@ export default function IssueScrollHeader({ title, status, issueId, userId, init
                                 <span>{stats[key] > 0 ? stats[key].toLocaleString() : ''}</span>
                             </button>
                         ))}
+                        {shortCode && (
+                            <ShareButton
+                                issueId={issueId}
+                                shortCode={shortCode}
+                                title={title}
+                                thumbnailUrl={thumbnailUrl}
+                                compact={true}
+                            />
+                        )}
                     </div>
                 </div>
 
