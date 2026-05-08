@@ -19,7 +19,7 @@
  * - COMMUNITY_BURST_WINDOW_MINUTES: 감지 시간 창 (기본 10분)
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { checkDuplicateIssue } from './duplicate-checker'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
 import { calculateHeatIndex } from '@/lib/analysis/heat'

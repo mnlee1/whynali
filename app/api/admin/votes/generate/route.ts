@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import type { IssueMetadata } from '@/lib/ai/vote-generator'

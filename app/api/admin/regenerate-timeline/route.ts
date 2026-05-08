@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { generateAndCacheSummaries } from '@/lib/ai/generate-timeline-summary'
 

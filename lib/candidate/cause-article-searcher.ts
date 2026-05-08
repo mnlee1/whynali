@@ -19,7 +19,7 @@
  *   4. 중복 방지: 이미 발단에 있는 유사 제목 제외
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonArray } from '@/lib/ai/parse-json-response'
 

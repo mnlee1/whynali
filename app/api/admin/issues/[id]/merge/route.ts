@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse, after } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 import { generateCloseSummary } from '@/lib/ai/generate-close-summary'

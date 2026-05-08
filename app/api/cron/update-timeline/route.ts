@@ -18,7 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonArray } from '@/lib/ai/parse-json-response'

@@ -7,7 +7,7 @@
  * 목표는 데이터베이스에서 동적으로 불러옵니다.
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 const supabase = supabaseAdmin
 

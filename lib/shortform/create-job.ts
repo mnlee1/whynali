@@ -12,7 +12,7 @@
  * - 동일 이슈 쿨다운
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { SHORTFORM_DAILY_MAX, SHORTFORM_MIN_HEAT_GRADE } from '@/lib/config/shortform-thresholds'
 import type { ShortformTriggerType, HeatGrade, ShortformSourceCount } from '@/types/shortform'
 

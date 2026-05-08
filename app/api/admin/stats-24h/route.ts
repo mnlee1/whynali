@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
