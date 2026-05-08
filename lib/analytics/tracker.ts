@@ -100,6 +100,12 @@ export async function trackPageView(params: {
         
         const { data: { user } } = await supabase.auth.getUser()
         
+        // 관리자는 KPI 추적에서 제외
+        if (user?.app_metadata?.is_admin === true) {
+            console.debug('[Analytics] Admin user - skipping tracking')
+            return
+        }
+        
         await supabase.from('page_views').insert({
             user_id: user?.id || null,
             session_id: sessionId,
@@ -127,6 +133,12 @@ export async function trackConversion(params: {
     try {
         const sessionId = getSessionId()
         const { data: { user } } = await supabase.auth.getUser()
+        
+        // 관리자는 KPI 추적에서 제외
+        if (user?.app_metadata?.is_admin === true) {
+            console.debug('[Analytics] Admin user - skipping conversion tracking')
+            return
+        }
         
         // 첫 방문 시 UTM 가져오기
         const firstUTM = JSON.parse(sessionStorage.getItem('whynali_first_utm') || '{}')
