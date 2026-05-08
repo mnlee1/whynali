@@ -212,16 +212,16 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .select('*', { count: 'exact', head: true })
 
     // 4. 참여율 계산
-    const commentParticipation = totalUsers > 0
-        ? ((totalComments || 0) / totalUsers) * 100
+    const commentParticipation = (totalUsers || 0) > 0
+        ? ((totalComments || 0) / (totalUsers || 0)) * 100
         : 0
 
-    const reactionParticipation = totalUsers > 0
-        ? ((totalReactions || 0) / totalUsers) * 100
+    const reactionParticipation = (totalUsers || 0) > 0
+        ? ((totalReactions || 0) / (totalUsers || 0)) * 100
         : 0
 
-    const voteParticipation = totalUsers > 0
-        ? ((totalVotes || 0) / totalUsers) * 100
+    const voteParticipation = (totalUsers || 0) > 0
+        ? ((totalVotes || 0) / (totalUsers || 0)) * 100
         : 0
 
     // 5. 최근 7일 데이터
