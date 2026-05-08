@@ -8,6 +8,7 @@
 
 import type { Metadata } from 'next'
 import Script from 'next/script'
+import { Suspense } from 'react'
 import './globals.css'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
@@ -79,7 +80,9 @@ export default function RootLayout({
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
                 />
                 <NextTopLoader color="#a202e3" showSpinner={false} />
-                <PageTracker />
+                <Suspense fallback={null}>
+                    <PageTracker />
+                </Suspense>
                 <Header />
                 <main className="min-h-screen flex flex-col pb-8 md:pb-14 xl:pb-24">
                     {children}
