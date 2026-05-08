@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase'
 
 const SAVED_EMAIL_KEY = 'admin_saved_email'
 

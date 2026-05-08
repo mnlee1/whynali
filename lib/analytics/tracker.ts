@@ -7,7 +7,7 @@
  * 재미나이 제안 반영: 유입 경로별 세분화, 전환율 측정
  */
 
-import { supabase } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase'
 
 // 세션 ID 생성 (브라우저 세션 단위)
 function getSessionId(): string {

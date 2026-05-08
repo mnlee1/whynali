@@ -36,3 +36,6 @@ export function createSupabaseAdminClient() {
         { auth: { autoRefreshToken: false, persistSession: false } }
     )
 }
+
+/* supabaseAdmin alias for compatibility */
+export const supabaseAdmin = createSupabaseAdminClient()
