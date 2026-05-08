@@ -22,7 +22,7 @@ import { getIssues } from '@/lib/api/issues'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { getCategoryById } from '@/lib/config/categories'
-import { supabase } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase'
 
 import 'swiper/css'
 import 'swiper/css/pagination'
