@@ -109,10 +109,16 @@ export default function KPIDashboardPage() {
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
     const [showHelp, setShowHelp] = useState<string | null>(null)
     
-    // 월 선택
+    // 월 선택 (5월은 건너뛰고 6월부터 시작)
     const now = new Date()
-    const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-    const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    
+    // 5월이면 자동으로 6월로, 아니면 현재 월
+    const initialMonth = (currentYear === 2026 && currentMonth === 5) ? 6 : currentMonth
+    
+    const [selectedYear, setSelectedYear] = useState(currentYear)
+    const [selectedMonth, setSelectedMonth] = useState(initialMonth)
 
     const fetchData = async (year?: number, month?: number) => {
         setLoading(true)
@@ -144,8 +150,13 @@ export default function KPIDashboardPage() {
         setSelectedMonth(month)
     }
 
-    // 이전/다음 월 이동
+    // 이전/다음 월 이동 (2026년 5월은 건너뛰기)
     const handlePrevMonth = () => {
+        // 2026년 6월에서는 5월로 이동 불가
+        if (selectedYear === 2026 && selectedMonth === 6) {
+            return
+        }
+        
         if (selectedMonth === 1) {
             setSelectedYear(selectedYear - 1)
             setSelectedMonth(12)
@@ -282,8 +293,9 @@ export default function KPIDashboardPage() {
                     <div className="flex items-center gap-2 ml-4">
                         <button
                             onClick={handlePrevMonth}
-                            className="p-2 hover:bg-surface-muted rounded-lg transition-colors"
-                            title="이전 월"
+                            disabled={selectedYear === 2026 && selectedMonth === 6}
+                            className="p-2 hover:bg-surface-muted rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={selectedYear === 2026 && selectedMonth === 6 ? "5월 데이터는 제외됩니다" : "이전 월"}
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
