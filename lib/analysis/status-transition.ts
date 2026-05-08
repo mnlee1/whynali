@@ -17,7 +17,7 @@
  *   - 이슈가 '종결' 상태로 전환되면 관련 투표 자동 마감
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
 import { CANDIDATE_MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-thresholds'
 

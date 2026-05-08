@@ -8,7 +8,7 @@
  * 로그 기록 실패는 메인 액션을 막지 않도록 에러를 무시한다.
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 export async function writeAdminLog(
     action: string,

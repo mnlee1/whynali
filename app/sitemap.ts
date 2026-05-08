@@ -18,7 +18,7 @@
  */
 
 import { MetadataRoute } from 'next'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import type { IssueStatus } from '@/types/issue'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

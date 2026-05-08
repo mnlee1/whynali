@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 
 interface NaverNewsItem {

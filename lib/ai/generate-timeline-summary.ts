@@ -4,7 +4,7 @@
  * 이슈 타임라인 AI 요약 생성 — update-timeline cron과 어드민 백필에서 공용으로 사용
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 

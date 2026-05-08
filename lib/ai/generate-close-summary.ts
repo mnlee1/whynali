@@ -6,7 +6,7 @@
  * recalculate-heat 크론에서 종결 전환 시 호출 + update-timeline에서 백필
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 

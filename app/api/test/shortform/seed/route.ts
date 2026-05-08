@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import type { HeatGrade, ShortformSourceCount } from '@/types/shortform'
 
 export const dynamic = 'force-dynamic'
