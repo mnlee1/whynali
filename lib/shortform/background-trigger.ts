@@ -11,7 +11,7 @@
  * - 외부 유입 효과가 낮은 저화력 이슈는 제외
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { createShortformJob } from './create-job'
 import type { ShortformTriggerType } from '@/types/shortform'
 

@@ -13,7 +13,7 @@
  */
 
 import Groq from 'groq-sdk'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { incrementApiUsage } from '@/lib/api-usage-tracker'
 import type { AIProvider, AIOptions } from './ai-provider.interface'
 

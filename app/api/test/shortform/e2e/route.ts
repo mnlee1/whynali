@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { createShortformJob } from '@/lib/shortform/create-job'
 import { generate3SceneShortform } from '@/lib/shortform/generate-image'
 import { uploadToYouTube, getYoutubeShortsUrl } from '@/lib/shortform/youtube-upload'

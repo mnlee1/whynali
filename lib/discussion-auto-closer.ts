@@ -9,7 +9,7 @@
  * - 활동이 없으면 auto-end-discussions 크론이 정상 마감 처리
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 /** 이슈가 '종결' 상태로 전환될 때 호출. 7일 후 자동 마감 예약. */
 export async function closeDiscussionsOnIssueClosed(issueId: string) {

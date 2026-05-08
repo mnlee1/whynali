@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { writeAdminLog } from '@/lib/admin-log'
 import { uploadToInstagram, getInstagramPostUrl } from '@/lib/shortform/instagram-upload'
 import { extractYoutubeHashtags } from '@/lib/shortform/generate-text'

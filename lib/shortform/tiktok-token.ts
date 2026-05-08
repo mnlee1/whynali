@@ -10,7 +10,7 @@
  * 2. .env.local TIKTOK_ACCESS_TOKEN (초기값 폴백)
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 interface TikTokTokens {
     access_token: string
