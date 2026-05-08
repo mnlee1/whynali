@@ -1,0 +1,67 @@
+name: 카드뉴스 자동 생성 및 업로드
+
+on:
+    schedule:
+        # 매주 수요일 오전 9시 (KST = UTC+9, 즉 UTC 0시)
+        - cron: '0 0 * * 3'
+        # 매주 토요일 오전 9시 (KST)
+        - cron: '0 0 * * 6'
+    workflow_dispatch:
+        inputs:
+            publish:
+                description: '실제 SNS 업로드 여부'
+                required: false
+                default: 'true'
+                type: choice
+                options:
+                    - 'true'
+                    - 'false'
+
+jobs:
+    generate-and-publish:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+
+        steps:
+            - name: 저장소 체크아웃
+              uses: actions/checkout@v4
+
+            - name: Node.js 설정
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+
+            - name: 의존성 설치
+              run: npm ci
+
+            - name: Playwright 브라우저 설치
+              run: npx playwright install chromium
+
+            - name: 카드뉴스 파이프라인 실행
+              run: |
+                  if [ "${{ github.event.inputs.publish }}" = "false" ]; then
+                    npx tsx scripts/card-news/pipeline.ts
+                  else
+                    npx tsx scripts/card-news/pipeline.ts --publish
+                  fi
+              env:
+                  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+                  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+                  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+                  IG_USER_ID: ${{ secrets.IG_USER_ID }}
+                  IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+                  THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+                  THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+                  TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+                  TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+                  TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+                  TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+
+            - name: 생성된 이미지 아티팩트 업로드
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: card-news-${{ github.run_number }}
+                  path: scripts/card-news/output/*.png
+                  retention-days: 7

@@ -4,12 +4,6 @@
  * Kakao JavaScript SDK 초기화
  */
 
-declare global {
-    interface Window {
-        Kakao: any
-    }
-}
-
 let isInitialized = false
 
 export function initKakao() {
