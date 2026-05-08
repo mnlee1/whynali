@@ -1,0 +1,33 @@
+name: Instagram 토큰 자동 갱신
+
+on:
+    schedule:
+        # 매달 1일 오전 9시 (KST = UTC 0시)
+        - cron: '0 0 1 * *'
+    workflow_dispatch:
+
+jobs:
+    refresh-token:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - name: Instagram 토큰 갱신
+              id: refresh
+              run: |
+                  RESPONSE=$(curl -s "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${{ secrets.IG_ACCESS_TOKEN }}")
+                  echo "$RESPONSE"
+                  NEW_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
+                  if [ -z "$NEW_TOKEN" ]; then
+                    echo "❌ 토큰 갱신 실패"
+                    exit 1
+                  fi
+                  echo "new_token=$NEW_TOKEN" >> $GITHUB_OUTPUT
+                  echo "✅ 토큰 갱신 성공"
+
+            - name: GitHub Secrets 업데이트
+              env:
+                  GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+              run: |
+                  echo "${{ steps.refresh.outputs.new_token }}" | gh secret set IG_ACCESS_TOKEN --repo ${{ github.repository }}
+                  echo "✅ GitHub Secrets 업데이트 완료"

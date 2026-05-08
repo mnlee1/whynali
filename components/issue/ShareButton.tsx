@@ -38,7 +38,13 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
         ? window.location.origin 
         : process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
     
-    const shareUrl = `${baseUrl}/i/${shortCode}`
+    // 기본 공유 URL (UTM 없음)
+    const baseShareUrl = `${baseUrl}/i/${shortCode}`
+    
+    // 플랫폼별 UTM 추가 함수
+    const getShareUrlWithUTM = (platform: string) => {
+        return `${baseShareUrl}?utm_source=${platform}&utm_medium=share`
+    }
 
     // Kakao SDK 초기화
     useEffect(() => {
@@ -97,6 +103,8 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
     const handleShare = async (platform: string) => {
         console.log('[ShareButton] 공유 플랫폼:', platform)
         trackShare(platform)
+        
+        const shareUrl = getShareUrlWithUTM(platform)
 
         // X (트위터) 공유
         if (platform === 'twitter') {
@@ -190,6 +198,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
 
     const copyLink = async () => {
         try {
+            const shareUrl = getShareUrlWithUTM('copy')
             const copyText = `요즘 난리 한눈에 👀, 왜난리에서 바로 확인하세요!\n${shareUrl}`
             await navigator.clipboard.writeText(copyText)
             setCopied(true)
@@ -323,9 +332,9 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             </div>
 
             <div className="mt-3 pt-3 border-t border-border space-y-2">
-                <p className="text-xs text-content-secondary break-all">{shareUrl}</p>
+                <p className="text-xs text-content-secondary break-all">{baseShareUrl}</p>
                 <p className="text-xs text-content-muted">
-                    X, 카카오톡은 클릭 시 자동으로 링크가 복사됩니다
+                    공유 시 자동으로 유입 경로가 추적됩니다
                 </p>
             </div>
 

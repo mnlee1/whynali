@@ -7,10 +7,12 @@
  */
 
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import './globals.css'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import NextTopLoader from 'nextjs-toploader'
+import PageTracker from '@/components/analytics/PageTracker'
 
 export const metadata: Metadata = {
     title: '왜난리 - 요즘 난리, 한눈에',
@@ -45,9 +47,30 @@ export default function RootLayout({
 }: {
     children: React.ReactNode
 }) {
+    const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+
     return (
         <html lang="ko">
             <head>
+                {GA_MEASUREMENT_ID && (
+                    <>
+                        <Script
+                            src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+                            strategy="afterInteractive"
+                        />
+                        <Script id="google-analytics" strategy="afterInteractive">
+                            {`
+                                window.dataLayer = window.dataLayer || [];
+                                function gtag(){dataLayer.push(arguments);}
+                                gtag('js', new Date());
+                                gtag('config', '${GA_MEASUREMENT_ID}', {
+                                    page_path: window.location.pathname,
+                                    send_page_view: true
+                                });
+                            `}
+                        </Script>
+                    </>
+                )}
                 <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" async></script>
             </head>
             <body className="min-h-screen bg-surface-muted text-content-primary antialiased font-pretendard">
@@ -56,6 +79,7 @@ export default function RootLayout({
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
                 />
                 <NextTopLoader color="#a202e3" showSpinner={false} />
+                <PageTracker />
                 <Header />
                 <main className="min-h-screen flex flex-col pb-8 md:pb-14 xl:pb-24">
                     {children}
