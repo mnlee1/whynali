@@ -10,7 +10,7 @@
  *
  */
 
-import { supabaseAdmin } from './supabase/server'
+import { supabaseAdmin } from './supabase-server'
 
 interface ApiUsage {
     api_name: string
