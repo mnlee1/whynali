@@ -94,7 +94,6 @@ export default function KPICharts({ metrics, weeklyProgress }: Props) {
                 backgroundColor: 'rgba(0,0,0,0)',
                 borderColor: 'rgba(156,163,175,0.6)',
                 borderWidth: 1.5,
-                borderDash: [4, 3],
                 borderRadius: 0,
                 borderSkipped: false,
                 barThickness: 2,
