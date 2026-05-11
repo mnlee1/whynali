@@ -7,7 +7,7 @@
  * 재미나이 제안 반영: 유입 경로별 세분화, 전환율 측정
  */
 
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 
 // 세션 ID 생성 (브라우저 세션 단위)
 function getSessionId(): string {
@@ -100,6 +100,12 @@ export async function trackPageView(params: {
         
         const { data: { user } } = await supabase.auth.getUser()
         
+        // 관리자는 KPI 추적에서 제외
+        if (user?.app_metadata?.is_admin === true) {
+            console.debug('[Analytics] Admin user - skipping tracking')
+            return
+        }
+        
         await supabase.from('page_views').insert({
             user_id: user?.id || null,
             session_id: sessionId,
@@ -127,6 +133,12 @@ export async function trackConversion(params: {
     try {
         const sessionId = getSessionId()
         const { data: { user } } = await supabase.auth.getUser()
+        
+        // 관리자는 KPI 추적에서 제외
+        if (user?.app_metadata?.is_admin === true) {
+            console.debug('[Analytics] Admin user - skipping conversion tracking')
+            return
+        }
         
         // 첫 방문 시 UTM 가져오기
         const firstUTM = JSON.parse(sessionStorage.getItem('whynali_first_utm') || '{}')

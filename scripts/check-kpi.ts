@@ -34,6 +34,13 @@ async function checkKPI() {
             .select('*', { count: 'exact', head: true })
             .eq('approval_status', 'approved')
             .eq('is_hidden', false)
+            .in('status', ['점화', '논란중'])
+
+        const { count: totalIssues } = await supabase
+            .from('issues')
+            .select('*', { count: 'exact', head: true })
+            .eq('approval_status', 'approved')
+            .eq('is_hidden', false)
         
         const { count: totalComments } = await supabase
             .from('comments')
@@ -64,7 +71,8 @@ async function checkKPI() {
         const reactionParticipationRate = totalUsers ? (uniqueReactionUsers / totalUsers * 100).toFixed(1) : '0.0'
         
         console.log(`가입자 수:        ${totalUsers || 0}명`)
-        console.log(`활성 이슈:        ${activeIssues || 0}개`)
+        console.log(`진행중 이슈:      ${activeIssues || 0}개 (점화+논란중)`)
+        console.log(`전체 이슈:        ${totalIssues || 0}개 (종결 포함)`)
         console.log(`누적 댓글:        ${totalComments || 0}개`)
         console.log(`누적 반응:        ${totalReactions || 0}개`)
         console.log(`누적 투표:        ${totalVotes || 0}회`)
