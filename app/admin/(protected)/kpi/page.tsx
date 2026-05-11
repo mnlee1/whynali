@@ -12,11 +12,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TrendingUp, Target, Users, MessageCircle, ThumbsUp, CheckSquare, AlertCircle, Calendar, TrendingDown, HelpCircle, Zap, Activity } from 'lucide-react'
+import { TrendingUp, Target, Users, MessageCircle, ThumbsUp, CheckSquare, AlertCircle, Calendar, TrendingDown, HelpCircle, Zap, Activity, BarChart2 } from 'lucide-react'
+import KPICharts from './KPICharts'
+import Sparkline from './Sparkline'
 
 interface KPIMetrics {
     currentUsers: number
-    currentActiveIssues: number
+    currentActiveIssues: number   // 진행중 (점화 + 논란중)
+    currentTotalIssues: number    // 전체 승인 (종결 포함)
     currentComments: number
     currentIssueComments: number
     currentDiscussionOpinions: number
@@ -31,7 +34,10 @@ interface KPIMetrics {
     visitorsBySource: {
         threads: number
         instagram: number
-        twitter: number
+        x: number
+        kakao: number
+        youtube: number
+        tiktok: number
         direct: number
         organic: number
         other: number
@@ -61,6 +67,24 @@ interface KPIMetrics {
     commentProgress: number
     reactionProgress: number
     voteProgress: number
+    weekOverWeek: {
+        newUsers:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        comments:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        reactions: { current: number; previous: number; delta: number; deltaPercent: number | null }
+        votes:     { current: number; previous: number; delta: number; deltaPercent: number | null }
+    }
+    monthOverMonth: {
+        newUsers:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        comments:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        reactions: { current: number; previous: number; delta: number; deltaPercent: number | null }
+        votes:     { current: number; previous: number; delta: number; deltaPercent: number | null }
+    }
+    sparklines: {
+        newUsers:  number[]
+        comments:  number[]
+        reactions: number[]
+        votes:     number[]
+    }
     targets: {
         users: number
         activeIssues: number
@@ -106,8 +130,9 @@ interface KPIResponse {
 export default function KPIDashboardPage() {
     const [data, setData] = useState<KPIResponse | null>(null)
     const [loading, setLoading] = useState(true)
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
     const [showHelp, setShowHelp] = useState<string | null>(null)
+    const [exporting, setExporting] = useState(false)
+    const [exportResult, setExportResult] = useState<{ url: string | null; label: string } | null>(null)
     
     // 월 선택 (5월은 건너뛰고 6월부터 시작)
     const now = new Date()
@@ -131,12 +156,33 @@ export default function KPIDashboardPage() {
             if (res.ok) {
                 const json = await res.json()
                 setData(json)
-                setLastUpdated(new Date())
             }
         } catch (error) {
             console.error('[KPI Dashboard] 데이터 로드 에러:', error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const exportToSheets = async () => {
+        setExporting(true)
+        setExportResult(null)
+        try {
+            const res = await fetch('/api/admin/export-kpi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year: selectedYear, month: selectedMonth }),
+            })
+            const json = await res.json()
+            if (json.success) {
+                setExportResult({ url: json.sheetUrl, label: json.label })
+            } else {
+                alert(`내보내기 실패: ${json.error}`)
+            }
+        } catch {
+            alert('내보내기 중 오류가 발생했습니다.')
+        } finally {
+            setExporting(false)
         }
     }
 
@@ -183,8 +229,8 @@ export default function KPIDashboardPage() {
             bad: '2주 연속 정체되면 SNS 홍보나 지인 초대를 강화하세요.'
         },
         activeIssues: {
-            title: '활성 이슈란?',
-            desc: '현재 공개되어 사람들이 볼 수 있는 이슈 개수입니다. 콘텐츠가 많아야 활동이 생깁니다.',
+            title: '진행중 이슈란?',
+            desc: '지금 뜨고 있는 이슈(점화·논란중) 개수입니다. 유저가 지금 참여할 수 있는 콘텐츠 수를 의미합니다. 종결된 이슈는 제외합니다.',
             good: '주 2-3개씩 꾸준히 등록하는 것이 좋습니다.',
             bad: '5개 미만이면 즉시 이슈를 승인하거나 수동 등록하세요.'
         },
@@ -279,35 +325,33 @@ export default function KPIDashboardPage() {
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* 헤더 */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-content-primary">KPI 리포트</h1>
-                        <p className="text-sm text-content-muted mt-1">
-                            {data?.goalInfo 
-                                ? `목표 기간: ${data.goalInfo.periodStart} - ${data.goalInfo.periodEnd}`
-                                : '목표 기간 정보 없음'}
-                        </p>
-                    </div>
-                    
-                    {/* 월 선택 컨트롤 */}
-                    <div className="flex items-center gap-2 ml-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-content-primary">KPI 리포트</h1>
+                    <p className="text-sm text-content-muted mt-1">
+                        {data?.goalInfo
+                            ? `목표 기간: ${data.goalInfo.periodStart} - ${data.goalInfo.periodEnd}`
+                            : '목표 기간 정보 없음'}
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {/* 월 네비게이션 */}
+                    <div className="flex items-center gap-1">
                         <button
                             onClick={handlePrevMonth}
                             disabled={selectedYear === 2026 && selectedMonth === 6}
                             className="p-2 hover:bg-surface-muted rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={selectedYear === 2026 && selectedMonth === 6 ? "5월 데이터는 제외됩니다" : "이전 월"}
+                            title={selectedYear === 2026 && selectedMonth === 6 ? '5월 데이터는 제외됩니다' : '이전 월'}
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                         </button>
-                        
-                        <div className="px-4 py-2 bg-surface-subtle border border-border rounded-lg min-w-[140px] text-center">
-                            <span className="text-lg font-semibold text-content-primary">
+                        <div className="px-4 py-2 bg-surface-subtle border border-border rounded-lg min-w-[120px] text-center">
+                            <span className="text-base font-semibold text-content-primary">
                                 {selectedYear}년 {selectedMonth}월
                             </span>
                         </div>
-                        
                         <button
                             onClick={handleNextMonth}
                             className="p-2 hover:bg-surface-muted rounded-lg transition-colors"
@@ -318,21 +362,30 @@ export default function KPIDashboardPage() {
                             </svg>
                         </button>
                     </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                    {lastUpdated && (
-                        <span className="text-sm text-content-muted">
-                            마지막 업데이트: {lastUpdated.toLocaleTimeString('ko-KR')}
+
+                    {/* Sheets 내보내기 */}
+                    <button
+                        onClick={exportToSheets}
+                        disabled={exporting || loading}
+                        className="px-3 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        title="Google Sheets로 내보내기"
+                    >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M11.318 12.545H7.91v-1.909h3.41v1.91zm.545 3.274v-1.91H7.91v1.91h3.953zm0-6.549H7.91v1.91h3.953v-1.91zM4.636 0v24l2.455-2.455L9.545 24l2.455-2.455L14.455 24l2.454-2.455L19.364 24V0H4.636zm13.09 21.145H6.273V2.91h11.454v18.236z"/>
+                        </svg>
+                        {exporting ? '내보내는 중...' : 'Sheets 내보내기'}
+                    </button>
+                    {exportResult && (
+                        <span className="text-xs text-emerald-700 flex items-center gap-1 whitespace-nowrap">
+                            ✅ {exportResult.label} 저장됨
+                            {exportResult.url && (
+                                <a href={exportResult.url} target="_blank" rel="noopener noreferrer"
+                                    className="underline ml-1">
+                                    시트 열기
+                                </a>
+                            )}
                         </span>
                     )}
-                    <button
-                        onClick={() => fetchData(selectedYear, selectedMonth)}
-                        disabled={loading}
-                        className="px-3 py-1.5 text-sm font-medium bg-surface-subtle hover:bg-surface-muted border border-border rounded-lg transition-colors disabled:opacity-50"
-                    >
-                        {loading ? '새로고침 중...' : '새로고침'}
-                    </button>
                 </div>
             </div>
 
@@ -415,6 +468,83 @@ export default function KPIDashboardPage() {
                 </div>
             </div>
 
+            {/* 📊 종합 그래프 */}
+            <div className="card p-6 border-l-4 border-l-indigo-400">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <BarChart2 className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold text-content-primary">종합 그래프</h2>
+                        <p className="text-xs text-content-muted">KPI 달성률 · 참여율 · 주차별 마일스톤</p>
+                    </div>
+                </div>
+                <KPICharts
+                    metrics={metrics}
+                    weeklyProgress={weeklyProgress}
+                />
+            </div>
+
+            {/* 📉 추이 비교 */}
+            <div className="card p-6 border-l-4 border-l-slate-400">
+                <div className="flex items-center gap-3 mb-5">
+                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <TrendingUp className="w-5 h-5 text-slate-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold text-content-primary">추이 비교</h2>
+                        <p className="text-xs text-content-muted">지난주 대비 · 지난달 대비 증감</p>
+                    </div>
+                </div>
+
+                {(() => {
+                    const rows = [
+                        { label: '신규 가입', wow: metrics.weekOverWeek.newUsers,  mom: metrics.monthOverMonth.newUsers,  unit: '명' },
+                        { label: '댓글',     wow: metrics.weekOverWeek.comments,  mom: metrics.monthOverMonth.comments,  unit: '개' },
+                        { label: '반응',     wow: metrics.weekOverWeek.reactions, mom: metrics.monthOverMonth.reactions, unit: '개' },
+                        { label: '투표',     wow: metrics.weekOverWeek.votes,     mom: metrics.monthOverMonth.votes,     unit: '회' },
+                    ]
+                    const badge = (d: { delta: number; deltaPercent: number | null }, unit: string) => {
+                        const isUp   = d.delta > 0
+                        const isDown = d.delta < 0
+                        const arrow  = isUp ? '▲' : isDown ? '▼' : '─'
+                        const color  = isUp ? 'text-emerald-600' : isDown ? 'text-red-500' : 'text-gray-400'
+                        const pct    = d.deltaPercent !== null ? ` (${Math.abs(d.deltaPercent).toFixed(0)}%)` : ''
+                        return (
+                            <span className={`text-sm font-semibold ${color}`}>
+                                {arrow} {isUp ? '+' : ''}{d.delta}{unit}{pct}
+                            </span>
+                        )
+                    }
+                    return (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-border">
+                                        <th className="text-left py-2 pr-4 text-xs font-medium text-content-muted w-24">지표</th>
+                                        <th className="text-right py-2 px-4 text-xs font-medium text-content-muted">이번 주</th>
+                                        <th className="text-right py-2 px-4 text-xs font-medium text-content-muted">지난주 대비</th>
+                                        <th className="text-right py-2 px-4 text-xs font-medium text-content-muted">이번 달</th>
+                                        <th className="text-right py-2 pl-4 text-xs font-medium text-content-muted">지난달 대비</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {rows.map(r => (
+                                        <tr key={r.label} className="hover:bg-surface-subtle">
+                                            <td className="py-3 pr-4 font-medium text-content-primary">{r.label}</td>
+                                            <td className="py-3 px-4 text-right font-mono text-content-secondary">{r.wow.current}{r.unit}</td>
+                                            <td className="py-3 px-4 text-right">{badge(r.wow, r.unit)}</td>
+                                            <td className="py-3 px-4 text-right font-mono text-content-secondary">{r.mom.current}{r.unit}</td>
+                                            <td className="py-3 pl-4 text-right">{badge(r.mom, r.unit)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
+                })()}
+            </div>
+
             {/* 📈 카테고리 1: 성장 지표 */}
             <div className="card p-6 border-l-4 border-l-blue-500">
                 <div className="flex items-center justify-between mb-4">
@@ -493,6 +623,7 @@ export default function KPIDashboardPage() {
                                 {metrics.currentUsers >= currentWeek.targetUsers ? '✅ 이번주 목표 달성' : '⏳ 추가 필요'}
                             </span>
                         </div>
+                        <Sparkline data={metrics.sparklines.newUsers} color="#6366f1" />
                     </div>
 
                     {/* 활성 이슈 */}
@@ -500,7 +631,7 @@ export default function KPIDashboardPage() {
                         <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                                 <Zap className="w-4 h-4 text-green-600" />
-                                <p className="text-sm font-medium text-green-900">활성 이슈</p>
+                                <p className="text-sm font-medium text-green-900">진행중 이슈</p>
                             </div>
                             <button
                                 onClick={() => setShowHelp(showHelp === 'activeIssues' ? null : 'activeIssues')}
@@ -541,6 +672,7 @@ export default function KPIDashboardPage() {
                                 {metrics.currentActiveIssues >= 10 ? '✅ 충분함' : '⚠️ 이슈 추가 필요'}
                             </span>
                         </div>
+                        <p className="text-xs text-green-600 mt-2">전체 콘텐츠 (종결 포함): {metrics.currentTotalIssues}개</p>
                     </div>
 
                     {/* 주간 성장률 */}
@@ -635,18 +767,30 @@ export default function KPIDashboardPage() {
 
                 <div className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl border border-teal-200">
                     <p className="text-sm font-medium text-teal-900 mb-3">유입 경로별 방문자 (최근 7일)</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                         <div className="p-3 bg-white rounded-lg">
-                            <p className="text-xs text-teal-700 mb-1">스레드</p>
+                            <p className="text-xs text-teal-700 mb-1">Threads</p>
                             <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.threads}</p>
                         </div>
                         <div className="p-3 bg-white rounded-lg">
-                            <p className="text-xs text-teal-700 mb-1">인스타그램</p>
+                            <p className="text-xs text-teal-700 mb-1">인스타</p>
                             <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.instagram}</p>
                         </div>
                         <div className="p-3 bg-white rounded-lg">
-                            <p className="text-xs text-teal-700 mb-1">트위터</p>
-                            <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.twitter}</p>
+                            <p className="text-xs text-teal-700 mb-1">X</p>
+                            <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.x}</p>
+                        </div>
+                        <div className="p-3 bg-white rounded-lg">
+                            <p className="text-xs text-teal-700 mb-1">카카오</p>
+                            <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.kakao}</p>
+                        </div>
+                        <div className="p-3 bg-white rounded-lg">
+                            <p className="text-xs text-teal-700 mb-1">유튜브</p>
+                            <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.youtube}</p>
+                        </div>
+                        <div className="p-3 bg-white rounded-lg">
+                            <p className="text-xs text-teal-700 mb-1">틱톡</p>
+                            <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.tiktok}</p>
                         </div>
                         <div className="p-3 bg-white rounded-lg">
                             <p className="text-xs text-teal-700 mb-1">직접 방문</p>
@@ -659,6 +803,7 @@ export default function KPIDashboardPage() {
                         <div className="p-3 bg-white rounded-lg">
                             <p className="text-xs text-teal-700 mb-1">기타</p>
                             <p className="text-xl font-bold text-teal-900">{metrics.visitorsBySource.other}</p>
+                            <p className="text-xs text-teal-500 mt-1">(UTM 태그는 있지만 미분류 채널)</p>
                         </div>
                     </div>
                     <p className="text-xs text-teal-700 mt-3">💡 가장 효과적인 채널에 마케팅을 집중하세요</p>
@@ -843,6 +988,7 @@ export default function KPIDashboardPage() {
                             <p>이슈 댓글: {metrics.currentIssueComments}개</p>
                             <p>토론 의견: {metrics.currentDiscussionOpinions}개</p>
                         </div>
+                        <Sparkline data={metrics.sparklines.comments} color="#6366f1" />
                     </div>
 
                     {/* 누적 반응 */}
@@ -888,6 +1034,7 @@ export default function KPIDashboardPage() {
                                 {metrics.reactionProgress.toFixed(0)}% 달성
                             </span>
                         </div>
+                        <Sparkline data={metrics.sparklines.reactions} color="#ec4899" />
                     </div>
 
                     {/* 투표 참여 */}
@@ -933,6 +1080,7 @@ export default function KPIDashboardPage() {
                                 {metrics.voteProgress.toFixed(0)}% 달성
                             </span>
                         </div>
+                        <Sparkline data={metrics.sparklines.votes} color="#0d9488" />
                     </div>
                 </div>
 
@@ -1333,7 +1481,7 @@ export default function KPIDashboardPage() {
                                 <div className="text-sm text-orange-800 space-y-1">
                                     <p className="font-medium">해야 할 일:</p>
                                     <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                        <li>트위터/인스타 운영 시작 (docs/88 참고)</li>
+                                        <li>X/인스타 운영 시작 (docs/88 참고)</li>
                                         <li>카드뉴스 자동 발행 (docs/87 참고)</li>
                                         <li>지인 초대 (30명 목표)</li>
                                         <li>화력 높은 이슈 SNS 공유</li>
@@ -1402,7 +1550,7 @@ export default function KPIDashboardPage() {
                                 <div className="text-sm text-green-800 space-y-1">
                                     <p className="font-medium">계속 할 일:</p>
                                     <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                        <li>트위터/인스타 꾸준히 운영하기</li>
+                                        <li>X/인스타 꾸준히 운영하기</li>
                                         <li>주 2-3개 이슈 등록 유지하기</li>
                                         <li>사용자 댓글/반응에 빠르게 응답하기</li>
                                         <li>매주 월요일 KPI 점검하기</li>

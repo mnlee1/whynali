@@ -81,6 +81,8 @@ ${backgroundLine}
 - "발언", "행동", "논란", "의혹", "사건", "갑질", "폭로", "혐의" 같은 원인 탐색 키워드 사용
 - 인물명/기관명 + 원인 키워드 조합, 2~4단어
 - 너무 일반적인 키워드 금지 (예: "연예인 발언" X → "알디원 발언" O)
+- 인명 단독 키워드 절대 금지 (예: "신현빈" X → "신현빈 레드카펫" O, "이재명" X → "이재명 발언" O)
+  이유: 인명 단독 검색 시 해당 인물의 무관한 기사가 모두 유입됨
 
 JSON 배열로만 응답: ["키워드1", "키워드2"]`
 
@@ -185,10 +187,10 @@ export async function searchAndLinkCauseArticles(
                 // 결과형 기사 제외
                 if (hasResultKeyword(item.title)) continue
 
-                // 이슈 제목과 키워드 겹침 최소 1개
+                // 이슈 제목과 키워드 겹침 최소 2개 (1개는 인명 단독 매칭으로 오매칭 유발)
                 const articleKeywords = extractKeywords(item.title)
                 const overlap = [...articleKeywords].filter(k => issueTitleKeywords.has(k)).length
-                if (overlap === 0) continue
+                if (overlap < 2) continue
 
                 // 이미 연결된 URL 제외
                 if (existingUrls.has(item.link)) continue

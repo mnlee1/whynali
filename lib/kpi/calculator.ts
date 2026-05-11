@@ -14,7 +14,8 @@ const supabase = supabaseAdmin
 interface KPIMetrics {
     // 현재 지표
     currentUsers: number
-    currentActiveIssues: number
+    currentActiveIssues: number   // 진행중 이슈 (점화 + 논란중)
+    currentTotalIssues: number    // 전체 승인 이슈 (종결 포함)
     currentComments: number
     currentIssueComments: number
     currentDiscussionOpinions: number
@@ -31,7 +32,10 @@ interface KPIMetrics {
     visitorsBySource: {
         threads: number
         instagram: number
-        twitter: number
+        x: number
+        kakao: number
+        youtube: number
+        tiktok: number
         direct: number
         organic: number
         other: number
@@ -72,7 +76,29 @@ interface KPIMetrics {
     commentProgress: number
     reactionProgress: number
     voteProgress: number
-    
+
+    // 추이 비교
+    weekOverWeek: {
+        newUsers:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        comments:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        reactions: { current: number; previous: number; delta: number; deltaPercent: number | null }
+        votes:     { current: number; previous: number; delta: number; deltaPercent: number | null }
+    }
+    monthOverMonth: {
+        newUsers:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        comments:  { current: number; previous: number; delta: number; deltaPercent: number | null }
+        reactions: { current: number; previous: number; delta: number; deltaPercent: number | null }
+        votes:     { current: number; previous: number; delta: number; deltaPercent: number | null }
+    }
+
+    // 스파크라인 (최근 14일 일별)
+    sparklines: {
+        newUsers:  number[]
+        comments:  number[]
+        reactions: number[]
+        votes:     number[]
+    }
+
     // 목표값
     targets: {
         users: number
@@ -181,7 +207,16 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .from('users')
         .select('*', { count: 'exact', head: true })
 
+    // 진행중 이슈 (점화 + 논란중) — KPI 목표 기준
     const { count: activeIssues } = await supabase
+        .from('issues')
+        .select('*', { count: 'exact', head: true })
+        .eq('approval_status', 'approved')
+        .eq('is_hidden', false)
+        .in('status', ['점화', '논란중'])
+
+    // 전체 승인 이슈 (종결 포함) — 참고 지표
+    const { count: totalApprovedIssues } = await supabase
         .from('issues')
         .select('*', { count: 'exact', head: true })
         .eq('approval_status', 'approved')
@@ -244,6 +279,11 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .select('*', { count: 'exact', head: true })
         .gte('created_at', sevenDaysAgo.toISOString())
 
+    const { count: newVotes7d } = await supabase
+        .from('user_votes')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', sevenDaysAgo.toISOString())
+
     // 6. 일평균 계산
     const dailyNewUsers = (newUsers7d || 0) / 7
     const dailyComments = (newComments7d || 0) / 7
@@ -285,13 +325,17 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .select('utm_source, session_id')
         .gte('created_at', sevenDaysAgo.toISOString())
 
+    const KNOWN_SOURCES = ['threads', 'instagram', 'twitter', 'kakao', 'youtube', 'tiktok', 'direct', 'google', 'naver', 'organic']
     const visitorsBySource = {
-        threads: new Set(visitorsBySourceData?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
+        threads:   new Set(visitorsBySourceData?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
         instagram: new Set(visitorsBySourceData?.filter(v => v.utm_source === 'instagram').map(v => v.session_id) || []).size,
-        twitter: new Set(visitorsBySourceData?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
-        direct: new Set(visitorsBySourceData?.filter(v => v.utm_source === 'direct' || !v.utm_source).map(v => v.session_id) || []).size,
-        organic: new Set(visitorsBySourceData?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
-        other: new Set(visitorsBySourceData?.filter(v => v.utm_source && !['threads', 'instagram', 'twitter', 'direct', 'google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
+        x:         new Set(visitorsBySourceData?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
+        kakao:     new Set(visitorsBySourceData?.filter(v => v.utm_source === 'kakao').map(v => v.session_id) || []).size,
+        youtube:   new Set(visitorsBySourceData?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
+        tiktok:    new Set(visitorsBySourceData?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
+        direct:    new Set(visitorsBySourceData?.filter(v => v.utm_source === 'direct' || !v.utm_source).map(v => v.session_id) || []).size,
+        organic:   new Set(visitorsBySourceData?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
+        other:     new Set(visitorsBySourceData?.filter(v => v.utm_source && !KNOWN_SOURCES.includes(v.utm_source)).map(v => v.session_id) || []).size,
     }
 
     // 전환율 계산 (최근 7일)
@@ -408,7 +452,120 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const reactionProgress = ((totalReactions || 0) / goal.target_reactions) * 100
     const voteProgress = ((totalVotes || 0) / goal.target_votes) * 100
 
-    // 9. 주차별 진행 상황
+    // 9. 추이 비교 (지난주 대비 / 지난달 대비)
+    const delta = (current: number, previous: number) => ({
+        current,
+        previous,
+        delta: current - previous,
+        deltaPercent: previous > 0 ? ((current - previous) / previous) * 100 : null,
+    })
+
+    // 지난주 (7-14일 전)
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+
+    const [
+        { count: prevUsers7d },
+        { count: prevComments7d },
+        { count: prevReactions7d },
+        { count: prevVotes7d },
+    ] = await Promise.all([
+        supabase.from('users').select('*', { count: 'exact', head: true })
+            .gte('created_at', fourteenDaysAgo.toISOString())
+            .lt('created_at', sevenDaysAgo.toISOString()),
+        supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', fourteenDaysAgo.toISOString())
+            .lt('created_at', sevenDaysAgo.toISOString())
+            .eq('is_hidden', false),
+        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', fourteenDaysAgo.toISOString())
+            .lt('created_at', sevenDaysAgo.toISOString()),
+        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', fourteenDaysAgo.toISOString())
+            .lt('created_at', sevenDaysAgo.toISOString()),
+    ])
+
+    // 이번 달 / 지난달
+    const now2 = new Date()
+    const thisMonthStart = new Date(now2.getFullYear(), now2.getMonth(), 1)
+    const lastMonthStart = new Date(now2.getFullYear(), now2.getMonth() - 1, 1)
+
+    const [
+        { count: thisMonthUsers },
+        { count: thisMonthComments },
+        { count: thisMonthReactions },
+        { count: thisMonthVotes },
+        { count: lastMonthUsers },
+        { count: lastMonthComments },
+        { count: lastMonthReactions },
+        { count: lastMonthVotes },
+    ] = await Promise.all([
+        supabase.from('users').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()),
+        supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()).eq('is_hidden', false),
+        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()),
+        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()),
+        supabase.from('users').select('*', { count: 'exact', head: true })
+            .gte('created_at', lastMonthStart.toISOString())
+            .lt('created_at', thisMonthStart.toISOString()),
+        supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', lastMonthStart.toISOString())
+            .lt('created_at', thisMonthStart.toISOString()).eq('is_hidden', false),
+        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', lastMonthStart.toISOString())
+            .lt('created_at', thisMonthStart.toISOString()),
+        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', lastMonthStart.toISOString())
+            .lt('created_at', thisMonthStart.toISOString()),
+    ])
+
+    const weekOverWeek = {
+        newUsers:  delta(newUsers7d  || 0, prevUsers7d  || 0),
+        comments:  delta(newComments7d  || 0, prevComments7d  || 0),
+        reactions: delta(newReactions7d || 0, prevReactions7d || 0),
+        votes:     delta(newVotes7d  || 0, prevVotes7d  || 0),
+    }
+    const monthOverMonth = {
+        newUsers:  delta(thisMonthUsers  || 0, lastMonthUsers  || 0),
+        comments:  delta(thisMonthComments  || 0, lastMonthComments  || 0),
+        reactions: delta(thisMonthReactions || 0, lastMonthReactions || 0),
+        votes:     delta(thisMonthVotes  || 0, lastMonthVotes  || 0),
+    }
+
+    // 10. 스파크라인 (최근 14일 일별 집계)
+    const [
+        { data: sparkUserRows },
+        { data: sparkCommentRows },
+        { data: sparkReactionRows },
+        { data: sparkVoteRows },
+    ] = await Promise.all([
+        supabase.from('users').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()),
+        supabase.from('comments').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()).eq('is_hidden', false),
+        supabase.from('reactions').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()),
+        supabase.from('user_votes').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()),
+    ])
+
+    const toDaily = (rows: { created_at: string }[] | null, days = 14): number[] => {
+        const buckets = new Array(days).fill(0)
+        const now = Date.now()
+        rows?.forEach(r => {
+            const daysAgo = Math.floor((now - new Date(r.created_at).getTime()) / 86400000)
+            if (daysAgo >= 0 && daysAgo < days) buckets[days - 1 - daysAgo]++
+        })
+        return buckets
+    }
+
+    const sparklines = {
+        newUsers:  toDaily(sparkUserRows),
+        comments:  toDaily(sparkCommentRows),
+        reactions: toDaily(sparkReactionRows),
+        votes:     toDaily(sparkVoteRows),
+    }
+
+    // 11. 주차별 진행 상황
     const today = new Date()
     const weeklyProgress: WeeklyProgress[] = (milestones || []).map(milestone => {
         const endDate = new Date(milestone.end_date)
@@ -435,12 +592,13 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         metrics: {
             currentUsers: totalUsers || 0,
             currentActiveIssues: activeIssues || 0,
+            currentTotalIssues: totalApprovedIssues || 0,
             currentComments: totalComments,
             currentIssueComments: issueComments || 0,
             currentDiscussionOpinions: discussionOpinions || 0,
             currentReactions: totalReactions || 0,
             currentVotes: totalVotes || 0,
-            
+
             // 방문자 지표
             weeklyPageViews: weeklyPageViews || 0,
             weeklyUniqueVisitors,
@@ -462,6 +620,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             commentProgress,
             reactionProgress,
             voteProgress,
+            weekOverWeek,
+            monthOverMonth,
+            sparklines,
             targets: {
                 users: goal.target_users,
                 activeIssues: goal.target_active_issues,
@@ -489,11 +650,21 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
 
 // 기본 메트릭 (목표가 없을 때)
 async function getDefaultMetrics(): Promise<KPIMetrics> {
+    const zd = { current: 0, previous: 0, delta: 0, deltaPercent: null }
     const { count: totalUsers } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
 
+    // 진행중 이슈 (점화 + 논란중) — KPI 목표 기준
     const { count: activeIssues } = await supabase
+        .from('issues')
+        .select('*', { count: 'exact', head: true })
+        .eq('approval_status', 'approved')
+        .eq('is_hidden', false)
+        .in('status', ['점화', '논란중'])
+
+    // 전체 승인 이슈 (종결 포함) — 참고 지표
+    const { count: totalApprovedIssues } = await supabase
         .from('issues')
         .select('*', { count: 'exact', head: true })
         .eq('approval_status', 'approved')
@@ -524,12 +695,13 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
     return {
         currentUsers: totalUsers || 0,
         currentActiveIssues: activeIssues || 0,
+        currentTotalIssues: totalApprovedIssues || 0,
         currentComments: totalComments,
         currentIssueComments: issueComments || 0,
         currentDiscussionOpinions: discussionOpinions || 0,
         currentReactions: totalReactions || 0,
         currentVotes: totalVotes || 0,
-        
+
         // 방문자 지표 (기본값)
         weeklyPageViews: 0,
         weeklyUniqueVisitors: 0,
@@ -538,7 +710,10 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         visitorsBySource: {
             threads: 0,
             instagram: 0,
-            twitter: 0,
+            x: 0,
+            kakao: 0,
+            youtube: 0,
+            tiktok: 0,
             direct: 0,
             organic: 0,
             other: 0,
@@ -568,6 +743,9 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         commentProgress: 0,
         reactionProgress: 0,
         voteProgress: 0,
+        weekOverWeek:   { newUsers: zd, comments: zd, reactions: zd, votes: zd },
+        monthOverMonth: { newUsers: zd, comments: zd, reactions: zd, votes: zd },
+        sparklines: { newUsers: new Array(14).fill(0), comments: new Array(14).fill(0), reactions: new Array(14).fill(0), votes: new Array(14).fill(0) },
         targets: {
             users: 0,
             activeIssues: 0,

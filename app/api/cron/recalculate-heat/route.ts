@@ -82,23 +82,25 @@ export async function GET(request: NextRequest) {
                 .order('updated_at', { ascending: true })
                 .limit(15),
 
-            // 최근 업데이트된 이슈 (최대 15개, 점화/논란중 제외)
+            // 최근 업데이트된 이슈 (최대 15개, 점화/논란중/종결 제외)
+            // 종결은 아래 closedIssues 쿼리가 전담 — 여기 포함하면 이중 처리로 슬롯 낭비
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .in('approval_status', ['승인', '대기'])
-                .not('status', 'in', '(점화,논란중)')
+                .not('status', 'in', '(점화,논란중,종결)')
                 .order('updated_at', { ascending: false })
                 .limit(15),
 
             // 종결 후 30일 이내 승인 이슈 (최대 10개, 재점화 감지용)
+            // heat_updated_at ASC: 가장 오래 재계산 안 된 이슈부터 처리 (배치 밀림 방지)
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '종결')
                 .eq('approval_status', '승인')
                 .gte('updated_at', recentlyClosedSince)
-                .order('updated_at', { ascending: false })
+                .order('heat_updated_at', { ascending: true, nullsFirst: true })
                 .limit(10),
         ])
 
