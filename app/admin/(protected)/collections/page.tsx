@@ -269,7 +269,12 @@ export default function AdminCollectionsPage() {
                                             ? [
                                                 detail.aiConfidence !== undefined && `AI 신뢰도 ${detail.aiConfidence}%`,
                                                 detail.reason && `사유: ${detail.reason}`,
-                                                detail.newsCount !== undefined && `뉴스 ${detail.newsCount}건`,
+                                                detail.newsCount !== undefined && (
+                                                    detail.newsLinked !== undefined
+                                                        ? `뉴스 수집 ${detail.newsCount}건 / 연결 ${detail.newsLinked}건`
+                                                        : `뉴스 ${detail.newsCount}건`
+                                                ),
+                                                detail.newsSkipReason && `미연결 사유: ${detail.newsSkipReason}`,
                                                 detail.heatIndex !== undefined && `화력 ${detail.heatIndex}점`,
                                                 detail.communityLinked !== undefined && `커뮤니티 ${detail.communityLinked}건 연결`,
                                                 detail.existingIssueTitle && `→ "${detail.existingIssueTitle}"`,
