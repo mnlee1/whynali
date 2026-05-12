@@ -11,7 +11,7 @@
  * - 참여가 없으면 auto-end-votes 크론이 정상 마감 처리
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 /* 이슈와 연결된 모든 진행중 투표를 즉시 마감 (이슈 삭제 등 강제 종료용) */
 export async function closeVotesByIssue(issueId: string, reason: string = '이슈 종결') {

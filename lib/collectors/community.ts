@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import * as cheerio from 'cheerio'
 
 const COMMUNITY_MIN_EXPECTED_POSTS = parseInt(

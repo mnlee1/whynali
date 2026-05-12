@@ -122,44 +122,70 @@ JSON 형식으로만 응답:
  */
 function parseTopics(raw: string): GeneratedTopic[] {
     try {
+        console.log('[parseTopics] Raw:', raw)
         const parsed = JSON.parse(raw)
         // topics 배열 또는 직접 배열 처리
         const topicsArray = parsed.topics || parsed
 
-        // 질문형 마무리 패턴 (반드시 의문형으로 끝나야 함, 반말 할까/있을까 제외)
+        // 질문형 마무리 패턴 (반드시 의문형으로 끝나야 함)
         const QUESTION_ENDINGS = /[?？]$|는가\??$|인가\??$|ㄴ가\??$|겠는가\??$|있나\??$|하나\??$/
-        // 한자·이상 문자 포함 여부
-        const ABNORMAL = /[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF\u0020-\u007E·–—\-·…,?！]/
+        // 한자·이상 문자 포함 여부 (전각 ?！도 허용)
+        const ABNORMAL = /[^가-힣ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿ -~！？·–—…]/
         // 거친 반말 어미만 차단 (~냐 계열)
         const COLLOQUIAL_ENDING = /[이]?냐\??$|어떠냐\??$/
 
-        const isValidTopic = (s: string) =>
-            s.trim().length > 0 &&
-            s.trim().length <= 35 &&            // 35자 이하
-            QUESTION_ENDINGS.test(s.trim()) &&  // 반드시 의문형
-            !COLLOQUIAL_ENDING.test(s.trim()) && // 반말 어미 차단
-            !ABNORMAL.test(s.trim())            // 이상 문자 차단
+        const isValidTopic = (s: string): boolean => {
+            const t = s.trim()
+            if (t.length === 0) {
+                console.log('[parseTopics] 탈락(빈 문자열)')
+                return false
+            }
+            if (t.length > 50) {
+                console.log(`[parseTopics] 탈락(${t.length}자>50자): ${t}`)
+                return false
+            }
+            if (!QUESTION_ENDINGS.test(t)) {
+                console.log(`[parseTopics] 탈락(의문형 아님): ${t}`)
+                return false
+            }
+            if (COLLOQUIAL_ENDING.test(t)) {
+                console.log(`[parseTopics] 탈락(거친 반말): ${t}`)
+                return false
+            }
+            if (ABNORMAL.test(t)) {
+                console.log(`[parseTopics] 탈락(이상 문자): ${t}`)
+                return false
+            }
+            return true
+        }
 
         if (Array.isArray(topicsArray)) {
-            return topicsArray
+            const results = topicsArray
                 .filter((item): item is string =>
                     typeof item === 'string' && isValidTopic(item)
                 )
                 .map((content) => ({ content: content.trim() }))
+            console.log(`[parseTopics] ${topicsArray.length}개 중 ${results.length}개 통과`)
+            return results
         }
 
-        // JSON 객체에서 배열 찾기 시도
-        const match = raw.match(/\[[\s\S]*?\]/)
-        if (!match) return []
+        // JSON 객체에서 배열 찾기 시도 (greedy)
+        const match = raw.match(/\[[\s\S]*\]/)
+        if (!match) {
+            console.error('[parseTopics] 배열 없음. Raw:', raw)
+            return []
+        }
 
         const arr: unknown[] = JSON.parse(match[0])
-        return arr
+        const results = arr
             .filter((item): item is string =>
                 typeof item === 'string' && isValidTopic(item)
             )
             .map((content) => ({ content: content.trim() }))
+        console.log(`[parseTopics] 배열추출 ${arr.length}개 중 ${results.length}개 통과`)
+        return results
     } catch (e) {
-        console.error('토론 주제 파싱 실패:', e, 'Raw:', raw)
+        console.error('[parseTopics] 파싱 실패:', e, 'Raw:', raw)
         return []
     }
 }

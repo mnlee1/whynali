@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata } from '@/lib/ai/discussion-generator'

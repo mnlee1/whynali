@@ -6,20 +6,22 @@
  * recalculate-heat 크론에서 종결 전환 시 호출 + update-timeline에서 백필
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 
-export async function generateCloseSummary(issueId: string, issueTitle: string): Promise<void> {
-    // 이미 종결 요약이 있으면 스킵
-    const { data: existing } = await supabaseAdmin
-        .from('timeline_summaries')
-        .select('id')
-        .eq('issue_id', issueId)
-        .eq('stage', '종결')
-        .maybeSingle()
+export async function generateCloseSummary(issueId: string, issueTitle: string, force = false): Promise<void> {
+    // force=false일 때만 기존 요약 스킵 (force=true이면 날짜 없는 요약도 재생성)
+    if (!force) {
+        const { data: existing } = await supabaseAdmin
+            .from('timeline_summaries')
+            .select('id')
+            .eq('issue_id', issueId)
+            .eq('stage', '종결')
+            .maybeSingle()
 
-    if (existing) return
+        if (existing) return
+    }
 
     // 타임라인 포인트 조회
     const { data: points } = await supabaseAdmin

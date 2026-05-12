@@ -182,6 +182,7 @@ function CommunityContent() {
     const [statusFilter, setStatusFilter] = useState<FilterStatus>((searchParams.get('status') as FilterStatus) ?? '')
     const [sortOrder, setSortOrder] = useState<SortOrder>('latest')
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
+    const [suggestedTopics, setSuggestedTopics] = useState<TopicWithIssue[]>([])
 
     const offsetRef = useRef(0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -255,6 +256,25 @@ function CommunityContent() {
         loadTopics(searchQuery, statusFilter, sortOrder, 0, false)
     }, [searchQuery, statusFilter, sortOrder, loadTopics])
 
+    // 검색어 있을 때 추천 토론 로드 (issueIdFilter 없을 때만)
+    useEffect(() => {
+        if (!searchQuery || issueIdFilter) {
+            setSuggestedTopics([])
+            return
+        }
+        let cancelled = false
+        const params = new URLSearchParams({ limit: '12', offset: '0', sort: 'popular' })
+        fetch(`/api/discussions?${params}`)
+            .then(r => r.json())
+            .then(json => {
+                if (cancelled) return
+                // raw 데이터로 저장 — 렌더링 시점에 중복 제거
+                setSuggestedTopics(json.data ?? [])
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [searchQuery, issueIdFilter])
+
     useEffect(() => {
         const sentinel = sentinelRef.current
         if (!sentinel) return
@@ -282,6 +302,7 @@ function CommunityContent() {
                         onChange={handleSearchChange}
                         onSearch={handleSearch}
                         placeholder="토론 주제 검색"
+                        keywordSource="discussions"
                     />
                 </div>
             )}
@@ -376,6 +397,31 @@ function CommunityContent() {
                     )}
                 </>
             )}
+
+            {/* 추천 토론 - 검색어 있을 때 표시, 현재 결과와 중복 제거 */}
+            {!loading && searchQuery && !issueIdFilter && (() => {
+                const existingIds = new Set(topics.map(t => t.id))
+                const filtered = suggestedTopics
+                    .filter(t => !existingIds.has(t.id))
+                    .slice(0, 6)
+                if (filtered.length === 0) return null
+                return (
+                    <div className={topics.length > 0 ? 'mt-16 pt-12 border-t border-border' : 'mt-8'}>
+                        <p className="text-lg font-semibold text-content-primary mb-4">
+                            이런 토론은 어떤가요?
+                        </p>
+                        <Masonry
+                            breakpointCols={breakpointColumns}
+                            className="flex gap-3 w-auto -ml-3"
+                            columnClassName="pl-3 bg-clip-padding"
+                        >
+                            {groupTopicsByIssue(filtered).map((group) => (
+                                <IssueGroupCard key={group.issueId} group={group} />
+                            ))}
+                        </Masonry>
+                    </div>
+                )
+            })()}
         </div>
     )
 }

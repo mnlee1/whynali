@@ -61,7 +61,7 @@ jobs:
               run: |
                   if [ -n "$(git status --porcelain backups/)" ]; then
                       git add backups/
-                      git commit -m "chore: db backup $(date +'%Y-%m-%d')"
+                      git commit -m "chore: db backup $(date +'%Y-%m-%d') [vercel skip]"
                       git push
                       echo "status=committed" >> $GITHUB_OUTPUT
                       echo "✅ 백업 파일 저장 완료"
@@ -78,7 +78,7 @@ jobs:
                   
                   if [ -n "$(git status --porcelain)" ]; then
                       git add .
-                      git commit -m "chore: cleanup old backups (keep last 30 days)"
+                      git commit -m "chore: cleanup old backups (keep last 30 days) [vercel skip]"
                       git push
                       echo "✅ 오래된 백업 삭제 완료"
                   else

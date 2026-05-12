@@ -7,7 +7,7 @@
 import type { Metadata } from 'next'
 import Script from 'next/script'
 import IssueList from '@/components/issues/IssueList'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import type { Issue } from '@/types/issue'
 import { generateCollectionPageSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 

@@ -132,50 +132,64 @@ JSON 형식으로만 응답:
  */
 function parseVotes(raw: string): GeneratedVote[] {
     try {
+        console.log('[parseVotes] Raw:', raw)
         const parsed = JSON.parse(raw)
         const votesArray = parsed.votes || parsed
 
         if (!Array.isArray(votesArray)) {
-            console.error('투표 배열이 아닙니다:', raw)
+            console.error('[parseVotes] 배열이 아닙니다. Raw:', raw)
             return []
         }
 
         // 거친 반말 어미만 차단 (~냐 계열)
         const COLLOQUIAL = /[이]?냐\?*$|어떠냐\?*$/
-        // ASCII/한자 외 비정상 문자 포함 여부
-        const ABNORMAL = /[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF\u0020-\u007E·–—\-·…,]/
+        // 의문형 끝맺음 허용 패턴 (ASCII/전각 ? 및 한국어 의문 어미)
+        const QUESTION_ENDINGS = /[?？]$|는가\??$|인가\??$|ㄴ가\??$|겠는가\??$|있나\??$|하나\??$/
+        // 비정상 문자 포함 여부 (전각 ?！도 허용)
+        const ABNORMAL = /[^가-힣ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿ -~！？·–—…]/
 
-        return votesArray
-            .filter((item): item is { title: string; choices: string[] } =>
-                typeof item === 'object' &&
-                item !== null &&
-                'title' in item &&
-                'choices' in item &&
-                typeof item.title === 'string' &&
-                item.title.trim().length > 0 &&
-                item.title.trim().length <= 35 &&  // 초과 시 필터링 (잘리지 않도록)
-                item.title.trim().endsWith('?') &&  // 반드시 의문문
-                !COLLOQUIAL.test(item.title.trim()) && // 구어체 차단
-                !ABNORMAL.test(item.title.trim()) &&   // 한자·이상 문자 차단
-                Array.isArray(item.choices) &&
-                item.choices.length >= 2 &&
-                item.choices.length <= 4
-            )
+        const results = votesArray
+            .filter((item): item is { title: string; choices: string[] } => {
+                if (typeof item !== 'object' || item === null || !('title' in item) || !('choices' in item)) {
+                    console.log('[parseVotes] 탈락(구조 오류):', item)
+                    return false
+                }
+                const t = (item as { title: string }).title?.trim() ?? ''
+                if (t.length === 0) { console.log('[parseVotes] 탈락(제목 빈 문자열)'); return false }
+                if (t.length > 50) { console.log(`[parseVotes] 탈락(제목 ${t.length}자>50자): ${t}`); return false }
+                if (!QUESTION_ENDINGS.test(t)) { console.log(`[parseVotes] 탈락(제목 의문형 아님): ${t}`); return false }
+                if (COLLOQUIAL.test(t)) { console.log(`[parseVotes] 탈락(제목 거친 반말): ${t}`); return false }
+                if (ABNORMAL.test(t)) { console.log(`[parseVotes] 탈락(제목 이상 문자): ${t}`); return false }
+                const choices = (item as { choices: unknown[] }).choices
+                if (!Array.isArray(choices) || choices.length < 2 || choices.length > 4) {
+                    console.log(`[parseVotes] 탈락(선택지 개수 ${Array.isArray(choices) ? choices.length : '?'}개): ${t}`)
+                    return false
+                }
+                return true
+            })
             .map((vote) => ({
                 title: vote.title.trim(),
                 choices: vote.choices
-                    .filter((c): c is string =>
-                        typeof c === 'string' &&
-                        c.trim().length >= 2 &&  // 1자 이하 쓰레기 값 제거
-                        c.trim().length <= 15 && // 문장형 선택지 허용
-                        !ABNORMAL.test(c.trim())  // 한자·이상 문자 차단
-                    )
+                    .filter((c): c is string => {
+                        if (typeof c !== 'string') return false
+                        const s = c.trim()
+                        return s.length >= 2 && s.length <= 15 && !ABNORMAL.test(s)
+                    })
                     .map((c) => c.trim())
                     .slice(0, 4),
             }))
-            .filter((vote) => vote.choices.length >= 2)  // 선택지 필터 후 2개 미만 제거
+            .filter((vote) => {
+                if (vote.choices.length < 2) {
+                    console.log(`[parseVotes] 탈락(유효 선택지 ${vote.choices.length}개<2): ${vote.title}`)
+                    return false
+                }
+                return true
+            })
+
+        console.log(`[parseVotes] ${votesArray.length}개 중 ${results.length}개 통과`)
+        return results
     } catch (e) {
-        console.error('투표 파싱 실패:', e, 'Raw:', raw)
+        console.error('[parseVotes] 파싱 실패:', e, 'Raw:', raw)
         return []
     }
 }

@@ -14,7 +14,7 @@
  * 환경변수 CLEANUP_RETAIN_DAYS 로 조정 가능
  */
 
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 const RETAIN_DAYS = parseInt(process.env.CLEANUP_RETAIN_DAYS ?? '7')
 const STALE_PENDING_HOURS = parseInt(process.env.STALE_PENDING_HOURS ?? '168')

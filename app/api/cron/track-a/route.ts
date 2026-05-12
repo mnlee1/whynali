@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse, after } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -1145,6 +1145,8 @@ async function processTrackA(): Promise<{
             console.log(`  ✗ [중복 이슈] "${duplicateCheck.existingIssue?.title}"`)
 
             // 기존 이슈에 커뮤니티 글 + 뉴스 연결 (AI 필터링 적용 — 오매칭 방지)
+            let newsLinked = 0
+            let newsSkipReason: string | undefined
             try {
                 const { relevantCommunityIds: filteredCommunityIds, relevantNewsIds: filteredNewsIds } = await filterAndTitleByAI(
                     burst.keyword,
@@ -1169,10 +1171,15 @@ async function processTrackA(): Promise<{
                         .update({ issue_id: duplicateCheck.existingIssue!.id })
                         .in('id', filteredNewsIds)
                         .is('issue_id', null) // 이미 다른 이슈에 연결된 뉴스는 건드리지 않음
+                    newsLinked = filteredNewsIds.length
                     console.log(`  → 기존 이슈에 뉴스 ${filteredNewsIds.length}/${newsItems.length}건 추가 연결`)
+                } else {
+                    newsSkipReason = 'AI 필터링 후 관련 없음'
+                    console.log(`  → 관련 뉴스 없음 (AI 필터링 후 0건) — 연결 건너뜀`)
                 }
             } catch {
                 // AI 실패 시 폴백: 커뮤니티만 전체 연결 (뉴스는 연결 안 함 — 노이즈 방지)
+                newsSkipReason = 'AI 오류 (폴백)'
                 const postIds = burst.posts.map(p => p.id)
                 await supabaseAdmin
                     .from('community_data')
@@ -1185,6 +1192,8 @@ async function processTrackA(): Promise<{
                 existingIssueId: duplicateCheck.existingIssue?.id,
                 existingIssueTitle: duplicateCheck.existingIssue?.title,
                 newsCount: newsItems.length,
+                newsLinked,
+                ...(newsSkipReason && { newsSkipReason }),
             })
             failedCount++
             continue

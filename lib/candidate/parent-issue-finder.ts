@@ -30,6 +30,9 @@ const PARENT_CONFIDENCE_THRESHOLD = parseInt(
     process.env.PARENT_CONFIDENCE_THRESHOLD ?? '95'
 )
 const MAX_CANDIDATE_ISSUES = 15
+const CLOSED_PARENT_WINDOW_DAYS = parseInt(
+    process.env.PARENT_CLOSED_WINDOW_DAYS ?? '30'
+)
 
 // 의미 없는 한국어 단어 (조사, 부사, 일반 명사 등)
 const STOPWORDS = new Set([
@@ -84,21 +87,40 @@ export async function findParentIssue(
     newTitle: string,
     category: string
 ): Promise<ParentIssueResult | null> {
-    const { data: activeIssues, error } = await supabaseAdmin
-        .from('issues')
-        .select('id, title')
-        .in('status', ['점화', '논란중', '대기'])
-        .in('approval_status', ['승인', '대기'])
-        .eq('category', category)
-        .order('heat_index', { ascending: false })
-        .limit(MAX_CANDIDATE_ISSUES)
+    const closedCutoff = new Date(
+        Date.now() - CLOSED_PARENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString()
 
-    if (error || !activeIssues || activeIssues.length === 0) return null
+    const [activeResult, closedResult] = await Promise.all([
+        supabaseAdmin
+            .from('issues')
+            .select('id, title')
+            .in('status', ['점화', '논란중', '대기'])
+            .in('approval_status', ['승인', '대기'])
+            .eq('category', category)
+            .order('heat_index', { ascending: false })
+            .limit(MAX_CANDIDATE_ISSUES),
+        supabaseAdmin
+            .from('issues')
+            .select('id, title')
+            .eq('status', '종결')
+            .eq('approval_status', '승인')
+            .eq('category', category)
+            .gte('updated_at', closedCutoff)
+            .order('updated_at', { ascending: false })
+            .limit(MAX_CANDIDATE_ISSUES),
+    ])
+
+    const issueMap = new Map<string, { id: string; title: string }>()
+    ;[...(activeResult.data ?? []), ...(closedResult.data ?? [])]
+        .forEach(i => { if (!issueMap.has(i.id)) issueMap.set(i.id, i) })
+    const activeIssues = Array.from(issueMap.values())
+
+    if (activeResult.error || (!activeIssues.length)) return null
 
     // 키워드 프리필터: AI 호출 전에 제목 키워드가 1개 이상 겹치는 이슈만 후보로 좁힘
-    // → 카테고리만 같고 내용이 전혀 다른 이슈가 AI 후보에 올라가는 것을 차단
-    const MIN_KEYWORD_OVERLAP = parseInt(process.env.PARENT_MIN_KEYWORD_OVERLAP ?? '2')
-    const filteredIssues = (activeIssues as Array<{ id: string; title: string }>)
+    const MIN_KEYWORD_OVERLAP = parseInt(process.env.PARENT_MIN_KEYWORD_OVERLAP ?? '1')
+    const filteredIssues = activeIssues
         .filter(iss => countKeywordOverlap(newTitle, iss.title) >= MIN_KEYWORD_OVERLAP)
 
     if (filteredIssues.length === 0) return null

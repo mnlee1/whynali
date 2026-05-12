@@ -98,13 +98,34 @@ export default function DiscussionComments({
         setSafetyBotEnabled(stored !== 'false')
     }, [])
 
-    /* URL hash(#dc-{id})로 진입 시 해당 의견으로 스크롤 */
+    /* hash 진입 시 요소가 생길 때까지 polling 후 스크롤 */
+    const scrolledRef = useRef(false)
     useEffect(() => {
-        if (loading) return
         const hash = window.location.hash
         if (!hash.startsWith('#dc-')) return
-        const el = document.getElementById(hash.slice(1))
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const targetId = hash.slice(1)
+        let attempts = 0
+        const interval = setInterval(() => {
+            const el = document.getElementById(targetId)
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                clearInterval(interval)
+            } else if (++attempts >= 30) {
+                clearInterval(interval)
+            }
+        }, 200)
+        return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    /* reply_parent 있으면 로딩 완료 후 해당 부모의 답글 자동 펼침 */
+    useEffect(() => {
+        if (loading) return
+        const params = new URLSearchParams(window.location.search)
+        const replyParent = params.get('reply_parent')
+        if (!replyParent || expandedRepliesIds.has(replyParent)) return
+        handleToggleReplies(replyParent)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loading])
 
     /* 내가 신고한 의견 ID 초기화 */
@@ -130,10 +151,11 @@ export default function DiscussionComments({
         currentOffset: number,
         append: boolean,
         currentSort: SortOption,
+        limit: number = PAGE_SIZE,
     ) => {
         try {
             const res = await fetch(
-                `/api/comments?${contextParam}&limit=${PAGE_SIZE}&offset=${currentOffset}&sort=${currentSort}`
+                `/api/comments?${contextParam}&limit=${limit}&offset=${currentOffset}&sort=${currentSort}`
             )
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
@@ -150,7 +172,11 @@ export default function DiscussionComments({
     useEffect(() => {
         setLoading(true)
         loadBest()
-        loadComments(0, false, sort)
+        const hasTarget = typeof window !== 'undefined' && (
+            window.location.hash.startsWith('#dc-') ||
+            !!new URLSearchParams(window.location.search).get('reply_parent')
+        )
+        loadComments(0, false, sort, hasTarget ? 50 : PAGE_SIZE)
     }, [loadBest, loadComments, sort])
 
     const handleLoadMore = () => {
@@ -758,13 +784,13 @@ function DiscussionCommentItem({
 
     return (
         <li
-            id={!isReply ? `dc-${comment.id}` : undefined}
+            id={`dc-${comment.id}`}
             className={[
                 'py-4',
                 isBest ? 'px-3 bg-amber-50/50 rounded-xl border border-amber-100' : '',
                 isReply ? 'py-3' : '',
             ].join(' ')}
-            style={!isReply ? { scrollMarginTop: 'var(--scroll-offset, 126px)' } : undefined}
+            style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}
         >
             {/* 작성자 + 시간 + 본인 액션 + ... 메뉴 */}
             <div className="flex items-center justify-between mb-4">
