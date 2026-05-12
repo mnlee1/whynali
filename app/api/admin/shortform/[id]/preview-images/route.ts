@@ -3,14 +3,14 @@
  *
  * [관리자 - 숏폼 이미지 미리보기 API]
  *
- * 동영상 생성 전에 Pexels 스톡 이미지 3장을 미리 확인합니다.
+ * ?count=N 파라미터로 이미지 개수를 동적으로 지정할 수 있습니다.
  * ?seed=숫자 전달 시 다른 이미지 세트를 반환합니다 (재생성용).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
-import { fetch3StockImages } from '@/lib/shortform/fetch-stock-images'
+import { fetchNStockImagesWithFull } from '@/lib/shortform/fetch-stock-images'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -22,8 +22,12 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (auth.error) return auth.error
 
     const { id } = await params
-    const seedParam = request.nextUrl.searchParams.get('seed')
+    const searchParams = request.nextUrl.searchParams
+    const seedParam = searchParams.get('seed')
+    const countParam = searchParams.get('count')
+
     const seed = seedParam !== null ? parseInt(seedParam) : undefined
+    const count = countParam !== null ? Math.min(Math.max(parseInt(countParam), 1), 10) : 3
 
     try {
         const { data: job, error: selectError } = await supabaseAdmin
@@ -40,11 +44,11 @@ export async function GET(request: NextRequest, { params }: Params) {
         }
 
         const category = (job.issues as any)?.category ?? '사회'
-        const images = await fetch3StockImages(category, job.issue_title, seed)
+        const { previews, fulls } = await fetchNStockImagesWithFull(category, job.issue_title, count, seed)
 
-        return NextResponse.json({ images })
+        return NextResponse.json({ images: previews, fullImages: fulls })
     } catch (error) {
-        console.error('이미지 미리보기 에러:', error)
+        console.error('[preview-images] 에러:', error)
         return NextResponse.json(
             { error: 'FETCH_ERROR', message: '이미지 조회 실패' },
             { status: 500 }

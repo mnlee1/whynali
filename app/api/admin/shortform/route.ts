@@ -1,8 +1,8 @@
 /**
  * app/api/admin/shortform/route.ts
- * 
- * [관리자 - 숏폼 작업 관리 API]
- * 
+ *
+ * [관리자 - 숏폼 job 관리 API]
+ *
  * GET: 숏폼 job 목록 조회
  * POST: 수동 숏폼 job 생성
  */
@@ -17,12 +17,9 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/admin/shortform
- * 
- * 숏폼 job 목록 조회
- * 
+ *
  * Query Parameters:
  *   - approval_status: 'pending' | 'approved' | 'rejected'
- *   - trigger_type: 'issue_created' | 'status_changed'
  *   - limit: 조회 개수 (기본 50)
  *   - offset: 페이징 오프셋 (기본 0)
  */
@@ -32,7 +29,6 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const approvalStatus = searchParams.get('approval_status')
-    const triggerType = searchParams.get('trigger_type')
     const limit = parseInt(searchParams.get('limit') ?? '50', 10)
     const offset = parseInt(searchParams.get('offset') ?? '0', 10)
 
@@ -45,12 +41,7 @@ export async function GET(request: NextRequest) {
         if (approvalStatus) {
             query = query.eq('approval_status', approvalStatus).order('created_at', { ascending: false })
         } else {
-            // 전체 목록: 대기(0) → 승인(1) → 반려(2) 순, 같은 상태 내에서는 최신순
             query = query.order('status_priority', { ascending: true }).order('created_at', { ascending: false })
-        }
-
-        if (triggerType) {
-            query = query.eq('trigger_type', triggerType)
         }
 
         const { data, error, count } = await query
@@ -72,9 +63,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/admin/shortform
- * 
- * 수동 숏폼 job 생성
- * 
+ *
  * Body:
  *   - issueId: string (필수)
  *   - triggerType: 'issue_created' | 'status_changed' (선택, 기본 'issue_created')
@@ -94,10 +83,10 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // 중복 job 확인 (같은 이슈 + pending/approved 상태 — trigger_type 무관)
+        // 중복 job 확인
         const { data: existingJobs } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('id, trigger_type')
+            .select('id')
             .eq('issue_id', issueId)
             .in('approval_status', ['pending', 'approved'])
             .limit(1)

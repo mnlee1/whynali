@@ -24,74 +24,80 @@ const TITLE_LINE_HEIGHT = 130  // 타이틀 줄 간격 (폰트 92 × 1.41)
 
 const DESC_FONTSIZE = 64
 const DESC_LINE_HEIGHT = 97   // 설명 줄 간격 (폰트 64 × 1.52)
-const BUTTON_GAP = 60        // 설명 bottom → 버튼 top (scene 3만)
-const BUTTON_H = 130
-const BUTTON_W = 660
 // ─────────────────────────────────────────────────────────────
 
 interface SceneLayout {
     logoY: number
     titleStartY: number
     descStartY: number
-    buttonY: number   // -1 if scene 1 or 2
 }
 
-/** 단어 경계 기준 줄바꿈 + 마지막 줄 orphan 방지 */
+/** 단어 경계 기준 줄바꿈 + 마지막 줄 orphan 방지. \n 명시 줄바꿈 지원. */
 function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
-    const words = text.split(' ').filter(w => w.length > 0)
-    if (words.length === 0) return ['']
-    const lines: string[] = []
-    let current = ''
-    for (const word of words) {
-        const test = current ? `${current} ${word}` : word
-        if (test.length <= maxCharsPerLine) {
-            current = test
-        } else {
-            if (current) lines.push(current)
-            current = word
-        }
-    }
-    if (current) lines.push(current)
+    // \n 포함 시 각 세그먼트를 독립적으로 처리
+    const segments = text.split('\n').map(s => s.trim()).filter(s => s.length > 0)
+    if (segments.length === 0) return ['']
 
-    // 마지막 줄이 4자 이하(orphan)이면 앞 줄 마지막 단어를 당겨서 균형 맞춤
-    if (lines.length >= 2) {
-        const lastLine = lines[lines.length - 1]
-        if (lastLine.length <= 4) {
-            const prevWords = lines[lines.length - 2].split(' ')
-            if (prevWords.length >= 2) {
-                const moved = prevWords[prevWords.length - 1]
-                const newPrev = prevWords.slice(0, -1).join(' ')
-                const newLast = `${moved} ${lastLine}`
-                if (newPrev.length <= maxCharsPerLine && newLast.length <= maxCharsPerLine) {
-                    lines[lines.length - 2] = newPrev
-                    lines[lines.length - 1] = newLast
+    const allLines: string[] = []
+
+    for (const segment of segments) {
+        const words = segment.split(' ').filter(w => w.length > 0)
+        if (words.length === 0) continue
+
+        const lines: string[] = []
+        let current = ''
+
+        for (const word of words) {
+            // 단일 어절이 maxCharsPerLine 초과 시 강제 분할
+            if (word.length > maxCharsPerLine) {
+                if (current) { lines.push(current); current = '' }
+                for (let i = 0; i < word.length; i += maxCharsPerLine) {
+                    lines.push(word.slice(i, i + maxCharsPerLine))
+                }
+                continue
+            }
+            const test = current ? `${current} ${word}` : word
+            if (test.length <= maxCharsPerLine) {
+                current = test
+            } else {
+                if (current) lines.push(current)
+                current = word
+            }
+        }
+        if (current) lines.push(current)
+
+        // 마지막 줄이 4자 이하(orphan)이면 앞 줄 마지막 단어를 당겨서 균형 맞춤
+        if (lines.length >= 2) {
+            const lastLine = lines[lines.length - 1]
+            if (lastLine.length <= 4) {
+                const prevWords = lines[lines.length - 2].split(' ')
+                if (prevWords.length >= 2) {
+                    const moved = prevWords[prevWords.length - 1]
+                    const newPrev = prevWords.slice(0, -1).join(' ')
+                    const newLast = `${moved} ${lastLine}`
+                    if (newPrev.length <= maxCharsPerLine && newLast.length <= maxCharsPerLine) {
+                        lines[lines.length - 2] = newPrev
+                        lines[lines.length - 1] = newLast
+                    }
                 }
             }
         }
+
+        allLines.push(...lines)
     }
 
-    return lines
+    return allLines.length > 0 ? allLines : ['']
 }
 
 /**
  * 상단: 로고 + 타이틀 (씬1,2,3 공통 고정)
  * 하단: 이슈 설명 + CTA 버튼 (씬3만 버튼)
  */
-function computeLayout(_title: string, desc: string, sceneNumber: number): SceneLayout {
-    const descLineCount = Math.max(1, wordWrapLines(desc, 16).length)
-    const descHeight = (descLineCount - 1) * DESC_LINE_HEIGHT + DESC_FONTSIZE
-
-    // 로고: 상단 고정
+function computeLayout(_title: string, _desc: string, _sceneNumber?: number): SceneLayout {
     const logoY = LOGO_TOP_Y
-
-    // 타이틀: 로고 바로 아래 (씬1,2,3 공통)
     const titleStartY = LOGO_TOP_Y + LOGO_H + 60
-
-    // 설명: 하단 고정
     const descStartY = Math.floor(HEIGHT * 0.60)
-    const buttonY = sceneNumber === 3 ? descStartY + descHeight + BUTTON_GAP : -1
-
-    return { logoY, titleStartY, descStartY, buttonY }
+    return { logoY, titleStartY, descStartY }
 }
 
 function escapeDrawtext(text: string): string {
@@ -166,10 +172,8 @@ function addLinePaths(
  */
 async function renderTypingStatePNG(
     visibleCount: number,
-    sceneNumber: number,
     layout: SceneLayout,
     descFinalLines: string[],
-    showButton = false,
     titleFinalLines: string[] = [],
     titleWordCount = 0
 ): Promise<Buffer> {
@@ -215,27 +219,10 @@ async function renderTypingStatePNG(
             rendered += lineWords.length
         }
 
-        // CTA 버튼: 씬3, showButton 플래그가 true일 때만 표시
-        if (sceneNumber === 3 && layout.buttonY > 0 && showButton) {
-            const CTA_SIZE = 58
-            const ctaText = '지금 바로 확인하기'
-            const ascC = Math.round(font.ascender * CTA_SIZE / font.unitsPerEm)
-            const descC = Math.round(Math.abs(font.descender) * CTA_SIZE / font.unitsPerEm)
-            const w = font.getAdvanceWidth(ctaText, CTA_SIZE)
-            const x = Math.floor((WIDTH - w) / 2)
-            const y = layout.buttonY + Math.floor(BUTTON_H / 2) + Math.floor((ascC - descC) / 2)
-            addLinePaths(font, svgPaths, ctaText, x, y, CTA_SIZE, '#ffffff', 0, false)
-        }
     }
-
-    // 씬3 버튼 rect (showButton 플래그 기준)
-    const buttonRectSvg = (sceneNumber === 3 && layout.buttonY > 0 && showButton)
-        ? `<rect x="${Math.floor(WIDTH / 2 - BUTTON_W / 2)}" y="${layout.buttonY}" width="${BUTTON_W}" height="${BUTTON_H}" rx="${Math.floor(BUTTON_H / 2)}" fill="#a308e2"/>`
-        : ''
 
     const svg =
         `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">` +
-        buttonRectSvg +
         svgPaths.join('') +
         `</svg>`
 
@@ -263,35 +250,23 @@ export async function createTypingFrames(
     const totalWords = titleWords.length + descWords.length
 
     if (totalWords === 0) {
-        const empty = await renderTypingStatePNG(0, sceneNumber, layout, [], false, titleFinalLines, titleWords.length)
+        const empty = await renderTypingStatePNG(0, layout, [], titleFinalLines, titleWords.length)
         return [{ buffer: empty, duration: sceneDuration }]
     }
 
-    const BUTTON_DELAY = 0.2  // 텍스트 완료 후 버튼 등장까지 딜레이 (초)
-    const wordDelay = Math.min(0.4, (sceneDuration * 0.78) / totalWords)
+    const TEXT_START_DELAY = 0.15
+    const wordDelay = Math.min(0.33, (sceneDuration * 0.85) / totalWords)
     const frames: { buffer: Buffer; duration: number }[] = []
+
+    frames.push({ buffer: await renderTypingStatePNG(0, layout, [], titleFinalLines, titleWords.length), duration: TEXT_START_DELAY })
 
     for (let n = 1; n <= totalWords; n++) {
         const isLast = n === totalWords
-        const showButton = isLast && sceneNumber !== 3  // 씬3는 별도 버튼 프레임에서 처리
-        const buffer = await renderTypingStatePNG(
-            n, sceneNumber, layout, descFinalLines, showButton, titleFinalLines, titleWords.length
-        )
-        const duration = isLast && sceneNumber === 3
-            ? BUTTON_DELAY  // 씬3 마지막 단어 프레임: 딜레이 시간만 유지
-            : isLast
-                ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
-                : wordDelay
+        const buffer = await renderTypingStatePNG(n, layout, descFinalLines, titleFinalLines, titleWords.length)
+        const duration = isLast
+            ? Math.max(sceneDuration - TEXT_START_DELAY - (n - 1) * wordDelay, wordDelay)
+            : wordDelay
         frames.push({ buffer, duration })
-    }
-
-    // 씬3: 딜레이 후 버튼 등장 프레임 추가
-    if (sceneNumber === 3 && totalWords > 0) {
-        const buttonBuffer = await renderTypingStatePNG(
-            totalWords, sceneNumber, layout, descFinalLines, true, titleFinalLines, titleWords.length
-        )
-        const remaining = Math.max(sceneDuration - (totalWords - 1) * wordDelay - BUTTON_DELAY, wordDelay)
-        frames.push({ buffer: buttonBuffer, duration: remaining })
     }
 
     return frames
@@ -444,7 +419,6 @@ export async function createSceneTextOverlay(
 /**
  * Scene 텍스트를 FFmpeg drawtext 필터 배열로 반환.
  * computeLayout 기준으로 타이틀·설명 위치 결정.
- * CTA 버튼 텍스트는 scene 3에서 정적으로 표시 (타이핑 없음).
  */
 export function getSceneTextDrawtextFilters(
     title: string,
@@ -505,17 +479,6 @@ export function getSceneTextDrawtextFilters(
         })
     }
 
-    // CTA 버튼 텍스트: scene 3만, 정적 (타이핑 없음, t=0부터 표시)
-    if (sceneNumber === 3 && layout.buttonY > 0) {
-        const btnCenterY = layout.buttonY + Math.floor(BUTTON_H / 2)
-        filters.push(
-            `drawtext=${ffmpegFont}` +
-            `text='지금 바로 확인하기':` +
-            `x=(w-tw)/2:y=${btnCenterY}-th/2:` +
-            `fontsize=58:fontcolor=white`
-        )
-    }
-
     return filters
 }
 
@@ -558,6 +521,142 @@ export function getTypingDrawtextFilters(
             `fontsize=80:fontcolor=white:borderw=4:bordercolor=black:enable='${enableExpr}'`
         )
     })
+}
+
+// ── 검색 씬 레이아웃 ──────────────────────────────────────────
+const SEARCH_BAR_W = 840
+const SEARCH_BAR_H = 130
+const SEARCH_BAR_X = Math.floor((WIDTH - SEARCH_BAR_W) / 2)
+const SEARCH_BAR_Y = 1000
+const SEARCH_BAR_RX = 65
+const MAG_CX = SEARCH_BAR_X + 58
+const MAG_R = 18
+const SEARCH_TEXT_X = SEARCH_BAR_X + 118
+const SEARCH_TEXT_FONTSIZE = 64
+const SEARCH_HEADLINE = '더 자세히 알고 싶다면?'
+const SEARCH_HEADLINE_FONTSIZE = 72
+const SEARCH_SUBTITLE_FONTSIZE = 52
+const SEARCH_SUBTITLE_Y1 = SEARCH_BAR_Y + SEARCH_BAR_H + 70
+const SEARCH_SUBTITLE_Y2 = SEARCH_SUBTITLE_Y1 + 80
+const SEARCH_QUERY = '왜난리'
+const SEARCH_SUBTITLE_LINE1 = "지금 검색창에"
+const SEARCH_SUBTITLE_LINE2 = "'왜난리'를 검색하세요"
+// ─────────────────────────────────────────────────────────────
+
+export async function createSearchSceneOverlay(): Promise<Buffer> {
+    const font = getOTFont()
+    const logoBase64 = getLogoBase64()
+    const logoX = Math.floor(WIDTH / 2 - LOGO_W / 2)
+
+    const magCY = SEARCH_BAR_Y + Math.floor(SEARCH_BAR_H / 2)
+    const handleLen = Math.round(MAG_R * 0.8)
+    const handleX1 = MAG_CX + Math.floor(MAG_R * 0.72)
+    const handleY1 = magCY + Math.floor(MAG_R * 0.72)
+    const handleX2 = handleX1 + handleLen
+    const handleY2 = handleY1 + handleLen
+
+    const svgPaths: string[] = []
+    if (font) {
+        const descender = Math.round(Math.abs(font.descender) * SEARCH_HEADLINE_FONTSIZE / font.unitsPerEm)
+        const headlineBaselineY = SEARCH_BAR_Y - 60 - descender
+        const headlineW = font.getAdvanceWidth(SEARCH_HEADLINE, SEARCH_HEADLINE_FONTSIZE)
+        const headlineX = Math.floor((WIDTH - headlineW) / 2)
+        addLinePaths(font, svgPaths, SEARCH_HEADLINE, headlineX, headlineBaselineY, SEARCH_HEADLINE_FONTSIZE, 'white', 4)
+    }
+
+    const svg = `
+        <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            ${logoBase64 ? `<image href="${logoBase64}" x="${logoX}" y="${LOGO_TOP_Y}" width="${LOGO_W}" height="${LOGO_H}" preserveAspectRatio="xMidYMid meet"/>` : ''}
+            <rect x="${SEARCH_BAR_X}" y="${SEARCH_BAR_Y}" width="${SEARCH_BAR_W}" height="${SEARCH_BAR_H}" rx="${SEARCH_BAR_RX}" fill="white" opacity="0.93"/>
+            <circle cx="${MAG_CX}" cy="${magCY}" r="${MAG_R}" fill="none" stroke="#666666" stroke-width="4"/>
+            <line x1="${handleX1}" y1="${handleY1}" x2="${handleX2}" y2="${handleY2}" stroke="#666666" stroke-width="4" stroke-linecap="round"/>
+            ${svgPaths.join('')}
+        </svg>
+    `
+
+    return await sharp({
+        create: { width: WIDTH, height: HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    })
+        .composite([{ input: Buffer.from(svg), blend: 'over' }])
+        .png()
+        .toBuffer()
+}
+
+export async function createSearchTypingFrames(
+    sceneDuration: number
+): Promise<{ buffer: Buffer; duration: number }[]> {
+    const font = getOTFont()
+    const searchChars = SEARCH_QUERY.split('')
+    const sub1Words = SEARCH_SUBTITLE_LINE1.split(' ')
+    const sub2Words = SEARCH_SUBTITLE_LINE2.split(' ')
+    const CHAR_DELAY = 0.28
+    const WORD_DELAY = 0.32
+    const TEXT_START_DELAY = 0.20
+    const totalAnimTime = searchChars.length * CHAR_DELAY + (sub1Words.length + sub2Words.length) * WORD_DELAY
+    const holdTime = Math.max(sceneDuration - TEXT_START_DELAY - totalAnimTime, 0.5)
+
+    const magCY = SEARCH_BAR_Y + Math.floor(SEARCH_BAR_H / 2)
+
+    async function renderFrame(visibleChars: number, visibleSub1: number, visibleSub2: number): Promise<Buffer> {
+        const svgPaths: string[] = []
+        const svgElements: string[] = []
+
+        if (font) {
+            const ascS = Math.round(font.ascender * SEARCH_TEXT_FONTSIZE / font.unitsPerEm)
+            const descS = Math.round(Math.abs(font.descender) * SEARCH_TEXT_FONTSIZE / font.unitsPerEm)
+            const textY = magCY + Math.floor((ascS - descS) / 2)
+            const cursorH = ascS + descS
+            const cursorTopY = textY - ascS
+
+            let cursorX = SEARCH_TEXT_X
+            if (visibleChars > 0) {
+                const text = searchChars.slice(0, visibleChars).join('')
+                const fp = font.getPath(text, SEARCH_TEXT_X, textY, SEARCH_TEXT_FONTSIZE)
+                fp.fill = '#1a1a1a'
+                fp.stroke = null
+                svgPaths.push(fp.toSVG(2))
+                cursorX = SEARCH_TEXT_X + Math.round(font.getAdvanceWidth(text, SEARCH_TEXT_FONTSIZE)) + 4
+            }
+
+            svgElements.push(
+                `<rect x="${cursorX}" y="${cursorTopY}" width="3" height="${cursorH}" fill="#1a1a1a" rx="1"/>`
+            )
+
+            const ascSub = Math.round(font.ascender * SEARCH_SUBTITLE_FONTSIZE / font.unitsPerEm)
+
+            if (visibleSub1 > 0) {
+                const subText1 = sub1Words.slice(0, visibleSub1).join(' ')
+                const w1 = font.getAdvanceWidth(subText1, SEARCH_SUBTITLE_FONTSIZE)
+                const x1 = Math.floor((WIDTH - w1) / 2)
+                addLinePaths(font, svgPaths, subText1, x1, SEARCH_SUBTITLE_Y1 + ascSub, SEARCH_SUBTITLE_FONTSIZE, '#E5E7EB', 5)
+            }
+
+            if (visibleSub2 > 0) {
+                const subText2 = sub2Words.slice(0, visibleSub2).join(' ')
+                const w2 = font.getAdvanceWidth(subText2, SEARCH_SUBTITLE_FONTSIZE)
+                const x2 = Math.floor((WIDTH - w2) / 2)
+                addLinePaths(font, svgPaths, subText2, x2, SEARCH_SUBTITLE_Y2 + ascSub, SEARCH_SUBTITLE_FONTSIZE, '#E5E7EB', 5)
+            }
+        }
+
+        const svg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">${svgPaths.join('')}${svgElements.join('')}</svg>`
+        return sharp(Buffer.from(svg)).png().toBuffer()
+    }
+
+    const frames: { buffer: Buffer; duration: number }[] = []
+    frames.push({ buffer: await renderFrame(0, 0, 0), duration: TEXT_START_DELAY })
+    for (let i = 1; i <= searchChars.length; i++) {
+        frames.push({ buffer: await renderFrame(i, 0, 0), duration: CHAR_DELAY })
+    }
+    for (let i = 1; i <= sub1Words.length; i++) {
+        frames.push({ buffer: await renderFrame(searchChars.length, i, 0), duration: WORD_DELAY })
+    }
+    for (let i = 1; i <= sub2Words.length; i++) {
+        const isLast = i === sub2Words.length
+        frames.push({ buffer: await renderFrame(searchChars.length, sub1Words.length, i), duration: isLast ? holdTime : WORD_DELAY })
+    }
+
+    return frames
 }
 
 /** @deprecated */

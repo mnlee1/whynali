@@ -67,8 +67,8 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
         return { jobsGenerated: 0, issueCount: 0 }
     }
 
-    // 한 번에 처리할 최대 숏폼 수 (타임아웃 방지, 기본 1개)
-    const SHORTFORM_BATCH_SIZE = parseInt(process.env.SHORTFORM_BATCH_SIZE ?? '1')
+    // 한 번에 처리할 최대 숏폼 수 (타임아웃 방지, 기본 3개)
+    const SHORTFORM_BATCH_SIZE = parseInt(process.env.SHORTFORM_BATCH_SIZE ?? '3')
 
     const { data: issues, error: issuesError } = await supabaseAdmin
         .from('issues')
