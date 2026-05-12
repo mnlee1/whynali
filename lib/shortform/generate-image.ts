@@ -14,10 +14,11 @@ import sharp from 'sharp'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import type { ShortformJob } from '@/types/shortform'
-import { generateShortformText, type ShortformTextInput } from './generate-text'
-import { fetch3StockImages } from './fetch-stock-images'
-import { createScene1, createScene2, createScene3 } from './generate-scenes'
-import { create3SceneVideo, type SceneContent } from './create-multi-video'
+import { generateShortformText } from './generate-text'
+import { generateShortformText as generateShortformTextV2 } from './generate-text-v2'
+import { fetch3StockImages, fetchNStockImagesWithFull } from './fetch-stock-images'
+import { create3SceneVideo, createNSceneVideo, type SceneContent } from './create-multi-video'
+import { generateSceneAudios, generateNSceneAudios, generateGoogleTTS } from './generate-voice'
 
 const WIDTH = 1080
 const HEIGHT = 1920
@@ -155,6 +156,8 @@ export interface GenerateImageInput {
     issueDescription?: string
     briefBullets?: string[]    // brief_summary.bullets — 씬2 desc 직접 사용
     briefConclusion?: string   // brief_summary.conclusion — 씬3 desc 직접 사용
+    useV2Text?: boolean        // v2 텍스트 생성 로직 사용 여부
+    sceneTexts?: string[]      // UI에서 편집한 씬별 자막 (제공 시 AI 재생성 스킵)
 }
 
 /**
@@ -226,20 +229,35 @@ export async function generate3SceneShortform(
     duration: number = 10,
     previewImages?: string[]
 ): Promise<Buffer> {
-    // 1. Groq Scene별 자막 생성 (이슈 제목 기반)
-    const generatedText = await generateShortformText({
-        title: input.issueTitle,
-        category: input.issueCategory,
-        status: input.issueStatus,
-        heatGrade: input.heatGrade,
-        newsCount: input.newsCount,
-        communityCount: input.communityCount,
-        issueDescription: input.issueDescription,
-        briefBullets: input.briefBullets,
-        briefConclusion: input.briefConclusion,
-    })
-
-    console.log('[생성된 Scene 자막]', generatedText)
+    // 1. 씬별 자막 결정 — UI 편집 텍스트 우선, 없으면 Groq 재생성
+    let generatedText: import('./generate-text').ShortformTextOutput
+    if (input.sceneTexts && input.sceneTexts.length > 0) {
+        generatedText = {
+            scene1Title: input.issueTitle,
+            scene1Desc: input.sceneTexts[0] ?? '',
+            scene2Title: input.issueTitle,
+            scene2Desc: input.sceneTexts[1] ?? '',
+            scene3Title: input.issueTitle,
+            scene3Desc: input.sceneTexts[2] ?? '',
+        }
+        console.log('[Scene 자막] UI 편집 텍스트 사용:', input.sceneTexts)
+    } else {
+        const textInput = {
+            title: input.issueTitle,
+            category: input.issueCategory,
+            status: input.issueStatus,
+            heatGrade: input.heatGrade,
+            newsCount: input.newsCount,
+            communityCount: input.communityCount,
+            issueDescription: input.issueDescription,
+            briefBullets: input.briefBullets,
+            briefConclusion: input.briefConclusion,
+        }
+        generatedText = input.useV2Text
+            ? await generateShortformTextV2(textInput)
+            : await generateShortformText(textInput)
+        console.log('[생성된 Scene 자막]', generatedText)
+    }
 
     // 2. 스톡 이미지 3장 가져오기 (미리보기 이미지 있으면 재사용, 없으면 새로 검색)
     const stockImages = (previewImages && previewImages.length >= 3)
@@ -253,29 +271,106 @@ export async function generate3SceneShortform(
     }
     
     // 3. 배경 이미지 3개 생성 (텍스트 없이)
-    const { createBackgroundScene, createSceneTextOverlay } = await import('./generate-scenes')
+    const { createBackgroundScene, createSceneTextOverlay, createSearchSceneOverlay } = await import('./generate-scenes')
     const scene1Bg = await createBackgroundScene(stockImages[0])
     const scene2Bg = await createBackgroundScene(stockImages[1])
     const scene3Bg = await createBackgroundScene(stockImages[2])
-    
-    // 4. Scene별 구조 레이어 생성 (로고 + CTA 버튼 rect) — title/desc로 수직 중앙 위치 계산
+
+    // 4. Scene별 구조 레이어 생성 — 씬3는 검색 유도 씬 (로고 + 검색바)
     const text1 = await createSceneTextOverlay(1, generatedText.scene1Title, generatedText.scene1Desc)
     const text2 = await createSceneTextOverlay(2, generatedText.scene1Title, generatedText.scene2Desc)
-    const text3 = await createSceneTextOverlay(3, generatedText.scene1Title, generatedText.scene3Desc)
+    const text3 = await createSearchSceneOverlay()
 
-    // 5. 동영상 합성 (씬 슬라이드 전환 + FFmpeg drawtext로 Pretendard 텍스트 렌더링)
+    // 5. Google TTS 씬별 나레이션 생성 (씬3는 검색 씬이므로 빈 텍스트로 오디오 스킵)
+    const sceneAudios = await generateSceneAudios({ ...generatedText, scene3Desc: '' })
+    console.log('[Google TTS] 씬별 음성 생성 완료')
+
+    // 6. 동영상 합성 — 씬별 오디오 duration에 따라 각 씬 길이 자동 조정
     const sceneContents: [SceneContent, SceneContent, SceneContent] = [
         { title: generatedText.scene1Title, desc: generatedText.scene1Desc },
         { title: generatedText.scene2Title, desc: generatedText.scene2Desc },
-        { title: generatedText.scene3Title, desc: generatedText.scene3Desc },
+        { title: '', desc: '', isSearchScene: true },
     ]
     const videoBuffer = await create3SceneVideo(
         [scene1Bg, scene2Bg, scene3Bg],
         [text1, text2, text3],
         duration,
         undefined,
-        sceneContents
+        sceneContents,
+        undefined,
+        sceneAudios.buffers
     )
     
     return videoBuffer
+}
+
+/**
+ * N씬 슬라이드쇼 동영상 생성 (v2 전용).
+ * 이미지 1장당 텍스트 2개씩 배정. 마지막 씬은 검색 유도 씬으로 고정.
+ *
+ * @param issueTitle   - 이슈 제목
+ * @param issueCategory - 이슈 카테고리 (이미지 검색용)
+ * @param sceneTexts   - N개 씬 텍스트 (UI에서 편집한 값)
+ * @param previewImages - ceil(N/2)개 full-size 이미지 URL (없으면 Pixabay에서 새로 조회)
+ */
+export async function generateNSceneShortform(
+    issueTitle: string,
+    issueCategory: string,
+    sceneTexts: string[],
+    previewImages?: string[]
+): Promise<Buffer> {
+    const N = sceneTexts.length
+    if (N === 0) throw new Error('씬 텍스트가 없습니다')
+
+    const imgCount = Math.ceil(N / 2)
+
+    // 1. 이미지 확보 (ceil(N/2)장)
+    let stockImages: string[]
+    if (previewImages && previewImages.length >= imgCount) {
+        stockImages = previewImages.slice(0, imgCount)
+    } else {
+        const { fulls } = await fetchNStockImagesWithFull(issueCategory, issueTitle, imgCount)
+        stockImages = fulls
+        if (stockImages.length === 0) throw new Error('스톡 이미지 조회 실패')
+    }
+
+    const {
+        createBackgroundScene,
+        createSceneTextOverlay,
+        createSearchSceneOverlay,
+    } = await import('./generate-scenes')
+
+    // 2. 배경 생성 — 씬 i는 stockImages[floor(i/2)] 사용, 검색씬은 마지막 이미지 재사용
+    const lastImg = stockImages[stockImages.length - 1]
+    const allBgs = await Promise.all([
+        ...Array.from({ length: N }, (_, i) =>
+            createBackgroundScene(stockImages[Math.min(Math.floor(i / 2), stockImages.length - 1)])
+        ),
+        createBackgroundScene(lastImg),
+    ]) as Buffer[]
+
+    // 3. 텍스트 오버레이 — 씬1은 타이틀 애니메이션, 이후는 정적, 마지막은 검색씬
+    const allOverlays = await Promise.all([
+        ...sceneTexts.map((desc, i) => createSceneTextOverlay(i + 1, issueTitle, desc)),
+        createSearchSceneOverlay(),
+    ]) as Buffer[]
+
+    // 4. TTS 생성 — 씬1은 타이틀도 함께 읽기, 검색씬은 고정 멘트
+    const cleanTitle = issueTitle.replace(/^\[.*?\]\s*/, '').trim()
+    const audioTexts = sceneTexts.map((desc, i) =>
+        i === 0 ? (desc ? `${cleanTitle}. ${desc}` : cleanTitle) : desc
+    )
+    const [audioBuffers, searchAudio] = await Promise.all([
+        generateNSceneAudios(audioTexts),
+        generateGoogleTTS('더 자세히 알고 싶다면? 지금 검색창에 왜난리를 검색하세요'),
+    ])
+    const allAudios: (Buffer | null)[] = [...audioBuffers, searchAudio]
+
+    // 5. 씬 콘텐츠 구성
+    const sceneContents: SceneContent[] = [
+        ...sceneTexts.map(desc => ({ title: issueTitle, desc })),
+        { title: '', desc: '', isSearchScene: true },
+    ]
+
+    return createNSceneVideo(allBgs, allOverlays, sceneContents, allAudios)
 }
