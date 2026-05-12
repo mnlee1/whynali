@@ -19,7 +19,8 @@ export default function PrivacyPage() {
             <div className="space-y-10 text-gray-700 text-sm leading-relaxed">
 
                 <p>
-                    NHN AD(이하 &quot;회사&quot;)는 개인정보보호법 및 정보통신망 이용촉진 및 정보보호 등에 관한 법률에 따라
+                    NHN AD(이하 &quot;회사&quot;)가 운영하는 서비스 <strong>WhyNali(왜난리, whynali.com)</strong>는
+                    개인정보보호법 및 정보통신망 이용촉진 및 정보보호 등에 관한 법률에 따라
                     이용자의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리하기 위해 다음과 같이
                     개인정보 처리방침을 수립·공개합니다.
                 </p>
@@ -199,6 +200,11 @@ export default function PrivacyPage() {
                                     <td className="border border-gray-200 px-3 py-2">이메일 발송 (서비스 알림, 마케팅 수신 동의자에 한함)</td>
                                     <td className="border border-gray-200 px-3 py-2">발송 후 즉시 파기</td>
                                 </tr>
+                                <tr>
+                                    <td className="border border-gray-200 px-3 py-2">TikTok Inc.</td>
+                                    <td className="border border-gray-200 px-3 py-2">콘텐츠 게시 (TikTok Content Posting API를 통해 WhyNali가 제작한 숏폼 영상을 TikTok에 업로드. 이용자 개인정보는 전달되지 않음)</td>
+                                    <td className="border border-gray-200 px-3 py-2">처리 즉시 파기</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -242,6 +248,13 @@ export default function PrivacyPage() {
                                     <td className="border border-gray-200 px-3 py-2">이메일 발송</td>
                                     <td className="border border-gray-200 px-3 py-2">이메일 주소</td>
                                     <td className="border border-gray-200 px-3 py-2">발송 후 즉시 파기</td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-gray-200 px-3 py-2">TikTok Inc.</td>
+                                    <td className="border border-gray-200 px-3 py-2">미국</td>
+                                    <td className="border border-gray-200 px-3 py-2">콘텐츠 게시 (숏폼 영상 업로드)</td>
+                                    <td className="border border-gray-200 px-3 py-2">영상 파일 및 제목 (이용자 개인정보 미포함)</td>
+                                    <td className="border border-gray-200 px-3 py-2">처리 즉시 파기</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -374,7 +387,7 @@ export default function PrivacyPage() {
 
                 <section className="border-t pt-6">
                     <p className="text-xs text-gray-500">
-                        시행일: 2026년 4월 16일<br />
+                        시행일: 2026년 5월 7일<br />
                         문의: <a href="mailto:dl_deflow@nhnad.com" className="text-blue-600 underline">dl_deflow@nhnad.com</a>
                     </p>
                 </section>

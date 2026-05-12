@@ -1,7 +1,10 @@
 /**
  * lib/shortform/create-multi-video.ts
- * 
+ *
  * 3개 Scene 이미지를 하나의 동영상으로 합성
+ *
+ * sceneAudios 제공 시: 씬별 TTS 싱크 모드 (텍스트 나타날 때 목소리도 함께)
+ * audioBuffer 제공 시: 단일 오디오 합성 (레거시)
  */
 
 import { promisify } from 'util'
@@ -9,11 +12,20 @@ import { exec as execCallback } from 'child_process'
 import { writeFile, mkdir } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { getTypingDrawtextFilters, createTypingFrames } from './generate-scenes'
+import { getTypingDrawtextFilters, createTypingFrames, createSearchTypingFrames } from './generate-scenes'
+import type { SceneAudios } from './generate-voice'
+
+/** 씬별 텍스트 콘텐츠 (FFmpeg drawtext 렌더링용) */
+export interface SceneContent {
+    title: string
+    desc: string
+    isSearchScene?: boolean
+}
+
+const exec = promisify(execCallback)
 
 /**
  * Sharp 타이핑 프레임 배열을 RGBA 영상(MKV/PNG코덱)으로 변환.
- * drawtext 없이 타이핑 애니메이션을 구현하기 위한 중간 영상.
  */
 async function buildTextAnimationVideo(
     frames: { buffer: Buffer; duration: number }[],
@@ -31,7 +43,6 @@ async function buildTextAnimationVideo(
         framePaths.push(framePath)
     }
 
-    // ffconcat 리스트 (마지막 항목은 duration 없이 추가 — ffconcat 스펙)
     const lines = ['ffconcat version 1.0']
     for (let i = 0; i < frames.length; i++) {
         lines.push(`file '${framePaths[i].replace(/\\/g, '/')}'`)
@@ -51,80 +62,85 @@ async function buildTextAnimationVideo(
     return outputPath
 }
 
-/** 씬별 텍스트 콘텐츠 (FFmpeg drawtext 렌더링용) */
-export interface SceneContent {
-    title: string
-    desc: string
-}
-
-const exec = promisify(execCallback)
-
 /**
  * Ken Burns 효과 (zoompan) 필터 문자열 반환.
- * 씬별로 확대 방향을 다르게 적용해 단조로움을 방지.
- *
- * @param sceneIndex - 0부터 시작 (씬 번호 - 1)
- * @param frames - 씬 총 프레임 수
- * @param fps - 프레임레이트
+ * opts.startZoom: 1.0 초과 시 연속 줌 (이전 씬에서 이어받은 시작 값)
+ * opts.step: 프레임당 줌 증가량 (그룹 공유)
+ * opts.centerX: true면 항상 중앙 고정 (연속 줌 그룹용)
  */
-function getKenBurnsFilter(sceneIndex: number, frames: number, fps: number): string {
-    // 1.0 → 1.15 으로 자연스럽게 확대 (frames 동안)
-    const zExpr = `min(zoom+${(0.15 / frames).toFixed(5)},1.15)`
+function getKenBurnsFilter(
+    sceneIndex: number,
+    frames: number,
+    fps: number,
+    opts?: { startZoom?: number; step?: number; centerX?: boolean }
+): string {
+    const startZoom = opts?.startZoom ?? 1.0
+    const step = opts?.step ?? (0.15 / frames)
+    const stepStr = step.toFixed(5)
+
+    // startZoom > 1.0 이면 첫 프레임을 해당 값으로 초기화한 뒤 누적
+    const zExpr = startZoom > 1.001
+        ? `if(eq(on,1),${startZoom.toFixed(4)},min(zoom+${stepStr},1.15))`
+        : `min(zoom+${stepStr},1.15)`
+
     const yExpr = `ih/2-(ih/zoom/2)`
 
     let xExpr: string
-    if (sceneIndex === 0) {
-        // 씬1: 왼쪽에서 오른쪽으로 천천히 이동
+    if (opts?.centerX || startZoom > 1.001) {
+        xExpr = `iw/2-(iw/zoom/2)`
+    } else if (sceneIndex === 0) {
         xExpr = `on*0.4`
     } else if (sceneIndex === 1) {
-        // 씬2: 오른쪽에서 왼쪽으로 천천히 이동
         xExpr = `max(44-on*0.4,0)`
     } else {
-        // 씬3: 중앙 고정 줌인
         xExpr = `iw/2-(iw/zoom/2)`
     }
 
     return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=1080x1920`
 }
 
-/** drawtext용 폰트 경로 결정. 우선순위: Pretendard → 맑은 고딕 → 빈 문자열(fontfile 생략) */
+/** drawtext용 폰트 경로 결정 */
 function resolveDrawtextFontPath(): string {
-    const fs = require('fs')
-    const pretendard = join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
-    if (fs.existsSync(pretendard)) return pretendard
-    const malgun = 'C:/Windows/Fonts/malgun.ttf'
-    if (fs.existsSync(malgun)) return malgun
-    return ''
+    return join(process.cwd(), 'public', 'fonts', 'Pretendard-Bold.ttf')
 }
 
 function getFfmpegPath(): string {
     const path = require('path')
     const fs = require('fs')
-    
+
     const directPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
-    
-    if (fs.existsSync(directPath)) {
-        return directPath
-    }
-    
+    if (fs.existsSync(directPath)) return directPath
+
     try {
         const ffmpegStatic = require('ffmpeg-static')
-        if (ffmpegStatic && typeof ffmpegStatic === 'string') {
-            return ffmpegStatic
-        }
+        if (ffmpegStatic && typeof ffmpegStatic === 'string') return ffmpegStatic
     } catch {}
-    
+
     throw new Error('ffmpeg-static을 찾을 수 없습니다')
 }
 
 /**
- * 3개 배경 Scene + Scene별 텍스트 오버레이로 10초 동영상 합성.
- * 씬2는 오른쪽에서, 씬3는 왼쪽에서 슬라이드 전환 (xfade).
+ * ffmpeg -i 로 오디오 파일 Duration을 파싱.
+ * ffmpeg은 출력 없으면 에러로 종료되지만 stderr에 Duration이 포함됨.
+ */
+async function probeAudioDuration(audioPath: string, ffmpegPath: string, fallback: number): Promise<number> {
+    try {
+        await exec(`"${ffmpegPath}" -i "${audioPath}"`)
+    } catch (e: any) {
+        const output: string = e.stderr ?? ''
+        const match = output.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/)
+        if (match) {
+            return parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseFloat(match[3])
+        }
+    }
+    return fallback
+}
+
+/**
+ * 3개 배경 Scene + Scene별 텍스트 오버레이로 동영상 합성.
  *
- * @param backgrounds - 3개 배경 PNG Buffer [scene1, scene2, scene3]
- * @param textOverlays - 3개 텍스트 레이어 PNG Buffer (투명 배경) [text1, text2, text3]
- * @param duration - 총 길이 (초, 기본값 10)
- * @param sceneTexts - 씬별 자막 텍스트 (전달 시 drawtext 타이핑 효과 적용)
+ * @param sceneAudios - 씬별 TTS MP3 버퍼 3개. 모두 non-null이면 씬별 싱크 모드 활성화.
+ * @param audioBuffer - 레거시 단일 오디오 (sceneAudios 없을 때 사용)
  * @returns MP4 Buffer
  */
 export async function create3SceneVideo(
@@ -132,16 +148,17 @@ export async function create3SceneVideo(
     textOverlays: Buffer | [Buffer, Buffer, Buffer],
     duration: number = 10,
     sceneTexts?: [string, string, string],
-    sceneContents?: [SceneContent, SceneContent, SceneContent]
+    sceneContents?: [SceneContent, SceneContent, SceneContent],
+    audioBuffer?: Buffer,
+    sceneAudios?: SceneAudios['buffers']
 ): Promise<Buffer> {
-    // 레거시 호환: Buffer 하나만 전달된 경우 3개로 복제
     const textArray: [Buffer, Buffer, Buffer] = Array.isArray(textOverlays)
         ? textOverlays
         : [textOverlays, textOverlays, textOverlays]
+
     const ffmpegPath = getFfmpegPath()
     const tmpId = Date.now()
     const tmpDir = join(tmpdir(), `shortform-${tmpId}`)
-
     await mkdir(tmpDir, { recursive: true })
 
     const bg1Path = join(tmpDir, 'bg1.png')
@@ -163,95 +180,442 @@ export async function create3SceneVideo(
         await writeFile(text2Path, textArray[1])
         await writeFile(text3Path, textArray[2])
 
-        const transitionDuration = 0.5
+        const transitionDuration = 0.15   // 씬1→2 전환
+        const transitionDuration23 = 0.05  // 씬2→3 전환 (더 빠르게)
         const fps = 30
-        // 총 duration이 정확히 나오도록 전환 겹침 보정: 3*scene - 2*transition = duration
-        const sceneDuration = (duration + 2 * transitionDuration) / 3
+        const MIN_SCENE = 3.0
+        const AUDIO_DELAY_MS = 300   // 씬1,2 목소리 시작 딜레이 (ms) — 텍스트 등장(150ms) 후 150ms 뒤
+        const AUDIO_DELAY_MS_S3 = 900 // 씬3 목소리 시작 딜레이 (ms) — xfade concat 오프셋 보정 포함
 
-        // ── sceneContents 전달 시: Sharp 타이핑 프레임 방식 (drawtext 불필요) ──────
-        // sceneContents 없으면 레거시 drawtext 경로 사용 (로컬 개발/fallback)
+        // ── STEP 0: 씬별 오디오 싱크 준비 ──────────────────────────────────
+        const isSearchScene3 = !!(sceneContents && sceneContents[2]?.isSearchScene)
+
+        const usePerSceneAudio = !!(
+            sceneAudios &&
+            sceneAudios[0] && sceneAudios[1] &&
+            (isSearchScene3 || sceneAudios[2])
+        )
+
+        let audioPaths: [string, string, string] | null = null
+        let sceneDurations: [number, number, number]
+
+        if (usePerSceneAudio && sceneAudios) {
+            const audio1Path = join(tmpDir, 'audio1.mp3')
+            const audio2Path = join(tmpDir, 'audio2.mp3')
+            const audio3Path = join(tmpDir, 'audio3.mp3')
+            audioPaths = [audio1Path, audio2Path, audio3Path]
+
+            const writeOps = [
+                writeFile(audio1Path, sceneAudios[0]!),
+                writeFile(audio2Path, sceneAudios[1]!),
+            ]
+            if (!isSearchScene3 && sceneAudios[2]) {
+                writeOps.push(writeFile(audio3Path, sceneAudios[2]!))
+            }
+            await Promise.all(writeOps)
+
+            const [d1, d2] = await Promise.all([
+                probeAudioDuration(audio1Path, ffmpegPath, 4),
+                probeAudioDuration(audio2Path, ffmpegPath, 4),
+            ])
+            const d3 = isSearchScene3 ? 0 : await probeAudioDuration(audio3Path, ffmpegPath, 4)
+
+            const delayS = AUDIO_DELAY_MS / 1000
+            sceneDurations = [
+                Math.max(d1 + delayS + 0.4, MIN_SCENE),
+                Math.max(d2 + delayS + 1.0, MIN_SCENE),
+                isSearchScene3 ? 3.5 : Math.max(d3 + delayS + 1.0, MIN_SCENE),
+            ]
+            console.log('[FFmpeg] 씬별 싱크 모드 — 오디오 길이:', [d1, d2, d3].map(d => d.toFixed(2)), '→ 씬 duration:', sceneDurations)
+        } else {
+            const sd = (duration + 2 * transitionDuration) / 3
+            sceneDurations = [sd, sd, sd]
+        }
+
+        // ── STEP 1: Sharp 타이핑 프레임 생성 ──────────────────────────────────
         let textAnimPaths: [string, string, string] | null = null
 
         if (sceneContents) {
-            // STEP 1a: Sharp+SVG로 단어별 타이핑 프레임 PNG 생성
             console.log('[FFmpeg] Sharp 타이핑 프레임 생성 중...')
-            const frames1 = await createTypingFrames(sceneContents[0].title, sceneContents[0].desc, 1, sceneDuration)
-            const frames2 = await createTypingFrames(sceneContents[1].title, sceneContents[1].desc, 2, sceneDuration)
-            const frames3 = await createTypingFrames(sceneContents[2].title, sceneContents[2].desc, 3, sceneDuration)
+            const [frames1, frames2] = await Promise.all([
+                createTypingFrames(sceneContents[0].title, sceneContents[0].desc, 1, sceneDurations[0]),
+                createTypingFrames(sceneContents[1].title, sceneContents[1].desc, 2, sceneDurations[1]),
+            ])
+            const frames3 = isSearchScene3
+                ? await createSearchTypingFrames(sceneDurations[2])
+                : await createTypingFrames(sceneContents[2].title, sceneContents[2].desc, 3, sceneDurations[2])
 
-            // STEP 1b: 프레임 시퀀스를 RGBA 영상(MKV)으로 변환
             console.log('[FFmpeg] 텍스트 애니메이션 영상 생성 중...')
             const [ta1, ta2, ta3] = await Promise.all([
-                buildTextAnimationVideo(frames1, tmpDir, 1, ffmpegPath, sceneDuration, fps),
-                buildTextAnimationVideo(frames2, tmpDir, 2, ffmpegPath, sceneDuration, fps),
-                buildTextAnimationVideo(frames3, tmpDir, 3, ffmpegPath, sceneDuration, fps),
+                buildTextAnimationVideo(frames1, tmpDir, 1, ffmpegPath, sceneDurations[0], fps),
+                buildTextAnimationVideo(frames2, tmpDir, 2, ffmpegPath, sceneDurations[1], fps),
+                buildTextAnimationVideo(frames3, tmpDir, 3, ffmpegPath, sceneDurations[2], fps),
             ])
             textAnimPaths = [ta1, ta2, ta3]
         }
 
-        // 씬 필터 빌더 (모드에 따라 분기)
-        const buildSceneFilter = (sceneNumber: number, extraFilters: string[] = [], useTextAnim = false): string => {
-            const frames = Math.ceil(sceneDuration * fps)
+        // ── STEP 2: 씬별 비디오 생성 ──────────────────────────────────────────
+        const encodeOpts = `-c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p`
+
+        // filter_complex 빌더 — 항상 [vout] 출력
+        const buildSceneFilter = (sceneNumber: number, dur: number, extraFilters: string[] = [], useTextAnim = false): string => {
+            const frames = Math.ceil(dur * fps)
             const kb = getKenBurnsFilter(sceneNumber - 1, frames, fps)
 
             if (useTextAnim) {
-                // 3입력 모드: [0:v]=배경, [1:v]=구조레이어(로고+버튼), [2:v]=텍스트애니메이션
                 return (
                     `[0:v]scale=1080:1920,${kb}[bg];` +
                     `[1:v]format=rgba,colorchannelmixer=aa=1[struct];` +
                     `[bg][struct]overlay=0:0[bgs];` +
                     `[2:v]format=rgba[textanim];` +
-                    `[bgs][textanim]overlay=0:0`
+                    `[bgs][textanim]overlay=0:0[vout]`
                 )
             }
 
-            // 기존 2입력 + drawtext 모드 (레거시 fallback)
-            const base = `[0:v]scale=1080:1920,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0`
-            return extraFilters.length > 0 ? `${base},${extraFilters.join(',')}` : base
+            const base = extraFilters.length > 0
+                ? `[0:v]scale=1080:1920,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0,${extraFilters.join(',')}[vout]`
+                : `[0:v]scale=1080:1920,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0[vout]`
+            return base
         }
 
-        // STEP 2: Scene별 개별 비디오 생성
-        const encodeOpts = `-c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p`
+        const bgPaths = [bg1Path, bg2Path, bg3Path]
+        const textPaths = [text1Path, text2Path, text3Path]
+        const videoPaths = [video1Path, video2Path, video3Path]
+
         if (textAnimPaths) {
-            console.log('[FFmpeg] Scene별 비디오 생성 중 (Sharp 타이핑 애니메이션)...')
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg1Path}" -loop 1 -i "${text1Path}" -i "${textAnimPaths[0]}" -filter_complex "${buildSceneFilter(1, [], true)}" ${encodeOpts} -t ${sceneDuration} -y "${video1Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg2Path}" -loop 1 -i "${text2Path}" -i "${textAnimPaths[1]}" -filter_complex "${buildSceneFilter(2, [], true)}" ${encodeOpts} -t ${sceneDuration} -y "${video2Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg3Path}" -loop 1 -i "${text3Path}" -i "${textAnimPaths[2]}" -filter_complex "${buildSceneFilter(3, [], true)}" ${encodeOpts} -t ${sceneDuration} -y "${video3Path}"`)
+            console.log('[FFmpeg] Scene별 비디오 생성 중 (Sharp 타이핑 + 씬별 오디오 싱크)...')
+            for (let i = 0; i < 3; i++) {
+                const dur = sceneDurations[i]
+                const filter = buildSceneFilter(i + 1, dur, [], true)
+                const hasAudio = audioPaths && !(isSearchScene3 && i === 2)
+                const audioInput = hasAudio ? `-i "${audioPaths![i]}"` : ''
+                const delay = hasAudio ? (i === 2 ? AUDIO_DELAY_MS_S3 : AUDIO_DELAY_MS) : 0
+                const audioFilter = hasAudio ? `;[3:a]adelay=${delay}|${delay}[aout]` : ''
+                const audioMap = hasAudio ? `-map "[aout]" -c:a aac` : ''
+                await exec(
+                    `"${ffmpegPath}" -loop 1 -i "${bgPaths[i]}" -loop 1 -i "${textPaths[i]}" -i "${textAnimPaths![i]}" ${audioInput} ` +
+                    `-filter_complex "${filter}${audioFilter}" -map "[vout]" ${audioMap} ${encodeOpts} -t ${dur.toFixed(4)} -y "${videoPaths[i]}"`
+                )
+            }
         } else {
             // 레거시 drawtext 경로
             const fontPath = resolveDrawtextFontPath()
-            let drawtextFilters: [string[], string[], string[]] = [[], [], []]
-            if (sceneTexts) {
-                drawtextFilters = [
-                    getTypingDrawtextFilters(sceneTexts[0], 1, 0, sceneDuration, fontPath),
-                    getTypingDrawtextFilters(sceneTexts[1], 2, 0, sceneDuration, fontPath),
-                    getTypingDrawtextFilters(sceneTexts[2], 3, 0, sceneDuration, fontPath),
-                ]
+            console.log('[FFmpeg] Scene별 비디오 생성 중 (drawtext 레거시)...')
+            for (let i = 0; i < 3; i++) {
+                const dur = sceneDurations[i]
+                const dtFilters = sceneTexts ? getTypingDrawtextFilters(sceneTexts[i], i + 1, 0, dur, fontPath) : []
+                const filter = buildSceneFilter(i + 1, dur, dtFilters)
+                const audioInput = audioPaths ? `-i "${audioPaths[i]}"` : ''
+                const delay = audioPaths ? (i === 2 ? AUDIO_DELAY_MS_S3 : AUDIO_DELAY_MS) : 0
+                const audioFilter = audioPaths ? `;[2:a]adelay=${delay}|${delay}[aout]` : ''
+                const audioMap = audioPaths ? `-map "[aout]" -c:a aac` : ''
+                await exec(
+                    `"${ffmpegPath}" -loop 1 -i "${bgPaths[i]}" -loop 1 -i "${textPaths[i]}" ${audioInput} ` +
+                    `-filter_complex "${filter}${audioFilter}" -map "[vout]" ${audioMap} ${encodeOpts} -t ${dur.toFixed(4)} -y "${videoPaths[i]}"`
+                )
             }
-            console.log('[FFmpeg] Scene별 비디오 3개 생성 중 (drawtext 레거시)...')
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg1Path}" -loop 1 -i "${text1Path}" -filter_complex "${buildSceneFilter(1, drawtextFilters[0])}" ${encodeOpts} -t ${sceneDuration} -y "${video1Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg2Path}" -loop 1 -i "${text2Path}" -filter_complex "${buildSceneFilter(2, drawtextFilters[1])}" ${encodeOpts} -t ${sceneDuration} -y "${video2Path}"`)
-            await exec(`"${ffmpegPath}" -loop 1 -i "${bg3Path}" -loop 1 -i "${text3Path}" -filter_complex "${buildSceneFilter(3, drawtextFilters[2])}" ${encodeOpts} -t ${sceneDuration} -y "${video3Path}"`)
         }
 
-        // STEP 3: xfade로 슬라이드 전환 합성
-        const offset1 = sceneDuration - 0.25
-        const offset2 = 2 * sceneDuration - transitionDuration - 0.25
+        // ── STEP 3: xfade 슬라이드 전환 합성 ──────────────────────────────────
+        const [s1, s2] = sceneDurations
+        const offset1 = s1 - 0.25
+        const offset2 = s1 + s2 - transitionDuration23 - 0.25
 
         console.log('[FFmpeg] xfade 슬라이드 전환 합성 중...')
+
+        if (usePerSceneAudio) {
+            const audioConcat = isSearchScene3
+                ? `[0:a][1:a]concat=n=2:v=0:a=1[aout]`
+                : `[0:a][1:a][2:a]concat=n=3:v=0:a=1[aout]`
+            await exec(
+                `"${ffmpegPath}" -i "${video1Path}" -i "${video2Path}" -i "${video3Path}" ` +
+                `-filter_complex ` +
+                `"[0:v][1:v]xfade=transition=slideright:duration=${transitionDuration}:offset=${offset1.toFixed(4)}[v01];` +
+                `[v01][2:v]xfade=transition=slideleft:duration=${transitionDuration23}:offset=${offset2.toFixed(4)}[vout];` +
+                `${audioConcat}" ` +
+                `-map "[vout]" -map "[aout]" ${encodeOpts} -c:a aac -movflags +faststart -y "${outputPath}"`
+            )
+        } else {
+            await exec(
+                `"${ffmpegPath}" -i "${video1Path}" -i "${video2Path}" -i "${video3Path}" ` +
+                `-filter_complex "[0:v][1:v]xfade=transition=slideright:duration=${transitionDuration}:offset=${offset1.toFixed(4)}[v01];` +
+                `[v01][2:v]xfade=transition=slideleft:duration=${transitionDuration23}:offset=${offset2.toFixed(4)}[vout]" ` +
+                `-map "[vout]" ${encodeOpts} -movflags +faststart -y "${outputPath}"`
+            )
+        }
+
+        // ── STEP 4: 레거시 단일 오디오 합성 (sceneAudios 없을 때만) ────────────
+        let finalOutputPath = outputPath
+        if (!usePerSceneAudio && audioBuffer) {
+            const audioPath = join(tmpDir, 'narration.mp3')
+            await writeFile(audioPath, audioBuffer)
+            const audioOutputPath = join(tmpDir, 'output_audio.mp4')
+            const totalDuration = s1 + sceneDurations[2] + s2 - transitionDuration
+            await exec(
+                `"${ffmpegPath}" -i "${outputPath}" -i "${audioPath}" ` +
+                `-c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -t ${totalDuration.toFixed(4)} -y "${audioOutputPath}"`
+            )
+            finalOutputPath = audioOutputPath
+        }
+
+        const { readFile } = await import('fs/promises')
+        return await readFile(finalOutputPath)
+    } finally {
+        try {
+            const { rm } = await import('fs/promises')
+            await rm(tmpDir, { recursive: true, force: true })
+        } catch {}
+    }
+}
+
+/**
+ * N개 씬 슬라이드쇼 동영상 합성 (v2 전용).
+ * sceneContents 마지막 씬에 isSearchScene=true 설정 시 검색 씬으로 처리.
+ *
+ * @param backgrounds  - N개 배경 버퍼 (content N-1 + search 1)
+ * @param textOverlays - N개 구조 레이어 버퍼
+ * @param sceneContents - N개 씬 콘텐츠
+ * @param sceneAudios  - N개 TTS 버퍼 (null = 무음)
+ */
+export async function createNSceneVideo(
+    backgrounds: Buffer[],
+    textOverlays: Buffer[],
+    sceneContents: SceneContent[],
+    sceneAudios?: (Buffer | null)[]
+): Promise<Buffer> {
+    const N = sceneContents.length
+    if (N === 0) throw new Error('씬이 없습니다')
+
+    const ffmpegPath = getFfmpegPath()
+    const tmpId = Date.now()
+    const tmpDir = join(tmpdir(), `shortform-n-${tmpId}`)
+    await mkdir(tmpDir, { recursive: true })
+
+    try {
+        const bgPaths = backgrounds.map((_, i) => join(tmpDir, `bg${i}.png`))
+        const textPaths = textOverlays.map((_, i) => join(tmpDir, `text${i}.png`))
+        const videoPaths = backgrounds.map((_, i) => join(tmpDir, `video${i}.mp4`))
+
+        await Promise.all([
+            ...backgrounds.map((buf, i) => writeFile(bgPaths[i], buf)),
+            ...textOverlays.map((buf, i) => writeFile(textPaths[i], buf)),
+        ])
+
+        // ── STEP 0: 씬별 오디오 준비 ──────────────────────────────────────────
+        const AUDIO_DELAY_MS = 50
+        const MIN_SCENE = 3.0
+        const SEARCH_SCENE_DUR = 3.5
+        const TRANSITION_DUR = 0.1
+        const fps = 30
+
+        const hasSceneAudio = sceneContents.map((_sc, i) =>
+            !!(sceneAudios && sceneAudios[i])
+        )
+        const usePerSceneAudio = hasSceneAudio.some(Boolean)
+
+        const audioPaths: (string | null)[] = new Array(N).fill(null)
+        const sceneDurations: number[] = sceneContents.map(sc =>
+            sc.isSearchScene ? SEARCH_SCENE_DUR : MIN_SCENE
+        )
+
+        if (usePerSceneAudio && sceneAudios) {
+            const writeOps: Promise<void>[] = []
+            for (let i = 0; i < N; i++) {
+                if (hasSceneAudio[i] && sceneAudios[i]) {
+                    const ap = join(tmpDir, `audio${i}.mp3`)
+                    audioPaths[i] = ap
+                    writeOps.push(writeFile(ap, sceneAudios[i]!))
+                }
+            }
+            await Promise.all(writeOps)
+
+            const delayS = AUDIO_DELAY_MS / 1000
+            await Promise.all(
+                audioPaths.map(async (ap, i) => {
+                    if (ap) {
+                        const d = await probeAudioDuration(ap, ffmpegPath, 4)
+                        sceneDurations[i] = Math.max(d + delayS + (i === 0 ? 0.4 : 1.0), MIN_SCENE)
+                    }
+                })
+            )
+            console.log('[FFmpeg N] 씬 duration:', sceneDurations.map(d => d.toFixed(2)))
+        }
+
+        // ── STEP 1: Sharp 타이핑 프레임 생성 ────────────────────────────────────
+        console.log('[FFmpeg N] Sharp 타이핑 프레임 생성 중...')
+        const allFrames = await Promise.all(
+            sceneContents.map((sc, i) =>
+                sc.isSearchScene
+                    ? createSearchTypingFrames(sceneDurations[i])
+                    : createTypingFrames(sc.title, sc.desc, i + 1, sceneDurations[i])
+            )
+        )
+
+        console.log('[FFmpeg N] 텍스트 애니메이션 영상 생성 중...')
+        const textAnimPaths = await Promise.all(
+            allFrames.map((frames, i) =>
+                buildTextAnimationVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i], fps)
+            )
+        )
+
+        // ── STEP 1.5: Ken Burns 연속 줌 그룹 계산 ───────────────────────────────
+        // 같은 배경 이미지를 쓰는 씬들(짝수+홀수 콘텐츠 씬, 검색씬)을 하나의 그룹으로 묶어
+        // 1.0→1.15 줌 범위를 그룹 전체에 걸쳐 분배 → 씬이 넘어가도 줌이 리셋되지 않음.
+        //
+        // 이미지 배정 규칙 (generateNSceneShortform):
+        //   씬 i → stockImages[floor(i/2)], 검색씬(마지막) → lastImg = stockImages[last]
+        // 따라서 짝수·홀수 콘텐츠 씬 쌍 + 검색씬은 마지막 그룹에 포함됨.
+        const searchIdx = N - 1
+        const kbGroups: number[][] = []
+        {
+            let gi = 0
+            while (gi < searchIdx) {
+                if (gi % 2 === 0 && gi + 1 < searchIdx) {
+                    kbGroups.push([gi, gi + 1])
+                    gi += 2
+                } else {
+                    kbGroups.push([gi])
+                    gi++
+                }
+            }
+            if (kbGroups.length > 0) {
+                kbGroups[kbGroups.length - 1].push(searchIdx)
+            } else {
+                kbGroups.push([searchIdx])
+            }
+        }
+
+        const kenBurnsParams: Array<{ startZoom: number; step: number }> =
+            Array.from({ length: N }, () => ({ startZoom: 1.0, step: 0.15 }))
+
+        for (const group of kbGroups) {
+            const totalFrames = group.reduce(
+                (sum, idx) => sum + Math.ceil(sceneDurations[idx] * fps), 0
+            )
+            const step = 0.15 / totalFrames
+            let accFrames = 0
+            for (const idx of group) {
+                kenBurnsParams[idx] = { startZoom: 1.0 + step * accFrames, step }
+                accFrames += Math.ceil(sceneDurations[idx] * fps)
+            }
+        }
+
+        // ── STEP 2: 씬별 비디오 생성 ─────────────────────────────────────────────
+        const encodeOpts = `-c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p`
+        console.log('[FFmpeg N] Scene별 비디오 생성 중...')
+
+        for (let i = 0; i < N; i++) {
+            const dur = sceneDurations[i]
+            const frames = Math.ceil(dur * fps)
+            const kb = getKenBurnsFilter(i, frames, fps, { ...kenBurnsParams[i], centerX: true })
+            const hasAudio = !!audioPaths[i]
+            const audioInput = hasAudio ? `-i "${audioPaths[i]}"` : ''
+            const delay = hasAudio ? AUDIO_DELAY_MS : 0
+            const audioFilter = hasAudio ? `;[3:a]adelay=${delay}|${delay}[aout]` : ''
+            const audioMap = hasAudio ? `-map "[aout]" -c:a aac` : ''
+
+            const filter =
+                `[0:v]scale=1080:1920,${kb}[bg];` +
+                `[1:v]format=rgba,colorchannelmixer=aa=1[struct];` +
+                `[bg][struct]overlay=0:0[bgs];` +
+                `[2:v]format=rgba[textanim];` +
+                `[bgs][textanim]overlay=0:0[vout]`
+
+            await exec(
+                `"${ffmpegPath}" -loop 1 -i "${bgPaths[i]}" -loop 1 -i "${textPaths[i]}" -i "${textAnimPaths[i]}" ${audioInput} ` +
+                `-filter_complex "${filter}${audioFilter}" -map "[vout]" ${audioMap} ${encodeOpts} -t ${dur.toFixed(4)} -y "${videoPaths[i]}"`
+            )
+        }
+
+        // ── STEP 3: 씬 전환 합성 ─────────────────────────────────────────────────
+        // 같은 이미지 공유 씬 쌍(i%2==0) → concat (전환 효과 없음)
+        // 이미지 바뀌는 구간 또는 검색씬 진입 → xfade
+        const outputPath = join(tmpDir, 'output.mp4')
+        const videoInputs = videoPaths.map(p => `-i "${p}"`).join(' ')
+
+        if (N === 1) {
+            const { readFile } = await import('fs/promises')
+            return await readFile(videoPaths[0])
+        }
+
+        // 같은 이미지 쌍(i%2==0) 또는 검색씬 진입 → fade 전환 (슬라이드 없음)
+        // 검색씬은 마지막 콘텐츠 씬과 같은 배경 이미지를 공유하므로 fade 처리
+        // 이미지가 바뀌는 구간만 slideright/slideleft 전환
+        const isSameImagePair = (i: number): boolean =>
+            i % 2 === 0 || !!(sceneContents[i + 1]?.isSearchScene)
+
+        const transitions = ['slideright', 'slideleft']
+        const videoFilterParts: string[] = []
+        // xfade 전환이 시작되는 output 타임라인 시각 (씬 i→i+1)
+        // 오디오 adelay 계산에 재사용
+        const xfadeOffsets: number[] = []
+        let cumDur = 0
+        let cumEarlyStart = 0  // 누적 earlyStart (정확한 xfade output 타임라인 추적용)
+        let prevLabel = '[0:v]'
+        let xfadeCount = 0
+
+        for (let i = 0; i < N - 1; i++) {
+            cumDur += sceneDurations[i]
+            // earlyStart: 이전 클립이 끝나기 몇 초 전에 전환을 시작할지.
+            // 같은 배경(fade) → TRANSITION_DUR(0.1s): 줌 연속성 유지, 프레임 차이 최소화.
+            // 다른 배경(slide) → 0.25s: 자연스러운 슬라이드 연출.
+            //
+            // offset 공식: cumDur - cumEarlyStart
+            //   각 xfade output duration = offset_k + D_{k+1}
+            //   다음 xfade의 remaining = e_k (현재 earlyStart) → 항상 양수 보장.
+            //   i * TRANSITION_DUR 공식은 earlyStart가 균일할 때만 정확하므로 사용 금지.
+            const earlyStart = isSameImagePair(i) ? TRANSITION_DUR : 0.25
+            cumEarlyStart += earlyStart
+            const offset = Math.max(cumDur - cumEarlyStart, 0.1)
+            xfadeOffsets.push(offset)
+            const outLabel = i < N - 2 ? `[v${i}]` : '[vout]'
+            const trans = isSameImagePair(i) ? 'fade' : transitions[xfadeCount % 2]
+
+            videoFilterParts.push(
+                `${prevLabel}[${i + 1}:v]xfade=transition=${trans}:duration=${TRANSITION_DUR}:offset=${offset.toFixed(4)}${outLabel}`
+            )
+
+            if (!isSameImagePair(i)) xfadeCount++
+            prevLabel = outLabel
+        }
+
+        // 오디오: concat 대신 amix+adelay로 xfade offset 기반 싱크 보정
+        // concat은 scene duration을 단순 누적하므로 xfade 전환마다 0.1s씩 drift 발생.
+        // 씬 k의 오디오를 xfadeOffsets[k-1] 시각에 배치하면 TTS가 씬 k 전환 직후에 재생됨.
+        const audioSceneIndices = hasSceneAudio
+            .map((has, i) => (has ? i : -1))
+            .filter(i => i >= 0)
+
+        let filterComplex = videoFilterParts.join(';')
+        let audioMapArg = ''
+
+        if (usePerSceneAudio && audioSceneIndices.length > 0) {
+            const amixParts: string[] = []
+            const amixLabels: string[] = []
+            for (let j = 0; j < audioSceneIndices.length; j++) {
+                const si = audioSceneIndices[j]
+                // 씬 0은 t=0, 씬 k>0는 xfade 전환 시작 시각
+                const delayMs = si === 0
+                    ? 0
+                    : Math.max(Math.round(xfadeOffsets[si - 1] * 1000), 0)
+                amixParts.push(`[${si}:a]adelay=${delayMs}|${delayMs}[amixA${j}]`)
+                amixLabels.push(`[amixA${j}]`)
+            }
+            filterComplex += `;${amixParts.join(';')}`
+            filterComplex += `;${amixLabels.join('')}amix=inputs=${amixParts.length}:normalize=0[aout]`
+            audioMapArg = `-map "[aout]" -c:a aac`
+        }
+
+        console.log('[FFmpeg N] xfade 합성 중...')
         await exec(
-            `"${ffmpegPath}" -i "${video1Path}" -i "${video2Path}" -i "${video3Path}" ` +
-            `-filter_complex "[0:v][1:v]xfade=transition=slideright:duration=${transitionDuration}:offset=${offset1}[v01];` +
-            `[v01][2:v]xfade=transition=slideleft:duration=${transitionDuration}:offset=${offset2}[vout]" ` +
-            `-map "[vout]" ${encodeOpts} -movflags +faststart -y "${outputPath}"`
+            `"${ffmpegPath}" ${videoInputs} ` +
+            `-filter_complex "${filterComplex}" ` +
+            `-map "[vout]" ${audioMapArg} ${encodeOpts} -movflags +faststart -y "${outputPath}"`
         )
 
         const { readFile } = await import('fs/promises')
-        const videoBuffer = await readFile(outputPath)
-
-        return videoBuffer
+        return await readFile(outputPath)
     } finally {
-        // tmpDir 전체 정리 (타이핑 프레임 PNG, MKV, 씬 MP4 등 모두 포함)
         try {
             const { rm } = await import('fs/promises')
             await rm(tmpDir, { recursive: true, force: true })
