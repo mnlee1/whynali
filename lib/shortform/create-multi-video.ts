@@ -96,7 +96,7 @@ function getKenBurnsFilter(
         xExpr = `iw/2-(iw/zoom/2)`
     }
 
-    return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=1080x1920`
+    return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=720x1280`
 }
 
 /** drawtext용 폰트 경로 결정 */
@@ -182,7 +182,7 @@ export async function create3SceneVideo(
 
         const transitionDuration = 0.15   // 씬1→2 전환
         const transitionDuration23 = 0.05  // 씬2→3 전환 (더 빠르게)
-        const fps = 30
+        const fps = 24
         const MIN_SCENE = 3.0
         const AUDIO_DELAY_MS = 300   // 씬1,2 목소리 시작 딜레이 (ms) — 텍스트 등장(150ms) 후 150ms 뒤
         const AUDIO_DELAY_MS_S3 = 900 // 씬3 목소리 시작 딜레이 (ms) — xfade concat 오프셋 보정 포함
@@ -255,7 +255,7 @@ export async function create3SceneVideo(
         }
 
         // ── STEP 2: 씬별 비디오 생성 ──────────────────────────────────────────
-        const encodeOpts = `-c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p`
+        const encodeOpts = `-c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
 
         // filter_complex 빌더 — 항상 [vout] 출력
         const buildSceneFilter = (sceneNumber: number, dur: number, extraFilters: string[] = [], useTextAnim = false): string => {
@@ -264,7 +264,7 @@ export async function create3SceneVideo(
 
             if (useTextAnim) {
                 return (
-                    `[0:v]scale=1080:1920,${kb}[bg];` +
+                    `[0:v]scale=720:1280,${kb}[bg];` +
                     `[1:v]format=rgba,colorchannelmixer=aa=1[struct];` +
                     `[bg][struct]overlay=0:0[bgs];` +
                     `[2:v]format=rgba[textanim];` +
@@ -273,8 +273,8 @@ export async function create3SceneVideo(
             }
 
             const base = extraFilters.length > 0
-                ? `[0:v]scale=1080:1920,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0,${extraFilters.join(',')}[vout]`
-                : `[0:v]scale=1080:1920,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0[vout]`
+                ? `[0:v]scale=720:1280,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0,${extraFilters.join(',')}[vout]`
+                : `[0:v]scale=720:1280,${kb}[bg];[1:v]format=rgba,colorchannelmixer=aa=1[text];[bg][text]overlay=0:0[vout]`
             return base
         }
 
@@ -406,7 +406,7 @@ export async function createNSceneVideo(
         const MIN_SCENE = 3.0
         const SEARCH_SCENE_DUR = 3.5
         const TRANSITION_DUR = 0.1
-        const fps = 30
+        const fps = 24
 
         const hasSceneAudio = sceneContents.map((_sc, i) =>
             !!(sceneAudios && sceneAudios[i])
@@ -501,7 +501,7 @@ export async function createNSceneVideo(
         }
 
         // ── STEP 2: 씬별 비디오 생성 ─────────────────────────────────────────────
-        const encodeOpts = `-c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p`
+        const encodeOpts = `-c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
         console.log('[FFmpeg N] Scene별 비디오 생성 중...')
 
         for (let i = 0; i < N; i++) {
@@ -515,7 +515,7 @@ export async function createNSceneVideo(
             const audioMap = hasAudio ? `-map "[aout]" -c:a aac` : ''
 
             const filter =
-                `[0:v]scale=1080:1920,${kb}[bg];` +
+                `[0:v]scale=720:1280,${kb}[bg];` +
                 `[1:v]format=rgba,colorchannelmixer=aa=1[struct];` +
                 `[bg][struct]overlay=0:0[bgs];` +
                 `[2:v]format=rgba[textanim];` +
