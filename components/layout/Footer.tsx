@@ -7,8 +7,7 @@
  */
 
 import Link from 'next/link'
-import { FaInstagram, FaYoutube } from 'react-icons/fa'
-import { FaThreads, FaXTwitter, FaTiktok } from 'react-icons/fa6'
+import { FaInstagram, FaYoutube, FaThreads, FaXTwitter, FaTiktok } from 'react-icons/fa6'
 
 const SNS_LINKS = [
     { href: 'https://www.instagram.com/why_nali/', label: '인스타그램', Icon: FaInstagram },
