@@ -41,8 +41,14 @@ export default function IssuePreviewDrawer({
 }: IssuePreviewDrawerProps) {
     const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState<number>(0)
     const [isRefreshing, setIsRefreshing] = useState(false)
+    const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+    const [isGeneratingFree, setIsGeneratingFree] = useState(false)
     const [localThumbnailUrls, setLocalThumbnailUrls] = useState<string[]>([])
     const [refreshSuccess, setRefreshSuccess] = useState(false)
+    const [aiSuccess, setAiSuccess] = useState(false)
+    const [creditsExhausted, setCreditsExhausted] = useState(false)
+    const [lastUsedModel, setLastUsedModel] = useState<'vertex' | 'gemini-free' | null>(null)
+    const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null)
     const [timelineTab, setTimelineTab] = useState<'preview' | 'manage'>('preview')
     const [summaryKey, setSummaryKey] = useState(0)
     const [sourcesKey, setSourcesKey] = useState(0)
@@ -146,6 +152,39 @@ export default function IssuePreviewDrawer({
             console.error('대표 이미지 설정 에러:', error)
             alert(error instanceof Error ? error.message : '대표 이미지 설정에 실패했습니다')
             setSelectedThumbnailIndex(issue.primary_thumbnail_index ?? 0)
+        }
+    }
+
+    const handleGenerateAIThumbnail = async (forceFree = false) => {
+        if (!issue) return
+        forceFree ? setIsGeneratingFree(true) : setIsGeneratingAI(true)
+        try {
+            const url = `/api/admin/issues/${issue.id}/generate-ai-thumbnail${forceFree ? '?forceFree=true' : ''}`
+            const res = await fetch(url, { method: 'POST' })
+            const data = await res.json()
+            if (!res.ok) {
+                if (data.error === 'CREDITS_EXHAUSTED') {
+                    setCreditsExhausted(true)
+                    return
+                }
+                throw new Error(data.message || 'AI 썸네일 생성 실패')
+            }
+            setLocalThumbnailUrls(data.thumbnail_urls ?? [])
+            setSelectedThumbnailIndex(0)
+            setLastUsedModel(data.usedModel ?? null)
+            // 크레딧 소진 후 Gemini 무료로 자동 폴백된 경우
+            if (data.usedModel === 'gemini-free' && !forceFree) {
+                setCreditsExhausted(true)
+            }
+            setAiSuccess(true)
+            setTimeout(() => setAiSuccess(false), 2000)
+            onIssueUpdate?.()
+        } catch (error) {
+            console.error('AI 썸네일 생성 에러:', error)
+            setAiErrorMessage(error instanceof Error ? error.message : 'AI 썸네일 생성에 실패했습니다')
+        } finally {
+            setIsGeneratingAI(false)
+            setIsGeneratingFree(false)
         }
     }
 
@@ -256,27 +295,53 @@ export default function IssuePreviewDrawer({
                                     <span className="ml-2 text-xs font-normal text-content-muted">({localThumbnailUrls.length}개)</span>
                                 )}
                             </h2>
-                            <div className="flex items-center gap-2">
-                                {refreshSuccess && (
-                                    <span className="text-xs text-green-600 font-medium">✓ 완료</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {(refreshSuccess || aiSuccess) && (
+                                    <span className="text-xs text-green-600 font-medium">
+                                        ✓ {lastUsedModel === 'gemini-free' ? '무료 모델' : 'Vertex AI'} 완료
+                                    </span>
+                                )}
+                                {creditsExhausted && (
+                                    <span className="text-xs text-amber-500 font-medium">크레딧 소진 → 무료 전환됨</span>
                                 )}
                                 <button
-                                    onClick={handleRefreshThumbnails}
-                                    disabled={isRefreshing}
-                                    className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg disabled:opacity-50"
+                                    onClick={() => handleGenerateAIThumbnail(false)}
+                                    disabled={isGeneratingAI || isGeneratingFree}
+                                    className="px-3 py-1.5 text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-50 whitespace-nowrap"
+                                    title={creditsExhausted ? '크레딧 소진 — Gemini 무료로 자동 전환' : 'Vertex AI Gemini 2.5 Flash Image — 크레딧 0.039$ 차감'}
                                 >
-                                    {isRefreshing ? '검색 중...' : localThumbnailUrls.length > 0 ? '이미지 재검색' : '이미지 검색'}
+                                    {isGeneratingAI ? '생성 중...' : '크레딧 이미지 생성'}
+                                </button>
+                                <button
+                                    onClick={() => handleGenerateAIThumbnail(true)}
+                                    disabled={isGeneratingAI || isGeneratingFree}
+                                    className="px-3 py-1.5 text-xs font-medium bg-purple-500 hover:bg-purple-600 text-white rounded-lg disabled:opacity-50 whitespace-nowrap"
+                                    title="Gemini API 무료 티어 (500장/일) — 크레딧 차감 없음"
+                                >
+                                    {isGeneratingFree ? '생성 중...' : '무료 이미지 생성'}
                                 </button>
                                 {localThumbnailUrls.length > 0 && selectedThumbnailIndex >= 0 && (
                                     <button
                                         onClick={handleRemoveThumbnails}
-                                        className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg"
+                                        className="px-3 py-1.5 text-xs font-medium bg-surface-muted hover:bg-border text-content-secondary rounded-lg whitespace-nowrap"
                                     >
                                         그라데이션 배경 사용
                                     </button>
                                 )}
                             </div>
                         </div>
+                        {aiErrorMessage && (
+                            <div className="mx-4 mt-3 rounded-lg bg-red-50 border border-red-200 p-3">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                    <span className="text-xs font-semibold text-red-700">생성 실패</span>
+                                    <button
+                                        onClick={() => setAiErrorMessage(null)}
+                                        className="text-red-400 hover:text-red-600 text-xs leading-none"
+                                    >✕</button>
+                                </div>
+                                <pre className="text-xs text-red-800 whitespace-pre-wrap break-all select-text font-mono">{aiErrorMessage}</pre>
+                            </div>
+                        )}
                         <div className="p-4 space-y-3">
                             {localThumbnailUrls.length === 0 ? (
                                 <p className="text-xs text-content-muted text-center py-4">
