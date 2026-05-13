@@ -194,20 +194,35 @@ ${variation ? '이전 표현과 다른 각도로, 같은 사실을 새롭게 표
 
 
 
-    try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const groqBody = JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: Math.max(600, sceneCount * 80),
+        temperature: variation ? 0.6 : 0.3,
+    })
+
+    const callGroq = async (): Promise<Response> => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: groqBody,
+            })
+            if (res.status !== 429) return res
+            const retryAfter = parseInt(res.headers.get('retry-after') ?? '5')
+            const wait = Math.min(retryAfter, 10) * 1000
+            console.warn(`[rewrite] Groq 429 — ${wait / 1000}초 후 재시도 (${attempt + 1}/3)`)
+            await new Promise(r => setTimeout(r, wait))
+        }
+        return fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                max_tokens: Math.max(600, sceneCount * 80),
-                temperature: variation ? 0.6 : 0.3,
-            }),
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: groqBody,
         })
+    }
+
+    try {
+        const res = await callGroq()
 
         if (!res.ok) {
             const errBody = await res.text().catch(() => '')
