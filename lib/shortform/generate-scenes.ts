@@ -15,15 +15,15 @@ import { downloadImage } from './fetch-stock-images'
 const WIDTH = 720
 const HEIGHT = 1280
 
-// ── 레이아웃 단위 ──────────────────────────────────────────────
-const LOGO_W = 280
-const LOGO_H = 110
-const LOGO_TOP_Y = 140       // 로고 상단 고정 Y
-const TITLE_FONTSIZE = 92
-const TITLE_LINE_HEIGHT = 130  // 타이틀 줄 간격 (폰트 92 × 1.41)
+// ── 레이아웃 단위 (720x1280 기준, 1080x1920 대비 ×0.667) ──────
+const LOGO_W = 187
+const LOGO_H = 73
+const LOGO_TOP_Y = 93
+const TITLE_FONTSIZE = 61
+const TITLE_LINE_HEIGHT = 87
 
-const DESC_FONTSIZE = 64
-const DESC_LINE_HEIGHT = 97   // 설명 줄 간격 (폰트 64 × 1.52)
+const DESC_FONTSIZE = 43
+const DESC_LINE_HEIGHT = 65
 // ─────────────────────────────────────────────────────────────
 
 interface SceneLayout {
@@ -518,25 +518,25 @@ export function getTypingDrawtextFilters(
         return (
             `drawtext=${fontfileParam}` +
             `text='${escapedText}':x=(w-tw)/2:y=${y}:` +
-            `fontsize=80:fontcolor=white:borderw=4:bordercolor=black:enable='${enableExpr}'`
+            `fontsize=53:fontcolor=white:borderw=3:bordercolor=black:enable='${enableExpr}'`
         )
     })
 }
 
-// ── 검색 씬 레이아웃 ──────────────────────────────────────────
-const SEARCH_BAR_W = 840
-const SEARCH_BAR_H = 130
+// ── 검색 씬 레이아웃 (720x1280 기준, ×0.667) ─────────────────
+const SEARCH_BAR_W = 560
+const SEARCH_BAR_H = 87
 const SEARCH_BAR_X = Math.floor((WIDTH - SEARCH_BAR_W) / 2)
-const SEARCH_BAR_Y = 1000
-const SEARCH_BAR_RX = 65
-const MAG_CX = SEARCH_BAR_X + 58
-const MAG_R = 18
-const SEARCH_TEXT_X = SEARCH_BAR_X + 118
-const SEARCH_TEXT_FONTSIZE = 64
+const SEARCH_BAR_Y = 667
+const SEARCH_BAR_RX = 43
+const MAG_CX = SEARCH_BAR_X + 39
+const MAG_R = 12
+const SEARCH_TEXT_X = SEARCH_BAR_X + 79
+const SEARCH_TEXT_FONTSIZE = 43
 const SEARCH_HEADLINE = '더 자세히 알고 싶다면?'
-const SEARCH_HEADLINE_FONTSIZE = 72
-const SEARCH_SUBTITLE_FONTSIZE = 52
-const SEARCH_SUBTITLE_Y1 = SEARCH_BAR_Y + SEARCH_BAR_H + 70
+const SEARCH_HEADLINE_FONTSIZE = 48
+const SEARCH_SUBTITLE_FONTSIZE = 35
+const SEARCH_SUBTITLE_Y1 = SEARCH_BAR_Y + SEARCH_BAR_H + 47
 const SEARCH_SUBTITLE_Y2 = SEARCH_SUBTITLE_Y1 + 80
 const SEARCH_QUERY = '왜난리'
 const SEARCH_SUBTITLE_LINE1 = "지금 검색창에"
