@@ -615,13 +615,22 @@ export default function AdminIssuesPage() {
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-1.5 group">
-                                            <a
-                                                href={`/issue/${issue.id}`}
-                                                target="_blank"
-                                                className="text-primary hover:underline line-clamp-2 inline-block max-w-full"
-                                            >
-                                                {decodeHtml(issue.title)}
-                                            </a>
+                                            {issue.approval_status === '승인' ? (
+                                                <a
+                                                    href={`/issue/${issue.id}`}
+                                                    target="_blank"
+                                                    className="text-primary hover:underline line-clamp-2 inline-block max-w-full"
+                                                >
+                                                    {decodeHtml(issue.title)}
+                                                </a>
+                                            ) : (
+                                                <button
+                                                    onClick={() => setPreviewIssue(issue)}
+                                                    className="text-primary hover:underline line-clamp-2 text-left max-w-full"
+                                                >
+                                                    {decodeHtml(issue.title)}
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => startEditTitle(issue)}
                                                 className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-content-muted hover:text-content-secondary transition-opacity"
