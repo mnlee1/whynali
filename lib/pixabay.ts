@@ -52,6 +52,11 @@ Tone: append ::dark or ::bright based on topic sentiment.
 - ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, love, romance
 
 Category: ${category}
+IMPORTANT: For drama/show titles, extract the VISUAL THEME of the show, not literal word meanings.
+- "취사병" in a drama = kitchen cooking chef (NOT military)
+- "형사" in a drama = detective crime scene (NOT police uniform)
+- "의사" in a drama = hospital surgery (NOT medical textbook)
+
 Examples:
 - [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
 - [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
@@ -59,6 +64,8 @@ Examples:
 - [연예] "아이돌 열애설 공식 인정" → "couple romantic flowers::bright"
 - [연예] "유명 유튜버 세금 탈루 의혹" → "tax document money audit::dark"
 - [연예] "연예인 사생활 폭로 논란" → "dark hallway spotlight::dark"
+- [연예] "취사병 전설이 되다 첫 방송" → "kitchen cooking chef::bright"
+- [연예] "형사 록 첫 방송" → "detective crime night::dark"
 - [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
 - [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
 - [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
