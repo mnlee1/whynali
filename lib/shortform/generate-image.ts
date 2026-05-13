@@ -20,8 +20,8 @@ import { fetch3StockImages, fetchNStockImagesWithFull } from './fetch-stock-imag
 import { create3SceneVideo, createNSceneVideo, type SceneContent } from './create-multi-video'
 import { generateSceneAudios, generateNSceneAudios, generateGoogleTTS } from './generate-voice'
 
-const WIDTH = 1080
-const HEIGHT = 1920
+const WIDTH = 720
+const HEIGHT = 1280
 
 /**
  * 화력 등급별 색상
