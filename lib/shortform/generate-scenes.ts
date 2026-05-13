@@ -12,8 +12,8 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { downloadImage } from './fetch-stock-images'
 
-const WIDTH = 1080
-const HEIGHT = 1920
+const WIDTH = 720
+const HEIGHT = 1280
 
 // ── 레이아웃 단위 ──────────────────────────────────────────────
 const LOGO_W = 280
