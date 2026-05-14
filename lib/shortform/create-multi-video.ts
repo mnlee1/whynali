@@ -72,21 +72,23 @@ function getKenBurnsFilter(
     sceneIndex: number,
     frames: number,
     fps: number,
-    opts?: { startZoom?: number; step?: number; centerX?: boolean }
+    opts?: { startZoom?: number; step?: number; centerX?: boolean; groupOffset?: number; groupTotal?: number }
 ): string {
-    const startZoom = opts?.startZoom ?? 1.0
-    const step = opts?.step ?? (0.15 / frames)
-    const stepStr = step.toFixed(5)
+    const groupTotal = opts?.groupTotal
+    const groupOffset = opts?.groupOffset ?? 0
+    const isContinuous = (opts?.startZoom ?? 1.0) > 1.001
 
-    // startZoom > 1.0 이면 첫 프레임을 해당 값으로 초기화한 뒤 누적
-    const zExpr = startZoom > 1.001
-        ? `if(eq(on,1),${startZoom.toFixed(4)},min(zoom+${stepStr},1.15))`
-        : `min(zoom+${stepStr},1.15)`
+    // 그룹 선형: 같은 배경을 공유하는 씬 묶음 전체 프레임 기준으로 일정한 속도 계산
+    // → 씬이 바뀌어도 zoom이 끊기지 않고 이어짐
+    // 독립 씬: 해당 씬 프레임 기준 선형 (1.0 → 1.15)
+    const zExpr = (groupTotal !== undefined && groupTotal > 0)
+        ? `min(1.0+0.15*(${groupOffset}+on)/${groupTotal},1.15)`
+        : `min(1.0+0.15*on/${frames},1.15)`
 
     const yExpr = `ih/2-(ih/zoom/2)`
 
     let xExpr: string
-    if (opts?.centerX || startZoom > 1.001) {
+    if (opts?.centerX || isContinuous || (groupTotal !== undefined && groupTotal > 0)) {
         xExpr = `iw/2-(iw/zoom/2)`
     } else if (sceneIndex === 0) {
         xExpr = `on*0.4`
@@ -96,7 +98,7 @@ function getKenBurnsFilter(
         xExpr = `iw/2-(iw/zoom/2)`
     }
 
-    return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=720x1280`
+    return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=720x1280,setpts=PTS-STARTPTS`
 }
 
 /** drawtext용 폰트 경로 결정 */
@@ -485,17 +487,16 @@ export async function createNSceneVideo(
             }
         }
 
-        const kenBurnsParams: Array<{ startZoom: number; step: number }> =
-            Array.from({ length: N }, () => ({ startZoom: 1.0, step: 0.15 }))
+        const kenBurnsParams: Array<{ groupOffset: number; groupTotal: number }> =
+            Array.from({ length: N }, () => ({ groupOffset: 0, groupTotal: 0 }))
 
         for (const group of kbGroups) {
             const totalFrames = group.reduce(
                 (sum, idx) => sum + Math.ceil(sceneDurations[idx] * fps), 0
             )
-            const step = 0.15 / totalFrames
             let accFrames = 0
             for (const idx of group) {
-                kenBurnsParams[idx] = { startZoom: 1.0 + step * accFrames, step }
+                kenBurnsParams[idx] = { groupOffset: accFrames, groupTotal: totalFrames }
                 accFrames += Math.ceil(sceneDurations[idx] * fps)
             }
         }
