@@ -35,7 +35,12 @@ export async function generateGeminiFreeThumbnail(
     const hfToken = process.env.HF_TOKEN
     if (!hfToken) {
         console.warn('[HF-Free] HF_TOKEN 없음')
-        return null
+        throw new Error('HF_TOKEN 환경 변수가 설정되지 않았습니다')
+    }
+
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+        console.warn('[HF-Free] Cloudinary 환경변수 없음')
+        throw new Error('CLOUDINARY 환경 변수가 설정되지 않았습니다')
     }
 
     try {
