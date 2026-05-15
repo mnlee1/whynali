@@ -82,8 +82,8 @@ function getKenBurnsFilter(
     // → 씬이 바뀌어도 zoom이 끊기지 않고 이어짐
     // 독립 씬: 해당 씬 프레임 기준 선형 (1.0 → 1.15)
     const zExpr = (groupTotal !== undefined && groupTotal > 0)
-        ? `min(1.0+0.15*(${groupOffset}+on)/${groupTotal},1.15)`
-        : `min(1.0+0.15*on/${frames},1.15)`
+        ? `min(1.0+0.4*(${groupOffset}+on)/${groupTotal},1.4)`
+        : `min(1.0+0.4*on/${frames},1.4)`
 
     const yExpr = `ih/2-(ih/zoom/2)`
 
