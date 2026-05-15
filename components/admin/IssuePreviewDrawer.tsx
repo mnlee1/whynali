@@ -161,6 +161,15 @@ export default function IssuePreviewDrawer({
         try {
             const url = `/api/admin/issues/${issue.id}/generate-ai-thumbnail${forceFree ? '?forceFree=true' : ''}`
             const res = await fetch(url, { method: 'POST' })
+            
+            // Content-Type 체크 및 응답 파싱
+            const contentType = res.headers.get('content-type')
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text()
+                console.error('API가 JSON이 아닌 응답을 반환했습니다:', text.substring(0, 200))
+                throw new Error('서버 에러: API가 올바른 응답을 반환하지 않았습니다. 관리자 로그인 상태를 확인하세요.')
+            }
+            
             const data = await res.json()
             if (!res.ok) {
                 if (data.error === 'CREDITS_EXHAUSTED') {
@@ -370,8 +379,8 @@ export default function IssuePreviewDrawer({
                                                     className="absolute top-2 left-2 w-4 h-4 accent-primary"
                                                 />
                                                 {selectedThumbnailIndex === i && (
-                                                    <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                                                        <span className="px-2 py-1 bg-primary text-white text-xs font-bold rounded">
+                                                    <div className="absolute top-2 right-2">
+                                                        <span className="px-2 py-1 bg-primary text-white text-xs font-bold rounded shadow-md">
                                                             대표
                                                         </span>
                                                     </div>
