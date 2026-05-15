@@ -55,7 +55,17 @@ export async function generateVertexThumbnail(
 
     if (!projectId) {
         console.warn('[Vertex] VERTEX_PROJECT_ID 환경변수 없음')
-        return null
+        throw new Error('VERTEX_PROJECT_ID 환경 변수가 설정되지 않았습니다')
+    }
+
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+        console.warn('[Vertex] Google 서비스 계정 환경변수 없음')
+        throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL 또는 GOOGLE_PRIVATE_KEY 환경 변수가 설정되지 않았습니다')
+    }
+
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+        console.warn('[Vertex] Cloudinary 환경변수 없음')
+        throw new Error('CLOUDINARY 환경 변수가 설정되지 않았습니다')
     }
 
     try {
