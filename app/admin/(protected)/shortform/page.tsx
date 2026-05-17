@@ -1199,7 +1199,6 @@ export default function AdminShortformPage() {
                 return (
                     <div
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-                        onClick={() => { if (!imagePreview.generating) setImagePreview(prev => ({ ...prev, open: false })) }}
                     >
                         <div
                             className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
