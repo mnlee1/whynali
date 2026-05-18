@@ -143,13 +143,17 @@ async function searchPixabay(query: string, apiKey: string, needed: number, seed
 
     const res = await fetch(`https://pixabay.com/api/?${params}`)
     if (!res.ok) {
-        console.warn(`[Pixabay] API 오류: ${res.status}`)
+        const body = await res.text().catch(() => '')
+        console.error(`[Pixabay] API 오류 status=${res.status} query="${query}" body=${body}`)
         return []
     }
 
     const data = await res.json()
     const hits: Array<{ webformatURL: string; largeImageURL: string; tags: string }> = data.hits ?? []
-    if (hits.length === 0) return []
+    if (hits.length === 0) {
+        console.warn(`[Pixabay] 검색 결과 0건 query="${query}"`)
+        return []
+    }
 
     const filtered = hits.filter(h => !PERSON_TAGS.some(t => h.tags.toLowerCase().includes(t)))
     const pool = filtered.length >= needed ? filtered : hits
