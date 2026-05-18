@@ -111,7 +111,37 @@ export default function TimelineSection({
                 const res = await fetch(`/api/issues/${issueId}/timeline/summary`)
                 if (!res.ok) throw new Error('타임라인 조회 실패')
                 const json = await res.json()
-                setSummaries(json.data ?? [])
+                const summaryData: StageSummary[] = json.data ?? []
+
+                if (summaryData.length > 0) {
+                    setSummaries(summaryData)
+                    return
+                }
+
+                // timeline_summaries 없으면 timeline_points로 폴백
+                const pointsRes = await fetch(`/api/issues/${issueId}/timeline/points`)
+                if (!pointsRes.ok) return
+                const pointsJson = await pointsRes.json()
+                const points: Array<{ stage: TimelineStage; text: string }> = pointsJson.data ?? []
+                if (points.length === 0) return
+
+                // stage별로 그룹핑해서 StageSummary 형식으로 변환
+                const grouped = new Map<TimelineStage, string[]>()
+                for (const p of points) {
+                    if (!grouped.has(p.stage)) grouped.set(p.stage, [])
+                    grouped.get(p.stage)!.push(p.text)
+                }
+                const STAGE_ORDER: TimelineStage[] = ['발단', '전개', '파생', '진정', '종결']
+                const converted: StageSummary[] = STAGE_ORDER
+                    .filter(s => grouped.has(s))
+                    .map(stage => ({
+                        stage,
+                        stageTitle: '',
+                        bullets: grouped.get(stage)!,
+                        dateStart: '',
+                        dateEnd: '',
+                    }))
+                setSummaries(converted)
             } catch (err) {
                 setError(err instanceof Error ? err.message : '타임라인 조회 실패')
             } finally {
