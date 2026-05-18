@@ -1,23 +1,23 @@
 /**
  * lib/shortform/fetch-stock-images.ts
  *
- * 숏폼용 스톡 이미지 가져오기 (Pixabay)
+ * 숏폼용 스톡 이미지 가져오기 (Pexels)
  *
  * 우선순위: 이슈 제목 키워드(Groq 추출) → 카테고리 폴백
  */
 
-import { fetchPixabayImages, fetchPixabayImagesWithFull } from '@/lib/pixabay'
+import { fetchPexelsImages, fetchPexelsImagesWithFull } from '@/lib/pexels'
 
 export async function fetch3StockImages(category: string, issueTitle?: string, seed?: number): Promise<string[]> {
-    return fetchPixabayImages(issueTitle ?? '', category, seed)
+    return fetchPexelsImages(issueTitle ?? '', category, seed)
 }
 
 export async function fetchNStockImages(category: string, issueTitle: string, count: number, seed?: number): Promise<string[]> {
-    return fetchPixabayImages(issueTitle, category, seed, count)
+    return fetchPexelsImages(issueTitle, category, seed, count)
 }
 
 export async function fetchNStockImagesWithFull(category: string, issueTitle: string, count: number, seed?: number): Promise<{ previews: string[]; fulls: string[] }> {
-    return fetchPixabayImagesWithFull(issueTitle, category, seed, count)
+    return fetchPexelsImagesWithFull(issueTitle, category, seed, count)
 }
 
 /**
