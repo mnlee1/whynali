@@ -47,12 +47,19 @@ Tone rules:
 - ::dark → scandal, accident, crime, conflict, death, protest, crisis, defeat, controversy
 - ::bright → achievement, award, victory, celebration, debut, record, comeback, release
 
+CRITICAL for [연예] category: ALWAYS use entertainment/media visual keywords (cinema, film, stage, screen, neon, spotlight, drama) regardless of the controversy topic. NEVER use literal keywords from the headline (e.g. 역사→history, 왜곡→ruins, 논란→smoke alone).
+- "역사 왜곡 논란" in 연예 → drama filming dark (NOT ruins/history)
+- "사생활 폭로" in 연예 → cinema dark (NOT literal exposure)
+- "표절 논란" in 연예 → film reel dark (NOT document/paper)
+
 Category: ${category}
 Examples:
 - [연예] "BTS 새 앨범 발매" → "neon bokeh::bright"
 - [연예] "지수 크레딧 삭제 논란" → "dark smoke::dark"
 - [연예] "아이유 콘서트 매진" → "stage spotlight::bright"
 - [연예] "배우 음주운전 적발" → "night rain::dark"
+- [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
+- [연예] "드라마 고증 오류 논란" → "cinema screen::dark"
 - [스포츠] "토트넘 강등 위기" → "stadium fog::dark"
 - [스포츠] "손흥민 골든부트 수상" → "stadium golden::bright"
 - [정치] "국회의원 막말 논란" → "marble shadow::dark"
