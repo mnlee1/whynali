@@ -46,6 +46,10 @@ export async function GET(request: NextRequest, { params }: Params) {
         const category = (job.issues as any)?.category ?? '사회'
         const { previews, fulls } = await fetchNStockImagesWithFull(category, job.issue_title, count, seed)
 
+        if (previews.length === 0) {
+            console.error(`[preview-images] 이미지 0건 jobId=${id} category=${category} title="${job.issue_title}" PIXABAY_API_KEY=${!!process.env.PIXABAY_API_KEY}`)
+        }
+
         return NextResponse.json({ images: previews, fullImages: fulls })
     } catch (error) {
         console.error('[preview-images] 에러:', error)
