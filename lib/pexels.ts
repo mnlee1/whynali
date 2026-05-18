@@ -39,45 +39,46 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
                 messages: [
                     {
                         role: 'user',
-                        content: `You pick a Pexels background photo mood for Korean news thumbnails.
-Output 2 simple visual/atmospheric English words + ::dark or ::bright tone.
-Focus on ATMOSPHERE, not news content. Avoid person/face keywords.
+                        content: `You pick a Pexels background photo for Korean news thumbnails.
+Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT. Avoid person/face keywords.
 
-Tone rules:
-- ::dark → scandal, accident, crime, conflict, death, protest, crisis, defeat, controversy
-- ::bright → achievement, award, victory, celebration, debut, record, comeback, release
-
-CRITICAL for [연예] category: ALWAYS use entertainment/media visual keywords (cinema, film, stage, screen, neon, spotlight, drama) regardless of the controversy topic. NEVER use literal keywords from the headline (e.g. 역사→history, 왜곡→ruins, 논란→smoke alone).
-- "역사 왜곡 논란" in 연예 → drama filming dark (NOT ruins/history)
-- "사생활 폭로" in 연예 → cinema dark (NOT literal exposure)
-- "표절 논란" in 연예 → film reel dark (NOT document/paper)
+Tone: append ::dark or ::bright based on topic sentiment.
+- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, evasion
+- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
 
 Category: ${category}
+CRITICAL for [연예]: ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight) regardless of topic. NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
+- "역사 왜곡 논란" in 연예 → "drama filming::dark"
+- "표절 논란" in 연예 → "film reel::dark"
+- "사생활 폭로" in 연예 → "cinema dark::dark"
+
 Examples:
-- [연예] "BTS 새 앨범 발매" → "neon bokeh::bright"
-- [연예] "지수 크레딧 삭제 논란" → "dark smoke::dark"
-- [연예] "아이유 콘서트 매진" → "stage spotlight::bright"
-- [연예] "배우 음주운전 적발" → "night rain::dark"
+- [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
+- [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
+- [연예] "배우 음주운전 적발" → "night road rain::dark"
+- [연예] "아이돌 열애설 인정" → "couple romantic flowers::bright"
 - [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
-- [연예] "드라마 고증 오류 논란" → "cinema screen::dark"
-- [스포츠] "토트넘 강등 위기" → "stadium fog::dark"
-- [스포츠] "손흥민 골든부트 수상" → "stadium golden::bright"
-- [정치] "국회의원 막말 논란" → "marble shadow::dark"
-- [정치] "대통령 취임식" → "flag sunrise::bright"
-- [사회] "이태원 참사 추모" → "candles dark::dark"
-- [사회] "산불 피해 확산" → "fire smoke::dark"
-- [경제] "삼성전자 노조 파업" → "factory smoke::dark"
-- [경제] "코스피 사상 최고치" → "skyline sunrise::bright"
-- [기술] "AI 스타트업 투자 열풍" → "circuit blue::bright"
-- [세계] "이스라엘 공습" → "ruins smoke::dark"
-- [세계] "G7 정상회담" → "marble columns::bright"
-- [생활문화] "카페 창업 열풍" → "cafe warm::bright"
+- [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
+- [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
+- [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
+- [정치] "국회의원 막말 논란" → "government building interior::dark"
+- [정치] "대통령 취임식" → "flag ceremony podium::bright"
+- [사회] "이태원 참사 추모" → "candles memorial night::dark"
+- [사회] "산불 피해 확산" → "forest fire smoke::dark"
+- [경제] "삼성전자 노조 파업" → "factory industrial strike::dark"
+- [경제] "코스피 사상 최고치" → "stock market graph city::bright"
+- [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"
+- [기술] "개인정보 유출 사고" → "cybersecurity hacker dark::dark"
+- [세계] "이스라엘 공습" → "ruins destruction smoke::dark"
+- [세계] "G7 정상회담" → "conference hall diplomacy::bright"
+- [생활문화] "카페 창업 열풍" → "cafe interior coffee shop::bright"
+- [생활문화] "반려동물 인구 급증" → "pet dog park::bright"
 
 Korean headline: "${title}"
-Reply with ONLY the 2-word keywords::tone format, nothing else.`,
+Reply with ONLY the keywords::tone format, nothing else.`,
                     },
                 ],
-                max_tokens: 25,
+                max_tokens: 40,
                 temperature: 0,
             }),
         })
