@@ -141,7 +141,13 @@ async function searchPixabay(query: string, apiKey: string, needed: number, seed
         min_width: '1080',
     })
 
-    const res = await fetch(`https://pixabay.com/api/?${params}`)
+    let res: Response
+    try {
+        res = await fetch(`https://pixabay.com/api/?${params}`)
+    } catch (e) {
+        console.error(`[Pixabay] fetch 네트워크 예외 query="${query}" error=${e}`)
+        return []
+    }
     if (!res.ok) {
         const body = await res.text().catch(() => '')
         console.error(`[Pixabay] API 오류 status=${res.status} query="${query}" body=${body}`)
