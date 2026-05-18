@@ -90,29 +90,36 @@ Reply with ONLY the 2-word keywords::tone format, nothing else.`,
     }
 }
 
+interface PexelsHit {
+    preview: string  // src.large — 관리자 썸네일용
+    full: string     // src.original — 동영상 생성용
+}
+
 /**
- * Pexels 검색 후 결과 중 랜덤 3개 URL 반환 (src.large — 영구 URL)
+ * Pexels 검색 후 PexelsHit 배열 반환
  */
-async function searchPexels(query: string, apiKey: string, seed?: number): Promise<string[]> {
+async function searchPexels(query: string, apiKey: string, needed: number, seed?: number): Promise<PexelsHit[]> {
     const params = new URLSearchParams({
         query,
         per_page: '30',
-        orientation: 'landscape',
+        orientation: 'portrait',
     })
 
     const res = await fetch(`https://api.pexels.com/v1/search?${params}`, {
         headers: { Authorization: apiKey },
     })
     if (!res.ok) {
-        console.warn(`[Pexels] API 오류: ${res.status}`)
+        console.error(`[Pexels] API 오류 status=${res.status} query="${query}"`)
         return []
     }
 
     const data = await res.json()
-    const photos: Array<{ src: { large: string } }> = data.photos ?? []
-    if (photos.length === 0) return []
+    const photos: Array<{ src: { large: string; original: string } }> = data.photos ?? []
+    if (photos.length === 0) {
+        console.warn(`[Pexels] 검색 결과 0건 query="${query}"`)
+        return []
+    }
 
-    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
     const shuffled = [...photos]
@@ -121,33 +128,42 @@ async function searchPexels(query: string, apiKey: string, seed?: number): Promi
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return shuffled.slice(0, 3).map(p => p.src.large).filter(Boolean)
+    return shuffled.slice(0, needed)
+        .map(p => ({ preview: p.src.large, full: p.src.original }))
+        .filter(h => h.preview)
 }
 
-/**
- * 이슈 제목과 카테고리로 Pexels 이미지 URL 최대 3개 반환
- * @returns 이미지 URL 배열 (최대 3개) — 실패 시 빈 배열
- */
-export async function fetchPexelsImages(title: string, category: string, seed?: number): Promise<string[]> {
+async function collectPexelsHits(title: string, category: string, count: number, seed?: number): Promise<PexelsHit[]> {
     const apiKey = process.env.PEXELS_API_KEY
     if (!apiKey) return []
 
-    // 1차: Groq로 영어 키워드 추출 후 검색
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const urls = await searchPexels(groqResult.keywords, apiKey, seed)
-            if (urls.length > 0) return urls
-        } catch {
-            // 실패 시 카테고리 폴백으로 진행
-        }
+            const hits = await searchPexels(groqResult.keywords, apiKey, count, seed)
+            if (hits.length > 0) return hits
+        } catch {}
     }
 
-    // 2차 폴백: 카테고리 영어 키워드로 재검색
     const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
     try {
-        return await searchPexels(fallbackQuery, apiKey, seed)
+        return await searchPexels(fallbackQuery, apiKey, count, seed)
     } catch {
         return []
+    }
+}
+
+export async function fetchPexelsImages(title: string, category: string, seed?: number, count = 3): Promise<string[]> {
+    const hits = await collectPexelsHits(title, category, count, seed)
+    return hits.map(h => h.preview)
+}
+
+export async function fetchPexelsImagesWithFull(
+    title: string, category: string, seed?: number, count = 3
+): Promise<{ previews: string[]; fulls: string[] }> {
+    const hits = await collectPexelsHits(title, category, count, seed)
+    return {
+        previews: hits.map(h => h.preview),
+        fulls: hits.map(h => h.full),
     }
 }
