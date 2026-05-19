@@ -31,6 +31,7 @@ export const metadata: Metadata = {
         google: ['J9cnf6UOrn5T_W38YOde3BnpgoLRpxbzMPjuM23QazE', 'oLeSnP_W1iS3crjqf9RtO1koomeIm860DTAP-WSclWg'],
         other: {
             'naver-site-verification': '7308faf20b068eccbe33fbe3794875d9db9f676d',
+            'DaumWebMasterTool': '5f7f0e4ccda02af974ce435e83ce7cdd2f8d81377a2bf3e07ea06dfa64fd08af:URM8VDHRn3s/PsmUxT0Z+w==',
         },
     },
 }

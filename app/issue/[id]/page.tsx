@@ -96,7 +96,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             tags: keywords,
             images: [
                 {
-                    url: '/og-image.png',
+                    url: '/whynali-share-og.png',
                     width: 1200,
                     height: 630,
                     alt: issue.title,
@@ -107,7 +107,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             card: 'summary_large_image',
             title,
             description,
-            images: ['/og-image.png'],
+            images: ['/whynali-share-og.png'],
         },
         alternates: {
             canonical: `${baseUrl}/issue/${id}`,
