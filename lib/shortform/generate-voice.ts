@@ -42,6 +42,21 @@ export async function generateNSceneAudios(texts: string[]): Promise<(Buffer | n
     )
 }
 
+const KOREAN_DIGITS: Record<string, string> = {
+    '0': '공', '1': '일', '2': '이', '3': '삼', '4': '사',
+    '5': '오', '6': '육', '7': '칠', '8': '팔', '9': '구',
+}
+
+/**
+ * TTS 전처리: 날짜 형식 숫자를 한국어 자릿수 발음으로 변환
+ * 예) 5.18 → 오일팔, 4.19 → 사일구, 6.25 → 육이오, 5·18 → 오일팔
+ * 소수점 1자리(1.5배, 2.3% 등)는 변환하지 않음 (점 뒤 2자리일 때만 적용)
+ */
+function preprocessForTTS(text: string): string {
+    const toKorean = (n: string) => n.split('').map(d => KOREAN_DIGITS[d] ?? d).join('')
+    return text.replace(/(?<!\d)(\d{1,2})[.·](\d{2})(?!\d)/g, (_, a, b) => toKorean(a) + toKorean(b))
+}
+
 export async function generateGoogleTTS(script: string): Promise<Buffer | null> {
     const apiKey = process.env.GOOGLE_TTS_API_KEY?.trim()
 
@@ -51,6 +66,7 @@ export async function generateGoogleTTS(script: string): Promise<Buffer | null> 
     }
 
     const voice = process.env.GOOGLE_TTS_VOICE?.trim() ?? 'ko-KR-Neural2-A'
+    const processedScript = preprocessForTTS(script)
 
     try {
         const res = await fetch(
@@ -59,7 +75,7 @@ export async function generateGoogleTTS(script: string): Promise<Buffer | null> 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    input: { text: script },
+                    input: { text: processedScript },
                     voice: { languageCode: 'ko-KR', name: voice },
                     audioConfig: { audioEncoding: 'MP3', speakingRate: 1.3 },
                 }),
