@@ -1,0 +1,26 @@
+# DaumWebMasterTool:5f7f0e4ccda02af974ce435e83ce7cdd2f8d81377a2bf3e07ea06dfa64fd08af:URM8VDHRn3s/PsmUxT0Z+w==
+
+User-agent: *
+Allow: /
+Allow: /issue/*
+Allow: /entertain
+Allow: /sports
+Allow: /politics
+Allow: /society
+Allow: /economy
+Allow: /tech
+Allow: /world
+Allow: /community
+Allow: /search
+Allow: /privacy
+Allow: /terms
+Disallow: /admin/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /onboarding
+Disallow: /mypage
+Disallow: /login
+Disallow: /debug-env
+Disallow: /i/
+
+Sitemap: https://whynali.com/sitemap.xml

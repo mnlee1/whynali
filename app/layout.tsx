@@ -17,7 +17,7 @@ import PageTracker from '@/components/analytics/PageTracker'
 
 export const metadata: Metadata = {
     title: '왜난리 - 요즘 난리, 한눈에',
-    description: '왜난리는 지금 한국에서 가장 뜨거운 이슈를 한눈에 확인하는 실시간 이슈 커뮤니티입니다. 연예, 정치, 사회, 스포츠 실시간 화제와 논란을 왜난리에서 빠르게 파악하세요.',
+    description: '지금 한국에서 가장 뜨거운 이슈를 한눈에 확인하세요. 연예·정치·사회·스포츠 실시간 논란을 왜난리에서 빠르게 파악하세요.',
     keywords: ['왜난리', '왜 난리', 'whynali', '이슈', '논란', '실시간 이슈', '화제', '뉴스', '연예이슈', '정치이슈', '사회이슈', '실시간 화제', '논쟁', '토론'],
     openGraph: {
         title: '왜난리 - 요즘 난리, 한눈에',
