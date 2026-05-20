@@ -1,0 +1,29 @@
+name: Keep Dev DB Alive
+
+# 5일마다 자동 실행 + 수동 실행 가능
+on:
+    schedule:
+        - cron: '0 0 */5 * *'  # 5일마다 UTC 00:00
+    workflow_dispatch:  # GitHub에서 수동 실행 버튼
+
+jobs:
+    ping:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+
+        steps:
+            - name: Dev DB 헬스체크
+              run: |
+                  response=$(curl -s -o /dev/null -w "%{http_code}" \
+                    "${{ secrets.DEV_SUPABASE_URL }}/rest/v1/issues?select=id&limit=1" \
+                    -H "apikey: ${{ secrets.DEV_SUPABASE_ANON_KEY }}" \
+                    -H "Authorization: Bearer ${{ secrets.DEV_SUPABASE_ANON_KEY }}")
+
+                  echo "응답 코드: $response"
+
+                  if [ "$response" = "200" ]; then
+                    echo "✅ Dev DB 정상"
+                  else
+                    echo "❌ Dev DB 응답 이상 (코드: $response)"
+                    exit 1
+                  fi
