@@ -38,9 +38,23 @@ import ShareButton from '@/components/issue/ShareButton'
 import { formatFullDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 
-// ISR: 15분(900초)마다 페이지 재생성
-// 같은 이슈를 여러 사용자가 보더라도 15분에 한 번만 생성
-export const revalidate = 900
+// ISR: 1시간(3600초)마다 페이지 재생성
+export const revalidate = 3600
+
+// 빌드 시 활성 이슈 상위 100개 정적 생성 → 봇 방문 시 DB 쿼리 없이 즉시 응답
+export async function generateStaticParams() {
+    const { data: issues } = await supabaseAdmin
+        .from('issues')
+        .select('id')
+        .eq('approval_status', '승인')
+        .eq('visibility_status', 'visible')
+        .is('merged_into_id', null)
+        .in('status', ['점화', '논란중', '종결'])
+        .order('updated_at', { ascending: false })
+        .limit(100)
+
+    return (issues ?? []).map((issue) => ({ id: issue.id }))
+}
 
 // 한 요청 내 generateMetadata + IssuePage 간 DB 조회 공유
 const getIssue = cache(async (id: string) => {
@@ -96,7 +110,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             tags: keywords,
             images: [
                 {
-                    url: '/og-image.png',
+                    url: '/whynali-share-og.png',
                     width: 1200,
                     height: 630,
                     alt: issue.title,
@@ -107,7 +121,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             card: 'summary_large_image',
             title,
             description,
-            images: ['/og-image.png'],
+            images: ['/whynali-share-og.png'],
         },
         alternates: {
             canonical: `${baseUrl}/issue/${id}`,

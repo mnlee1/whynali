@@ -24,27 +24,12 @@ const CATEGORY_FALLBACK: Record<string, string> = {
  * Groq API로 한국어 이슈 제목 → 영어 검색 키워드 + 톤(dark/bright) 추출
  */
 async function extractKeywordsAndTone(title: string, category: string): Promise<{ keywords: string; isDark: boolean } | null> {
-    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
-    if (!apiKey) return null
+    const keys = (process.env.GROQ_API_KEY ?? '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0)
 
-    try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
-                messages: [
-                    {
-                        role: 'user',
-                        content: `You pick a Pexels background photo for Korean news thumbnails.
-Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT. Avoid person/face keywords.
-
-Tone: append ::dark or ::bright based on topic sentiment.
-- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, evasion
-- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
+    if (keys.length === 0) return null
 
 CRITICAL RULES (override all other logic):
 1. [연예] ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight). NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
@@ -53,6 +38,7 @@ CRITICAL RULES (override all other logic):
 
 Category: ${category}
 
+Category: ${category}
 Examples:
 - [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
 - [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
@@ -81,59 +67,57 @@ Examples:
 - [생활문화] "반려동물 인구 급증" → "pet dog park::bright"
 
 Korean headline: "${title}"
-Reply with ONLY the keywords::tone format, nothing else.`,
+Reply with ONLY the 2-word keywords::tone format, nothing else.`,
                     },
                 ],
-                max_tokens: 40,
-                temperature: 0,
-            }),
-        })
+                    max_tokens: 25,
+                    temperature: 0,
+                }),
+            })
 
-        if (!res.ok) return null
-        const data = await res.json()
-        const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
-        if (!raw) return null
+            if (res.status === 401) continue
+            if (!res.ok) continue
 
-        const [keywords, tone] = raw.split('::')
-        return {
-            keywords: keywords.trim(),
-            isDark: tone?.trim() === 'dark',
+            const data = await res.json()
+            const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
+            if (!raw) continue
+
+            const [keywords, tone] = raw.split('::')
+            return {
+                keywords: keywords.trim(),
+                isDark: tone?.trim() === 'dark',
+            }
+        } catch {
+            continue
         }
-    } catch {
-        return null
     }
-}
 
-interface PexelsHit {
-    preview: string  // src.large — 관리자 썸네일용
-    full: string     // src.original — 동영상 생성용
+    return null
 }
 
 /**
- * Pexels 검색 후 PexelsHit 배열 반환
+ * Pexels 검색 후 결과 중 랜덤 3개 URL 반환 (src.large — 영구 URL)
  */
-async function searchPexels(query: string, apiKey: string, needed: number, seed?: number): Promise<PexelsHit[]> {
+async function searchPexels(query: string, apiKey: string, seed?: number): Promise<string[]> {
     const params = new URLSearchParams({
         query,
         per_page: '30',
-        orientation: 'portrait',
+        orientation: 'landscape',
     })
 
     const res = await fetch(`https://api.pexels.com/v1/search?${params}`, {
         headers: { Authorization: apiKey },
     })
     if (!res.ok) {
-        console.error(`[Pexels] API 오류 status=${res.status} query="${query}"`)
+        console.warn(`[Pexels] API 오류: ${res.status}`)
         return []
     }
 
     const data = await res.json()
-    const photos: Array<{ src: { large: string; original: string } }> = data.photos ?? []
-    if (photos.length === 0) {
-        console.warn(`[Pexels] 검색 결과 0건 query="${query}"`)
-        return []
-    }
+    const photos: Array<{ src: { large: string } }> = data.photos ?? []
+    if (photos.length === 0) return []
 
+    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
     const shuffled = [...photos]
@@ -142,42 +126,33 @@ async function searchPexels(query: string, apiKey: string, needed: number, seed?
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return shuffled.slice(0, needed)
-        .map(p => ({ preview: p.src.large, full: p.src.original }))
-        .filter(h => h.preview)
+    return shuffled.slice(0, 3).map(p => p.src.large).filter(Boolean)
 }
 
-async function collectPexelsHits(title: string, category: string, count: number, seed?: number): Promise<PexelsHit[]> {
+/**
+ * 이슈 제목과 카테고리로 Pexels 이미지 URL 최대 3개 반환
+ * @returns 이미지 URL 배열 (최대 3개) — 실패 시 빈 배열
+ */
+export async function fetchPexelsImages(title: string, category: string, seed?: number): Promise<string[]> {
     const apiKey = process.env.PEXELS_API_KEY
     if (!apiKey) return []
 
+    // 1차: Groq로 영어 키워드 추출 후 검색
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const hits = await searchPexels(groqResult.keywords, apiKey, count, seed)
-            if (hits.length > 0) return hits
-        } catch {}
+            const urls = await searchPexels(groqResult.keywords, apiKey, seed)
+            if (urls.length > 0) return urls
+        } catch {
+            // 실패 시 카테고리 폴백으로 진행
+        }
     }
 
+    // 2차 폴백: 카테고리 영어 키워드로 재검색
     const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
     try {
-        return await searchPexels(fallbackQuery, apiKey, count, seed)
+        return await searchPexels(fallbackQuery, apiKey, seed)
     } catch {
         return []
-    }
-}
-
-export async function fetchPexelsImages(title: string, category: string, seed?: number, count = 3): Promise<string[]> {
-    const hits = await collectPexelsHits(title, category, count, seed)
-    return hits.map(h => h.preview)
-}
-
-export async function fetchPexelsImagesWithFull(
-    title: string, category: string, seed?: number, count = 3
-): Promise<{ previews: string[]; fulls: string[] }> {
-    const hits = await collectPexelsHits(title, category, count, seed)
-    return {
-        previews: hits.map(h => h.preview),
-        fulls: hits.map(h => h.full),
     }
 }

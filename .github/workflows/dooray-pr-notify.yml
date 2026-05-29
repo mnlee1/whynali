@@ -6,7 +6,7 @@
 name: Dooray PR notification
 on:
     pull_request:
-        types: [opened, closed, reopened]
+        types: [closed]
 jobs:
     notify:
         runs-on: ubuntu-latest
@@ -26,25 +26,13 @@ jobs:
                   HEAD_REF: ${{ github.event.pull_request.head.ref }}
               run: |
                   if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
-                  case "$PR_ACTION" in
-                      opened)   TITLE="새 PR이 열렸습니다"; COLOR="blue";;
-                      closed)
-                          if [ "$PR_MERGED" = "true" ]; then
-                              TITLE="PR이 머지되었습니다"
-                              COLOR="green"
-                          else
-                              TITLE="PR이 닫혔습니다"
-                              COLOR="gray"
-                          fi
-                          ;;
-                      reopened) TITLE="PR이 다시 열렸습니다"; COLOR="blue";;
-                      synchronize) TITLE="PR에 새 커밋이 푸시되었습니다"; COLOR="default";;
-                      *) TITLE="PR 알림"; COLOR="default";;
-                  esac
+                  if [ "$PR_MERGED" != "true" ]; then exit 0; fi
+                  TITLE="PR이 머지되었습니다"
+                  COLOR="green"
                   BRANCH_INFO="${HEAD_REF} → ${BASE_REF}"
                   ATTACH_TEXT="👤 작성자: ${PR_AUTHOR}"$'\n'"📂 저장소: ${REPO}"$'\n'"🌿 브랜치: ${BRANCH_INFO}"$'\n'
                   BODY=$(jq -n \
-                      --arg bot "Git 알림" \
+                      --arg bot "[whynali] Git 알림" \
                       --arg text "$TITLE" \
                       --arg atitle "#${PR_NUM} ${PR_TITLE}" \
                       --arg url "$PR_URL" \

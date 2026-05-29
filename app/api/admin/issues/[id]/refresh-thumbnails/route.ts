@@ -32,7 +32,8 @@ export async function POST(
 
         if (fetchError) throw fetchError
 
-        const thumbnailUrls = await fetchPexelsImages(issue.title, issue.category)
+        // 재검색마다 다른 후보가 나오도록 시드 사용
+        const thumbnailUrls = await fetchPexelsImages(issue.title, issue.category, Date.now())
 
         if (thumbnailUrls.length === 0) {
             return NextResponse.json(
