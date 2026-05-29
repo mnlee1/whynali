@@ -147,7 +147,7 @@ async function searchPexels(
     const photos: Array<{ src: { large: string; original: string } }> = data.photos ?? []
     if (photos.length === 0) return []
 
-    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
+    // seed 기반 Fisher-Yates 셔플 (재검색마다 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
     const shuffled = [...photos]
