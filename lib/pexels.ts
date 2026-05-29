@@ -121,6 +121,7 @@ Reply with ONLY the 2-word keywords::tone format, nothing else.`,
 
 /**
  * Pexels 검색 후 랜덤 N개 반환 (seed 기반 셔플)
+ * preview(large)와 full(original) 쌍으로 반환
  */
 async function searchPexels(
     query: string,
