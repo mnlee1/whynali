@@ -53,8 +53,13 @@ Tone: append ::dark or ::bright based on topic sentiment.
 
 CRITICAL RULES (override all other logic):
 1. [연예] ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight). NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
-2. For any arrest/legal topic (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category: use "handcuffs arrest crime::dark" or "courthouse justice law::dark". NEVER output "court" alone — it maps to sports courts on Pexels, not a courtroom.
-3. [스포츠] topic with legal/crime angle: use crime/legal keywords, NOT sports keywords.
+2. For legal/crime topics (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category: choose the most contextually fitting scene below. NEVER use "court" alone (it maps to sports courts on Pexels).
+   - 영장 발부 / 재판 / 기소 → "courthouse exterior dark" or "gavel justice law"
+   - 구속 / 체포 → "prison bars metal dark" or "police badge justice"
+   - 수사 / 혐의 → "law document evidence dark" or "scales justice dark"
+   - 성범죄 / 폭행 → "crime scene barrier dark" or "law enforcement badge"
+   - Vary the keyword — do NOT always pick the same one. Consider which scene best fits the headline.
+3. [스포츠] topic with legal/crime angle: use legal/crime scene keywords (rule 2), NOT sports keywords.
 
 Category: ${category}
 Examples:
@@ -63,18 +68,19 @@ Examples:
 - [연예] "배우 음주운전 적발" → "night road rain::dark"
 - [연예] "아이돌 열애설 인정" → "couple romantic flowers::bright"
 - [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
-- [연예] "배우 마약 혐의 구속" → "handcuffs arrest crime::dark"
+- [연예] "배우 마약 혐의 구속" → "prison bars metal dark::dark"
 - [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
 - [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
 - [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
-- [스포츠] "선수 구속영장 발부" → "handcuffs arrest crime::dark"
-- [스포츠] "감독 성폭행 혐의 구속" → "handcuffs courthouse dark::dark"
+- [스포츠] "선수 구속영장 발부" → "courthouse exterior dark::dark"
+- [스포츠] "감독 성폭행 혐의 구속" → "law enforcement badge dark::dark"
 - [정치] "국회의원 막말 논란" → "government building interior::dark"
 - [정치] "대통령 취임식" → "flag ceremony podium::bright"
-- [정치] "의원 뇌물 혐의 구속" → "handcuffs courthouse justice::dark"
+- [정치] "의원 뇌물 혐의 구속" → "gavel justice law::dark"
 - [사회] "이태원 참사 추모" → "candles memorial night::dark"
 - [사회] "산불 피해 확산" → "forest fire smoke::dark"
-- [사회] "피의자 구속영장 발부" → "handcuffs arrest crime::dark"
+- [사회] "피의자 구속영장 발부" → "scales justice dark::dark"
+- [사회] "살인범 기소" → "courthouse exterior dark::dark"
 - [경제] "삼성전자 노조 파업" → "factory industrial strike::dark"
 - [경제] "코스피 사상 최고치" → "stock market graph city::bright"
 - [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"
