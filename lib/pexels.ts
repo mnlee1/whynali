@@ -46,11 +46,12 @@ Tone: append ::dark or ::bright based on topic sentiment.
 - ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, evasion
 - ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
 
+CRITICAL RULES (override all other logic):
+1. [연예] ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight). NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
+2. For any arrest/legal topic (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category: use "handcuffs arrest crime::dark" or "courthouse justice law::dark". NEVER output "court" alone — it maps to sports courts on Pexels, not a courtroom.
+3. [스포츠] topic with legal/crime angle: use crime/legal keywords, NOT sports keywords.
+
 Category: ${category}
-CRITICAL for [연예]: ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight) regardless of topic. NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
-- "역사 왜곡 논란" in 연예 → "drama filming::dark"
-- "표절 논란" in 연예 → "film reel::dark"
-- "사생활 폭로" in 연예 → "cinema dark::dark"
 
 Examples:
 - [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
@@ -58,13 +59,18 @@ Examples:
 - [연예] "배우 음주운전 적발" → "night road rain::dark"
 - [연예] "아이돌 열애설 인정" → "couple romantic flowers::bright"
 - [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
+- [연예] "배우 마약 혐의 구속" → "handcuffs arrest crime::dark"
 - [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
 - [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
 - [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
+- [스포츠] "선수 구속영장 발부" → "handcuffs arrest crime::dark"
+- [스포츠] "감독 성폭행 혐의 구속" → "handcuffs courthouse dark::dark"
 - [정치] "국회의원 막말 논란" → "government building interior::dark"
 - [정치] "대통령 취임식" → "flag ceremony podium::bright"
+- [정치] "의원 뇌물 혐의 구속" → "handcuffs courthouse justice::dark"
 - [사회] "이태원 참사 추모" → "candles memorial night::dark"
 - [사회] "산불 피해 확산" → "forest fire smoke::dark"
+- [사회] "피의자 구속영장 발부" → "handcuffs arrest crime::dark"
 - [경제] "삼성전자 노조 파업" → "factory industrial strike::dark"
 - [경제] "코스피 사상 최고치" → "stock market graph city::bright"
 - [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"

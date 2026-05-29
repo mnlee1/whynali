@@ -75,6 +75,7 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
         .select('id, title, category, status, heat_index')
         .eq('approval_status', '승인')
         .eq('visibility_status', 'visible')
+        .neq('status', '종결')
         .gte('heat_index', SHORTFORM_MIN_HEAT)
         .order('heat_index', { ascending: false })
         .limit(SHORTFORM_BATCH_SIZE)
@@ -87,12 +88,12 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
     let jobsGenerated = 0
 
     for (const issue of issues) {
-        // 활성 job(pending/approved) 중복 체크 — 기간 제한 없이 전체 확인
+        // 동일 이슈 job 중복 체크 — pending/approved는 물론 rejected도 포함하여 재생성 방지
         const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
             .from('shortform_jobs')
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', issue.id)
-            .in('approval_status', ['pending', 'approved'])
+            .in('approval_status', ['pending', 'approved', 'rejected'])
 
         if (recentJobError) {
             console.error(`[숏폼 배치] 활성 job 조회 실패 (${issue.id}):`, recentJobError)
