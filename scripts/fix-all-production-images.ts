@@ -2,7 +2,7 @@
  * scripts/fix-all-production-images.ts
  *
  * 프로덕션 DB의 모든 이슈 이미지를 Pexels 이미지로 교체합니다.
- * (Unsplash, Pixabay 포함 전체 교체)
+ * (Unsplash·Pixabay 레거시 URL 포함 전체 Pexels로 교체)
  *
  * 사용법:
  * npx tsx scripts/fix-all-production-images.ts --dry-run  # 미리보기만
@@ -82,9 +82,9 @@ async function main() {
         const issue = issues[i] as Issue
         const progress = `[${i + 1}/${issues.length}]`
         const currentUrls = issue.thumbnail_urls ?? []
-        const source = currentUrls[0]?.includes('unsplash') ? 'Unsplash'
+        const source = currentUrls[0]?.includes('pexels') ? 'Pexels'
+            : currentUrls[0]?.includes('unsplash') ? 'Unsplash(레거시)'
             : currentUrls[0]?.includes('pixabay') ? 'Pixabay'
-            : currentUrls[0]?.includes('pexels') ? 'Pexels'
             : '없음'
 
         process.stdout.write(`${progress} [${source}] "${issue.title.substring(0, 35)}"... `)
