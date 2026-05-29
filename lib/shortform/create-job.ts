@@ -98,13 +98,13 @@ export async function createShortformJob(input: CreateShortformJobInput): Promis
         return null
     }
 
-    // 1-4. 동일 이슈 활성 job 중복 체크 (pending/approved가 하나라도 있으면 생성 안 함)
+    // 1-4. 동일 이슈 job 중복 체크 — pending/approved는 물론 rejected도 포함하여 자동 재생성 방지
     if (!skipFilters) {
         const { count: activeJobCount, error: activeJobError } = await supabaseAdmin
             .from('shortform_jobs')
             .select('*', { count: 'exact', head: true })
             .eq('issue_id', issueId)
-            .in('approval_status', ['pending', 'approved'])
+            .in('approval_status', ['pending', 'approved', 'rejected'])
 
         if (activeJobError) {
             throw new Error('활성 job 조회 실패')
