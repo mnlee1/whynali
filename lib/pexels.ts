@@ -101,9 +101,14 @@ Reply with ONLY the 2-word keywords::tone format, nothing else.`,
 }
 
 /**
- * Pexels 검색 후 결과 중 랜덤 3개 URL 반환 (src.large — 영구 URL)
+ * Pexels 검색 후 랜덤 N개 반환 (seed 기반 셔플)
  */
-async function searchPexels(query: string, apiKey: string, seed?: number): Promise<string[]> {
+async function searchPexels(
+    query: string,
+    apiKey: string,
+    seed?: number,
+    count = 3,
+): Promise<Array<{ large: string; original: string }>> {
     const params = new URLSearchParams({
         query,
         per_page: '30',
@@ -119,10 +124,10 @@ async function searchPexels(query: string, apiKey: string, seed?: number): Promi
     }
 
     const data = await res.json()
-    const photos: Array<{ src: { large: string } }> = data.photos ?? []
+    const photos: Array<{ src: { large: string; original: string } }> = data.photos ?? []
     if (photos.length === 0) return []
 
-    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
+    // seed 기반 Fisher-Yates 셔플 (재검색마다 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
     const shuffled = [...photos]
@@ -131,33 +136,79 @@ async function searchPexels(query: string, apiKey: string, seed?: number): Promi
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return shuffled.slice(0, 3).map(p => p.src.large).filter(Boolean)
+    return shuffled
+        .slice(0, count)
+        .filter(p => p.src.large)
+        .map(p => ({ large: p.src.large, original: p.src.original }))
 }
 
 /**
- * 이슈 제목과 카테고리로 Pexels 이미지 URL 최대 3개 반환
- * @returns 이미지 URL 배열 (최대 3개) — 실패 시 빈 배열
+ * 이슈 제목과 카테고리로 Pexels 이미지 URL 반환 (preview만)
+ * @returns URL 배열 — 실패 시 빈 배열
  */
-export async function fetchPexelsImages(title: string, category: string, seed?: number): Promise<string[]> {
+export async function fetchPexelsImages(
+    title: string,
+    category: string,
+    seed?: number,
+    count = 3,
+): Promise<string[]> {
     const apiKey = process.env.PEXELS_API_KEY
     if (!apiKey) return []
 
-    // 1차: Groq로 영어 키워드 추출 후 검색
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const urls = await searchPexels(groqResult.keywords, apiKey, seed)
-            if (urls.length > 0) return urls
+            const photos = await searchPexels(groqResult.keywords, apiKey, seed, count)
+            if (photos.length > 0) return photos.map(p => p.large)
         } catch {
             // 실패 시 카테고리 폴백으로 진행
         }
     }
 
-    // 2차 폴백: 카테고리 영어 키워드로 재검색
     const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
     try {
-        return await searchPexels(fallbackQuery, apiKey, seed)
+        const photos = await searchPexels(fallbackQuery, apiKey, seed, count)
+        return photos.map(p => p.large)
     } catch {
         return []
+    }
+}
+
+/**
+ * 이슈 제목과 카테고리로 Pexels 이미지 URL 반환 (preview + original)
+ * 숏폼 생성 시 원본 해상도가 필요한 경우 사용
+ * @returns { previews: large URL 배열, fulls: original URL 배열 }
+ */
+export async function fetchPexelsImagesWithFull(
+    title: string,
+    category: string,
+    seed?: number,
+    count = 3,
+): Promise<{ previews: string[]; fulls: string[] }> {
+    const apiKey = process.env.PEXELS_API_KEY
+    if (!apiKey) return { previews: [], fulls: [] }
+
+    const groqResult = await extractKeywordsAndTone(title, category)
+    if (groqResult) {
+        try {
+            const photos = await searchPexels(groqResult.keywords, apiKey, seed, count)
+            if (photos.length > 0) return {
+                previews: photos.map(p => p.large),
+                fulls: photos.map(p => p.original),
+            }
+        } catch {
+            // 실패 시 카테고리 폴백으로 진행
+        }
+    }
+
+    const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
+    try {
+        const photos = await searchPexels(fallbackQuery, apiKey, seed, count)
+        return {
+            previews: photos.map(p => p.large),
+            fulls: photos.map(p => p.original),
+        }
+    } catch {
+        return { previews: [], fulls: [] }
     }
 }
