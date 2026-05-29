@@ -24,22 +24,27 @@ const CATEGORY_FALLBACK: Record<string, string> = {
  * Groq API로 한국어 이슈 제목 → 영어 검색 키워드 + 톤(dark/bright) 추출
  */
 async function extractKeywordsAndTone(title: string, category: string): Promise<{ keywords: string; isDark: boolean } | null> {
-    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
-    if (!apiKey) return null
+    const keys = (process.env.GROQ_API_KEY ?? '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0)
 
-    try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
-                messages: [
-                    {
-                        role: 'user',
-                        content: `You pick a Pexels background photo mood for Korean news thumbnails.
+    if (keys.length === 0) return null
+
+    for (const apiKey of keys) {
+        try {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'llama-3.1-8b-instant',
+                    messages: [
+                        {
+                            role: 'user',
+                            content: `You pick a Pexels background photo mood for Korean news thumbnails.
 Output 2 simple visual/atmospheric English words + ::dark or ::bright tone.
 Focus on ATMOSPHERE, not news content. Avoid person/face keywords.
 
@@ -70,24 +75,29 @@ Korean headline: "${title}"
 Reply with ONLY the 2-word keywords::tone format, nothing else.`,
                     },
                 ],
-                max_tokens: 25,
-                temperature: 0,
-            }),
-        })
+                    max_tokens: 25,
+                    temperature: 0,
+                }),
+            })
 
-        if (!res.ok) return null
-        const data = await res.json()
-        const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
-        if (!raw) return null
+            if (res.status === 401) continue
+            if (!res.ok) continue
 
-        const [keywords, tone] = raw.split('::')
-        return {
-            keywords: keywords.trim(),
-            isDark: tone?.trim() === 'dark',
+            const data = await res.json()
+            const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
+            if (!raw) continue
+
+            const [keywords, tone] = raw.split('::')
+            return {
+                keywords: keywords.trim(),
+                isDark: tone?.trim() === 'dark',
+            }
+        } catch {
+            continue
         }
-    } catch {
-        return null
     }
+
+    return null
 }
 
 /**

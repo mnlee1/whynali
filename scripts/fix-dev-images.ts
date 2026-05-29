@@ -82,9 +82,9 @@ async function main() {
         const issue = issues[i] as Issue
         const progress = `[${i + 1}/${issues.length}]`
         const currentUrls = issue.thumbnail_urls ?? []
-        const source = currentUrls[0]?.includes('unsplash') ? 'Unsplash'
+        const source = currentUrls[0]?.includes('pexels') ? 'Pexels'
+            : currentUrls[0]?.includes('unsplash') ? 'Unsplash(레거시)'
             : currentUrls[0]?.includes('pixabay') ? 'Pixabay'
-            : currentUrls[0]?.includes('pexels') ? 'Pexels'
             : '없음'
 
         process.stdout.write(`${progress} [${source}] "${issue.title.substring(0, 35)}"... `)
