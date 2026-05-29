@@ -47,32 +47,55 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
                             content: `You pick a Pexels background photo mood for Korean news thumbnails.
 Output 2 simple visual/atmospheric English words + ::dark or ::bright tone.
 Focus on ATMOSPHERE, not news content. Avoid person/face keywords.
+    try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'llama-3.1-8b-instant',
+                messages: [
+                    {
+                        role: 'user',
+                        content: `You pick a Pexels background photo for Korean news thumbnails.
+Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT. Avoid person/face keywords.
 
-Tone rules:
-- ::dark → scandal, accident, crime, conflict, death, protest, crisis, defeat, controversy
-- ::bright → achievement, award, victory, celebration, debut, record, comeback, release
+Tone: append ::dark or ::bright based on topic sentiment.
+- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, evasion
+- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
 
 Category: ${category}
+CRITICAL for [연예]: ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight) regardless of topic. NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
+- "역사 왜곡 논란" in 연예 → "drama filming::dark"
+- "표절 논란" in 연예 → "film reel::dark"
+- "사생활 폭로" in 연예 → "cinema dark::dark"
+
 Examples:
-- [연예] "BTS 새 앨범 발매" → "neon bokeh::bright"
-- [연예] "지수 크레딧 삭제 논란" → "dark smoke::dark"
-- [연예] "아이유 콘서트 매진" → "stage spotlight::bright"
-- [연예] "배우 음주운전 적발" → "night rain::dark"
-- [스포츠] "토트넘 강등 위기" → "stadium fog::dark"
-- [스포츠] "손흥민 골든부트 수상" → "stadium golden::bright"
-- [정치] "국회의원 막말 논란" → "marble shadow::dark"
-- [정치] "대통령 취임식" → "flag sunrise::bright"
-- [사회] "이태원 참사 추모" → "candles dark::dark"
-- [사회] "산불 피해 확산" → "fire smoke::dark"
-- [경제] "삼성전자 노조 파업" → "factory smoke::dark"
-- [경제] "코스피 사상 최고치" → "skyline sunrise::bright"
-- [기술] "AI 스타트업 투자 열풍" → "circuit blue::bright"
-- [세계] "이스라엘 공습" → "ruins smoke::dark"
-- [세계] "G7 정상회담" → "marble columns::bright"
-- [생활문화] "카페 창업 열풍" → "cafe warm::bright"
+- [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
+- [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
+- [연예] "배우 음주운전 적발" → "night road rain::dark"
+- [연예] "아이돌 열애설 인정" → "couple romantic flowers::bright"
+- [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
+- [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
+- [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
+- [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
+- [정치] "국회의원 막말 논란" → "government building interior::dark"
+- [정치] "대통령 취임식" → "flag ceremony podium::bright"
+- [사회] "이태원 참사 추모" → "candles memorial night::dark"
+- [사회] "산불 피해 확산" → "forest fire smoke::dark"
+- [경제] "삼성전자 노조 파업" → "factory industrial strike::dark"
+- [경제] "코스피 사상 최고치" → "stock market graph city::bright"
+- [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"
+- [기술] "개인정보 유출 사고" → "cybersecurity hacker dark::dark"
+- [세계] "이스라엘 공습" → "ruins destruction smoke::dark"
+- [세계] "G7 정상회담" → "conference hall diplomacy::bright"
+- [생활문화] "카페 창업 열풍" → "cafe interior coffee shop::bright"
+- [생활문화] "반려동물 인구 급증" → "pet dog park::bright"
 
 Korean headline: "${title}"
-Reply with ONLY the 2-word keywords::tone format, nothing else.`,
+Reply with ONLY the keywords::tone format, nothing else.`,
                     },
                 ],
                     max_tokens: 25,
@@ -94,35 +117,56 @@ Reply with ONLY the 2-word keywords::tone format, nothing else.`,
             }
         } catch {
             continue
+                max_tokens: 40,
+                temperature: 0,
+            }),
+        })
+
+        if (!res.ok) return null
+        const data = await res.json()
+        const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
+        if (!raw) return null
+
+        const [keywords, tone] = raw.split('::')
+        return {
+            keywords: keywords.trim(),
+            isDark: tone?.trim() === 'dark',
         }
     }
 
     return null
 }
 
+interface PexelsHit {
+    preview: string  // src.large — 관리자 썸네일용
+    full: string     // src.original — 동영상 생성용
+}
+
 /**
- * Pexels 검색 후 결과 중 랜덤 3개 URL 반환 (src.large — 영구 URL)
+ * Pexels 검색 후 PexelsHit 배열 반환
  */
-async function searchPexels(query: string, apiKey: string, seed?: number): Promise<string[]> {
+async function searchPexels(query: string, apiKey: string, needed: number, seed?: number): Promise<PexelsHit[]> {
     const params = new URLSearchParams({
         query,
         per_page: '30',
-        orientation: 'landscape',
+        orientation: 'portrait',
     })
 
     const res = await fetch(`https://api.pexels.com/v1/search?${params}`, {
         headers: { Authorization: apiKey },
     })
     if (!res.ok) {
-        console.warn(`[Pexels] API 오류: ${res.status}`)
+        console.error(`[Pexels] API 오류 status=${res.status} query="${query}"`)
         return []
     }
 
     const data = await res.json()
-    const photos: Array<{ src: { large: string } }> = data.photos ?? []
-    if (photos.length === 0) return []
+    const photos: Array<{ src: { large: string; original: string } }> = data.photos ?? []
+    if (photos.length === 0) {
+        console.warn(`[Pexels] 검색 결과 0건 query="${query}"`)
+        return []
+    }
 
-    // seed 기반 Fisher-Yates 셔플 (재생성마다 균등하게 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
     const shuffled = [...photos]
@@ -131,33 +175,42 @@ async function searchPexels(query: string, apiKey: string, seed?: number): Promi
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    return shuffled.slice(0, 3).map(p => p.src.large).filter(Boolean)
+    return shuffled.slice(0, needed)
+        .map(p => ({ preview: p.src.large, full: p.src.original }))
+        .filter(h => h.preview)
 }
 
-/**
- * 이슈 제목과 카테고리로 Pexels 이미지 URL 최대 3개 반환
- * @returns 이미지 URL 배열 (최대 3개) — 실패 시 빈 배열
- */
-export async function fetchPexelsImages(title: string, category: string, seed?: number): Promise<string[]> {
+async function collectPexelsHits(title: string, category: string, count: number, seed?: number): Promise<PexelsHit[]> {
     const apiKey = process.env.PEXELS_API_KEY
     if (!apiKey) return []
 
-    // 1차: Groq로 영어 키워드 추출 후 검색
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const urls = await searchPexels(groqResult.keywords, apiKey, seed)
-            if (urls.length > 0) return urls
-        } catch {
-            // 실패 시 카테고리 폴백으로 진행
-        }
+            const hits = await searchPexels(groqResult.keywords, apiKey, count, seed)
+            if (hits.length > 0) return hits
+        } catch {}
     }
 
-    // 2차 폴백: 카테고리 영어 키워드로 재검색
     const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
     try {
-        return await searchPexels(fallbackQuery, apiKey, seed)
+        return await searchPexels(fallbackQuery, apiKey, count, seed)
     } catch {
         return []
+    }
+}
+
+export async function fetchPexelsImages(title: string, category: string, seed?: number, count = 3): Promise<string[]> {
+    const hits = await collectPexelsHits(title, category, count, seed)
+    return hits.map(h => h.preview)
+}
+
+export async function fetchPexelsImagesWithFull(
+    title: string, category: string, seed?: number, count = 3
+): Promise<{ previews: string[]; fulls: string[] }> {
+    const hits = await collectPexelsHits(title, category, count, seed)
+    return {
+        previews: hits.map(h => h.preview),
+        fulls: hits.map(h => h.full),
     }
 }

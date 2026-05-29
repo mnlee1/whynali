@@ -1,12 +1,9 @@
 'use client'
 
 /**
- * app/admin/shortform/page.tsx
+ * app/admin/(protected)/shortform/page.tsx
  *
  * [관리자 - 숏폼 job 관리 페이지]
- *
- * 이슈 승인 시, 이슈 상태 전환 시 자동 생성된 숏폼 job을 관리합니다.
- * 승인된 job은 영상 생성 후 플랫폼 업로드 대상이 됩니다.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -36,16 +33,78 @@ interface IssueOption {
     heat_index: number | null
 }
 
+interface StageSummary {
+    stage: string
+    stageTitle: string
+    bullets: Array<string | { date: string; text: string }>
+}
+
+interface SelectedContentItem {
+    id: string
+    source: 'topic' | 'stage'
+    stage?: string
+    stageTitle?: string
+    text: string
+}
+
+const STAGE_STYLE: Record<string, { badge: string; border: string; header: string; row: string }> = {
+    '발단': { badge: 'bg-blue-100 text-blue-600',    border: 'border-blue-200',  header: 'bg-blue-50',   row: 'hover:bg-blue-50/60' },
+    '전개': { badge: 'bg-green-100 text-green-600',   border: 'border-green-200', header: 'bg-green-50',  row: 'hover:bg-green-50/60' },
+    '파생': { badge: 'bg-yellow-100 text-yellow-600', border: 'border-yellow-200',header: 'bg-yellow-50', row: 'hover:bg-yellow-50/60' },
+    '진정': { badge: 'bg-gray-200 text-gray-600',     border: 'border-gray-300',  header: 'bg-gray-100',  row: 'hover:bg-gray-50/60' },
+    '종결': { badge: 'bg-gray-200 text-gray-600',     border: 'border-gray-300',  header: 'bg-gray-100',  row: 'hover:bg-gray-50/60' },
+}
+
+/** 유사한 항목 제거 — 문자 집합 기준 Jaccard 유사도 0.6 초과 시 중복 처리 */
+function deduplicateItems(items: SelectedContentItem[]): SelectedContentItem[] {
+    const norm = (s: string) => s.replace(/[\s.,!?~""''·]/g, '')
+    const kept: SelectedContentItem[] = []
+    for (const item of items) {
+        const na = norm(item.text)
+        const isDuplicate = kept.some(k => {
+            const nb = norm(k.text)
+            if (na === nb) return true
+            if (na.includes(nb) || nb.includes(na)) return true
+            const sa = new Set(na.split(''))
+            const sb = new Set(nb.split(''))
+            const intersection = [...sa].filter(c => sb.has(c)).length
+            const union = new Set([...sa, ...sb]).size
+            return intersection / union > 0.6
+        })
+        if (!isDuplicate) kept.push(item)
+    }
+    return kept
+}
+
+function buildItemsFromSummaries(stageSummaries: StageSummary[]): SelectedContentItem[] {
+    const items: SelectedContentItem[] = []
+    stageSummaries.forEach(({ stage, stageTitle, bullets }) => {
+        bullets.forEach((b, i) => {
+            const text = typeof b === 'string' ? b : b.text
+            if (text?.trim()) items.push({ id: `stage_${stage}_${i}`, source: 'stage', stage, stageTitle, text: text.trim() })
+        })
+    })
+    return items
+}
+
 type FilterStatus = '' | 'pending' | 'approved' | 'rejected'
 
 interface ImagePreviewModal {
     open: boolean
     jobId: string
+    jobIssueId: string
     jobTitle: string
+    jobIssueStatus: string
     images: string[]
+    fullImages: string[]
     loading: boolean
     generating: boolean
     error: string | null
+    contentLoading: boolean
+    selectedItems: SelectedContentItem[]
+    rewrittenTexts: string[]
+    rewriteLoading: boolean
+    rewriteError: string | null
 }
 
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
@@ -77,6 +136,12 @@ function formatDate(dateString: string): string {
     return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
+function formatVideoTime(seconds: number): string {
+    const m = Math.floor(seconds / 60)
+    const s = Math.floor(seconds % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 function getStoragePublicUrl(path: string): string {
     const base = process.env.NEXT_PUBLIC_SUPABASE_URL
     return `${base}/storage/v1/object/public/shortform/${path}`
@@ -93,17 +158,27 @@ export default function AdminShortformPage() {
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
     const [uploadingAction, setUploadingAction] = useState<'youtube' | 'tiktok' | 'instagram' | 'all' | null>(null)
+    const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
+    const [rewritingIndex, setRewritingIndex] = useState<number | null>(null)
 
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
     const [imagePreview, setImagePreview] = useState<ImagePreviewModal>({
         open: false,
         jobId: '',
+        jobIssueId: '',
         jobTitle: '',
+        jobIssueStatus: '',
         images: [],
+        fullImages: [],
         loading: false,
         generating: false,
         error: null,
+        contentLoading: false,
+        selectedItems: [],
+        rewrittenTexts: [],
+        rewriteLoading: false,
+        rewriteError: null,
     })
 
     // 수동 생성 인라인 영역
@@ -116,6 +191,11 @@ export default function AdminShortformPage() {
     const [issueSearchQuery, setIssueSearchQuery] = useState('')
     const [issueDropdownOpen, setIssueDropdownOpen] = useState(false)
     const issueDropdownRef = useRef<HTMLDivElement>(null)
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [videoPlaying, setVideoPlaying] = useState(false)
+    const [videoCurrentTime, setVideoCurrentTime] = useState(0)
+    const [videoDuration, setVideoDuration] = useState(0)
+
 
     const loadTabCounts = useCallback(async () => {
         const tabParams: { value: FilterStatus; params: Record<string, string> }[] = [
@@ -171,7 +251,6 @@ export default function AdminShortformPage() {
     const loadIssueOptions = useCallback(async () => {
         setIssueOptionsLoading(true)
         try {
-            // 승인된 이슈 목록을 화력순으로 가져옴 (실서버/테스트서버 공통)
             const params = new URLSearchParams({
                 approval_status: '승인',
                 limit: '100',
@@ -214,6 +293,18 @@ export default function AdminShortformPage() {
         setPage(1)
         loadJobs(filter, 1)
     }, [filter, loadJobs])
+
+    useEffect(() => {
+        if (!previewJob) return
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'Space' && videoRef.current) {
+                e.preventDefault()
+                videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause()
+            }
+        }
+        document.addEventListener('keydown', handleKeyDown)
+        return () => document.removeEventListener('keydown', handleKeyDown)
+    }, [previewJob])
 
     const handleToggleManualCreate = () => {
         if (!manualCreateOpen) {
@@ -270,16 +361,20 @@ export default function AdminShortformPage() {
         }
     }
 
-    const fetchPreviewImages = async (jobId: string, seed?: number) => {
-        setImagePreview((prev) => ({ ...prev, loading: true, error: null, images: [] }))
+    const fetchPreviewImages = async (jobId: string, count: number, seed?: number) => {
+        setImagePreview((prev) => ({ ...prev, loading: true, error: null, images: [], fullImages: [] }))
         try {
-            const url = seed !== undefined
-                ? `/api/admin/shortform/${jobId}/preview-images?seed=${seed}`
-                : `/api/admin/shortform/${jobId}/preview-images`
-            const res = await fetch(url)
+            const params = new URLSearchParams({ count: String(count) })
+            if (seed !== undefined) params.set('seed', String(seed))
+            const res = await fetch(`/api/admin/shortform/${jobId}/preview-images?${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            setImagePreview((prev) => ({ ...prev, loading: false, images: json.images ?? [] }))
+            setImagePreview((prev) => ({
+                ...prev,
+                loading: false,
+                images: json.images ?? [],
+                fullImages: json.fullImages ?? [],
+            }))
         } catch (e) {
             setImagePreview((prev) => ({
                 ...prev,
@@ -290,12 +385,163 @@ export default function AdminShortformPage() {
     }
 
     const handlePreviewImages = async (job: ShortformJob) => {
-        setImagePreview({ open: true, jobId: job.id, jobTitle: job.issue_title, images: [], loading: true, generating: false, error: null })
-        await fetchPreviewImages(job.id)
+        setImagePreview({
+            open: true,
+            jobId: job.id,
+            jobIssueId: job.issue_id,
+            jobTitle: job.issue_title,
+            jobIssueStatus: job.issue_status,
+            images: [],
+            fullImages: [],
+            loading: false,
+            generating: false,
+            error: null,
+            contentLoading: true,
+            selectedItems: [],
+            rewrittenTexts: [],
+            rewriteLoading: false,
+            rewriteError: null,
+        })
+        try {
+            const summaryRes = await fetch(`/api/issues/${job.issue_id}/timeline/summary`)
+            const summaryJson = await summaryRes.json()
+            const stageSummaries: StageSummary[] = summaryJson.data ?? []
+
+            const MAX_SCENES = 5
+            const allItems = deduplicateItems(buildItemsFromSummaries(stageSummaries)).slice(0, MAX_SCENES)
+
+            setImagePreview(prev => ({
+                ...prev,
+                contentLoading: false,
+                selectedItems: allItems,
+                loading: allItems.length > 0,
+                rewriteLoading: allItems.length > 0,
+            }))
+            if (allItems.length === 0) return
+
+            const imgCount = Math.max(Math.ceil(allItems.length / 2), 1)
+            await Promise.all([
+                fetchRewrittenTexts(allItems, job.issue_title, job.issue_status),
+                fetchPreviewImages(job.id, imgCount),
+            ])
+        } catch {
+            setImagePreview(prev => ({ ...prev, contentLoading: false }))
+        }
     }
 
-    const handleRefreshImages = () => {
-        fetchPreviewImages(imagePreview.jobId, Math.floor(Math.random() * 1000))
+    /** timeline/points 소스 텍스트를 1회 AI로 압축·흐름 처리 */
+    const fetchRewrittenTexts = async (items: SelectedContentItem[], issueTitle: string, issueStatus?: string) => {
+        setImagePreview(prev => ({ ...prev, rewriteLoading: true, rewriteError: null }))
+        const sceneTexts = items.map(item => item.text)
+        try {
+            const res = await fetch('/api/admin/shortform/rewrite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    issueTitle,
+                    issueStatus: issueStatus ?? '',
+                    scenes: items.map((item, i) => ({ index: i, text: item.text, stage: item.stage })),
+                }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            setImagePreview(prev => ({
+                ...prev,
+                rewriteLoading: false,
+                rewrittenTexts: json.texts ?? sceneTexts,
+            }))
+        } catch (e) {
+            setImagePreview(prev => ({
+                ...prev,
+                rewriteLoading: false,
+                rewrittenTexts: sceneTexts,
+                rewriteError: e instanceof Error ? e.message : '재작성 실패 — 원문을 사용합니다',
+            }))
+        }
+    }
+
+    const handleUpdateRewrittenText = (index: number, value: string) => {
+        setImagePreview(prev => {
+            const newTexts = [...prev.rewrittenTexts]
+            newTexts[index] = value
+            return { ...prev, rewrittenTexts: newTexts }
+        })
+    }
+
+    const handleRefreshAllTexts = () => {
+        fetchRewrittenTexts(imagePreview.selectedItems, imagePreview.jobTitle, imagePreview.jobIssueStatus)
+    }
+
+    const handleRefreshAllImages = () => {
+        const imgCount = Math.max(Math.ceil(imagePreview.selectedItems.length / 2), 1)
+        fetchPreviewImages(imagePreview.jobId, imgCount, Math.floor(Math.random() * 100000))
+    }
+
+    const handleRefreshSingleText = async (index: number) => {
+        if (rewritingIndex !== null) return
+        const item = imagePreview.selectedItems[index]
+        if (!item) return
+        setRewritingIndex(index)
+        try {
+            const res = await fetch('/api/admin/shortform/rewrite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    issueTitle: imagePreview.jobTitle,
+                    issueStatus: imagePreview.jobIssueStatus,
+                    totalScenes: imagePreview.selectedItems.length,
+                    variation: true,
+                    scenes: [{ index: index, text: item.text, stage: item.stage }],
+                }),
+            })
+            const json = await res.json()
+            if (!res.ok) {
+                setImagePreview(prev => ({
+                    ...prev,
+                    rewriteError: json.message || 'AI 자막 재생성 실패',
+                }))
+                return
+            }
+            if (json.texts?.[0]) {
+                handleUpdateRewrittenText(index, json.texts[0])
+            }
+        } catch (e) {
+            setImagePreview(prev => ({
+                ...prev,
+                rewriteError: e instanceof Error ? e.message : 'AI 자막 재생성 실패',
+            }))
+        } finally {
+            setRewritingIndex(null)
+        }
+    }
+
+    const handleRefreshSingleImage = async (index: number) => {
+        if (regeneratingIndex !== null || imagePreview.generating) return
+        const imgIndex = Math.floor(index / 2)  // 씬 2개가 이미지 1장 공유
+        setRegeneratingIndex(index)
+        try {
+            const seed = Math.floor(Math.random() * 100000)
+            const res = await fetch(`/api/admin/shortform/${imagePreview.jobId}/preview-images?count=8&seed=${seed}`)
+            const json = await res.json()
+            if (res.ok && json.images?.length > 0) {
+                const allCurrentImages = imagePreview.images
+                const pickedIdx = (json.images as string[]).findIndex(url => !allCurrentImages.includes(url))
+                const idx = pickedIdx >= 0 ? pickedIdx : 0
+                const picked = json.images[idx]
+                const pickedFull = json.fullImages?.[idx] ?? picked
+                setImagePreview(prev => {
+                    const newImages = [...prev.images]
+                    const newFullImages = [...prev.fullImages]
+                    newImages[imgIndex] = picked
+                    newFullImages[imgIndex] = pickedFull
+                    return { ...prev, images: newImages, fullImages: newFullImages }
+                })
+            }
+        } catch {
+            // 실패 무시
+        } finally {
+            setRegeneratingIndex(null)
+        }
     }
 
     const handleDeleteStorage = async (id: string) => {
@@ -329,7 +575,6 @@ export default function AdminShortformPage() {
             setProcessingId(null)
         }
     }
-
 
     const handleManualCreate = async () => {
         if (!selectedIssueId) {
@@ -744,7 +989,7 @@ export default function AdminShortformPage() {
                                                                 disabled={isProcessing}
                                                                 className="text-xs px-2.5 py-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
                                                             >
-                                                                이미지 확인
+                                                                숏폼 제작
                                                             </button>
                                                             <button
                                                                 onClick={() => handleDelete(job.id)}
@@ -796,7 +1041,6 @@ export default function AdminShortformPage() {
                                                     instagram: !isInstagramUploaded,
                                                 }
 
-                                                // 업로드 이력 없고 영상도 없으면 → 동영상 생성
                                                 if (!job.video_path && !hasAnySuccessfulUpload) {
                                                     return (
                                                         <button
@@ -811,7 +1055,6 @@ export default function AdminShortformPage() {
 
                                                 return (
                                                     <div className="flex flex-col gap-1.5 min-w-max">
-                                                        {/* 전체 업로드 (영상 있을 때만) */}
                                                         {job.video_path && !allUploaded && (
                                                             <button
                                                                 onClick={() => handleAllUpload(job.id, uploadTargets)}
@@ -822,7 +1065,6 @@ export default function AdminShortformPage() {
                                                             </button>
                                                         )}
 
-                                                        {/* YouTube */}
                                                         {isYoutubeUploaded ? (
                                                             <a
                                                                 href={youtubeUrl}
@@ -842,7 +1084,6 @@ export default function AdminShortformPage() {
                                                             </button>
                                                         ) : null}
 
-                                                        {/* TikTok */}
                                                         {isTiktokUploaded ? (
                                                             <a
                                                                 href={tiktokProfileUrl}
@@ -862,7 +1103,6 @@ export default function AdminShortformPage() {
                                                             </button>
                                                         ) : null}
 
-                                                        {/* Instagram */}
                                                         {isInstagramUploaded ? (
                                                             <a
                                                                 href={instagramProfileUrl}
@@ -882,7 +1122,6 @@ export default function AdminShortformPage() {
                                                             </button>
                                                         ) : null}
 
-                                                        {/* 업로드 후: Storage 삭제 + job 삭제 / 업로드 전: 승인 취소 */}
                                                         {hasAnySuccessfulUpload ? (
                                                             <>
                                                                 {allUploaded && job.video_path && (
@@ -947,112 +1186,332 @@ export default function AdminShortformPage() {
                 onChange={(p) => { setPage(p); loadJobs(filter, p) }}
             />
 
-            {/* 이미지 미리보기 모달 */}
-            {imagePreview.open && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-                    onClick={() => { if (!imagePreview.generating) setImagePreview((prev) => ({ ...prev, open: false })) }}
-                >
+            {/* 숏폼 제작 모달 — 씬 카드 단일화면 */}
+            {imagePreview.open && (() => {
+                const refreshIcon = (
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                        <path d="M21 3v5h-5"/>
+                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        <path d="M3 21v-5h5"/>
+                    </svg>
+                )
+                return (
                     <div
-                        className="bg-surface rounded-xl shadow-2xl w-full max-w-2xl p-6"
-                        onClick={(e) => e.stopPropagation()}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
                     >
-                        {/* 헤더 */}
-                        <div className="flex items-start justify-between mb-4">
-                            <div>
-                                <h2 className="text-lg font-bold text-content-primary">이미지 미리보기</h2>
-                                <p className="text-sm text-content-secondary mt-0.5">{imagePreview.jobTitle}</p>
+                        <div
+                            className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* 헤더 */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
+                                <div>
+                                    <h2 className="text-lg font-bold text-content-primary">숏폼 제작</h2>
+                                    <p className="text-sm text-content-secondary mt-0.5">{imagePreview.jobTitle}</p>
+                                </div>
+                                <button
+                                    onClick={() => { if (!imagePreview.generating) setImagePreview(prev => ({ ...prev, open: false })) }}
+                                    disabled={imagePreview.generating}
+                                    className="w-8 h-8 text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle disabled:opacity-40"
+                                >
+                                    ✕
+                                </button>
                             </div>
-                            <button
-                                onClick={() => { if (!imagePreview.generating) setImagePreview((prev) => ({ ...prev, open: false })) }}
-                                disabled={imagePreview.generating}
-                                className="w-8 h-8 bg-transparent text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle flex-shrink-0 disabled:opacity-40"
-                            >
-                                ✕
-                            </button>
-                        </div>
 
-                        {/* 이미지 영역 */}
-                        {imagePreview.loading && (
-                            <div className="grid grid-cols-3 gap-3">
-                                {[1, 2, 3].map((i) => (
-                                    <div key={i} className="aspect-[9/16] bg-surface-muted rounded-xl animate-pulse" />
-                                ))}
-                            </div>
-                        )}
-                        {imagePreview.error && (
-                            <p className="text-sm text-red-600 text-center py-8">{imagePreview.error}</p>
-                        )}
-                        {!imagePreview.loading && !imagePreview.error && imagePreview.images.length > 0 && (
-                            <div className="grid grid-cols-3 gap-3">
-                                {imagePreview.images.map((url, i) => (
-                                    <div key={i} className="aspect-[9/16] rounded-xl overflow-hidden border border-border bg-surface-muted flex items-center justify-center">
-                                        <img
-                                            src={`/api/admin/shortform/image-proxy?url=${encodeURIComponent(url)}`}
-                                            alt={`이미지 ${i + 1}`}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                                const img = e.currentTarget
-                                                img.style.display = 'none'
-                                                const parent = img.parentElement
-                                                if (parent && !parent.querySelector('.img-error-msg')) {
-                                                    const msg = document.createElement('span')
-                                                    msg.className = 'img-error-msg text-xs text-content-muted text-center px-2'
-                                                    msg.textContent = '이미지 로딩 실패'
-                                                    parent.appendChild(msg)
-                                                }
-                                            }}
-                                        />
+                            {/* 바디 */}
+                            <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
+                                {imagePreview.contentLoading ? (
+                                    /* 최초 콘텐츠 로딩 스켈레톤 */
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {[1, 2, 3].map(i => (
+                                            <div key={i} className="border border-border rounded-xl overflow-hidden">
+                                                <div className="h-40 bg-surface-muted animate-pulse" />
+                                                <div className="p-3 bg-surface-subtle border-b border-border space-y-1.5">
+                                                    <div className="h-2.5 bg-surface-muted rounded animate-pulse w-1/3" />
+                                                    <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
+                                                    <div className="h-2.5 bg-surface-muted rounded animate-pulse w-4/5" />
+                                                </div>
+                                                <div className="p-3 space-y-1.5">
+                                                    <div className="h-2.5 bg-surface-muted rounded animate-pulse w-1/4" />
+                                                    <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
+                                                    <div className="h-2.5 bg-surface-muted rounded animate-pulse w-3/5" />
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                ) : imagePreview.selectedItems.length === 0 ? (
+                                    <p className="text-sm text-content-muted text-center py-16">불러올 콘텐츠 데이터가 없습니다.</p>
+                                ) : (
+                                    <>
+                                        {imagePreview.rewriteError && (
+                                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg mb-4">
+                                                ⚠️ {imagePreview.rewriteError}
+                                            </p>
+                                        )}
+                                        {imagePreview.error && (
+                                            <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg mb-4">
+                                                {imagePreview.error}
+                                            </p>
+                                        )}
+                                        {/* 안 A 레이아웃: 이미지 그룹 → 씬 카드 2열 */}
+                                        {(() => {
+                                            const N = imagePreview.selectedItems.length
+                                            const imgCount = Math.ceil(N / 2)
+                                            const groups = Array.from({ length: imgCount }, (_, gi) => ({
+                                                imgIndex: gi,
+                                                sceneIndices: [gi * 2, gi * 2 + 1].filter(si => si < N),
+                                            }))
+                                            return (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {groups.map(({ imgIndex, sceneIndices }) => {
+                                                        const imageUrl = imagePreview.images[imgIndex]
+                                                        const isImgLoading = imagePreview.loading
+                                                        const isGroupRegenerating = sceneIndices.some(si => regeneratingIndex === si)
 
-                        {/* 하단 버튼 */}
-                        <div className="flex items-center justify-between mt-4">
-                            <button
-                                onClick={handleRefreshImages}
-                                disabled={imagePreview.loading || imagePreview.generating}
-                                className="flex items-center gap-1.5 text-xs text-content-secondary hover:text-content-primary disabled:opacity-40 transition-colors"
-                            >
-                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                                    <path d="M21 3v5h-5"/>
-                                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                                    <path d="M3 21v-5h5"/>
-                                </svg>
-                                이미지 재생성
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    const jobId = imagePreview.jobId
-                                    const images = imagePreview.images
-                                    setImagePreview((prev) => ({ ...prev, generating: true }))
-                                    try {
-                                        const res = await fetch(`/api/admin/shortform/${jobId}/generate`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ images }),
-                                        })
-                                        const json = await res.json()
-                                        if (!res.ok) throw new Error(json.message || json.error)
-                                        setImagePreview((prev) => ({ ...prev, open: false, generating: false }))
-                                        alert('동영상 생성 완료!')
-                                        await loadJobs(filter, page)
-                                    } catch (e) {
-                                        setImagePreview((prev) => ({ ...prev, generating: false }))
-                                        alert(e instanceof Error ? e.message : '동영상 생성 실패')
-                                    }
-                                }}
-                                disabled={imagePreview.loading || imagePreview.images.length === 0 || imagePreview.generating}
-                                className="btn-primary btn-md disabled:opacity-50"
-                            >
-                                {imagePreview.generating ? '동영상 생성 중...' : '동영상 생성'}
-                            </button>
+                                                        return (
+                                                            <div key={imgIndex} className="border border-border rounded-xl overflow-hidden flex flex-col">
+                                                                {/* 이미지 그룹 헤더 */}
+                                                                <div className="flex items-center justify-between px-3 py-2 bg-surface-subtle border-b border-border">
+                                                                    <span className="text-xs font-semibold text-content-secondary">이미지 {imgIndex + 1}</span>
+                                                                    <button
+                                                                        onClick={() => handleRefreshSingleImage(sceneIndices[0])}
+                                                                        disabled={imagePreview.generating || regeneratingIndex !== null || imagePreview.loading}
+                                                                        className="text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
+                                                                        title="이미지 재생성"
+                                                                    >
+                                                                        {isGroupRegenerating
+                                                                            ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                                                            : refreshIcon
+                                                                        }
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* 전체 너비 이미지 */}
+                                                                <div className="relative h-44 bg-surface-muted">
+                                                                    {isImgLoading || isGroupRegenerating ? (
+                                                                        <div className="w-full h-full bg-surface-muted animate-pulse flex items-center justify-center">
+                                                                            {isGroupRegenerating && (
+                                                                                <div className="w-5 h-5 border-2 border-content-muted border-t-transparent rounded-full animate-spin" />
+                                                                            )}
+                                                                        </div>
+                                                                    ) : imageUrl ? (
+                                                                        <img
+                                                                            src={`/api/admin/shortform/image-proxy?url=${encodeURIComponent(imageUrl)}`}
+                                                                            alt={`이미지 ${imgIndex + 1}`}
+                                                                            className="w-full h-full object-cover"
+                                                                            onError={e => {
+                                                                                const img = e.currentTarget
+                                                                                img.style.display = 'none'
+                                                                                const p = img.parentElement
+                                                                                if (p && !p.querySelector('.img-err')) {
+                                                                                    const el = document.createElement('span')
+                                                                                    el.className = 'img-err text-xs text-content-muted absolute inset-0 flex items-center justify-center text-center px-2'
+                                                                                    el.textContent = '이미지 로딩 실패'
+                                                                                    p.appendChild(el)
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center">
+                                                                            <span className="text-xs text-content-muted">이미지 없음</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* 씬 카드: 원문/AI 행 분리로 같은 그룹 내 높이 자동 통일 */}
+                                                                {sceneIndices.length === 1 ? (
+                                                                    // 씬 1개: 전체 너비 단일 카드
+                                                                    (() => {
+                                                                        const i = sceneIndices[0]
+                                                                        const item = imagePreview.selectedItems[i]
+                                                                        const sourceStyle = item.source === 'stage' && item.stage
+                                                                            ? (STAGE_STYLE[item.stage] ?? STAGE_STYLE['진정'])
+                                                                            : null
+                                                                        const isThisTextRegenerating = rewritingIndex === i
+                                                                        return (
+                                                                            <div className="flex-1 flex flex-col border-t border-border">
+                                                                                <div className="px-3 py-2.5 bg-surface-subtle border-b border-border">
+                                                                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                                                                        <span className="text-[10px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full">씬 {i + 1}</span>
+                                                                                        {sourceStyle && item.stage ? (
+                                                                                            <>
+                                                                                                <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">타임라인</span>
+                                                                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sourceStyle.badge}`}>{item.stage}</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">이슈 설명</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <p className="text-[11px] text-content-muted leading-relaxed line-clamp-3">{item.text}</p>
+                                                                                </div>
+                                                                                <div className="flex-1 flex flex-col px-3 py-2.5 bg-surface">
+                                                                                    <div className="flex items-center justify-between mb-1.5">
+                                                                                        <span className="text-[10px] font-semibold text-primary">AI 자막</span>
+                                                                                        <button
+                                                                                            onClick={() => handleRefreshSingleText(i)}
+                                                                                            disabled={rewritingIndex !== null || imagePreview.rewriteLoading}
+                                                                                            className="text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
+                                                                                            title="텍스트 재생성"
+                                                                                        >
+                                                                                            {isThisTextRegenerating
+                                                                                                ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                                                                                : refreshIcon
+                                                                                            }
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    {imagePreview.rewriteLoading ? (
+                                                                                        <div className="space-y-1.5">
+                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
+                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-4/5" />
+                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-3/5" />
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <textarea
+                                                                                            value={imagePreview.rewrittenTexts[i] ?? ''}
+                                                                                            onChange={e => handleUpdateRewrittenText(i, e.target.value)}
+                                                                                            rows={3}
+                                                                                            placeholder="AI 재작성 결과"
+                                                                                            className="w-full text-xs font-medium text-content-primary resize-none bg-transparent outline-none leading-relaxed placeholder:text-content-muted"
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        )
+                                                                    })()
+                                                                ) : (
+                                                                    // 씬 2개: 원문 행 / AI 자막 행을 grid row로 분리 → 같은 높이 자동 통일
+                                                                    <div className="flex-1 grid grid-cols-2 grid-rows-[auto_1fr] border-t border-border">
+                                                                        {/* 원문 행 */}
+                                                                        {sceneIndices.map((i, colIdx) => {
+                                                                            const item = imagePreview.selectedItems[i]
+                                                                            const sourceStyle = item.source === 'stage' && item.stage
+                                                                                ? (STAGE_STYLE[item.stage] ?? STAGE_STYLE['진정'])
+                                                                                : null
+                                                                            return (
+                                                                                <div key={`원문-${item.id}`} className={`px-3 py-2.5 bg-surface-subtle border-b border-border ${colIdx === 0 ? 'border-r' : ''}`}>
+                                                                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                                                                        <span className="text-[10px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full">씬 {i + 1}</span>
+                                                                                        {sourceStyle && item.stage ? (
+                                                                                            <>
+                                                                                                <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">타임라인</span>
+                                                                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sourceStyle.badge}`}>{item.stage}</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">이슈 설명</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <p className="text-[11px] text-content-muted leading-relaxed line-clamp-3">{item.text}</p>
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                        {/* AI 자막 행 */}
+                                                                        {sceneIndices.map((i, colIdx) => {
+                                                                            const item = imagePreview.selectedItems[i]
+                                                                            const isThisTextRegenerating = rewritingIndex === i
+                                                                            return (
+                                                                                <div key={`ai-${item.id}`} className={`flex flex-col px-3 py-2.5 bg-surface ${colIdx === 0 ? 'border-r border-border' : ''}`}>
+                                                                                    <div className="flex items-center justify-between mb-1.5">
+                                                                                        <span className="text-[10px] font-semibold text-primary">AI 자막</span>
+                                                                                        <button
+                                                                                            onClick={() => handleRefreshSingleText(i)}
+                                                                                            disabled={rewritingIndex !== null || imagePreview.rewriteLoading}
+                                                                                            className="text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
+                                                                                            title="텍스트 재생성"
+                                                                                        >
+                                                                                            {isThisTextRegenerating
+                                                                                                ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                                                                                : refreshIcon
+                                                                                            }
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    {imagePreview.rewriteLoading ? (
+                                                                                        <div className="space-y-1.5">
+                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
+                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-4/5" />
+                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-3/5" />
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <textarea
+                                                                                            value={imagePreview.rewrittenTexts[i] ?? ''}
+                                                                                            onChange={e => handleUpdateRewrittenText(i, e.target.value)}
+                                                                                            rows={3}
+                                                                                            placeholder="AI 재작성 결과"
+                                                                                            className="w-full text-xs font-medium text-content-primary resize-none bg-transparent outline-none leading-relaxed placeholder:text-content-muted"
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )
+                                        })()}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* 하단 액션 바 */}
+                            {!imagePreview.contentLoading && imagePreview.selectedItems.length > 0 && (
+                                <div className="flex items-center justify-between px-6 py-4 border-t border-border flex-shrink-0">
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={handleRefreshAllTexts}
+                                            disabled={imagePreview.rewriteLoading || imagePreview.generating}
+                                            className="flex items-center gap-1.5 text-xs text-content-secondary hover:text-content-primary disabled:opacity-40 transition-colors"
+                                        >
+                                            {refreshIcon}
+                                            텍스트 전체 재생성
+                                        </button>
+                                        <button
+                                            onClick={handleRefreshAllImages}
+                                            disabled={imagePreview.loading || imagePreview.generating || regeneratingIndex !== null}
+                                            className="flex items-center gap-1.5 text-xs text-content-secondary hover:text-content-primary disabled:opacity-40 transition-colors"
+                                        >
+                                            {refreshIcon}
+                                            이미지 전체 재생성
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            const jobId = imagePreview.jobId
+                                            const fullImages = imagePreview.fullImages.length > 0
+                                                ? imagePreview.fullImages
+                                                : imagePreview.images
+                                            const sceneTexts = imagePreview.rewrittenTexts
+                                            const selectedItems = imagePreview.selectedItems
+                                            setImagePreview(prev => ({ ...prev, generating: true }))
+                                            try {
+                                                const res = await fetch(`/api/admin/shortform/${jobId}/generate`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ images: fullImages, selectedItems, sceneTexts }),
+                                                })
+                                                const json = await res.json()
+                                                if (!res.ok) throw new Error(json.message || json.error)
+                                                setImagePreview(prev => ({ ...prev, open: false, generating: false }))
+                                                alert('동영상 생성 완료!')
+                                                await loadJobs(filter, page)
+                                            } catch (e) {
+                                                setImagePreview(prev => ({ ...prev, generating: false }))
+                                                alert(e instanceof Error ? e.message : '동영상 생성 실패')
+                                            }
+                                        }}
+                                        disabled={imagePreview.loading || imagePreview.rewriteLoading || imagePreview.images.length === 0 || imagePreview.generating}
+                                        className="btn-primary btn-md disabled:opacity-50"
+                                    >
+                                        {imagePreview.generating ? '동영상 생성 중...' : '동영상 생성'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            })()}
 
             {/* 동영상 미리보기 모달 */}
             {previewJob && (
@@ -1061,41 +1520,95 @@ export default function AdminShortformPage() {
                     onClick={() => setPreviewJob(null)}
                 >
                     <div
-                        className="relative bg-black rounded-xl overflow-hidden shadow-2xl"
+                        className="bg-black rounded-xl overflow-hidden shadow-2xl flex flex-col"
                         style={{ width: 360, height: 640 }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <button
-                            onClick={() => setPreviewJob(null)}
-                            className="absolute top-3 right-3 z-10 w-8 h-8 bg-transparent text-white rounded-full flex items-center justify-center hover:bg-black/40"
+                        {/* 비디오 + 오버레이 */}
+                        <div
+                            className="relative flex-1 overflow-hidden min-h-0 cursor-pointer"
+                            onClick={() => {
+                                if (!videoRef.current) return
+                                videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause()
+                            }}
                         >
-                            ✕
-                        </button>
-
-                        <video
-                            src={getStoragePublicUrl(previewJob.video_path!)}
-                            className="w-full h-full object-contain"
-                            controls
-                            controlsList="nodownload nofullscreen noremoteplayback"
-                            disablePictureInPicture
-                            autoPlay
-                            loop
-                            playsInline
-                        />
-
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-8">
-                            <p className="text-white text-sm font-medium line-clamp-2">
-                                {previewJob.issue_title}
-                            </p>
-                            <a
-                                href={previewJob.issue_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-400 text-xs mt-1 block hover:underline hover:text-blue-300"
-                                onClick={(e) => e.stopPropagation()}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setPreviewJob(null) }}
+                                className="absolute top-3 right-3 z-10 w-8 h-8 bg-transparent text-white rounded-full flex items-center justify-center hover:bg-black/40"
                             >
-                                이슈 상세 보기 →
-                            </a>
+                                ✕
+                            </button>
+                            <video
+                                key={previewJob.id}
+                                ref={videoRef}
+                                src={getStoragePublicUrl(previewJob.video_path!)}
+                                className="w-full h-full object-cover"
+                                autoPlay
+                                loop
+                                playsInline
+                                onTimeUpdate={() => setVideoCurrentTime(videoRef.current?.currentTime ?? 0)}
+                                onLoadedMetadata={() => {
+                                    setVideoDuration(videoRef.current?.duration ?? 0)
+                                    setVideoCurrentTime(0)
+                                    setVideoPlaying(true)
+                                }}
+                                onPlay={() => setVideoPlaying(true)}
+                                onPause={() => setVideoPlaying(false)}
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-8 pointer-events-none">
+                                <p className="text-white text-sm font-medium line-clamp-2">
+                                    {previewJob.issue_title}
+                                </p>
+                                <a
+                                    href={previewJob.issue_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 text-xs mt-1 block hover:underline hover:text-blue-300 pointer-events-auto"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    이슈 상세 보기 →
+                                </a>
+                            </div>
+                        </div>
+
+                        {/* 커스텀 컨트롤바 — 항상 표시 */}
+                        <div className="flex-shrink-0 bg-black border-t border-white/10 px-3 py-2.5 flex items-center gap-2.5">
+                            <button
+                                className="text-white/80 hover:text-white flex-shrink-0"
+                                onClick={() => {
+                                    if (!videoRef.current) return
+                                    videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause()
+                                }}
+                            >
+                                {videoPlaying ? (
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <rect x="5" y="3" width="3" height="14" rx="1"/>
+                                        <rect x="12" y="3" width="3" height="14" rx="1"/>
+                                    </svg>
+                                ) : (
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                                    </svg>
+                                )}
+                            </button>
+                            <span className="text-white/60 text-xs tabular-nums flex-shrink-0">
+                                {formatVideoTime(videoCurrentTime)} / {formatVideoTime(videoDuration)}
+                            </span>
+                            <div
+                                className="flex-1 h-1 bg-white/20 rounded-full cursor-pointer"
+                                onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect()
+                                    const pct = (e.clientX - rect.left) / rect.width
+                                    if (videoRef.current && videoDuration > 0) {
+                                        videoRef.current.currentTime = pct * videoDuration
+                                    }
+                                }}
+                            >
+                                <div
+                                    className="h-full bg-white rounded-full pointer-events-none"
+                                    style={{ width: `${videoDuration > 0 ? (videoCurrentTime / videoDuration) * 100 : 0}%` }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

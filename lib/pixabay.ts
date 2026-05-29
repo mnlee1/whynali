@@ -52,6 +52,11 @@ Tone: append ::dark or ::bright based on topic sentiment.
 - ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, love, romance
 
 Category: ${category}
+IMPORTANT: For drama/show titles, extract the VISUAL THEME of the show, not literal word meanings.
+- "취사병" in a drama = kitchen cooking chef (NOT military)
+- "형사" in a drama = detective crime scene (NOT police uniform)
+- "의사" in a drama = hospital surgery (NOT medical textbook)
+
 Examples:
 - [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
 - [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
@@ -59,6 +64,8 @@ Examples:
 - [연예] "아이돌 열애설 공식 인정" → "couple romantic flowers::bright"
 - [연예] "유명 유튜버 세금 탈루 의혹" → "tax document money audit::dark"
 - [연예] "연예인 사생활 폭로 논란" → "dark hallway spotlight::dark"
+- [연예] "취사병 전설이 되다 첫 방송" → "kitchen cooking chef::bright"
+- [연예] "형사 록 첫 방송" → "detective crime night::dark"
 - [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
 - [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
 - [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
@@ -114,11 +121,17 @@ const SAFE_FALLBACK_QUERIES = [
 
 const PERSON_TAGS = ['person', 'people', 'man', 'woman', 'human', 'face', 'portrait', 'crowd', 'girl', 'boy', 'child']
 
+/** 미리보기용(640px, 안정적) + 동영상용(1280px+, 고화질) URL 쌍 */
+interface PixabayHit {
+    preview: string  // webformatURL — 관리자 썸네일용
+    full: string     // largeImageURL — 동영상 생성용
+}
+
 /**
- * Pixabay 검색 후 랜덤 URL 배열 반환 (최대 needed개)
- * 사람 관련 태그 이미지는 우선 제외 (3개 미만이면 포함)
+ * Pixabay 검색 후 PixabayHit 배열 반환 (최대 needed개)
+ * 사람 관련 태그 이미지는 우선 제외 (needed 미만이면 포함)
  */
-async function searchPixabay(query: string, apiKey: string, needed: number, seed?: number): Promise<string[]> {
+async function searchPixabay(query: string, apiKey: string, needed: number, seed?: number): Promise<PixabayHit[]> {
     const params = new URLSearchParams({
         key: apiKey,
         q: query,
@@ -128,15 +141,25 @@ async function searchPixabay(query: string, apiKey: string, needed: number, seed
         min_width: '1080',
     })
 
-    const res = await fetch(`https://pixabay.com/api/?${params}`)
+    let res: Response
+    try {
+        res = await fetch(`https://pixabay.com/api/?${params}`)
+    } catch (e) {
+        console.error(`[Pixabay] fetch 네트워크 예외 query="${query}" error=${e}`)
+        return []
+    }
     if (!res.ok) {
-        console.warn(`[Pixabay] API 오류: ${res.status}`)
+        const body = await res.text().catch(() => '')
+        console.error(`[Pixabay] API 오류 status=${res.status} query="${query}" body=${body}`)
         return []
     }
 
     const data = await res.json()
     const hits: Array<{ webformatURL: string; largeImageURL: string; tags: string }> = data.hits ?? []
-    if (hits.length === 0) return []
+    if (hits.length === 0) {
+        console.warn(`[Pixabay] 검색 결과 0건 query="${query}"`)
+        return []
+    }
 
     const filtered = hits.filter(h => !PERSON_TAGS.some(t => h.tags.toLowerCase().includes(t)))
     const pool = filtered.length >= needed ? filtered : hits
@@ -149,42 +172,47 @@ async function searchPixabay(query: string, apiKey: string, needed: number, seed
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    // largeImageURL 우선 사용 (webformatURL보다 안정적인 CDN URL)
-    return shuffled.slice(0, needed).map(h => h.largeImageURL || h.webformatURL).filter(Boolean)
+    return shuffled.slice(0, needed).map(h => ({
+        preview: h.webformatURL || h.largeImageURL || '',
+        full: h.largeImageURL || h.webformatURL || '',
+    })).filter(h => h.preview !== '')
+}
+
+interface CollectResult {
+    hits: PixabayHit[]
+    firstKeyword: string
+    firstIsDark: boolean
+    source: 'groq' | 'fallback'
 }
 
 /**
- * 이슈 제목과 카테고리로 Pixabay 이미지 URL 3개 반환
- * 여러 쿼리를 순차 시도해 반드시 3개를 채움:
- *   1차: Groq 키워드 → 2차: 카테고리 폴백 → 3차: 범용 안전 쿼리들
+ * 1차(Groq 키워드) → 2차(카테고리 폴백) → 3차(범용 쿼리) 순서로
+ * target개의 PixabayHit을 수집하는 내부 함수
  */
-export async function fetchPixabayImages(title: string, category: string, seed?: number): Promise<string[]>
-export async function fetchPixabayImages(title: string, category: string, debug: true): Promise<{ urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }>
-export async function fetchPixabayImages(title: string, category: string, seedOrDebug?: number | boolean): Promise<string[] | { urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }> {
-    const debug = seedOrDebug === true
-    const seed = typeof seedOrDebug === 'number' ? seedOrDebug : undefined
+async function collectPixabayHits(title: string, category: string, target: number, seed?: number): Promise<CollectResult> {
     const apiKey = process.env.PIXABAY_API_KEY
-    if (!apiKey) return debug ? { urls: [], keyword: '', isDark: false, source: 'fallback' } : []
+    if (!apiKey) return { hits: [], firstKeyword: '', firstIsDark: false, source: 'fallback' }
 
-    const TARGET = 3
-    const collected: string[] = []
-    const addUnique = (urls: string[]) => {
-        for (const u of urls) {
-            if (!collected.includes(u) && collected.length < TARGET) collected.push(u)
-        }
-    }
-
+    const collected: PixabayHit[] = []
     let firstKeyword = ''
     let firstIsDark = false
     let source: 'groq' | 'fallback' = 'fallback'
+
+    const addUnique = (newHits: PixabayHit[]) => {
+        for (const h of newHits) {
+            if (!collected.some(c => c.preview === h.preview) && collected.length < target) {
+                collected.push(h)
+            }
+        }
+    }
 
     // 1차: Groq로 영어 키워드 + 톤 추출 후 검색
     const groqResult = await extractKeywordsAndTone(title, category)
     if (groqResult) {
         try {
-            const urls = await searchPixabay(groqResult.keywords, apiKey, TARGET, seed)
-            addUnique(urls)
-            if (urls.length > 0) {
+            const hits = await searchPixabay(groqResult.keywords, apiKey, target, seed)
+            addUnique(hits)
+            if (hits.length > 0) {
                 firstKeyword = groqResult.keywords
                 firstIsDark = groqResult.isDark
                 source = 'groq'
@@ -195,30 +223,63 @@ export async function fetchPixabayImages(title: string, category: string, seedOr
     }
 
     // 2차: 카테고리 폴백 키워드
-    if (collected.length < TARGET) {
+    if (collected.length < target) {
         const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
         try {
-            const urls = await searchPixabay(fallbackQuery, apiKey, TARGET - collected.length, seed)
-            addUnique(urls)
-            if (!firstKeyword && urls.length > 0) firstKeyword = fallbackQuery
+            const hits = await searchPixabay(fallbackQuery, apiKey, target - collected.length, seed)
+            addUnique(hits)
+            if (!firstKeyword && hits.length > 0) firstKeyword = fallbackQuery
         } catch {
             // 실패 시 다음 단계로
         }
     }
 
     // 3차: 범용 안전 쿼리 순차 시도 (항상 결과 충분)
-    if (collected.length < TARGET) {
+    if (collected.length < target) {
         for (const q of SAFE_FALLBACK_QUERIES) {
-            if (collected.length >= TARGET) break
+            if (collected.length >= target) break
             try {
-                const urls = await searchPixabay(q, apiKey, TARGET - collected.length, seed)
-                addUnique(urls)
+                const hits = await searchPixabay(q, apiKey, target - collected.length, seed)
+                addUnique(hits)
             } catch {
                 // 계속 다음 쿼리 시도
             }
         }
     }
 
-    if (debug) return { urls: collected, keyword: firstKeyword, isDark: firstIsDark, source }
-    return collected
+    return { hits: collected, firstKeyword, firstIsDark, source }
+}
+
+/**
+ * 이슈 제목과 카테고리로 Pixabay 이미지 URL 배열 반환 (미리보기용 preview URL)
+ * 기존 호환성 유지: string[] 반환
+ */
+export async function fetchPixabayImages(title: string, category: string, seed?: number, count?: number): Promise<string[]>
+export async function fetchPixabayImages(title: string, category: string, debug: true): Promise<{ urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }>
+export async function fetchPixabayImages(title: string, category: string, seedOrDebug?: number | boolean, count = 3): Promise<string[] | { urls: string[]; keyword: string; isDark: boolean; source: 'groq' | 'fallback' }> {
+    const debug = seedOrDebug === true
+    const seed = typeof seedOrDebug === 'number' ? seedOrDebug : undefined
+    if (!process.env.PIXABAY_API_KEY) return debug ? { urls: [], keyword: '', isDark: false, source: 'fallback' } : []
+
+    const TARGET = debug ? 3 : count
+    const result = await collectPixabayHits(title, category, TARGET, seed)
+    const urls = result.hits.map(h => h.preview)
+
+    if (debug) return { urls, keyword: result.firstKeyword, isDark: result.firstIsDark, source: result.source }
+    return urls
+}
+
+/**
+ * 이슈 제목과 카테고리로 Pixabay 이미지를 검색해
+ * 미리보기용(preview, 640px) + 동영상 생성용(full, 1280px+) URL을 함께 반환
+ */
+export async function fetchPixabayImagesWithFull(
+    title: string, category: string, seed?: number, count = 3
+): Promise<{ previews: string[]; fulls: string[] }> {
+    if (!process.env.PIXABAY_API_KEY) return { previews: [], fulls: [] }
+    const result = await collectPixabayHits(title, category, count, seed)
+    return {
+        previews: result.hits.map(h => h.preview),
+        fulls: result.hits.map(h => h.full),
+    }
 }

@@ -71,7 +71,7 @@ function useIsActive() {
     const pathname = usePathname()
     return (href: string) => {
         if (href === '/admin') return pathname === '/admin'
-        return pathname.startsWith(href)
+        return pathname === href || pathname.startsWith(href + '/')
     }
 }
 

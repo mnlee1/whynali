@@ -57,8 +57,7 @@ export async function uploadToYouTube(
 
     const { title, description, tags = [], categoryId = '22' } = options
 
-    // Shorts 해시태그 자동 추가
-    const fullDescription = `${description}\n\n#Shorts`
+    const fullDescription = description
     const fullTags = ['Shorts', '왜난리', ...tags]
 
     const videoStream = Readable.from(videoBuffer)
