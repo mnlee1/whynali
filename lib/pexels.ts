@@ -31,12 +31,30 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
 
     if (keys.length === 0) return null
 
+    for (const apiKey of keys) {
+        try {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'llama-3.1-8b-instant',
+                    messages: [
+                        {
+                            role: 'user',
+                            content: `You pick a Pexels background photo for Korean news thumbnails.
+Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT. Avoid person/face keywords.
+
+Tone: append ::dark or ::bright based on topic sentiment.
+- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, evasion
+- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
+
 CRITICAL RULES (override all other logic):
 1. [연예] ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight). NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
 2. For any arrest/legal topic (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category: use "handcuffs arrest crime::dark" or "courthouse justice law::dark". NEVER output "court" alone — it maps to sports courts on Pexels, not a courtroom.
 3. [스포츠] topic with legal/crime angle: use crime/legal keywords, NOT sports keywords.
-
-Category: ${category}
 
 Category: ${category}
 Examples:
@@ -68,8 +86,8 @@ Examples:
 
 Korean headline: "${title}"
 Reply with ONLY the 2-word keywords::tone format, nothing else.`,
-                    },
-                ],
+                        },
+                    ],
                     max_tokens: 25,
                     temperature: 0,
                 }),
