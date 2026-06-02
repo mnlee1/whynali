@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
     try {
         // 0. 현재 연결된 Supabase 인스턴스 정보
@@ -293,6 +295,8 @@ export async function GET(request: NextRequest) {
                 usagePercent: Math.round((estimatedSizeMB / 500) * 100),
             },
             warnings,
+        }, {
+            headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
         })
     } catch (error) {
         console.error('[Admin Monitoring API] 에러:', error)

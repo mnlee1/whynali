@@ -103,7 +103,7 @@ export default function MonitoringPage() {
     const fetchData = async () => {
         setLoading(true)
         try {
-            const res = await fetch('/api/admin/monitoring')
+            const res = await fetch('/api/admin/monitoring', { cache: 'no-store' })
             if (res.ok) {
                 const json = await res.json()
                 setData(json)
