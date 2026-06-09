@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback, CSSProperties } from 'react'
 import { CheckCircle2, Calendar, ChevronDown, Check } from 'lucide-react'
 import type { Vote, VoteChoice } from '@/types'
+import { trackConversion } from '@/lib/analytics/tracker'
 
 interface VoteSectionProps {
     issueId: string
@@ -95,6 +96,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 })
                 const json = await res.json()
                 if (!res.ok) throw new Error(json.error)
+                trackConversion({ eventType: 'vote', issueId })
             }
             
             // 투표 후 데이터 갱신 (투표 카드 순서 + 선택지 순서 유지)

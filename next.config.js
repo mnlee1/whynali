@@ -1,5 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    async redirects() {
+        return [
+            { source: '/ig',      destination: '/?utm_source=instagram', permanent: false },
+            { source: '/tt',      destination: '/?utm_source=tiktok',    permanent: false },
+            { source: '/yt',      destination: '/?utm_source=youtube',   permanent: false },
+            { source: '/threads', destination: '/?utm_source=threads',   permanent: false },
+            { source: '/kakao',   destination: '/?utm_source=kakao',     permanent: false },
+            { source: '/x',       destination: '/?utm_source=twitter',   permanent: false },
+        ]
+    },
     images: {
         remotePatterns: [
             {

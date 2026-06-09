@@ -1,0 +1,33 @@
+name: 일일 방문자 집계 Cron
+
+# 매일 자정 KST(=15:00 UTC)에 page_views → daily_analytics 집계 실행
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: update_daily_analytics RPC 호출
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "📊 daily_analytics 집계 시작..."
+          STATUS=$(curl -s -o /tmp/rpc_response.json -w "%{http_code}" \
+            -X POST "${SUPABASE_URL}/rest/v1/rpc/update_daily_analytics" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Content-Type: application/json" \
+            --max-time 30)
+          echo "HTTP 상태: $STATUS"
+          cat /tmp/rpc_response.json
+          if [ "$STATUS" != "200" ] && [ "$STATUS" != "204" ]; then
+            echo "❌ 집계 실패 (HTTP $STATUS)"
+            exit 1
+          fi
+          echo "✅ 집계 완료"

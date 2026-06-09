@@ -559,7 +559,7 @@ export default function AdminIssuesPage() {
                                 >
                                     <div className="flex flex-col items-start">
                                         <span>화력 추이</span>
-                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재</span>
+                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재/종결 시</span>
                                     </div>
                                     {sortField === 'heat_index' && (
                                         <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
@@ -662,11 +662,14 @@ export default function AdminIssuesPage() {
                                 </td>
                                 <td className="px-4 py-3 text-sm whitespace-nowrap w-36">
                                     {(() => {
-                                        const currentHeat = issue.heat_index ?? 0
+                                        const isClosed = issue.status === '종결'
+                                        // 종결 이슈: 종결 시점 화력 스냅샷 표시 (heat_index는 재점화 감지용으로 이후 변할 수 있음)
+                                        const rightHeat = isClosed
+                                            ? (issue.heat_at_close ?? null)
+                                            : (issue.heat_index ?? 0)
                                         const createdHeat = issue.created_heat_index
-                                        const heatMeta = getHeatMeta(currentHeat)
-                                        // 등록 시점 화력은 한 번만 저장되며 이후 변동하지 않음. null이면 현재 화력으로 대체하지 않음(대체 시 재계산마다 변동처럼 보이는 버그)
-                                        const diff = createdHeat != null ? currentHeat - createdHeat : 0
+                                        const heatMeta = getHeatMeta(rightHeat ?? 0)
+                                        const diff = (createdHeat != null && rightHeat != null) ? rightHeat - createdHeat : 0
                                         const diffIcon = diff > 0 ? '↑' : diff < 0 ? '↓' : ''
                                         const diffColor = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-content-muted'
                                         return (
@@ -675,10 +678,10 @@ export default function AdminIssuesPage() {
                                                     {createdHeat != null ? `${createdHeat}점` : '—'}
                                                 </span>
                                                 <span className="text-content-muted">→</span>
-                                                <span className={heatMeta.className}>
-                                                    {currentHeat}점
+                                                <span className={rightHeat != null ? heatMeta.className : 'text-content-muted'}>
+                                                    {rightHeat != null ? `${rightHeat}점` : '—'}
                                                 </span>
-                                                {createdHeat != null && diff !== 0 && (
+                                                {createdHeat != null && rightHeat != null && diff !== 0 && (
                                                     <span className={`text-xs ${diffColor}`}>
                                                         {diffIcon}
                                                     </span>

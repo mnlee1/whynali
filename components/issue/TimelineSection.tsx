@@ -207,14 +207,6 @@ export default function TimelineSection({
     return (
         <div className="space-y-0">
 
-            {/* AI 안내 문구 */}
-            <div className="mb-4 flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                <Bot className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-gray-600 leading-relaxed">
-                    AI가 자동 생성한 타임라인으로, 실제 내용과 다를 수 있습니다.
-                </p>
-            </div>
-
             {stages.map((stage, index) => {
                 const summary = summaries.find(s => s.stage === stage)
                 const style = STAGE_STYLES[stage]
@@ -280,6 +272,14 @@ export default function TimelineSection({
                     </div>
                 )
             })}
+
+            {/* AI 안내 문구 */}
+            <div className="mt-4 flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <Bot className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-600 leading-relaxed">
+                    AI가 자동 생성한 타임라인으로, 실제 내용과 다를 수 있습니다.
+                </p>
+            </div>
 
         </div>
     )

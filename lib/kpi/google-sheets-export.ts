@@ -2,21 +2,19 @@
  * lib/kpi/google-sheets-export.ts
  *
  * KPI 데이터를 Google Sheets로 내보냅니다.
- *  - "KPI보고서" 시트: 당월 포맷된 리포트 (매번 덮어씀)
- *  - "이력"     시트: 월별 누적 원시 데이터 (append)
+ * - "KPI보고서" 시트: 오늘/이번주/이번달 기간별 데이터 + 월 달성 현황
  */
 
 import { google, sheets_v4 } from 'googleapis'
 import type { calculateKPI } from './calculator'
 
-type KPIResult  = Awaited<ReturnType<typeof calculateKPI>>
-type GColor     = sheets_v4.Schema$Color
-type CellData   = sheets_v4.Schema$CellData
-type RowData    = sheets_v4.Schema$RowData
-type Req        = sheets_v4.Schema$Request
+type KPIResult = Awaited<ReturnType<typeof calculateKPI>>
+type GColor    = sheets_v4.Schema$Color
+type CellData  = sheets_v4.Schema$CellData
+type RowData   = sheets_v4.Schema$RowData
+type Req       = sheets_v4.Schema$Request
 
 const REPORT_SHEET = 'KPI보고서'
-const HISTORY_SHEET = '이력'
 const NCOLS = 7
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
@@ -35,8 +33,6 @@ const C = {
     warningFg:  { red: 0.76, green: 0.54, blue: 0.02 } as GColor,
     dangerBg:   { red: 1.00, green: 0.91, blue: 0.91 } as GColor,
     dangerFg:   { red: 0.80, green: 0.10, blue: 0.12 } as GColor,
-    posFg:      { red: 0.05, green: 0.55, blue: 0.35 } as GColor,
-    negFg:      { red: 0.80, green: 0.10, blue: 0.12 } as GColor,
     border:     { red: 0.84, green: 0.86, blue: 0.92 } as GColor,
     text:       { red: 0.11, green: 0.13, blue: 0.18 } as GColor,
     muted:      { red: 0.52, green: 0.55, blue: 0.62 } as GColor,
@@ -49,7 +45,7 @@ type Fmt = {
     bg?: GColor; fg?: GColor
     bold?: boolean; italic?: boolean; size?: number
     align?: 'LEFT' | 'CENTER' | 'RIGHT'
-    border?: boolean; wrap?: boolean
+    border?: boolean
 }
 
 function cell(value: string | number | null, fmt: Fmt = {}): CellData {
@@ -57,14 +53,12 @@ function cell(value: string | number | null, fmt: Fmt = {}): CellData {
         typeof value === 'number' ? { numberValue: value } :
         value === null            ? {} :
                                     { stringValue: value }
-
     const bd: sheets_v4.Schema$Borders | undefined = fmt.border ? {
         top:    { style: 'SOLID', color: C.border, width: 1 },
         bottom: { style: 'SOLID', color: C.border, width: 1 },
         left:   { style: 'SOLID', color: C.border, width: 1 },
         right:  { style: 'SOLID', color: C.border, width: 1 },
     } : undefined
-
     return {
         userEnteredValue: uv,
         userEnteredFormat: {
@@ -76,15 +70,14 @@ function cell(value: string | number | null, fmt: Fmt = {}): CellData {
                 fontSize: fmt.size ?? 10,
             },
             horizontalAlignment: fmt.align ?? 'LEFT',
-            verticalAlignment:   'MIDDLE',
-            wrapStrategy: fmt.wrap ? 'WRAP' : 'OVERFLOW_CELL',
+            verticalAlignment: 'MIDDLE',
+            wrapStrategy: 'OVERFLOW_CELL',
             padding: { top: 4, bottom: 4, left: 8, right: 8 },
             borders: bd,
         },
     }
 }
 
-// 편의 함수들
 const hdr = (t: string) => cell(t, { bg: C.hdrBg, fg: C.hdrFg, bold: true, align: 'CENTER', border: true })
 const dat = (v: string | number | null, align: Fmt['align'] = 'LEFT', bg = C.white) =>
     cell(v, { bg, fg: C.text, align, border: true })
@@ -98,21 +91,10 @@ function statusCell(rate: number): CellData {
 
 function rateCell(rate: number): CellData {
     const fmt: Fmt = { bold: true, align: 'CENTER', border: true }
-    if (rate >= 100) { fmt.bg = C.achievedBg; fmt.fg = C.achievedFg }
-    else if (rate >= 50) { fmt.bg = C.warningBg; fmt.fg = C.warningFg }
-    else { fmt.bg = C.dangerBg; fmt.fg = C.dangerFg }
+    if (rate >= 100)      { fmt.bg = C.achievedBg; fmt.fg = C.achievedFg }
+    else if (rate >= 50)  { fmt.bg = C.warningBg;  fmt.fg = C.warningFg  }
+    else                  { fmt.bg = C.dangerBg;   fmt.fg = C.dangerFg   }
     return cell(`${rate.toFixed(1)}%`, fmt)
-}
-
-function deltaCell(delta: number, pct: number | null): CellData {
-    const sign = delta >= 0 ? '+' : ''
-    const pctStr = pct !== null ? ` (${delta >= 0 ? '+' : ''}${pct.toFixed(0)}%)` : ''
-    return cell(`${sign}${delta}${pctStr}`, {
-        fg: delta > 0 ? C.posFg : delta < 0 ? C.negFg : C.muted,
-        bold: delta !== 0,
-        align: 'CENTER',
-        border: true,
-    })
 }
 
 // ── 인증 ──────────────────────────────────────────────────────────────────────
@@ -129,10 +111,11 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
     if (!spreadsheetId) throw new Error('KPI_SPREADSHEET_ID가 설정되지 않았습니다')
 
     const { metrics } = kpi
-    const vs      = metrics.visitorsBySource
-    const label   = `${year}-${String(month).padStart(2, '0')}`
+    const ps  = metrics.periodStats
+    const vs  = metrics.visitorsBySource
+    const label      = `${year}-${String(month).padStart(2, '0')}`
     const exportedAt = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
-    const period  = kpi.goalInfo
+    const period     = kpi.goalInfo
         ? `${kpi.goalInfo.periodStart} ~ ${kpi.goalInfo.periodEnd}`
         : `${year}년 ${month}월`
 
@@ -143,18 +126,29 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
     const ss0 = await sheets.spreadsheets.get({ spreadsheetId })
     const existing0 = ss0.data.sheets ?? []
     const toCreate: Req[] = []
+
     if (!existing0.find(s => s.properties?.title === REPORT_SHEET))
-        toCreate.push({ addSheet: { properties: { title: REPORT_SHEET,  gridProperties: { rowCount: 120, columnCount: NCOLS } } } })
-    if (!existing0.find(s => s.properties?.title === HISTORY_SHEET))
-        toCreate.push({ addSheet: { properties: { title: HISTORY_SHEET, gridProperties: { rowCount: 1000, columnCount: 32 } } } })
+        toCreate.push({ addSheet: { properties: { title: REPORT_SHEET, gridProperties: { rowCount: 80, columnCount: NCOLS } } } })
+
+    // 기본 빈 시트("시트1"/"Sheet1") 삭제
+    const defaultSheet = existing0.find(s =>
+        s.properties?.title === '시트1' || s.properties?.title === 'Sheet1'
+    )
+    if (defaultSheet?.properties?.sheetId !== undefined && (existing0.length > 1 || toCreate.length > 0))
+        toCreate.push({ deleteSheet: { sheetId: defaultSheet.properties.sheetId } })
+
+    // 이력 시트가 남아 있으면 삭제
+    const oldHistSheet = existing0.find(s => s.properties?.title === '이력')
+    if (oldHistSheet?.properties?.sheetId !== undefined)
+        toCreate.push({ deleteSheet: { sheetId: oldHistSheet.properties.sheetId } })
+
     if (toCreate.length > 0)
         await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: toCreate } })
 
     const ss1 = await sheets.spreadsheets.get({ spreadsheetId })
-    const reportId  = ss1.data.sheets?.find(s => s.properties?.title === REPORT_SHEET)?.properties?.sheetId  ?? 0
-    const historyId = ss1.data.sheets?.find(s => s.properties?.title === HISTORY_SHEET)?.properties?.sheetId ?? 0
+    const reportId = ss1.data.sheets?.find(s => s.properties?.title === REPORT_SHEET)?.properties?.sheetId ?? 0
 
-    // ── 보고서 행 빌드 ───────────────────────────────────────────────────────
+    // ── 행 빌드 헬퍼 ─────────────────────────────────────────────────────────
     const rows: RowData[] = []
     const merges: Req[]   = []
     let r = 0
@@ -171,16 +165,24 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
             mergeType: 'MERGE_ALL',
         }})
     }
-    function spacer() { addRow(Array(NCOLS).fill(pad())); }
+    function spacer() { addRow(Array(NCOLS).fill(pad())) }
     function secRow(text: string) {
         addRow([cell(text, { bg: C.secBg, fg: C.secFg, bold: true, size: 11 })])
         merge(0, NCOLS)
     }
+    // 기간별 3컬럼 공통 헤더
+    function periodHeader(label0: string) {
+        addRow([hdr(label0), hdr('오늘'), hdr('이번주'), hdr('이번달'), pad(C.hdrBg), pad(C.hdrBg), pad(C.hdrBg)])
+        merge(4, NCOLS)
+    }
+    // 기간별 3컬럼 데이터 행
+    function periodRow(lbl: string, d1: number, d7: number, d30: number, i: number) {
+        const bg = i % 2 === 0 ? C.white : C.rowAlt
+        addRow([dat(lbl, 'LEFT', bg), dat(d1, 'CENTER', bg), dat(d7, 'CENTER', bg), dat(d30, 'CENTER', bg), pad(bg), pad(bg), pad(bg)])
+        merge(4, NCOLS)
+    }
 
-    const issuePct = metrics.targets.activeIssues > 0
-        ? (metrics.currentActiveIssues / metrics.targets.activeIssues) * 100 : 0
-
-    // ── 제목 영역 ─────────────────────────────────────────────────────────────
+    // ── 제목 ─────────────────────────────────────────────────────────────────
     addRow([
         cell(`왜난리  KPI 월간 보고서`, { bg: C.titleBg, fg: C.titleFg, bold: true, size: 15 }),
         ...Array(NCOLS - 1).fill(pad(C.titleBg)),
@@ -197,17 +199,16 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
 
     spacer()
 
-    // ── ① 핵심 KPI 달성 현황 ─────────────────────────────────────────────────
-    secRow('① 핵심 KPI 달성 현황')
+    // ── ① 이달 달성 현황 ─────────────────────────────────────────────────────
+    secRow('① 이달 달성 현황')
     addRow([hdr('지표'), hdr('목표'), hdr('현재'), hdr('달성률'), hdr('상태'), hdr(''), hdr('')])
     merge(5, NCOLS)
 
     ;([
-        ['가입자 수 (명)',       metrics.targets.users,         metrics.currentUsers,         metrics.userProgress  ],
-        ['진행중 이슈 (개)',     metrics.targets.activeIssues,  metrics.currentActiveIssues,  issuePct              ],
-        ['누적 댓글 (개)',       metrics.targets.comments,      metrics.currentComments,      metrics.commentProgress  ],
-        ['누적 반응 (개)',       metrics.targets.reactions,     metrics.currentReactions,     metrics.reactionProgress ],
-        ['투표 참여 (회)',       metrics.targets.votes,         metrics.currentVotes,         metrics.voteProgress     ],
+        ['가입자 (명)',  metrics.targets.users,     metrics.currentUsers,     metrics.userProgress     ],
+        ['댓글 (개)',    metrics.targets.comments,  metrics.currentComments,  metrics.commentProgress  ],
+        ['반응 (개)',    metrics.targets.reactions, metrics.currentReactions, metrics.reactionProgress ],
+        ['투표 (개)',    metrics.targets.votes,     metrics.currentVotes,     metrics.voteProgress     ],
     ] as [string, number, number, number][]).forEach(([lbl, tgt, cur, rate], i) => {
         const bg = i % 2 === 0 ? C.white : C.rowAlt
         addRow([dat(lbl, 'LEFT', bg), dat(tgt, 'CENTER', bg), dat(cur, 'CENTER', bg), rateCell(rate), statusCell(rate), pad(bg), pad(bg)])
@@ -216,85 +217,44 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
 
     spacer()
 
-    // ── ② 참여율 ─────────────────────────────────────────────────────────────
-    secRow('② 참여율  (가입자 대비 활동 비율)')
-    addRow([hdr('지표'), hdr('목표'), hdr('현재'), hdr('달성 여부'), hdr(''), hdr(''), hdr('')])
-    merge(4, NCOLS)
+    // ── ② 콘텐츠 등록 ────────────────────────────────────────────────────────
+    secRow('② 콘텐츠 등록')
+    periodHeader('항목')
 
     ;([
-        ['댓글 참여율', metrics.targets.commentParticipation,  metrics.commentParticipation ],
-        ['반응 참여율', metrics.targets.reactionParticipation, metrics.reactionParticipation],
-        ['투표 참여율', metrics.targets.voteParticipation,     metrics.voteParticipation    ],
-    ] as [string, number, number][]).forEach(([lbl, tgt, cur], i) => {
-        const bg   = i % 2 === 0 ? C.white : C.rowAlt
-        const rate = tgt > 0 ? (cur / tgt) * 100 : 0
-        addRow([dat(lbl, 'LEFT', bg), dat(`${tgt.toFixed(1)}%`, 'CENTER', bg), dat(`${cur.toFixed(1)}%`, 'CENTER', bg), statusCell(rate), pad(bg), pad(bg), pad(bg)])
-        merge(4, NCOLS)
-    })
+        ['이슈 (승인)',  ps.d1.issues,              ps.d7.issues,              ps.d30.issues              ],
+        ['인스타 숏폼', ps.d1.shortforms.instagram, ps.d7.shortforms.instagram, ps.d30.shortforms.instagram],
+        ['유튜브 숏폼', ps.d1.shortforms.youtube,   ps.d7.shortforms.youtube,   ps.d30.shortforms.youtube  ],
+        ['틱톡 숏폼',   ps.d1.shortforms.tiktok,    ps.d7.shortforms.tiktok,    ps.d30.shortforms.tiktok   ],
+    ] as [string, number, number, number][]).forEach(([lbl, d1, d7, d30], i) => periodRow(lbl, d1, d7, d30, i))
 
     spacer()
 
-    // ── ③ 전주 / 전월 비교 ───────────────────────────────────────────────────
-    secRow('③ 전주 / 전월 비교')
-    addRow([hdr('지표'), hdr('이번 주'), hdr('전주'), hdr('주간 증감'), hdr('이번 달'), hdr('전달'), hdr('월간 증감')])
+    // ── ③ 주요 지표 ──────────────────────────────────────────────────────────
+    secRow('③ 주요 지표')
+    periodHeader('항목')
 
     ;([
-        ['신규 가입 (명)', metrics.weekOverWeek.newUsers,  metrics.monthOverMonth.newUsers ],
-        ['댓글 (개)',      metrics.weekOverWeek.comments,  metrics.monthOverMonth.comments ],
-        ['반응 (개)',      metrics.weekOverWeek.reactions, metrics.monthOverMonth.reactions],
-        ['투표 (회)',      metrics.weekOverWeek.votes,     metrics.monthOverMonth.votes    ],
-    ] as [string, typeof metrics.weekOverWeek.newUsers, typeof metrics.monthOverMonth.newUsers][])
-    .forEach(([lbl, wow, mom], i) => {
-        const bg = i % 2 === 0 ? C.white : C.rowAlt
-        addRow([
-            dat(lbl, 'LEFT', bg),
-            dat(wow.current,  'CENTER', bg),
-            dat(wow.previous, 'CENTER', bg),
-            deltaCell(wow.delta, wow.deltaPercent),
-            dat(mom.current,  'CENTER', bg),
-            dat(mom.previous, 'CENTER', bg),
-            deltaCell(mom.delta, mom.deltaPercent),
-        ])
-    })
+        ['신규 가입자 (명)', ps.d1.newUsers,   ps.d7.newUsers,   ps.d30.newUsers  ],
+        ['댓글 (개)',        ps.d1.comments,   ps.d7.comments,   ps.d30.comments  ],
+        ['반응 (개)',        ps.d1.reactions,  ps.d7.reactions,  ps.d30.reactions ],
+        ['투표 (개)',        ps.d1.votes,      ps.d7.votes,      ps.d30.votes     ],
+    ] as [string, number, number, number][]).forEach(([lbl, d1, d7, d30], i) => periodRow(lbl, d1, d7, d30, i))
 
     spacer()
 
-    // ── ④ 유입 경로별 방문자 ─────────────────────────────────────────────────
-    secRow('④ 유입 경로별 방문자  (최근 30일)')
-    addRow([hdr('채널'), hdr('방문자 수'), hdr('비율'), hdr(''), hdr(''), hdr(''), hdr('')])
-    merge(3, NCOLS)
+    // ── ④ 유입 경로 ──────────────────────────────────────────────────────────
+    secRow('④ 유입 경로')
+    periodHeader('채널')
 
-    const totalV = Object.values(vs).reduce((a, b) => a + b, 0)
     ;([
-        ['Threads',             vs.threads  ],
-        ['Instagram',           vs.instagram],
-        ['X (구 트위터)',        vs.x        ],
-        ['카카오',               vs.kakao   ],
-        ['유튜브',               vs.youtube ],
-        ['틱톡',                 vs.tiktok  ],
-        ['직접 유입 (Direct)',   vs.direct  ],
-        ['검색 유입 (Organic)',  vs.organic ],
-        ['기타 (UTM 미분류)',    vs.other   ],
-    ] as [string, number][]).forEach(([lbl, cnt], i) => {
-        const bg    = i % 2 === 0 ? C.white : C.rowAlt
-        const ratio = totalV > 0 ? `${((cnt / totalV) * 100).toFixed(1)}%` : '0.0%'
-        addRow([dat(lbl, 'LEFT', bg), dat(cnt, 'CENTER', bg), dat(ratio, 'CENTER', bg), pad(bg), pad(bg), pad(bg), pad(bg)])
-        merge(3, NCOLS)
-    })
-
-    spacer()
-
-    // ── ⑤ 기타 지표 ──────────────────────────────────────────────────────────
-    secRow('⑤ 기타 지표')
-    ;([
-        ['주간 성장률',        `${metrics.weeklyGrowthRate.toFixed(1)}%` ],
-        ['일평균 신규 가입',   `${metrics.dailyNewUsers.toFixed(1)}명`   ],
-        ['전체 이슈 (종결 포함)', `${metrics.currentTotalIssues}개`       ],
-    ] as [string, string][]).forEach(([lbl, val], i) => {
-        const bg = i % 2 === 0 ? C.white : C.rowAlt
-        addRow([dat(lbl, 'LEFT', bg), cell(val, { bg, fg: C.text, bold: true, align: 'CENTER', border: true }), pad(bg), pad(bg), pad(bg), pad(bg), pad(bg)])
-        merge(2, NCOLS)
-    })
+        ['인스타그램',  vs.d1.instagram, vs.d7.instagram, vs.d30.instagram],
+        ['유튜브',      vs.d1.youtube,   vs.d7.youtube,   vs.d30.youtube  ],
+        ['틱톡',        vs.d1.tiktok,    vs.d7.tiktok,    vs.d30.tiktok   ],
+        ['X (트위터)',  vs.d1.x,         vs.d7.x,         vs.d30.x        ],
+        ['스레드',      vs.d1.threads,   vs.d7.threads,   vs.d30.threads  ],
+        ['검색',        vs.d1.organic,   vs.d7.organic,   vs.d30.organic  ],
+    ] as [string, number, number, number][]).forEach(([lbl, d1, d7, d30], i) => periodRow(lbl, d1, d7, d30, i))
 
     spacer()
 
@@ -303,80 +263,24 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
     merge(0, NCOLS)
 
     // ── batchUpdate 실행 ──────────────────────────────────────────────────────
-    const colWidths = [155, 90, 90, 120, 90, 90, 140]
+    const colWidths = [155, 90, 90, 90, 90, 90, 110]
     const requests: Req[] = [
-        // 기존 머지 해제
-        { unmergeCells: { range: { sheetId: reportId, startRowIndex: 0, endRowIndex: 120, startColumnIndex: 0, endColumnIndex: NCOLS } } },
-        // 셀 전체 초기화
-        { repeatCell: { range: { sheetId: reportId, startRowIndex: 0, endRowIndex: 120 }, cell: {}, fields: 'userEnteredValue,userEnteredFormat' } },
-        // 제목 행 높이 42px
-        { updateDimensionProperties: { range: { sheetId: reportId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },   properties: { pixelSize: 42 }, fields: 'pixelSize' } },
-        // 나머지 행 높이 26px
-        { updateDimensionProperties: { range: { sheetId: reportId, dimension: 'ROWS', startIndex: 1, endIndex: 120 }, properties: { pixelSize: 26 }, fields: 'pixelSize' } },
-        // 열 너비
+        { unmergeCells: { range: { sheetId: reportId, startRowIndex: 0, endRowIndex: 80, startColumnIndex: 0, endColumnIndex: NCOLS } } },
+        { repeatCell: { range: { sheetId: reportId, startRowIndex: 0, endRowIndex: 80 }, cell: {}, fields: 'userEnteredValue,userEnteredFormat' } },
+        { updateDimensionProperties: { range: { sheetId: reportId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },  properties: { pixelSize: 42 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: reportId, dimension: 'ROWS', startIndex: 1, endIndex: 80 }, properties: { pixelSize: 26 }, fields: 'pixelSize' } },
         ...colWidths.map((px, i): Req => ({
             updateDimensionProperties: {
                 range: { sheetId: reportId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
-                properties: { pixelSize: px },
-                fields: 'pixelSize',
+                properties: { pixelSize: px }, fields: 'pixelSize',
             },
         })),
-        // 데이터 쓰기
         { updateCells: { rows, fields: 'userEnteredValue,userEnteredFormat', start: { sheetId: reportId, rowIndex: 0, columnIndex: 0 } } },
-        // 셀 머지 적용
         ...merges,
-        // 시트 탭 색상 (indigo)
         { updateSheetProperties: { properties: { sheetId: reportId, tabColorStyle: { rgbColor: C.titleBg } }, fields: 'tabColorStyle' } },
     ]
 
     await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } })
 
-    // ── 이력 시트 (월별 누적) ─────────────────────────────────────────────────
-    const HIST_HEADERS = [
-        '연월', '내보낸 시간',
-        '목표 가입자', '현재 가입자', '가입자 달성률(%)',
-        '목표 이슈', '현재 이슈', '이슈 달성률(%)',
-        '목표 댓글', '현재 댓글', '댓글 달성률(%)',
-        '목표 반응', '현재 반응', '반응 달성률(%)',
-        '목표 투표', '현재 투표', '투표 달성률(%)',
-        '댓글 참여율(%)', '반응 참여율(%)', '투표 참여율(%)',
-        '주간 성장률(%)',
-        'Threads', 'Instagram', 'X', '카카오', '유튜브', '틱톡', '직접 유입', '검색 유입', '기타',
-    ]
-    const histRow = [
-        label, exportedAt,
-        metrics.targets.users,        metrics.currentUsers,        +metrics.userProgress.toFixed(1),
-        metrics.targets.activeIssues, metrics.currentActiveIssues, +issuePct.toFixed(1),
-        metrics.targets.comments,     metrics.currentComments,     +metrics.commentProgress.toFixed(1),
-        metrics.targets.reactions,    metrics.currentReactions,    +metrics.reactionProgress.toFixed(1),
-        metrics.targets.votes,        metrics.currentVotes,        +metrics.voteProgress.toFixed(1),
-        +metrics.commentParticipation.toFixed(1),
-        +metrics.reactionParticipation.toFixed(1),
-        +metrics.voteParticipation.toFixed(1),
-        +metrics.weeklyGrowthRate.toFixed(1),
-        vs.threads, vs.instagram, vs.x, vs.kakao, vs.youtube, vs.tiktok, vs.direct, vs.organic, vs.other,
-    ]
-
-    const histExisting = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${HISTORY_SHEET}!A:A` })
-    const histRows = histExisting.data.values ?? []
-    const existingIdx = histRows.findIndex((row, i) => i > 0 && row[0] === label)
-
-    if (histRows.length === 0) {
-        await sheets.spreadsheets.values.append({
-            spreadsheetId, range: `${HISTORY_SHEET}!A1`, valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [HIST_HEADERS, histRow] },
-        })
-    } else if (existingIdx > 0) {
-        await sheets.spreadsheets.values.update({
-            spreadsheetId, range: `${HISTORY_SHEET}!A${existingIdx + 1}`, valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [histRow] },
-        })
-    } else {
-        await sheets.spreadsheets.values.append({
-            spreadsheetId, range: `${HISTORY_SHEET}!A:A`, valueInputOption: 'USER_ENTERED',
-            insertDataOption: 'INSERT_ROWS', requestBody: { values: [histRow] },
-        })
-    }
-
-    return { action: existingIdx > 0 ? 'updated' as const : 'appended' as const, label }
+    return { action: 'exported' as const, label }
 }

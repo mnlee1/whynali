@@ -11,6 +11,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { trackConversion } from '@/lib/analytics/tracker'
 
 function AuthVerifyContent() {
     const searchParams = useSearchParams()
@@ -67,6 +68,10 @@ function AuthVerifyContent() {
                             !data.displayName
 
                         if (needsOnboarding) {
+                            // termsAgreedAt이 없으면 최초 가입 → signup 전환 이벤트
+                            if (!data.termsAgreedAt) {
+                                trackConversion({ eventType: 'signup' })
+                            }
                             setStatus('ok')
                             window.location.replace('/onboarding')
                             return

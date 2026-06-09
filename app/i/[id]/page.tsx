@@ -15,6 +15,7 @@ import { Metadata } from 'next'
 
 interface Props {
     params: Promise<{ id: string }>
+    searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
 export const metadata: Metadata = {
@@ -24,8 +25,9 @@ export const metadata: Metadata = {
     },
 }
 
-export default async function ShortIssueUrl({ params }: Props) {
+export default async function ShortIssueUrl({ params, searchParams }: Props) {
     const { id } = await params
+    const sp = await searchParams
 
     // 1. short_code로 조회 시도
     let issue = await supabaseAdmin
@@ -48,6 +50,13 @@ export default async function ShortIssueUrl({ params }: Props) {
         redirect('/')
     }
 
-    // 4. 이슈 상세 페이지로 리다이렉트
-    redirect(`/issue/${issue.data.id}`)
+    // 4. 이슈 상세 페이지로 리다이렉트 (UTM 파라미터 유지)
+    const qs = new URLSearchParams(
+        Object.entries(sp).reduce((acc, [k, v]) => {
+            if (typeof v === 'string') acc[k] = v
+            return acc
+        }, {} as Record<string, string>)
+    ).toString()
+
+    redirect(`/issue/${issue.data.id}${qs ? `?${qs}` : ''}`)
 }
