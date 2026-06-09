@@ -555,9 +555,9 @@ export default function AdminIssuesPage() {
                             <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-36">
                                 <button
                                     onClick={() => handleSort('heat_index')}
-                                    className="flex items-center gap-1 hover:text-content-secondary"
+                                    className="flex items-start gap-1 hover:text-content-secondary"
                                 >
-                                    <div className="flex flex-col items-start">
+                                    <div className="flex flex-col items-start text-left">
                                         <span>화력 추이</span>
                                         <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재/종결 시</span>
                                     </div>

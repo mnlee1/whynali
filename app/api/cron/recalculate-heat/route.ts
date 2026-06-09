@@ -27,7 +27,6 @@ import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
 import { type IssueCategory } from '@/lib/config/categories'
 import {
     CANDIDATE_AUTO_APPROVE_THRESHOLD as AUTO_APPROVE_THRESHOLD,
-    CANDIDATE_MIN_HEAT_TO_REGISTER as MIN_HEAT_TO_REGISTER,
     AUTO_APPROVE_CATEGORIES,
 } from '@/lib/config/candidate-thresholds'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
@@ -61,8 +60,8 @@ export async function GET(request: NextRequest) {
         // 1) 점화 상태 이슈 (상태 전환이 시급함)
         // 2) 논란중 상태 이슈 (종결 전환 확인 필요)
         // 3) 최근 업데이트된 대기/승인 이슈
-        // 4) 종결 후 30일 이내 승인 이슈 (재점화 감지)
-        const recentlyClosedSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        // 4) 종결 이슈 중 24시간 이상 재계산 안 된 것 (기간 제한 없음, 자연 소멸 대기)
+        const staleHeatSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
         const [igniteIssues, debateIssues, recentIssues, closedIssues] = await Promise.all([
             // 점화 상태 이슈 (최대 30개)
             supabaseAdmin
@@ -92,14 +91,15 @@ export async function GET(request: NextRequest) {
                 .order('updated_at', { ascending: false })
                 .limit(15),
 
-            // 종결 후 30일 이내 승인 이슈 (최대 10개, 재점화 감지용)
+            // 종결 이슈 중 24시간 이상 재계산 안 된 것 (최대 10개, 기간 제한 없음)
             // heat_updated_at ASC: 가장 오래 재계산 안 된 이슈부터 처리 (배치 밀림 방지)
+            // 30일 cutoff 제거 → 오래된 종결 이슈도 시간 가중치 0으로 수렴할 때까지 재계산
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '종결')
                 .eq('approval_status', '승인')
-                .gte('updated_at', recentlyClosedSince)
+                .or(`heat_updated_at.is.null,heat_updated_at.lt.${staleHeatSince}`)
                 .order('heat_updated_at', { ascending: true, nullsFirst: true })
                 .limit(10),
         ])
@@ -132,7 +132,6 @@ export async function GET(request: NextRequest) {
         }> = []
 
         let autoApproved = 0
-        let autoRejected = 0
         let statusTransitioned = 0
         let timeoutReached = false
 
@@ -177,10 +176,6 @@ export async function GET(request: NextRequest) {
                         if (issue.approval_status === '대기') {
                             const category = issue.category as IssueCategory
                             
-                            // 생성 후 10분 이내 이슈는 자동 반려 보류 (뉴스 연결 완료 대기)
-                            const ageMinutes = (Date.now() - new Date(issue.created_at).getTime()) / 60000
-                            const isNewIssue = ageMinutes < 10
-                            
                             // 자동 승인: 화력 + 카테고리 모두 체크
                             if (shouldAutoApprove(category, heatIndex)) {
                                 await supabaseAdmin
@@ -195,7 +190,7 @@ export async function GET(request: NextRequest) {
                                 // 투표·토론 생성은 배치 루프 밖에서 순차 처리 (타임아웃 방지)
                                 newlyApprovedIssues.push({ id: issue.id, title: issue.title, category, heatIndex })
                                 result.statusChanged = '대기 → 승인 (화력 ' + heatIndex + '점, ' + category + ')'
-                                return { ...result, autoApproved: 1, autoRejected: 0, statusTransitioned: 0 }
+                                return { ...result, autoApproved: 1, statusTransitioned: 0 }
                             }
                             // 자동 반려 제거 (2026-03-16):
                             // - 화력이 15점 미만으로 떨어져도 자동 반려하지 않음
@@ -276,11 +271,11 @@ export async function GET(request: NextRequest) {
                                 
                                 result.statusChanged = (result.statusChanged ? result.statusChanged + ', ' : '')
                                     + `${oldStatus} → ${transition.newStatus} (${transition.reason.message})`
-                                return { ...result, autoApproved: 0, autoRejected: 0, statusTransitioned: 1 }
+                                return { ...result, autoApproved: 0, statusTransitioned: 1 }
                             }
                         }
 
-                        return { ...result, autoApproved: 0, autoRejected: 0, statusTransitioned: 0 }
+                        return { ...result, autoApproved: 0, statusTransitioned: 0 }
                     } catch (err) {
                         console.error(`이슈 ${issue.id} 화력 계산 실패:`, err)
                         return null
@@ -291,9 +286,8 @@ export async function GET(request: NextRequest) {
             batchResults.forEach((batchResult) => {
                 if (batchResult) {
                     autoApproved += batchResult.autoApproved
-                    autoRejected += batchResult.autoRejected
                     statusTransitioned += batchResult.statusTransitioned
-                    const { autoApproved: _, autoRejected: __, statusTransitioned: ___, ...result } = batchResult
+                    const { autoApproved: _, statusTransitioned: __, ...result } = batchResult
                     results.push(result)
                 }
             })
@@ -372,7 +366,6 @@ export async function GET(request: NextRequest) {
                 recent: recentIssues.data?.length ?? 0,
             },
             autoApproved,
-            autoRejected,
             statusTransitioned,
             avgHeat: avgHeat.toFixed(2),
             elapsed: `${elapsed}ms`,
