@@ -230,6 +230,7 @@ export async function GET(request: NextRequest) {
                                     .update({
                                         status: transition.newStatus,
                                         updated_at: new Date().toISOString(),
+                                        ...(transition.newStatus === '종결' ? { heat_at_close: heatIndex } : {}),
                                     })
                                     .eq('id', issue.id)
                                 

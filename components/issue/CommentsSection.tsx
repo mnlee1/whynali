@@ -19,6 +19,7 @@ import type { Comment } from '@/types'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
 import ReportModal from '@/components/issue/ReportModal'
 import NicknameAvatar from '@/components/common/NicknameAvatar'
+import { trackConversion } from '@/lib/analytics/tracker'
 
 interface CommentsSectionProps {
     issueId?: string
@@ -284,6 +285,7 @@ export default function CommentsSection({
             }
             if (!res.ok) { setWriteError(json.error ?? '오류가 발생했습니다.'); return }
             setDraft('')
+            trackConversion({ eventType: 'comment', issueId: issueId ?? undefined })
             if (json.pending) {
                 /* 금칙어 포함 댓글: 알럿 없이 state에만 추가 */
                 if (json.data) {

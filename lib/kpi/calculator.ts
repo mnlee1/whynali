@@ -11,6 +11,15 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 
 const supabase = supabaseAdmin
 
+type PeriodStat = {
+    newUsers: number
+    comments: number
+    reactions: number
+    votes: number
+    issues: number
+    shortforms: { instagram: number; youtube: number; tiktok: number }
+}
+
 interface KPIMetrics {
     // 현재 지표
     currentUsers: number
@@ -23,22 +32,18 @@ interface KPIMetrics {
     currentVotes: number
     
     // 방문자 지표 (재미나이 제안)
+    todayPageViews: number               // 오늘 페이지뷰
+    todayUniqueVisitors: number          // 오늘 순방문자
     weeklyPageViews: number              // 최근 7일 페이지뷰
     weeklyUniqueVisitors: number         // 최근 7일 순방문자
     monthlyPageViews: number             // 최근 30일 페이지뷰
     monthlyUniqueVisitors: number        // 최근 30일 순방문자
     
-    // 유입 경로별 (재미나이 제안 1번)
+    // 유입 경로별 (기간별)
     visitorsBySource: {
-        threads: number
-        instagram: number
-        x: number
-        kakao: number
-        youtube: number
-        tiktok: number
-        direct: number
-        organic: number
-        other: number
+        d1:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
+        d7:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
+        d30: { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
     }
     
     // 전환율 (재미나이 제안 2번)
@@ -57,7 +62,12 @@ interface KPIMetrics {
         topCategory: string | null
     }
     
-    // 참여율
+    // 이달 활성 참여자 (중복 제거된 유저 수)
+    monthlyActiveCommenters: number
+    monthlyActiveReactors: number
+    monthlyActiveVoters: number
+
+    // 이달 참여율 (활성 유저 / 전체 가입자)
     commentParticipation: number
     reactionParticipation: number
     voteParticipation: number
@@ -76,6 +86,16 @@ interface KPIMetrics {
     commentProgress: number
     reactionProgress: number
     voteProgress: number
+
+    // 현재 가입자 기준 환산 목표
+    stageTargets: {
+        comments: number
+        reactions: number
+        votes: number
+        commentProgress: number
+        reactionProgress: number
+        voteProgress: number
+    }
 
     // 추이 비교
     weekOverWeek: {
@@ -99,6 +119,17 @@ interface KPIMetrics {
         votes:     number[]
     }
 
+    // 운영 KPI (오늘 / 이번달)
+    todayIssues: number
+    monthlyIssues: number
+    todayShortforms: { instagram: number; youtube: number; tiktok: number }
+    monthlyShortforms: { instagram: number; youtube: number; tiktok: number }
+    todayNewUsers: number
+    todayComments: number
+    todayReactions: number
+
+    periodStats: { d1: PeriodStat; d7: PeriodStat; d30: PeriodStat }
+
     // 목표값
     targets: {
         users: number
@@ -112,6 +143,9 @@ interface KPIMetrics {
         dailyNewUsers: number
         dailyComments: number
         dailyReactions: number
+        dailyIssues: number
+        dailyShortformsPerPlatform: number
+        pageviews: number
     }
 }
 
@@ -146,6 +180,8 @@ interface KPIGoal {
     target_daily_new_users: number
     target_daily_comments: number
     target_daily_reactions: number
+    target_daily_issues: number
+    target_daily_shortforms_per_platform: number
     notes: string | null
 }
 
@@ -246,18 +282,83 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .from('user_votes')
         .select('*', { count: 'exact', head: true })
 
-    // 4. 참여율 계산
-    const commentParticipation = (totalUsers || 0) > 0
-        ? ((totalComments || 0) / (totalUsers || 0)) * 100
-        : 0
+    // 4. 이달 활성 참여자 수 (중복 제거)
+    const thisMonthForParticipation = new Date()
+    thisMonthForParticipation.setDate(1)
+    thisMonthForParticipation.setHours(0, 0, 0, 0)
 
-    const reactionParticipation = (totalUsers || 0) > 0
-        ? ((totalReactions || 0) / (totalUsers || 0)) * 100
-        : 0
+    const [
+        { data: monthlyCommentUsers },
+        { data: monthlyReactionUsers },
+        { data: monthlyVoteUsers },
+    ] = await Promise.all([
+        supabase.from('comments').select('user_id')
+            .gte('created_at', thisMonthForParticipation.toISOString())
+            .eq('is_hidden', false)
+            .not('user_id', 'is', null),
+        supabase.from('reactions').select('user_id')
+            .gte('created_at', thisMonthForParticipation.toISOString())
+            .not('user_id', 'is', null),
+        supabase.from('user_votes').select('user_id')
+            .gte('created_at', thisMonthForParticipation.toISOString())
+            .not('user_id', 'is', null),
+    ])
 
-    const voteParticipation = (totalUsers || 0) > 0
-        ? ((totalVotes || 0) / (totalUsers || 0)) * 100
-        : 0
+    const monthlyActiveCommenters  = new Set(monthlyCommentUsers?.map(r => r.user_id)  || []).size
+    const monthlyActiveReactors    = new Set(monthlyReactionUsers?.map(r => r.user_id) || []).size
+    const monthlyActiveVoters      = new Set(monthlyVoteUsers?.map(r => r.user_id)     || []).size
+
+    const commentParticipation  = (totalUsers || 0) > 0 ? (monthlyActiveCommenters  / (totalUsers || 0)) * 100 : 0
+    const reactionParticipation = (totalUsers || 0) > 0 ? (monthlyActiveReactors    / (totalUsers || 0)) * 100 : 0
+    const voteParticipation     = (totalUsers || 0) > 0 ? (monthlyActiveVoters      / (totalUsers || 0)) * 100 : 0
+
+    // 4-1. 오늘 운영 KPI (이슈 / 숏폼)
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+
+    const now3 = new Date()
+    const thisMonthStart2 = new Date(now3.getFullYear(), now3.getMonth(), 1)
+
+    const [
+        { count: todayIssuesCount },
+        { count: monthlyIssuesCount },
+        { data: todayShortformData },
+        { data: monthlyShortformData },
+        { count: todayNewUsersCount },
+        { count: todayCommentsCount },
+        { count: todayReactionsCount },
+        { count: todayVotesCount },
+    ] = await Promise.all([
+        supabase.from('issues').select('*', { count: 'exact', head: true })
+            .eq('approval_status', 'approved')
+            .gte('created_at', todayStart.toISOString()),
+        supabase.from('issues').select('*', { count: 'exact', head: true })
+            .eq('approval_status', 'approved')
+            .gte('created_at', thisMonthStart2.toISOString()),
+        supabase.from('shortform_jobs').select('upload_status')
+            .gte('updated_at', todayStart.toISOString()),
+        supabase.from('shortform_jobs').select('upload_status')
+            .gte('updated_at', thisMonthStart2.toISOString()),
+        supabase.from('users').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()),
+        supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()).eq('is_hidden', false),
+        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()),
+        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()),
+    ])
+
+    const todayShortforms = {
+        instagram: todayShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
+        youtube:   todayShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
+        tiktok:    todayShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
+    }
+    const monthlyShortforms = {
+        instagram: monthlyShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
+        youtube:   monthlyShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
+        tiktok:    monthlyShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
+    }
 
     // 5. 최근 7일 데이터
     const sevenDaysAgo = new Date()
@@ -289,9 +390,67 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const dailyComments = (newComments7d || 0) / 7
     const dailyReactions = (newReactions7d || 0) / 7
 
-    // 7. 방문자 데이터 (재미나이 제안)
+    // 6-b. 기간 선택용: 7일·30일 이슈·숏폼·활동 집계
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const [
+        { count: newIssues7d },
+        { count: newIssues30d },
+        { data: shortformData7d },
+        { data: shortformData30d },
+        { count: newUsers30d },
+        { count: newComments30d },
+        { count: newReactions30d },
+        { count: newVotes30d },
+    ] = await Promise.all([
+        supabase.from('issues').select('*', { count: 'exact', head: true })
+            .eq('approval_status', 'approved').gte('created_at', sevenDaysAgo.toISOString()),
+        supabase.from('issues').select('*', { count: 'exact', head: true })
+            .eq('approval_status', 'approved').gte('created_at', thirtyDaysAgo.toISOString()),
+        supabase.from('shortform_jobs').select('upload_status')
+            .gte('updated_at', sevenDaysAgo.toISOString()),
+        supabase.from('shortform_jobs').select('upload_status')
+            .gte('updated_at', thirtyDaysAgo.toISOString()),
+        supabase.from('users').select('*', { count: 'exact', head: true })
+            .gte('created_at', thirtyDaysAgo.toISOString()),
+        supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thirtyDaysAgo.toISOString()).eq('is_hidden', false),
+        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', thirtyDaysAgo.toISOString()),
+        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', thirtyDaysAgo.toISOString()),
+    ])
+
+    const shortforms7d = {
+        instagram: shortformData7d?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
+        youtube:   shortformData7d?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
+        tiktok:    shortformData7d?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
+    }
+    const shortforms30d = {
+        instagram: shortformData30d?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
+        youtube:   shortformData30d?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
+        tiktok:    shortformData30d?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
+    }
+    const periodStats = {
+        d1:  { newUsers: todayNewUsersCount ?? 0, comments: todayCommentsCount ?? 0, reactions: todayReactionsCount ?? 0, votes: todayVotesCount ?? 0, issues: todayIssuesCount ?? 0, shortforms: todayShortforms },
+        d7:  { newUsers: newUsers7d ?? 0, comments: newComments7d ?? 0, reactions: newReactions7d ?? 0, votes: newVotes7d ?? 0, issues: newIssues7d ?? 0, shortforms: shortforms7d },
+        d30: { newUsers: newUsers30d ?? 0, comments: newComments30d ?? 0, reactions: newReactions30d ?? 0, votes: newVotes30d ?? 0, issues: newIssues30d ?? 0, shortforms: shortforms30d },
+    }
+
+    // 7. 방문자 데이터 (재미나이 제안)
+    // 오늘 방문자
+    const [
+        { count: todayPageViewsCount },
+        { data: todayVisitorsData },
+    ] = await Promise.all([
+        supabase.from('page_views').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()),
+        supabase.from('page_views').select('session_id')
+            .gte('created_at', todayStart.toISOString()),
+    ])
+    const todayPageViews = todayPageViewsCount ?? 0
+    const todayUniqueVisitors = new Set(todayVisitorsData?.map(v => v.session_id) || []).size
 
     // 최근 7일 방문자
     const { count: weeklyPageViews } = await supabase
@@ -319,23 +478,30 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     
     const monthlyUniqueVisitors = new Set(monthlyVisitors?.map(v => v.session_id) || []).size
 
-    // 유입 경로별 방문자 (최근 7일)
-    const { data: visitorsBySourceData } = await supabase
-        .from('page_views')
-        .select('utm_source, session_id')
-        .gte('created_at', sevenDaysAgo.toISOString())
+    // 유입 경로별 방문자 (오늘/7일/30일)
+    const [
+        { data: sourceDataD1 },
+        { data: sourceDataD7 },
+        { data: sourceDataD30 },
+    ] = await Promise.all([
+        supabase.from('page_views').select('utm_source, session_id').gte('created_at', todayStart.toISOString()),
+        supabase.from('page_views').select('utm_source, session_id').gte('created_at', sevenDaysAgo.toISOString()),
+        supabase.from('page_views').select('utm_source, session_id').gte('created_at', thirtyDaysAgo.toISOString()),
+    ])
 
-    const KNOWN_SOURCES = ['threads', 'instagram', 'twitter', 'kakao', 'youtube', 'tiktok', 'direct', 'google', 'naver', 'organic']
+    const buildSources = (data: { utm_source: string | null; session_id: string }[] | null) => ({
+        threads:   new Set(data?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
+        instagram: new Set(data?.filter(v => v.utm_source === 'instagram').map(v => v.session_id) || []).size,
+        x:         new Set(data?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
+        youtube:   new Set(data?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
+        tiktok:    new Set(data?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
+        organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
+    })
+
     const visitorsBySource = {
-        threads:   new Set(visitorsBySourceData?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
-        instagram: new Set(visitorsBySourceData?.filter(v => v.utm_source === 'instagram').map(v => v.session_id) || []).size,
-        x:         new Set(visitorsBySourceData?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
-        kakao:     new Set(visitorsBySourceData?.filter(v => v.utm_source === 'kakao').map(v => v.session_id) || []).size,
-        youtube:   new Set(visitorsBySourceData?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
-        tiktok:    new Set(visitorsBySourceData?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
-        direct:    new Set(visitorsBySourceData?.filter(v => v.utm_source === 'direct' || !v.utm_source).map(v => v.session_id) || []).size,
-        organic:   new Set(visitorsBySourceData?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
-        other:     new Set(visitorsBySourceData?.filter(v => v.utm_source && !KNOWN_SOURCES.includes(v.utm_source)).map(v => v.session_id) || []).size,
+        d1:  buildSources(sourceDataD1),
+        d7:  buildSources(sourceDataD7),
+        d30: buildSources(sourceDataD30),
     }
 
     // 전환율 계산 (최근 7일)
@@ -451,6 +617,20 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const commentProgress = ((totalComments || 0) / goal.target_comments) * 100
     const reactionProgress = ((totalReactions || 0) / goal.target_reactions) * 100
     const voteProgress = ((totalVotes || 0) / goal.target_votes) * 100
+
+    // 현재 가입자 기준 환산 목표 (이사님 목표는 가입자 100명 달성 시 기대치)
+    const userRatio = Math.min((totalUsers || 0) / goal.target_users, 1)
+    const stageTargetComments  = Math.max(1, Math.round(goal.target_comments  * userRatio))
+    const stageTargetReactions = Math.max(1, Math.round(goal.target_reactions * userRatio))
+    const stageTargetVotes     = Math.max(1, Math.round(goal.target_votes     * userRatio))
+    const stageTargets = {
+        comments:        stageTargetComments,
+        reactions:       stageTargetReactions,
+        votes:           stageTargetVotes,
+        commentProgress:  ((totalComments  || 0) / stageTargetComments)  * 100,
+        reactionProgress: ((totalReactions || 0) / stageTargetReactions) * 100,
+        voteProgress:     ((totalVotes     || 0) / stageTargetVotes)     * 100,
+    }
 
     // 9. 추이 비교 (지난주 대비 / 지난달 대비)
     const delta = (current: number, previous: number) => ({
@@ -600,6 +780,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             currentVotes: totalVotes || 0,
 
             // 방문자 지표
+            todayPageViews,
+            todayUniqueVisitors,
             weeklyPageViews: weeklyPageViews || 0,
             weeklyUniqueVisitors,
             monthlyPageViews: monthlyPageViews || 0,
@@ -608,6 +790,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             conversionRates,
             issueQuality,
             
+            monthlyActiveCommenters,
+            monthlyActiveReactors,
+            monthlyActiveVoters,
             commentParticipation,
             reactionParticipation,
             voteParticipation,
@@ -620,9 +805,18 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             commentProgress,
             reactionProgress,
             voteProgress,
+            stageTargets,
             weekOverWeek,
             monthOverMonth,
             sparklines,
+            todayIssues: todayIssuesCount ?? 0,
+            monthlyIssues: monthlyIssuesCount ?? 0,
+            todayShortforms,
+            monthlyShortforms,
+            todayNewUsers: todayNewUsersCount ?? 0,
+            todayComments: todayCommentsCount ?? 0,
+            todayReactions: todayReactionsCount ?? 0,
+            periodStats,
             targets: {
                 users: goal.target_users,
                 activeIssues: goal.target_active_issues,
@@ -635,6 +829,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
                 dailyNewUsers: goal.target_daily_new_users,
                 dailyComments: goal.target_daily_comments,
                 dailyReactions: goal.target_daily_reactions,
+                dailyIssues: goal.target_daily_issues ?? 3,
+                dailyShortformsPerPlatform: goal.target_daily_shortforms_per_platform ?? 3,
+                pageviews: goal.target_users * 10,
             },
         },
         weeklyProgress,
@@ -703,20 +900,16 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         currentVotes: totalVotes || 0,
 
         // 방문자 지표 (기본값)
+        todayPageViews: 0,
+        todayUniqueVisitors: 0,
         weeklyPageViews: 0,
         weeklyUniqueVisitors: 0,
         monthlyPageViews: 0,
         monthlyUniqueVisitors: 0,
         visitorsBySource: {
-            threads: 0,
-            instagram: 0,
-            x: 0,
-            kakao: 0,
-            youtube: 0,
-            tiktok: 0,
-            direct: 0,
-            organic: 0,
-            other: 0,
+            d1:  { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
+            d7:  { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
+            d30: { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
         },
         conversionRates: {
             signupRate: 0,
@@ -731,6 +924,9 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
             topCategory: null,
         },
         
+        monthlyActiveCommenters: 0,
+        monthlyActiveReactors: 0,
+        monthlyActiveVoters: 0,
         commentParticipation: 0,
         reactionParticipation: 0,
         voteParticipation: 0,
@@ -743,9 +939,22 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         commentProgress: 0,
         reactionProgress: 0,
         voteProgress: 0,
+        stageTargets: { comments: 1, reactions: 1, votes: 1, commentProgress: 0, reactionProgress: 0, voteProgress: 0 },
         weekOverWeek:   { newUsers: zd, comments: zd, reactions: zd, votes: zd },
         monthOverMonth: { newUsers: zd, comments: zd, reactions: zd, votes: zd },
         sparklines: { newUsers: new Array(14).fill(0), comments: new Array(14).fill(0), reactions: new Array(14).fill(0), votes: new Array(14).fill(0) },
+        todayIssues: 0,
+        monthlyIssues: 0,
+        todayShortforms: { instagram: 0, youtube: 0, tiktok: 0 },
+        monthlyShortforms: { instagram: 0, youtube: 0, tiktok: 0 },
+        todayNewUsers: 0,
+        todayComments: 0,
+        todayReactions: 0,
+        periodStats: {
+            d1:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: { instagram: 0, youtube: 0, tiktok: 0 } },
+            d7:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: { instagram: 0, youtube: 0, tiktok: 0 } },
+            d30: { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: { instagram: 0, youtube: 0, tiktok: 0 } },
+        },
         targets: {
             users: 0,
             activeIssues: 0,
@@ -758,6 +967,9 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
             dailyNewUsers: 0,
             dailyComments: 0,
             dailyReactions: 0,
+            dailyIssues: 3,
+            dailyShortformsPerPlatform: 3,
+            pageviews: 0,
         }
     }
 }
