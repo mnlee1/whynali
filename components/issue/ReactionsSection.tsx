@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactionType } from '@/types'
+import { trackConversion } from '@/lib/analytics/tracker'
 
 interface ReactionsSectionProps {
     issueId: string
@@ -105,6 +106,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
+            trackConversion({ eventType: 'reaction', issueId })
             // 서버 확정값으로 동기화 + 상대 컴포넌트(ReactionDropdown) 업데이트
             await loadReactions()
             window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId, source: 'ReactionsSection' } }))

@@ -13,10 +13,10 @@ import { supabase } from '@/lib/supabase/client'
 function getSessionId(): string {
     if (typeof window === 'undefined') return ''
     
-    let sessionId = sessionStorage.getItem('whynali_session_id')
+    let sessionId = localStorage.getItem('whynali_session_id')
     if (!sessionId) {
         sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        sessionStorage.setItem('whynali_session_id', sessionId)
+        localStorage.setItem('whynali_session_id', sessionId)
     }
     return sessionId
 }
