@@ -11,53 +11,152 @@
       height: 1350px;
       overflow: hidden;
       position: relative;
-      background-color: #ffffff;
+      background: #0d0d0d;
     }
 
+    /* 사진 배경 (Pexels 이미지) */
     .bg-image {
       position: absolute;
       inset: 0;
-      background-image: url('{{bg_image_url}}');
       background-size: cover;
       background-position: center top;
+      display: none;
     }
 
-    /* 그라디언트: y=408~1350, 상단 투명 → 하단 짙은 검정 */
-    .gradient-overlay {
+    /* 사진 위 어두운 오버레이 */
+    .bg-photo-overlay {
       position: absolute;
-      left: 0;
-      right: 0;
-      top: 408px;
-      height: 942px;
+      inset: 0;
       background: linear-gradient(
         to bottom,
-        rgba(5, 5, 5, 0) 0%,
-        rgba(5, 5, 5, 0.5) 50%,
-        rgba(5, 5, 5, 0.92) 100%
+        rgba(5,5,5,0.25) 0%,
+        rgba(5,5,5,0.0)  20%,
+        rgba(5,5,5,0.55) 52%,
+        rgba(5,5,5,0.93) 73%,
+        rgba(5,5,5,1.0)  100%
       );
+      display: none;
     }
 
-    /* #main-title: x=81, y=896, 110px Bold */
-    .main-title {
+    /* 다크 배경 그라디언트 (사진 없을 때) */
+    .bg-gradient {
       position: absolute;
-      left: 81px;
-      top: 896px;
-      width: 820px;
+      inset: 0;
+      background: linear-gradient(145deg, #1a0a2e 0%, #0d0d0d 55%, #0a0a14 100%);
+    }
+
+    /* 우상단 보라 발광 */
+    .glow-top-right {
+      position: absolute;
+      top: -260px;
+      right: -260px;
+      width: 780px;
+      height: 780px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.18) 0%, transparent 68%);
+      border-radius: 50%;
+    }
+
+    /* 좌하단 보라 발광 */
+    .glow-bottom-left {
+      position: absolute;
+      bottom: -180px;
+      left: -180px;
+      width: 560px;
+      height: 560px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.10) 0%, transparent 68%);
+      border-radius: 50%;
+    }
+
+
+    /* HOT 인디케이터 — 우상단 */
+    .hot-badge {
+      position: absolute;
+      top: 60px;
+      right: 72px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1.5px solid rgba(239, 68, 68, 0.6);
+      padding: 10px 24px;
+      border-radius: 100px;
+    }
+
+    .hot-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #EF4444;
+    }
+
+    .hot-text {
       font-family: 'Pretendard', sans-serif;
       font-weight: 700;
-      font-size: 110px;
+      font-size: 24px;
+      color: #EF4444;
+      letter-spacing: 3px;
+    }
+
+    /* 하단 콘텐츠 블록 */
+    .content {
+      position: absolute;
+      left: 72px;
+      right: 72px;
+      bottom: 110px;
+    }
+
+    /* 보라 액센트 바 */
+    .accent-bar {
+      width: 56px;
+      height: 5px;
+      background: #7C3AED;
+      border-radius: 3px;
+      margin-bottom: 28px;
+    }
+
+    /* 카테고리 뱃지 */
+    .category-pill {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(124, 58, 237, 0.2);
+      border: 1px solid rgba(124, 58, 237, 0.6);
+      padding: 10px 26px;
+      border-radius: 6px;
+      margin-bottom: 30px;
+    }
+
+    .category-pill span {
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 600;
+      font-size: 28px;
+      color: #c4b5fd;
+      letter-spacing: 0.3px;
+    }
+
+    /* 메인 타이틀 */
+    .main-title {
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 800;
+      font-size: 96px;
       color: #ffffff;
-      letter-spacing: -1.1px;
-      line-height: 1.5;
+      letter-spacing: -2px;
+      line-height: 1.15;
       white-space: pre-line;
     }
 
-    /* 하단 로고 이미지 — 가운데 정렬 */
-    .bottom-logo {
+    /* 하단 바 */
+    .bottom-bar {
       position: absolute;
-      left: 50%;
-      top: 1265px;
-      transform: translateX(-50%);
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 94px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .bottom-logo {
       width: 83px;
       height: 50px;
       display: flex;
@@ -71,11 +170,10 @@
       object-fit: contain;
     }
 
-    /* 화살표: 오른쪽 끝, 로고와 수직 중앙 정렬 */
     .arrow {
       position: absolute;
       right: 70px;
-      top: 1290px;
+      top: 50%;
       transform: translateY(-50%);
       width: 120px;
       height: 29.46px;
@@ -83,16 +181,48 @@
   </style>
 </head>
 <body>
-  <div class="bg-image"></div>
-  <div class="gradient-overlay"></div>
-  <div class="main-title">{{main_title}}</div>
-  
-  <div class="bottom-logo">
-    <img src="{{logo_image_url}}" alt="왜난리">
+  <div class="bg-image" id="bg-image"></div>
+  <div class="bg-photo-overlay" id="bg-photo-overlay"></div>
+  <div class="bg-gradient" id="bg-gradient"></div>
+  <div class="glow-top-right"></div>
+  <div class="glow-bottom-left"></div>
+
+  <!-- HOT 인디케이터 -->
+  <div class="hot-badge">
+    <div class="hot-dot"></div>
+    <span class="hot-text">HOT</span>
   </div>
-  
-  <svg class="arrow" viewBox="0 0 120 29.4558" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M119.414 16.1421C120.195 15.3611 120.195 14.0948 119.414 13.3137L106.686 0.585787C105.905 -0.195262 104.639 -0.195262 103.858 0.585787C103.077 1.36684 103.077 2.63317 103.858 3.41421L115.172 14.7279L103.858 26.0416C103.077 26.8227 103.077 28.089 103.858 28.8701C104.639 29.6511 105.905 29.6511 106.686 28.8701L119.414 16.1421ZM0 14.7279V16.7279H118V14.7279V12.7279H0V14.7279Z" fill="#FFFFFF"/>
-  </svg>
+
+  <!-- 하단 콘텐츠 -->
+  <div class="content">
+    <div class="accent-bar"></div>
+    <div class="category-pill">
+      <span>{{sub_title}}</span>
+    </div>
+    <div class="main-title">{{main_title}}</div>
+  </div>
+
+  <!-- 하단 바 -->
+  <div class="bottom-bar">
+    <div class="bottom-logo">
+      <img src="{{logo_image_url}}" alt="왜난리">
+    </div>
+    <svg class="arrow" viewBox="0 0 120 29.4558" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M119.414 16.1421C120.195 15.3611 120.195 14.0948 119.414 13.3137L106.686 0.585787C105.905 -0.195262 104.639 -0.195262 103.858 0.585787C103.077 1.36684 103.077 2.63317 103.858 3.41421L115.172 14.7279L103.858 26.0416C103.077 26.8227 103.077 28.089 103.858 28.8701C104.639 29.6511 105.905 29.6511 106.686 28.8701L119.414 16.1421ZM0 14.7279V16.7279H118V14.7279V12.7279H0V14.7279Z" fill="#FFFFFF"/>
+    </svg>
+  </div>
+
+  <script>
+    const pill = document.querySelector('.category-pill');
+    if (!pill.querySelector('span').textContent.trim()) pill.style.display = 'none';
+
+    const bgUrl = '{{bg_image_url}}';
+    if (bgUrl) {
+      document.getElementById('bg-image').style.backgroundImage = `url('${bgUrl}')`;
+      document.getElementById('bg-image').style.display = 'block';
+      document.getElementById('bg-photo-overlay').style.display = 'block';
+      document.getElementById('bg-gradient').style.display = 'none';
+    }
+  </script>
 </body>
 </html>
