@@ -1,9 +1,16 @@
 /**
  * 카드뉴스 자동화 파이프라인
- * 흐름: Supabase 이슈 조회 → Groq AI 텍스트 생성 → HTML 렌더링 → PNG 저장
+ *
+ * 콘텐츠 모드 (KST 요일 기반 자동 선택):
+ *   월 — 주말 핫이슈 TOP 3
+ *   화 — 급상승 이슈 단독
+ *   수 — 이번주 핫이슈 TOP 3
+ *   목 — 분야별 핫이슈 (정치·경제·사회·연예)
+ *   금 — 이슈 타임라인 (종결 이슈 심층)
  *
  * 실행: npx tsx scripts/card-news/pipeline.ts
  * 실제 업로드: npx tsx scripts/card-news/pipeline.ts --publish
+ * 모드 강제: npx tsx scripts/card-news/pipeline.ts --mode surging
  */
 
 import dotenv from 'dotenv'
@@ -22,15 +29,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const GROQ_API_KEY = process.env.GROQ_API_KEY!.split(',')[0].trim()
 
-// Instagram
 const IG_USER_ID = process.env.IG_USER_ID
 const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN
-
-// Threads
 const THREADS_USER_ID = process.env.THREADS_USER_ID
 const THREADS_ACCESS_TOKEN = process.env.THREADS_ACCESS_TOKEN
-
-// Twitter (X)
 const TWITTER_API_KEY = process.env.TWITTER_API_KEY
 const TWITTER_API_SECRET = process.env.TWITTER_API_SECRET
 const TWITTER_ACCESS_TOKEN = process.env.TWITTER_ACCESS_TOKEN
@@ -40,11 +42,15 @@ const TEMPLATE_DIR = path.join(__dirname, 'templates')
 const OUTPUT_DIR = path.join(__dirname, 'output')
 const PUBLISH = process.argv.includes('--publish')
 
-// 로고 Base64 인코딩
 const LOGO_PATH = path.join(__dirname, '../../public/whynali-logo.png')
 const LOGO_BASE64 = `data:image/png;base64,${fs.readFileSync(LOGO_PATH).toString('base64')}`
 
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const groq = new Groq({ apiKey: GROQ_API_KEY })
+
 // ─── 타입 ──────────────────────────────────────────────
+
+type ContentMode = 'weekend-recap' | 'surging' | 'weekly-top3' | 'by-category' | 'timeline'
 
 interface Issue {
   id: string
@@ -52,7 +58,19 @@ interface Issue {
   category: string
   thumbnail_urls?: string[] | null
   primary_thumbnail_index?: number | null
-  view_count: number
+  heat_index: number | null
+  heat_index_1h_ago?: number | null
+  surgePct?: number
+}
+
+interface TimelinePoint {
+  stage: string
+  title: string
+  occurred_at: string
+}
+
+interface ClosedIssue extends Issue {
+  timelinePoints: TimelinePoint[]
 }
 
 interface SlideContent {
@@ -66,19 +84,93 @@ interface SlideContent {
   logo_image_url?: string
 }
 
+// ─── 모드 감지 ──────────────────────────────────────────
+
+function getContentMode(): ContentMode {
+  const modeArg = process.argv.find(a => a.startsWith('--mode='))?.split('=')[1]
+  if (modeArg) return modeArg as ContentMode
+
+  // KST 요일: 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
+  const dayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay()
+  const modeMap: Record<number, ContentMode> = {
+    1: 'weekend-recap',
+    2: 'surging',
+    3: 'weekly-top3',
+    4: 'by-category',
+    5: 'timeline',
+  }
+  return modeMap[dayKST] ?? 'weekly-top3'
+}
+
 // ─── 메인 ──────────────────────────────────────────────
 
 async function run() {
-  console.log('🚀 카드뉴스 파이프라인 시작')
+  const mode = getContentMode()
+  console.log(`🚀 카드뉴스 파이프라인 시작 (모드: ${mode})`)
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
 
-  // 1. 이번 주 TOP 이슈 조회
-  const issues = await fetchTopIssues()
-  console.log(`✅ 이슈 ${issues.length}개 조회 완료`)
+  // 1. 데이터 조회 (fallback 시 effectiveMode 변경)
+  let issues: Issue[] = []
+  let closedIssue: ClosedIssue | null = null
+  let effectiveMode = mode
 
-  // 2. AI 텍스트 생성
-  const slideContents = await generateSlideContents(issues)
+  if (mode === 'weekend-recap') {
+    issues = await fetchWeekendTopIssues()
+  } else if (mode === 'surging') {
+    const issue = await fetchSurgingIssue()
+    if (issue) {
+      issues = [issue]
+    } else {
+      issues = await fetchTopIssues()
+      effectiveMode = 'weekly-top3'
+      console.warn('⚠️  급상승 이슈 없음, weekly-top3로 대체')
+    }
+  } else if (mode === 'weekly-top3') {
+    issues = await fetchTopIssues()
+  } else if (mode === 'by-category') {
+    issues = await fetchCategoryTopIssues()
+  } else if (mode === 'timeline') {
+    closedIssue = await fetchClosedIssueTimeline()
+    if (!closedIssue) {
+      issues = await fetchTopIssues()
+      effectiveMode = 'weekly-top3'
+      console.warn('⚠️  타임라인 이슈 없음, weekly-top3로 대체')
+    }
+  }
+
+  if (effectiveMode !== 'timeline' && issues.length === 0) {
+    issues = await fetchTopIssues()
+    effectiveMode = 'weekly-top3'
+    console.warn('⚠️  이슈 없음, weekly-top3로 대체')
+  }
+
+  const fetchedLabel = effectiveMode === 'timeline'
+    ? `타임라인 이슈 1개 (${closedIssue!.title})`
+    : `이슈 ${issues.length}개`
+  console.log(`✅ 데이터 조회 완료: ${fetchedLabel}`)
+
+  // 2. 슬라이드 콘텐츠 생성
+  let slideContents: SlideContent[]
+
+  switch (effectiveMode) {
+    case 'weekend-recap':
+      slideContents = await generateTop3Slides(issues, '주말 핫이슈')
+      break
+    case 'surging':
+      slideContents = await generateSurgingSlides(issues[0])
+      break
+    case 'weekly-top3':
+      slideContents = await generateTop3Slides(issues)
+      break
+    case 'by-category':
+      slideContents = await generateCategorySlides(issues)
+      break
+    case 'timeline':
+      slideContents = await generateTimelineSlides(closedIssue!)
+      break
+  }
+
   console.log(`✅ 슬라이드 콘텐츠 ${slideContents.length}개 생성 완료`)
 
   // 3. PNG 이미지 생성
@@ -94,12 +186,14 @@ async function run() {
 
   // 4. SNS 자동 업로드
   const uploadResults: string[] = []
+  let igPostId: string | null = null
+  let threadsPostId: string | null = null
+  const igCaption = buildCaption(effectiveMode, issues, closedIssue, 'instagram')
+  const threadsCaption = buildCaption(effectiveMode, issues, closedIssue, 'threads')
 
-  // 4-1. Instagram 업로드
   if (IG_USER_ID && IG_ACCESS_TOKEN) {
     try {
-      const caption = buildCaption(issues, 'instagram')
-      await uploadToInstagram(imagePaths, caption)
+      igPostId = await uploadToInstagram(imagePaths, igCaption)
       console.log('✅ Instagram 업로드 완료')
       uploadResults.push('Instagram ✓')
     } catch (err) {
@@ -110,11 +204,9 @@ async function run() {
     console.warn('⚠️  Instagram: 환경 변수 없음 (IG_USER_ID, IG_ACCESS_TOKEN)')
   }
 
-  // 4-2. Threads 업로드
   if (THREADS_USER_ID && THREADS_ACCESS_TOKEN) {
     try {
-      const caption = buildCaption(issues, 'threads')
-      await uploadToThreads(imagePaths, caption)
+      threadsPostId = await uploadToThreads(imagePaths, threadsCaption)
       console.log('✅ Threads 업로드 완료')
       uploadResults.push('Threads ✓')
     } catch (err) {
@@ -125,37 +217,169 @@ async function run() {
     console.warn('⚠️  Threads: 환경 변수 없음 (THREADS_USER_ID, THREADS_ACCESS_TOKEN)')
   }
 
-  // 4-3. Twitter(X) 연계 트윗 - 무료 플랜 게시 불가 (Basic $100/월 필요)
-  // if (TWITTER_API_KEY && TWITTER_API_SECRET && TWITTER_ACCESS_TOKEN && TWITTER_ACCESS_SECRET) {
-  //   try {
-  //     await tweetCardNews(issues)
-  //     console.log('✅ X(Twitter) 트윗 완료')
-  //     uploadResults.push('X(Twitter) ✓')
-  //   } catch (err) {
-  //     console.error('❌ X(Twitter) 트윗 실패:', (err as Error).message)
-  //     uploadResults.push('X(Twitter) ✗')
-  //   }
-  // }
+  // Twitter(X) — 무료 플랜 게시 불가 (Basic $100/월 필요)
+  // if (TWITTER_API_KEY && ...) { ... }
 
   console.log('\n📊 업로드 결과:')
   uploadResults.forEach((result) => console.log(`   ${result}`))
+
+  // 발행 로그 DB 저장 (post_id 보존 → 나중에 Insights API 조회용)
+  const reportIssues = effectiveMode === 'timeline' && closedIssue ? [closedIssue] : issues
+  const { error: logError } = await supabase.from('card_news_logs').insert({
+    mode: effectiveMode,
+    issues: reportIssues.map(i => ({ id: i.id, title: i.title, category: i.category, heat_index: i.heat_index })),
+    tags_instagram: igCaption.split('\n').pop(),
+    tags_threads: threadsCaption.split('\n').pop(),
+    slide_count: imagePaths.length,
+    ig_post_id: igPostId,
+    threads_post_id: threadsPostId,
+    ig_success: igPostId !== null,
+    threads_success: threadsPostId !== null,
+  })
+  if (logError) console.warn('⚠️  DB 로그 저장 실패 (무시):', logError.message)
+  else console.log('   DB 로그 저장 완료')
+
+  // 로컬 이력도 유지
+  const resultLog = {
+    timestamp: new Date().toISOString(),
+    mode: effectiveMode,
+    issues: reportIssues.map(i => ({ id: i.id, title: i.title, category: i.category, heat_index: i.heat_index })),
+    slides: imagePaths.length,
+    ig_post_id: igPostId,
+    threads_post_id: threadsPostId,
+    results: uploadResults,
+  }
+  const logPath = path.join(OUTPUT_DIR, 'result-log.json')
+  const existing = fs.existsSync(logPath) ? JSON.parse(fs.readFileSync(logPath, 'utf-8')) : []
+  existing.unshift(resultLog)
+  fs.writeFileSync(logPath, JSON.stringify(existing.slice(0, 20), null, 2))
+  console.log(`   로컬 이력 저장: ${logPath}`)
+
   console.log('\n🎉 완료!')
 }
 
-// ─── 1. Supabase 이슈 조회 ──────────────────────────────
+// ─── 1. Supabase 데이터 조회 ────────────────────────────
 
 async function fetchTopIssues(): Promise<Issue[]> {
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, view_count')
-    .not('status', 'eq', '대기')
-    .order('view_count', { ascending: false })
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index')
+    .eq('approval_status', '승인')
+    .eq('visibility_status', 'visible')
+    .neq('status', '종결')
+    .is('merged_into_id', null)
+    .order('heat_index', { ascending: false, nullsFirst: false })
     .limit(3)
-
   if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
   return data || []
+}
+
+// 월요일: 직전 금~일 동안 업데이트된 이슈 중 heat_index 상위 3개
+async function fetchWeekendTopIssues(): Promise<Issue[]> {
+  const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('issues')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index')
+    .eq('approval_status', '승인')
+    .eq('visibility_status', 'visible')
+    .is('merged_into_id', null)
+    .gte('updated_at', since)
+    .order('heat_index', { ascending: false, nullsFirst: false })
+    .limit(3)
+  if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
+
+  const result = (data || []) as Issue[]
+  if (result.length >= 3) return result
+
+  // 주말 이슈 부족 시 전체 top으로 보충
+  const fallback = await fetchTopIssues()
+  const existing = new Set(result.map(i => i.id))
+  return [...result, ...fallback.filter(i => !existing.has(i.id))].slice(0, 3)
+}
+
+// 화요일: surgePct 기준 1위 이슈
+async function fetchSurgingIssue(): Promise<Issue | null> {
+  const { data, error } = await supabase
+    .from('issues')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago')
+    .eq('approval_status', '승인')
+    .eq('visibility_status', 'visible')
+    .neq('status', '종결')
+    .is('merged_into_id', null)
+    .not('heat_index_1h_ago', 'is', null)
+    .gt('heat_index_1h_ago', 0)
+    .order('heat_index', { ascending: false, nullsFirst: false })
+    .limit(50)
+  if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
+
+  const candidates = (data || []) as Issue[]
+  const withSurge = candidates
+    .map(i => ({
+      ...i,
+      surgePct: ((i.heat_index ?? 0) - (i.heat_index_1h_ago ?? 0)) / (i.heat_index_1h_ago ?? 1) * 100,
+    }))
+    .filter(i => i.surgePct > 0)
+    .sort((a, b) => b.surgePct - a.surgePct)
+
+  return withSurge[0] ?? (candidates[0] ? { ...candidates[0], surgePct: 0 } : null)
+}
+
+// 목요일: 카테고리별 heat_index 1위
+const CARD_NEWS_CATEGORIES = ['정치', '경제', '사회', '연예'] as const
+
+async function fetchCategoryTopIssues(): Promise<Issue[]> {
+  const results: Issue[] = []
+  for (const cat of CARD_NEWS_CATEGORIES) {
+    const { data } = await supabase
+      .from('issues')
+      .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index')
+      .eq('approval_status', '승인')
+      .eq('visibility_status', 'visible')
+      .neq('status', '종결')
+      .is('merged_into_id', null)
+      .eq('category', cat)
+      .order('heat_index', { ascending: false, nullsFirst: false })
+      .limit(1)
+    if (data && data.length > 0) results.push(data[0] as Issue)
+  }
+  return results
+}
+
+// 금요일: 이번주 종결 이슈 중 timeline_points가 2개 이상인 것
+async function fetchClosedIssueTimeline(): Promise<ClosedIssue | null> {
+  const queries = [
+    new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 이번주 (금 기준 월요일)
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30일 fallback
+  ]
+
+  for (const since of queries) {
+    const { data } = await supabase
+      .from('issues')
+      .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, updated_at')
+      .eq('approval_status', '승인')
+      .eq('visibility_status', 'visible')
+      .eq('status', '종결')
+      .is('merged_into_id', null)
+      .gte('updated_at', since)
+      .order('heat_index', { ascending: false, nullsFirst: false })
+      .limit(5)
+
+    if (!data || data.length === 0) continue
+
+    for (const issue of data as Issue[]) {
+      const { data: points } = await supabase
+        .from('timeline_points')
+        .select('stage, title, occurred_at')
+        .eq('issue_id', issue.id)
+        .order('occurred_at', { ascending: true })
+
+      if (points && points.length >= 2) {
+        return { ...issue, timelinePoints: points as TimelinePoint[] }
+      }
+    }
+  }
+
+  return null
 }
 
 function getIssueThumbnail(issue: Issue): string {
@@ -165,34 +389,22 @@ function getIssueThumbnail(issue: Issue): string {
   return urls[idx] ?? urls[0] ?? ''
 }
 
-// ─── 2. Groq AI 텍스트 생성 ─────────────────────────────
+// ─── 2. Groq AI 텍스트 생성 헬퍼 ────────────────────────
 
-async function generateSlideContents(issues: Issue[]): Promise<SlideContent[]> {
-  const groq = new Groq({ apiKey: GROQ_API_KEY })
-  const slides: SlideContent[] = []
-
-  // 슬라이드 01: 커버 (전체 요약)
-  slides.push({
-    type: 'cover',
-    main_title: `이번 주\n핫이슈 TOP ${issues.length}`,
-    bg_image_url: getIssueThumbnail(issues[0]),
-    logo_image_url: LOGO_BASE64,
-  })
-
-  // 슬라이드 02~: 이슈별 본문
-  for (const issue of issues) {
-    const res = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        {
-          role: 'system',
-          content: '당신은 한국 이슈 카드뉴스 편집자입니다. 짧고 명확하게 작성하세요.',
-        },
-        {
-          role: 'user',
-          content: `이슈 제목: "${issue.title}"
+async function generateBadgeContent(
+  issue: Issue,
+  context = ''
+): Promise<{ sub_title: string; desc: string; point_text_01: string; point_text_02: string }> {
+  const res = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 짧고 명확하게 작성하세요.' },
+      {
+        role: 'user',
+        content: `이슈 제목: "${issue.title}"
 카테고리: ${issue.category}
-조회수: ${issue.view_count}회
+화력: ${issue.heat_index ?? 0}점
+${context}
 
 다음 JSON 형식으로 카드뉴스 텍스트를 생성해줘 (한국어):
 {
@@ -203,47 +415,240 @@ async function generateSlideContents(issues: Issue[]): Promise<SlideContent[]> {
 }
 
 JSON만 출력, 설명 없이.`,
-        },
-      ],
-      temperature: 0.7,
-    })
+      },
+    ],
+    temperature: 0.7,
+  })
 
-    let content: { sub_title: string; desc: string; point_text_01: string; point_text_02: string }
-    try {
-      content = JSON.parse(res.choices[0].message.content || '{}')
-    } catch {
-      content = {
-        sub_title: issue.title.slice(0, 20),
-        desc: '내용을 불러오는 중 오류가 발생했습니다.',
-        point_text_01: issue.category,
-        point_text_02: `조회 ${issue.view_count}회`,
-      }
+  try {
+    return JSON.parse(res.choices[0].message.content || '{}')
+  } catch {
+    return {
+      sub_title: issue.title.slice(0, 20),
+      desc: '내용을 불러오는 중 오류가 발생했습니다.',
+      point_text_01: issue.category,
+      point_text_02: `화력 ${issue.heat_index ?? 0}점`,
     }
+  }
+}
 
-    // 슬라이드 03 타입 (뱃지 포함): 이슈 중 첫 번째에만 적용
-    const slideType = issues.indexOf(issue) === 0 ? 'badge' : 'body'
+// ─── 3. 모드별 슬라이드 생성 ─────────────────────────────
 
+// 월(주말 핫이슈) / 수(이번주 TOP 3): cover + N×badge + follow
+async function generateTop3Slides(issues: Issue[], label = '이번주 핫이슈'): Promise<SlideContent[]> {
+  const slides: SlideContent[] = [
+    {
+      type: 'cover',
+      main_title: `${label}\nTOP ${issues.length}`,
+      bg_image_url: getIssueThumbnail(issues[0]),
+      logo_image_url: LOGO_BASE64,
+    },
+  ]
+
+  for (const issue of issues) {
+    const content = await generateBadgeContent(issue)
     slides.push({
-      type: slideType,
+      type: 'badge',
       sub_title: content.sub_title,
       desc: content.desc,
       point_text_01: content.point_text_01,
       point_text_02: content.point_text_02,
-      bg_image_url: getIssueThumbnail(issue) || '',
+      bg_image_url: getIssueThumbnail(issue),
       logo_image_url: LOGO_BASE64,
     })
   }
 
-  // 마지막 슬라이드: 팔로우 카드 (고정 CTA)
-  slides.push({
-    type: 'follow',
-    logo_image_url: LOGO_BASE64,
-  })
-
+  slides.push({ type: 'follow', logo_image_url: LOGO_BASE64 })
   return slides
 }
 
-// ─── 3. Puppeteer HTML → PNG ─────────────────────────────
+// 화(급상승): cover + badge + body + follow
+async function generateSurgingSlides(issue: Issue): Promise<SlideContent[]> {
+  const surgePctStr = issue.surgePct != null && issue.surgePct > 0
+    ? `${Math.round(issue.surgePct)}%`
+    : ''
+
+  const badgeContent = await generateBadgeContent(
+    issue,
+    `현재 급상승 중인 이슈입니다.${surgePctStr ? ` 1시간 전 대비 화력이 ${surgePctStr} 상승했습니다.` : ''}`
+  )
+
+  const bodyRes = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 짧고 명확하게 작성하세요.' },
+      {
+        role: 'user',
+        content: `이슈 제목: "${issue.title}"
+카테고리: ${issue.category}
+현재 화력: ${issue.heat_index ?? 0}점${surgePctStr ? `, 1시간 전 대비 ${surgePctStr} 급상승` : ''}
+
+이 이슈가 지금 왜 화제인지 배경을 설명해줘.
+다음 JSON 형식으로 작성 (한국어):
+{
+  "sub_title": "왜 지금 화제인가 (20자 이내)",
+  "desc": "배경 3줄, 줄바꿈은 \\n 사용 (각 줄 25자 이내)"
+}
+
+JSON만 출력, 설명 없이.`,
+      },
+    ],
+    temperature: 0.7,
+  })
+
+  let bodyContent: { sub_title: string; desc: string }
+  try {
+    bodyContent = JSON.parse(bodyRes.choices[0].message.content || '{}')
+  } catch {
+    bodyContent = { sub_title: '왜 지금 화제인가', desc: '상세 내용을 불러오는 중 오류가 발생했습니다.' }
+  }
+
+  const bg = getIssueThumbnail(issue)
+  return [
+    {
+      type: 'cover',
+      main_title: '지금\n급상승 중!',
+      bg_image_url: bg,
+      logo_image_url: LOGO_BASE64,
+    },
+    {
+      type: 'badge',
+      sub_title: badgeContent.sub_title,
+      desc: badgeContent.desc,
+      point_text_01: issue.category,
+      point_text_02: surgePctStr ? `▲ ${surgePctStr}` : `화력 ${issue.heat_index ?? 0}점`,
+      bg_image_url: bg,
+      logo_image_url: LOGO_BASE64,
+    },
+    {
+      type: 'body',
+      sub_title: bodyContent.sub_title,
+      desc: bodyContent.desc,
+      bg_image_url: bg,
+      logo_image_url: LOGO_BASE64,
+    },
+    { type: 'follow', logo_image_url: LOGO_BASE64 },
+  ]
+}
+
+// 목(분야별): cover + N×badge + follow
+async function generateCategorySlides(issues: Issue[]): Promise<SlideContent[]> {
+  const slides: SlideContent[] = [
+    {
+      type: 'cover',
+      main_title: '분야별\n핫이슈',
+      bg_image_url: getIssueThumbnail(issues[0]),
+      logo_image_url: LOGO_BASE64,
+    },
+  ]
+
+  for (const issue of issues) {
+    const content = await generateBadgeContent(issue, `${issue.category} 분야 최고 화력 이슈입니다.`)
+    slides.push({
+      type: 'badge',
+      sub_title: content.sub_title,
+      desc: content.desc,
+      point_text_01: issue.category,
+      point_text_02: `화력 ${issue.heat_index ?? 0}점`,
+      bg_image_url: getIssueThumbnail(issue),
+      logo_image_url: LOGO_BASE64,
+    })
+  }
+
+  slides.push({ type: 'follow', logo_image_url: LOGO_BASE64 })
+  return slides
+}
+
+// 금(타임라인): cover + N×body + badge(종결) + follow
+async function generateTimelineSlides(issue: ClosedIssue): Promise<SlideContent[]> {
+  const bg = getIssueThumbnail(issue)
+  const slides: SlideContent[] = [
+    {
+      type: 'cover',
+      main_title: issue.title,
+      bg_image_url: bg,
+      logo_image_url: LOGO_BASE64,
+    },
+  ]
+
+  // 스테이지별 그룹핑 및 정렬
+  const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3, '종결': 4 }
+  const grouped = new Map<string, TimelinePoint[]>()
+  for (const p of issue.timelinePoints) {
+    if (!grouped.has(p.stage)) grouped.set(p.stage, [])
+    grouped.get(p.stage)!.push(p)
+  }
+  const stages = Array.from(grouped.keys()).sort(
+    (a, b) => (STAGE_ORDER[a] ?? 9) - (STAGE_ORDER[b] ?? 9)
+  )
+
+  // 마지막 스테이지가 '종결'이면 badge로 처리, 나머지는 body
+  const hasClosingStage = stages[stages.length - 1] === '종결'
+  const bodyStages = hasClosingStage ? stages.slice(0, -1) : stages
+  const closingStage = hasClosingStage ? '종결' : null
+
+  for (const stage of bodyStages) {
+    const points = grouped.get(stage)!
+    let desc: string
+
+    if (points.length <= 3) {
+      desc = points.map(p => p.title).join('\n')
+    } else {
+      // Groq로 요약
+      const res = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 짧고 명확하게 작성하세요.' },
+          {
+            role: 'user',
+            content: `이슈: "${issue.title}"
+${stage} 단계 사건들:
+${points.map(p => p.title).join('\n')}
+
+3줄로 요약해줘. 줄바꿈은 \\n 사용 (각 줄 25자 이내).
+JSON: {"desc": "요약"} 만 출력.`,
+          },
+        ],
+        temperature: 0.5,
+      })
+      try {
+        desc = JSON.parse(res.choices[0].message.content || '{}').desc || points.slice(0, 3).map(p => p.title).join('\n')
+      } catch {
+        desc = points.slice(0, 3).map(p => p.title).join('\n')
+      }
+    }
+
+    slides.push({
+      type: 'body',
+      sub_title: stage,
+      desc,
+      bg_image_url: bg,
+      logo_image_url: LOGO_BASE64,
+    })
+  }
+
+  // 종결 badge 슬라이드
+  if (closingStage) {
+    const closingPoints = grouped.get(closingStage)!
+    const lastOccurred = new Date(closingPoints[closingPoints.length - 1].occurred_at)
+    const dateStr = `${lastOccurred.getMonth() + 1}/${lastOccurred.getDate()} 종결`
+
+    slides.push({
+      type: 'badge',
+      sub_title: '종결',
+      desc: closingPoints.slice(0, 3).map(p => p.title).join('\n'),
+      point_text_01: dateStr,
+      point_text_02: `화력 ${issue.heat_index ?? 0}점`,
+      bg_image_url: bg,
+      logo_image_url: LOGO_BASE64,
+    })
+  }
+
+  slides.push({ type: 'follow', logo_image_url: LOGO_BASE64 })
+  return slides
+}
+
+// ─── 4. HTML → PNG 렌더링 ────────────────────────────────
 
 async function renderSlides(slides: SlideContent[]): Promise<string[]> {
   const browser = await chromium.launch({ args: ['--no-sandbox'] })
@@ -295,74 +700,146 @@ function fillTemplate(template: string, slide: SlideContent): string {
     .replace(/\{\{logo_image_url\}\}/g, slide.logo_image_url || '')
 }
 
-// ─── 4. Instagram Graph API 업로드 ──────────────────────
+// ─── 5. 캡션 생성 ────────────────────────────────────────
 
-function buildCaption(issues: Issue[], platform: 'instagram' | 'threads' = 'instagram'): string {
-    const lines = issues.map((issue, i) => `${i + 1}위 "${issue.title}"`)
-    const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
-    return [
-        '📸 이번주 핫이슈 카드뉴스',
+// 카테고리 → 해시태그 매핑
+const CATEGORY_TAGS: Record<string, string> = {
+  '정치': '#정치이슈',
+  '경제': '#경제이슈',
+  '사회': '#사회이슈',
+  '연예': '#연예이슈',
+  '스포츠': '#스포츠이슈',
+  '기술': '#IT이슈',
+}
+
+// 플랫폼별 태그 수: 인스타는 5~8개, 스레드는 2~3개
+function buildTags(mode: ContentMode, issues: Issue[], platform: 'instagram' | 'threads'): string {
+  const base = ['#왜난리', '#핫이슈']
+
+  const modeTagsMap: Record<ContentMode, string[]> = {
+    'weekend-recap': ['#주말이슈', '#주간핫이슈', '#이번주뭐가터졌나'],
+    'surging':       ['#급상승이슈', '#실시간이슈', '#지금화제'],
+    'weekly-top3':   ['#이번주이슈', '#주간이슈', '#TOP3'],
+    'by-category':   ['#분야별이슈', ...issues.map(i => CATEGORY_TAGS[i.category]).filter(Boolean)],
+    'timeline':      ['#이슈정리', '#사건타임라인', '#이슈타임라인'],
+  }
+
+  const modeTags = modeTagsMap[mode]
+
+  if (platform === 'threads') {
+    // 스레드는 태그 최소화 (base 2개 + 모드 1개)
+    return [...base, modeTags[0]].join(' ')
+  }
+
+  // 인스타는 base + 모드 태그 전체 (중복 제거)
+  return Array.from(new Set([...base, ...modeTags])).join(' ')
+}
+
+function buildCaption(
+  mode: ContentMode,
+  issues: Issue[],
+  closedIssue: ClosedIssue | null,
+  platform: 'instagram' | 'threads' = 'instagram'
+): string {
+  const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
+  const tags = buildTags(mode, issues, platform)
+
+  switch (mode) {
+    case 'weekend-recap': {
+      const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
+      return ['📸 주말 핫이슈 정리', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+    }
+    case 'surging': {
+      const issue = issues[0]
+      const surge = issue?.surgePct ? ` (▲${Math.round(issue.surgePct)}%)` : ''
+      return [
+        `📸 지금 가장 빠르게 오르는 이슈${surge}`,
         '',
-        ...lines,
+        `"${issue?.title}"`,
         '',
         `전체 타임라인 👉 ${url}`,
         '',
-        '#왜난리 #주간이슈 #핫이슈',
-    ].join('\n')
+        tags,
+      ].join('\n')
+    }
+    case 'weekly-top3': {
+      const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
+      return ['📸 이번주 핫이슈 TOP 3', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+    }
+    case 'by-category': {
+      const lines = issues.map(i => `[${i.category}] "${i.title}"`)
+      return ['📸 오늘의 분야별 핫이슈', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+    }
+    case 'timeline': {
+      return [
+        `📸 이슈 타임라인: "${closedIssue?.title}"`,
+        '',
+        '발단부터 종결까지 한눈에',
+        '',
+        `전체 타임라인 👉 ${url}`,
+        '',
+        tags,
+      ].join('\n')
+    }
+  }
 }
 
-async function uploadToInstagram(imagePaths: string[], caption: string): Promise<void> {
-  // Step 1: 각 이미지를 Supabase Storage에 업로드 → public URL 획득
-  const imageUrls = await uploadImagesToStorage(imagePaths)
+// ─── 6. Instagram Graph API 업로드 ──────────────────────
 
-  // Step 2: 이미지별 Instagram 미디어 컨테이너 생성
-  const mediaIds: string[] = []
-  for (const imageUrl of imageUrls) {
-    const res = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
+async function uploadToInstagram(imagePaths: string[], caption: string): Promise<string> {
+  const { urls: imageUrls, fileNames } = await uploadImagesToStorage(imagePaths)
+
+  try {
+    const mediaIds: string[] = []
+    for (const imageUrl of imageUrls) {
+      const res = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          image_url: imageUrl,
+          is_carousel_item: 'true',
+          access_token: IG_ACCESS_TOKEN!,
+        }),
+      })
+      const json = (await res.json()) as { id?: string; error?: { message: string; code?: number } }
+      if (!json.id) throw new Error(`미디어 컨테이너 생성 실패: ${JSON.stringify(json.error)}`)
+      mediaIds.push(json.id)
+    }
+
+    const carouselRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
       method: 'POST',
       body: new URLSearchParams({
-        image_url: imageUrl,
-        is_carousel_item: 'true',
+        media_type: 'CAROUSEL',
+        children: mediaIds.join(','),
+        caption,
         access_token: IG_ACCESS_TOKEN!,
       }),
     })
-    const json = (await res.json()) as { id?: string; error?: { message: string; code?: number } }
-    if (!json.id) throw new Error(`미디어 컨테이너 생성 실패: ${JSON.stringify(json.error)}`)
-    mediaIds.push(json.id)
+    const carouselJson = (await carouselRes.json()) as { id?: string; error?: { message: string } }
+    if (!carouselJson.id) throw new Error(`캐러셀 생성 실패: ${carouselJson.error?.message}`)
+
+    const publishRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        creation_id: carouselJson.id,
+        access_token: IG_ACCESS_TOKEN!,
+      }),
+    })
+    const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } }
+    if (!publishJson.id) throw new Error(`발행 실패: ${publishJson.error?.message}`)
+
+    return publishJson.id
+  } finally {
+    await deleteFromStorage(fileNames)
   }
-
-  // Step 3: 캐러셀 컨테이너 생성
-  const carouselRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      media_type: 'CAROUSEL',
-      children: mediaIds.join(','),
-      caption,
-      access_token: IG_ACCESS_TOKEN!,
-    }),
-  })
-  const carouselJson = (await carouselRes.json()) as { id?: string; error?: { message: string } }
-  if (!carouselJson.id) throw new Error(`캐러셀 생성 실패: ${carouselJson.error?.message}`)
-
-  // Step 4: 발행
-  const publishRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      creation_id: carouselJson.id,
-      access_token: IG_ACCESS_TOKEN!,
-    }),
-  })
-  const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } }
-  if (!publishJson.id) throw new Error(`발행 실패: ${publishJson.error?.message}`)
 }
 
-async function uploadImagesToStorage(imagePaths: string[]): Promise<string[]> {
-  const { createClient: createSupabaseClient } = await import('@supabase/supabase-js')
-  const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_KEY)
+async function uploadImagesToStorage(imagePaths: string[]): Promise<{ urls: string[]; fileNames: string[] }> {
   const urls: string[] = []
+  const fileNames: string[] = []
+  const ts = Date.now()
 
   for (const imagePath of imagePaths) {
-    const fileName = `card-news/${Date.now()}-${path.basename(imagePath)}`
+    const fileName = `card-news/${ts}-${path.basename(imagePath)}`
     const fileBuffer = fs.readFileSync(imagePath)
 
     const { error } = await supabase.storage
@@ -372,68 +849,76 @@ async function uploadImagesToStorage(imagePaths: string[]): Promise<string[]> {
     if (error) throw new Error(`Storage 업로드 실패: ${error.message}`)
 
     const { data } = supabase.storage.from('public').getPublicUrl(fileName, {
-      transform: { width: 1080, height: 1350, format: 'origin' }
+      transform: { width: 1080, height: 1350, format: 'origin' },
     })
     urls.push(data.publicUrl)
+    fileNames.push(fileName)
   }
 
-  return urls
+  return { urls, fileNames }
 }
 
-// ─── 5. Threads 업로드 ──────────────────────────────────
+async function deleteFromStorage(fileNames: string[]): Promise<void> {
+  const { error } = await supabase.storage.from('public').remove(fileNames)
+  if (error) console.warn(`Storage 삭제 실패 (무시):`, error.message)
+}
 
-async function uploadToThreads(imagePaths: string[], caption: string): Promise<void> {
+// ─── 7. Threads 업로드 ──────────────────────────────────
+
+async function uploadToThreads(imagePaths: string[], caption: string): Promise<string> {
   console.log('   Threads 업로드 시작...')
-  
-  // Step 1: 이미지를 Supabase Storage에 업로드 → public URL 획득
-  const imageUrls = await uploadImagesToStorage(imagePaths)
+  const { urls: imageUrls, fileNames } = await uploadImagesToStorage(imagePaths)
 
-  // Step 2: 이미지별 Threads 미디어 컨테이너 생성
-  const itemIds: string[] = []
-  for (const imageUrl of imageUrls) {
-    const res = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
+  try {
+    const itemIds: string[] = []
+    for (const imageUrl of imageUrls) {
+      const res = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          media_type: 'IMAGE',
+          image_url: imageUrl,
+          is_carousel_item: 'true',
+          access_token: THREADS_ACCESS_TOKEN!,
+        }),
+      })
+      const json = (await res.json()) as { id?: string; error?: { message: string } }
+      if (!json.id) throw new Error(`Threads 아이템 컨테이너 생성 실패: ${json.error?.message}`)
+      itemIds.push(json.id)
+    }
+
+    const carouselRes = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
       method: 'POST',
       body: new URLSearchParams({
-        media_type: 'IMAGE',
-        image_url: imageUrl,
-        is_carousel_item: 'true',
+        media_type: 'CAROUSEL',
+        children: itemIds.join(','),
+        text: caption,
         access_token: THREADS_ACCESS_TOKEN!,
       }),
     })
-    const json = (await res.json()) as { id?: string; error?: { message: string } }
-    if (!json.id) throw new Error(`Threads 아이템 컨테이너 생성 실패: ${json.error?.message}`)
-    itemIds.push(json.id)
+    const carouselJson = (await carouselRes.json()) as { id?: string; error?: { message: string } }
+    if (!carouselJson.id) throw new Error(`Threads 캐러셀 생성 실패: ${JSON.stringify(carouselJson)}`)
+
+    console.log('   Threads 발행 전 대기 중 (30초)...')
+    await new Promise((resolve) => setTimeout(resolve, 30000))
+
+    const publishRes = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads_publish`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        creation_id: carouselJson.id,
+        access_token: THREADS_ACCESS_TOKEN!,
+      }),
+    })
+    const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } }
+    if (!publishJson.id) throw new Error(`Threads 발행 실패: ${publishJson.error?.message}`)
+
+    return publishJson.id
+  } finally {
+    await deleteFromStorage(fileNames)
   }
-
-  // Step 3: 캐러셀 컨테이너 생성
-  const carouselRes = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      media_type: 'CAROUSEL',
-      children: itemIds.join(','),
-      text: caption,
-      access_token: THREADS_ACCESS_TOKEN!,
-    }),
-  })
-  const carouselJson = (await carouselRes.json()) as { id?: string; error?: { message: string } }
-  if (!carouselJson.id) throw new Error(`Threads 캐러셀 생성 실패: ${JSON.stringify(carouselJson)}`)
-
-  // Step 4: 최소 30초 대기 후 발행
-  console.log('   Threads 발행 전 대기 중 (30초)...')
-  await new Promise((resolve) => setTimeout(resolve, 30000))
-
-  const publishRes = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads_publish`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      creation_id: carouselJson.id,
-      access_token: THREADS_ACCESS_TOKEN!,
-    }),
-  })
-  const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } }
-  if (!publishJson.id) throw new Error(`Threads 발행 실패: ${publishJson.error?.message}`)
 }
 
-// ─── 6. X(Twitter) 연계 트윗 ─────────────────────────────
+// ─── 8. X(Twitter) 연계 트윗 ─────────────────────────────
+// 무료 플랜 게시 불가 (Basic $100/월 필요) — 참고용으로 보존
 
 async function tweetCardNews(issues: Issue[]): Promise<void> {
   const twitter = new TwitterApi({
@@ -444,19 +929,18 @@ async function tweetCardNews(issues: Issue[]): Promise<void> {
   })
 
   const issueLines = issues.map((issue, i) => `${i + 1}위 "${issue.title}"`)
-  
-  const tweet = [
-    '📸 이번주 핫이슈 카드뉴스 업로드!',
-    '',
-    ...issueLines,
-    '',
-    '인스타/스레드 @whynali 에서 확인',
-    '전체 타임라인 👉 whynali.com',
-    '',
-    '#왜난리 #주간이슈 #핫이슈',
-  ].join('\n')
-
-  await twitter.v2.tweet(tweet)
+  await twitter.v2.tweet(
+    [
+      '📸 이번주 핫이슈 카드뉴스 업로드!',
+      '',
+      ...issueLines,
+      '',
+      '인스타/스레드 @whynali 에서 확인',
+      '전체 타임라인 👉 whynali.com',
+      '',
+      '#왜난리 #주간이슈 #핫이슈',
+    ].join('\n')
+  )
 }
 
 // ─── 실행 ──────────────────────────────────────────────
