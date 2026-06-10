@@ -16,7 +16,7 @@ import { join } from 'path'
 import type { ShortformJob } from '@/types/shortform'
 import { generateShortformText } from './generate-text'
 import { generateShortformText as generateShortformTextV2 } from './generate-text-v2'
-import { fetch3StockImages, fetchNStockImagesWithFull } from './fetch-stock-images'
+import { fetch3StockImages, fetchNStockImagesWithFull, fetchSceneImagesWithFull } from './fetch-stock-images'
 import { create3SceneVideo, createNSceneVideo, type SceneContent } from './create-multi-video'
 import { generateSceneAudios, generateNSceneAudios, generateGoogleTTS } from './generate-voice'
 
@@ -318,19 +318,17 @@ export async function generateNSceneShortform(
     issueCategory: string,
     sceneTexts: string[],
     previewImages?: string[]
-): Promise<Buffer> {
+): Promise<{ videoBuffer: Buffer; scene1TextEndTime: number }> {
     const N = sceneTexts.length
     if (N === 0) throw new Error('씬 텍스트가 없습니다')
 
-    const imgCount = Math.ceil(N / 2)
-
-    // 1. 이미지 확보 (ceil(N/2)장)
+    // 1. 이미지 확보 (씬별 1:1 — 씬 텍스트 기반 개별 Pexels 검색)
     let stockImages: string[]
-    if (previewImages && previewImages.length >= imgCount) {
-        stockImages = previewImages.slice(0, imgCount)
+    if (previewImages && previewImages.length >= N) {
+        stockImages = previewImages.slice(0, N)
     } else {
-        const { fulls } = await fetchNStockImagesWithFull(issueCategory, issueTitle, imgCount)
-        stockImages = fulls
+        const { fulls } = await fetchSceneImagesWithFull(sceneTexts, issueCategory)
+        stockImages = fulls.filter(Boolean)
         if (stockImages.length === 0) throw new Error('스톡 이미지 조회 실패')
     }
 
@@ -340,14 +338,13 @@ export async function generateNSceneShortform(
         createSearchSceneOverlay,
     } = await import('./generate-scenes')
 
-    // 2. 배경 생성 — 씬 i는 stockImages[floor(i/2)] 사용, 검색씬은 마지막 이미지 재사용
-    const lastImg = stockImages[stockImages.length - 1]
-    const allBgs = await Promise.all([
-        ...Array.from({ length: N }, (_, i) =>
-            createBackgroundScene(stockImages[Math.min(Math.floor(i / 2), stockImages.length - 1)])
-        ),
-        createBackgroundScene(lastImg),
-    ]) as Buffer[]
+    // 2. 배경 생성 — 씬 i → stockImages[i] 1:1 배정, 검색씬은 마지막 씬 버퍼 재사용 (중복 생성 방지)
+    const sceneBgs = await Promise.all(
+        Array.from({ length: N }, (_, i) =>
+            createBackgroundScene(stockImages[Math.min(i, stockImages.length - 1)])
+        )
+    ) as Buffer[]
+    const allBgs = [...sceneBgs, sceneBgs[sceneBgs.length - 1]]
 
     // 3. 텍스트 오버레이 — 씬1은 타이틀 애니메이션, 이후는 정적, 마지막은 검색씬
     const allOverlays = await Promise.all([
@@ -372,5 +369,6 @@ export async function generateNSceneShortform(
         { title: '', desc: '', isSearchScene: true },
     ]
 
-    return createNSceneVideo(allBgs, allOverlays, sceneContents, allAudios)
+    const { buffer: videoBuffer, scene1TextEndTime } = await createNSceneVideo(allBgs, allOverlays, sceneContents, allAudios)
+    return { videoBuffer, scene1TextEndTime }
 }

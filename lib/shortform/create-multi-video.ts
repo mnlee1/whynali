@@ -12,7 +12,14 @@ import { exec as execCallback } from 'child_process'
 import { writeFile, mkdir } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { getTypingDrawtextFilters, createTypingFrames, createSearchTypingFrames } from './generate-scenes'
+import {
+    getTypingDrawtextFilters,
+    createTypingFrames,
+    createSearchTypingFrames,
+    createBackgroundFrames,
+    BG_MOTION_CYCLE,
+    type BgMotionType,
+} from './generate-scenes'
 import type { SceneAudios } from './generate-voice'
 
 /** 씬별 텍스트 콘텐츠 (FFmpeg drawtext 렌더링용) */
@@ -99,6 +106,82 @@ function getKenBurnsFilter(
     }
 
     return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=720x1280,setpts=PTS-STARTPTS`
+}
+
+const BG_FPS = 12 // 배경은 12fps로 충분 — 처리 시간 절반, 시각적으로 부드러움
+
+/**
+ * 배경 모션 프레임 배열을 yuv420p MP4로 인코딩.
+ * Sharp가 생성한 PNG 시퀀스 → ffconcat → libx264(ultrafast)
+ */
+async function buildBackgroundMotionVideo(
+    frames: { buffer: Buffer; duration: number }[],
+    tmpDir: string,
+    sceneIndex: number,
+    ffmpegPath: string,
+    sceneDuration: number
+): Promise<string> {
+    const framePaths: string[] = []
+    for (let i = 0; i < frames.length; i++) {
+        const framePath = join(tmpDir, `bg_s${sceneIndex}_f${i}.png`)
+        await writeFile(framePath, frames[i].buffer)
+        framePaths.push(framePath)
+    }
+
+    const lines = ['ffconcat version 1.0']
+    for (let i = 0; i < frames.length; i++) {
+        lines.push(`file '${framePaths[i].replace(/\\/g, '/')}'`)
+        lines.push(`duration ${frames[i].duration.toFixed(4)}`)
+    }
+    lines.push(`file '${framePaths[framePaths.length - 1].replace(/\\/g, '/')}'`)
+
+    const concatPath = join(tmpDir, `bgconcat_s${sceneIndex}.txt`)
+    await writeFile(concatPath, lines.join('\n'))
+
+    const outputPath = join(tmpDir, `bgmotion_s${sceneIndex}.mp4`)
+    await exec(
+        `"${ffmpegPath}" -f concat -safe 0 -i "${concatPath}" ` +
+        `-vf fps=${BG_FPS} -pix_fmt yuv420p -c:v libx264 -crf 18 -preset ultrafast ` +
+        `-t ${sceneDuration.toFixed(4)} -y "${outputPath}"`
+    )
+
+    return outputPath
+}
+
+/**
+ * 완성된 영상 버퍼에서 특정 시점 프레임을 JPEG로 추출.
+ * 씬1 텍스트가 모두 표시된 시점(기본 2.5초)을 썸네일로 사용.
+ *
+ * @param videoBuffer - 최종 MP4 버퍼
+ * @param timeOffset  - 추출 시점(초), 기본값 2.5
+ * @returns JPEG 버퍼 (실패 시 null)
+ */
+export async function extractThumbnailFromVideo(
+    videoBuffer: Buffer,
+    timeOffset = 2.5
+): Promise<Buffer | null> {
+    const ffmpegPath = getFfmpegPath()
+    const tmpDir = join(tmpdir(), `thumb-${Date.now()}`)
+    await mkdir(tmpDir, { recursive: true })
+
+    const inputPath = join(tmpDir, 'input.mp4')
+    const outputPath = join(tmpDir, 'thumb.jpg')
+
+    try {
+        await writeFile(inputPath, videoBuffer)
+        await exec(
+            `"${ffmpegPath}" -ss ${timeOffset.toFixed(2)} -i "${inputPath}" ` +
+            `-frames:v 1 -q:v 2 -y "${outputPath}"`
+        )
+        const { readFile } = await import('fs/promises')
+        return await readFile(outputPath)
+    } catch (e) {
+        console.warn('[extractThumbnailFromVideo] 추출 실패:', e)
+        return null
+    } finally {
+        const { rm } = await import('fs/promises')
+        await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+    }
 }
 
 /** drawtext용 폰트 경로 결정 */
@@ -384,7 +467,7 @@ export async function createNSceneVideo(
     textOverlays: Buffer[],
     sceneContents: SceneContent[],
     sceneAudios?: (Buffer | null)[]
-): Promise<Buffer> {
+): Promise<{ buffer: Buffer; scene1TextEndTime: number }> {
     const N = sceneContents.length
     if (N === 0) throw new Error('씬이 없습니다')
 
@@ -394,14 +477,12 @@ export async function createNSceneVideo(
     await mkdir(tmpDir, { recursive: true })
 
     try {
-        const bgPaths = backgrounds.map((_, i) => join(tmpDir, `bg${i}.png`))
         const textPaths = textOverlays.map((_, i) => join(tmpDir, `text${i}.png`))
         const videoPaths = backgrounds.map((_, i) => join(tmpDir, `video${i}.mp4`))
 
-        await Promise.all([
-            ...backgrounds.map((buf, i) => writeFile(bgPaths[i], buf)),
-            ...textOverlays.map((buf, i) => writeFile(textPaths[i], buf)),
-        ])
+        await Promise.all(
+            textOverlays.map((buf, i) => writeFile(textPaths[i], buf))
+        )
 
         // ── STEP 0: 씬별 오디오 준비 ──────────────────────────────────────────
         const AUDIO_DELAY_MS = 50
@@ -443,6 +524,58 @@ export async function createNSceneVideo(
             console.log('[FFmpeg N] 씬 duration:', sceneDurations.map(d => d.toFixed(2)))
         }
 
+        // ── Scene 1 텍스트 완성 시점 계산 (썸네일 추출 타임스탬프) ───────────────
+        const sc0 = sceneContents[0]
+        let scene1TextEndTime: number
+        if (!sc0?.isSearchScene) {
+            const titleWc = (sc0?.title ?? '').split(' ').filter(Boolean).length
+            const descWc  = (sc0?.desc  ?? '').split(' ').filter(Boolean).length
+            const totalWc = titleWc + descWc
+            if (totalWc > 0) {
+                const d0 = sceneDurations[0]
+                const wordDelay = Math.min(0.33, (d0 * 0.85) / totalWc)
+                scene1TextEndTime = Math.min(0.15 + (totalWc - 1) * wordDelay + 0.1, d0 - 0.1)
+            } else {
+                scene1TextEndTime = sceneDurations[0] * 0.5
+            }
+        } else {
+            scene1TextEndTime = SEARCH_SCENE_DUR * 0.5
+        }
+
+        // ── STEP 0.5: 배경 모션 비디오 생성 (Sharp 프레임 → MP4) ────────────────
+        // zoompan 필터 대신 Sharp crop+resize로 easing 곡선 완전 제어.
+        // BG_MOTION_CYCLE 순서로 씬마다 다른 모션 패턴 적용.
+        // 마지막 일반씬 + 검색바씬: 동일 모션·배경을 50/50 분할해 끊김없이 이어받기.
+        console.log('[FFmpeg N] 배경 모션 프레임 생성 중...')
+        const bgMotionPaths = await Promise.all(
+            backgrounds.map(async (bgBuf, i) => {
+                const isSearch = !!sceneContents[i]?.isSearchScene
+                const isLastBeforeSearch = !isSearch && !!sceneContents[i + 1]?.isSearchScene
+
+                const motionType = isSearch
+                    ? BG_MOTION_CYCLE[(i - 1) % BG_MOTION_CYCLE.length]  // 이전 씬과 동일 모션
+                    : BG_MOTION_CYCLE[i % BG_MOTION_CYCLE.length]
+
+                let bgBufToUse = bgBuf
+                let startT = 0
+                let endT = 1
+
+                if (isSearch && i > 0) {
+                    bgBufToUse = backgrounds[i - 1]
+                    const prevDur = sceneDurations[i - 1]
+                    const searchDur = sceneDurations[i]
+                    startT = prevDur / (prevDur + searchDur)
+                } else if (isLastBeforeSearch) {
+                    const prevDur = sceneDurations[i]
+                    const searchDur = sceneDurations[i + 1]
+                    endT = prevDur / (prevDur + searchDur)
+                }
+
+                const frames = await createBackgroundFrames(bgBufToUse, motionType, sceneDurations[i], BG_FPS, startT, endT)
+                return buildBackgroundMotionVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i])
+            })
+        )
+
         // ── STEP 1: Sharp 타이핑 프레임 생성 ────────────────────────────────────
         console.log('[FFmpeg N] Sharp 타이핑 프레임 생성 중...')
         const allFrames = await Promise.all(
@@ -460,55 +593,14 @@ export async function createNSceneVideo(
             )
         )
 
-        // ── STEP 1.5: Ken Burns 연속 줌 그룹 계산 ───────────────────────────────
-        // 같은 배경 이미지를 쓰는 씬들(짝수+홀수 콘텐츠 씬, 검색씬)을 하나의 그룹으로 묶어
-        // 1.0→1.15 줌 범위를 그룹 전체에 걸쳐 분배 → 씬이 넘어가도 줌이 리셋되지 않음.
-        //
-        // 이미지 배정 규칙 (generateNSceneShortform):
-        //   씬 i → stockImages[floor(i/2)], 검색씬(마지막) → lastImg = stockImages[last]
-        // 따라서 짝수·홀수 콘텐츠 씬 쌍 + 검색씬은 마지막 그룹에 포함됨.
-        const searchIdx = N - 1
-        const kbGroups: number[][] = []
-        {
-            let gi = 0
-            while (gi < searchIdx) {
-                if (gi % 2 === 0 && gi + 1 < searchIdx) {
-                    kbGroups.push([gi, gi + 1])
-                    gi += 2
-                } else {
-                    kbGroups.push([gi])
-                    gi++
-                }
-            }
-            if (kbGroups.length > 0) {
-                kbGroups[kbGroups.length - 1].push(searchIdx)
-            } else {
-                kbGroups.push([searchIdx])
-            }
-        }
-
-        const kenBurnsParams: Array<{ groupOffset: number; groupTotal: number }> =
-            Array.from({ length: N }, () => ({ groupOffset: 0, groupTotal: 0 }))
-
-        for (const group of kbGroups) {
-            const totalFrames = group.reduce(
-                (sum, idx) => sum + Math.ceil(sceneDurations[idx] * fps), 0
-            )
-            let accFrames = 0
-            for (const idx of group) {
-                kenBurnsParams[idx] = { groupOffset: accFrames, groupTotal: totalFrames }
-                accFrames += Math.ceil(sceneDurations[idx] * fps)
-            }
-        }
-
-        // ── STEP 2: 씬별 비디오 생성 ─────────────────────────────────────────────
+        // ── STEP 2: 씬별 비디오 합성 ─────────────────────────────────────────────
+        // 입력 순서: [0] bgMotion.mp4 | [1] textOverlay(loop) | [2] textAnim.mkv | [3] audio(optional)
+        // zoompan 제거 — 배경 모션은 STEP 0.5에서 Sharp로 이미 처리됨.
         const encodeOpts = `-c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
         console.log('[FFmpeg N] Scene별 비디오 생성 중...')
 
         for (let i = 0; i < N; i++) {
             const dur = sceneDurations[i]
-            const frames = Math.ceil(dur * fps)
-            const kb = getKenBurnsFilter(i, frames, fps, { ...kenBurnsParams[i], centerX: true })
             const hasAudio = !!audioPaths[i]
             const audioInput = hasAudio ? `-i "${audioPaths[i]}"` : ''
             const delay = hasAudio ? AUDIO_DELAY_MS : 0
@@ -516,14 +608,13 @@ export async function createNSceneVideo(
             const audioMap = hasAudio ? `-map "[aout]" -c:a aac` : ''
 
             const filter =
-                `[0:v]scale=720:1280,${kb}[bg];` +
                 `[1:v]format=rgba,colorchannelmixer=aa=1[struct];` +
-                `[bg][struct]overlay=0:0[bgs];` +
+                `[0:v][struct]overlay=0:0[bgs];` +
                 `[2:v]format=rgba[textanim];` +
                 `[bgs][textanim]overlay=0:0[vout]`
 
             await exec(
-                `"${ffmpegPath}" -loop 1 -i "${bgPaths[i]}" -loop 1 -i "${textPaths[i]}" -i "${textAnimPaths[i]}" ${audioInput} ` +
+                `"${ffmpegPath}" -i "${bgMotionPaths[i]}" -loop 1 -i "${textPaths[i]}" -i "${textAnimPaths[i]}" ${audioInput} ` +
                 `-filter_complex "${filter}${audioFilter}" -map "[vout]" ${audioMap} ${encodeOpts} -t ${dur.toFixed(4)} -y "${videoPaths[i]}"`
             )
         }
@@ -536,14 +627,12 @@ export async function createNSceneVideo(
 
         if (N === 1) {
             const { readFile } = await import('fs/promises')
-            return await readFile(videoPaths[0])
+            return { buffer: await readFile(videoPaths[0]), scene1TextEndTime }
         }
 
-        // 같은 이미지 쌍(i%2==0) 또는 검색씬 진입 → fade 전환 (슬라이드 없음)
-        // 검색씬은 마지막 콘텐츠 씬과 같은 배경 이미지를 공유하므로 fade 처리
-        // 이미지가 바뀌는 구간만 slideright/slideleft 전환
+        // 씬별 이미지 1:1 배정 — 검색씬 진입 직전만 같은 이미지(fade), 나머지는 슬라이드
         const isSameImagePair = (i: number): boolean =>
-            i % 2 === 0 || !!(sceneContents[i + 1]?.isSearchScene)
+            !!(sceneContents[i + 1]?.isSearchScene)
 
         const transitions = ['slideright', 'slideleft']
         const videoFilterParts: string[] = []
@@ -615,7 +704,7 @@ export async function createNSceneVideo(
         )
 
         const { readFile } = await import('fs/promises')
-        return await readFile(outputPath)
+        return { buffer: await readFile(outputPath), scene1TextEndTime }
     } finally {
         try {
             const { rm } = await import('fs/promises')

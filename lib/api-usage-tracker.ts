@@ -293,7 +293,7 @@ export async function getAllApiCostsSummary() {
                 groqSuccesses += row.success_count || 0
                 groqFailures += row.fail_count || 0
                 if (isToday) groqCallsToday += row.call_count
-            } else if (row.api_name === 'claude') {
+            } else if (row.api_name === 'claude' || row.api_name === 'claude_shortform') {
                 claudeInputTokensMonthly += row.input_tokens || 0
                 claudeOutputTokensMonthly += row.output_tokens || 0
                 claudeCallsMonthly += row.call_count

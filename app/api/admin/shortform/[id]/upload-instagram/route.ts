@@ -33,7 +33,7 @@ export async function POST(
         // 1. shortform_job 조회
         const { data: job, error: jobError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('id, issue_id, issue_title, issue_url, approval_status, video_path, upload_status, issues(category)')
+            .select('id, issue_id, issue_title, issue_url, approval_status, video_path, upload_status, issues(category, short_code)')
             .eq('id', jobId)
             .single()
 
@@ -102,11 +102,13 @@ export async function POST(
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
-        const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
-        const publicIssueUrl = issueId ? `https://whynali.com/i/${issueId}` : 'https://whynali.com'
+        const shortCode = (job.issues as any)?.[0]?.short_code ?? (job.issues as any)?.short_code ?? ''
+        const issueUUID = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
+        const issueSlug = shortCode || issueUUID
+        const publicIssueUrl = issueSlug ? `https://whynali.com/i/${issueSlug}?utm_source=instagram&utm_medium=reels` : 'https://whynali.com'
 
         const caption = [
-            `${job.issue_title} | 왜난리`,
+            job.issue_title,
             '',
             `📌 실시간 여론·토론·타임라인 확인하기`,
             publicIssueUrl,
@@ -114,12 +116,22 @@ export async function POST(
             `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim(),
         ].join('\n')
 
+        // 썸네일 공개 URL 가져오기
+        const thumbnailPath = currentUploadStatus?.thumbnail_path
+        let coverUrl: string | undefined
+        if (thumbnailPath) {
+            const { data: thumbUrlData } = supabaseAdmin.storage
+                .from('shortform').getPublicUrl(thumbnailPath)
+            if (thumbUrlData?.publicUrl) coverUrl = thumbUrlData.publicUrl
+        }
+
         // 3. Instagram 업로드
         let mediaId: string
         try {
             mediaId = await uploadToInstagram(videoPublicUrl, {
                 caption,
                 shareToFeed: true,
+                coverUrl,
             })
 
             const instagramUsername = process.env.INSTAGRAM_USERNAME || 'whynali'

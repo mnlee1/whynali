@@ -15,6 +15,21 @@ import { downloadImage } from './fetch-stock-images'
 const WIDTH = 720
 const HEIGHT = 1280
 
+// ── 배경 소스 크기 (패닝 여유분 20% 포함) ────────────────────────
+export const BG_SRC_W = 864   // 720 + 144 (좌72 + 우72)
+export const BG_SRC_H = 1536  // 1280 + 256 (상128 + 하128)
+
+// ── 배경 모션 타입 ───────────────────────────────────────────────
+export type BgMotionType = 'zoom-in' | 'zoom-out' | 'pan-right' | 'pan-left' | 'pan-up' | 'pan-down' | 'pan-left+zoom-in' | 'pan-right+zoom-in'
+export const BG_MOTION_CYCLE: BgMotionType[] = [
+    'pan-left+zoom-in', 'pan-right', 'pan-up', 'pan-right+zoom-in', 'pan-left+zoom-in',
+]
+
+// ── Easing 함수 ──────────────────────────────────────────────────
+function easeLinear(t: number): number {
+    return t
+}
+
 // ── 레이아웃 단위 (720x1280 기준, 1080x1920 대비 ×0.667) ──────
 const LOGO_W = 187
 const LOGO_H = 73
@@ -183,6 +198,7 @@ async function renderTypingStatePNG(
     if (font) {
         const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
         const ascD = Math.round(font.ascender * DESC_FONTSIZE / font.unitsPerEm)
+        const descD = Math.round(Math.abs(font.descender) * DESC_FONTSIZE / font.unitsPerEm)
 
         // 타이틀 애니메이션 (씬1만, titleFinalLines 전달 시)
         if (titleFinalLines.length > 0) {
@@ -205,6 +221,11 @@ async function renderTypingStatePNG(
         // 설명: 줄 위치 고정, 단어 수만큼 표시 (타이틀 완료 후 시작)
         const descVisible = Math.max(0, visibleCount - titleWordCount)
         let rendered = 0
+        const descRects: string[] = []
+        const PAD_X = 10
+        const PAD_TOP = 14   // 위 여백
+        const PAD_BOT = 6    // 아래 여백
+        const LINE_GAP = 6   // 줄 간 간격
         for (let i = 0; i < descFinalLines.length; i++) {
             if (rendered >= descVisible) break
             const lineWords = descFinalLines[i].split(' ').filter(Boolean)
@@ -214,11 +235,18 @@ async function renderTypingStatePNG(
                 const w = font.getAdvanceWidth(text, DESC_FONTSIZE)
                 const x = Math.floor((WIDTH - w) / 2)
                 const y = layout.descStartY + i * DESC_LINE_HEIGHT + ascD
+                const lineTop = layout.descStartY + i * DESC_LINE_HEIGHT
+                descRects.push(
+                    `<rect x="${x - PAD_X}" y="${lineTop + LINE_GAP - PAD_TOP}" ` +
+                    `width="${w + PAD_X * 2}" height="${ascD + descD + PAD_TOP + PAD_BOT - LINE_GAP}" ` +
+                    `fill="black" fill-opacity="0.55"/>`
+                )
                 addLinePaths(font, svgPaths, text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
             }
             rendered += lineWords.length
         }
-
+        // rect는 텍스트 뒤에 깔리도록 앞에 삽입
+        svgPaths.unshift(...descRects)
     }
 
     const svg =
@@ -346,21 +374,130 @@ function buildTypingFilters(
 export async function createBackgroundScene(backgroundUrl: string): Promise<Buffer> {
     const bgBuffer = await downloadImage(backgroundUrl)
 
+    // BG_SRC_W×BG_SRC_H (864×1536) 로 생성 — 패닝 여유분 포함
+    // create3SceneVideo(레거시)는 ffmpeg scale=720:1280 으로 처리하므로 호환됨
     const background = await sharp(bgBuffer)
-        .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'center' })
+        .resize(BG_SRC_W, BG_SRC_H, { fit: 'cover', position: 'center' })
         .modulate({ brightness: 0.65 })
         .toBuffer()
 
-    const svg = `
-        <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-            <rect width="${WIDTH}" height="${HEIGHT}" fill="black" opacity="0.2"/>
-        </svg>
-    `
+    const svg = `<svg width="${BG_SRC_W}" height="${BG_SRC_H}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="${BG_SRC_W}" height="${BG_SRC_H}" fill="black" opacity="0.2"/>
+    </svg>`
 
     return await sharp(background)
         .composite([{ input: Buffer.from(svg), blend: 'over' }])
         .png()
         .toBuffer()
+}
+
+/**
+ * 배경 이미지를 프레임 단위로 crop+resize하여 모션 효과 생성.
+ * zoompan 필터 대신 Sharp 직접 처리 → easing 곡선 완전 제어.
+ *
+ * @param bgBuffer - createBackgroundScene() 결과 (BG_SRC_W×BG_SRC_H)
+ * @param motionType - 모션 방향/종류
+ * @param duration - 씬 길이(초)
+ * @param fps - 배경 프레임레이트 (기본 12 — 배경은 12fps로도 충분히 부드러움)
+ */
+export async function createBackgroundFrames(
+    bgBuffer: Buffer,
+    motionType: BgMotionType,
+    duration: number,
+    fps: number = 12,
+    startT: number = 0,  // 모션 시작 지점 (0.0~1.0)
+    endT: number = 1,    // 모션 종료 지점 (0.0~1.0) — 다음 씬과 연속 재생 시 사용
+): Promise<{ buffer: Buffer; duration: number }[]> {
+    const meta = await sharp(bgBuffer).metadata()
+    const srcW = meta.width ?? BG_SRC_W
+    const srcH = meta.height ?? BG_SRC_H
+
+    const panX = (srcW - WIDTH) / 2    // 수평 패닝 최대 편이 (각 방향)
+    const panY = (srcH - HEIGHT) / 2   // 수직 패닝 최대 편이
+    const ZOOM_RANGE = 0.40             // 1.0 → 1.40x
+
+    function getCrop(t: number): { left: number; top: number; width: number; height: number } {
+        switch (motionType) {
+            case 'zoom-in': {
+                const zoom = 1.0 + ZOOM_RANGE * easeLinear(t)
+                const w = Math.round(WIDTH / zoom)
+                const h = Math.round(HEIGHT / zoom)
+                return { left: Math.round((srcW - w) / 2), top: Math.round((srcH - h) / 2), width: w, height: h }
+            }
+            case 'zoom-out': {
+                const zoom = (1.0 + ZOOM_RANGE) - ZOOM_RANGE * easeLinear(t)
+                const w = Math.round(WIDTH / zoom)
+                const h = Math.round(HEIGHT / zoom)
+                return { left: Math.round((srcW - w) / 2), top: Math.round((srcH - h) / 2), width: w, height: h }
+            }
+            case 'pan-right': {
+                return { left: Math.round(panX * 2 * easeLinear(t)), top: Math.round(panY), width: WIDTH, height: HEIGHT }
+            }
+            case 'pan-left': {
+                return { left: Math.round(panX * 2 * (1 - easeLinear(t))), top: Math.round(panY), width: WIDTH, height: HEIGHT }
+            }
+            case 'pan-up': {
+                return { left: Math.round(panX), top: Math.round(panY * 2 * (1 - easeLinear(t))), width: WIDTH, height: HEIGHT }
+            }
+            case 'pan-down': {
+                return { left: Math.round(panX), top: Math.round(panY * 2 * easeLinear(t)), width: WIDTH, height: HEIGHT }
+            }
+            case 'pan-left+zoom-in': {
+                const zoom = 1.0 + ZOOM_RANGE * easeLinear(t)
+                const w = Math.round(WIDTH / zoom)
+                const h = Math.round(HEIGHT / zoom)
+                // 오른쪽→왼쪽 이동하면서 줌인
+                const centerX = Math.round(srcW / 2 + panX * (1 - 2 * easeLinear(t)))
+                const centerY = Math.round(srcH / 2)
+                return {
+                    left: Math.max(0, Math.min(centerX - Math.round(w / 2), srcW - w)),
+                    top: Math.max(0, Math.min(centerY - Math.round(h / 2), srcH - h)),
+                    width: w, height: h,
+                }
+            }
+            case 'pan-right+zoom-in': {
+                const zoom = 1.0 + ZOOM_RANGE * easeLinear(t)
+                const w = Math.round(WIDTH / zoom)
+                const h = Math.round(HEIGHT / zoom)
+                // 왼쪽→오른쪽 이동하면서 줌인
+                const centerX = Math.round(srcW / 2 + panX * (2 * easeLinear(t) - 1))
+                const centerY = Math.round(srcH / 2)
+                return {
+                    left: Math.max(0, Math.min(centerX - Math.round(w / 2), srcW - w)),
+                    top: Math.max(0, Math.min(centerY - Math.round(h / 2), srcH - h)),
+                    width: w, height: h,
+                }
+            }
+        }
+    }
+
+    const totalFrames = Math.max(1, Math.ceil(duration * fps))
+    const frameDuration = 1 / fps
+    const frames: { buffer: Buffer; duration: number }[] = []
+
+    for (let i = 0; i < totalFrames; i++) {
+        const tLocal = totalFrames > 1 ? i / (totalFrames - 1) : 0
+        const t = startT + (endT - startT) * tLocal  // [startT, endT] 구간으로 매핑
+        const crop = getCrop(t)
+
+        // 경계 초과 방지
+        const safeLeft = Math.max(0, Math.min(crop.left, srcW - crop.width))
+        const safeTop = Math.max(0, Math.min(crop.top, srcH - crop.height))
+
+        const frameBuffer = await sharp(bgBuffer)
+            .extract({ left: safeLeft, top: safeTop, width: crop.width, height: crop.height })
+            .resize(WIDTH, HEIGHT, { fit: 'fill' })
+            .png()
+            .toBuffer()
+
+        const remaining = duration - i * frameDuration
+        frames.push({
+            buffer: frameBuffer,
+            duration: i === totalFrames - 1 ? Math.max(remaining, frameDuration) : frameDuration,
+        })
+    }
+
+    return frames
 }
 
 /**

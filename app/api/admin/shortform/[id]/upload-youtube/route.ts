@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
-import { uploadToYouTube, getYoutubeShortsUrl } from '@/lib/shortform/youtube-upload'
+import { uploadToYouTube, setYouTubeThumbnail, getYoutubeShortsUrl } from '@/lib/shortform/youtube-upload'
 import { extractYoutubeHashtags } from '@/lib/shortform/generate-text'
 
 type Params = { params: Promise<{ id: string }> }
@@ -28,7 +28,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
         // 1. Job 조회
         const { data: job, error: selectError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('*, issues(category)')
+            .select('*, issues(category, short_code)')
             .eq('id', id)
             .single()
 
@@ -88,8 +88,10 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
         // 4. YouTube 업로드 (항상 실서버 URL 사용 — 로컬 개발환경에서도 동일)
         const siteUrl = 'https://whynali.com'
-        const issueId = job.issue_url.split('/issue/')[1]?.split('?')[0] ?? ''
-        const publicIssueUrl = issueId ? `${siteUrl}/i/${issueId}` : siteUrl
+        const shortCode = (job.issues as any)?.short_code ?? (job.issues as any)?.[0]?.short_code ?? ''
+        const issueUUID = job.issue_url.split('/issue/')[1]?.split('?')[0] ?? ''
+        const issueSlug = shortCode || issueUUID
+        const publicIssueUrl = issueSlug ? `${siteUrl}/i/${issueSlug}?utm_source=youtube&utm_medium=shorts` : siteUrl
 
         // 카테고리별 고정 해시태그
         const CATEGORY_HASHTAGS: Record<string, string> = {
@@ -109,7 +111,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
-        const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags} #Shorts`.replace(/\s+/g, ' ').trim()
+        const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
 
         const videoId = await uploadToYouTube(videoBuffer, {
             title: job.issue_title,
@@ -119,6 +121,22 @@ export async function POST(_request: NextRequest, { params }: Params) {
                 hashtagLine,
             tags: ['왜난리', '이슈', '뉴스', '한국뉴스', ...titleKeywords],
         })
+
+        // 썸네일 적용 (실패해도 업로드 자체는 성공으로 처리)
+        const thumbnailPath = (job.upload_status as any)?.thumbnail_path
+        if (thumbnailPath) {
+            try {
+                const { data: thumbData, error: thumbErr } = await supabaseAdmin
+                    .storage.from('shortform').download(thumbnailPath)
+                if (!thumbErr && thumbData) {
+                    const thumbBuffer = Buffer.from(await thumbData.arrayBuffer())
+                    await setYouTubeThumbnail(videoId, thumbBuffer)
+                    console.log(`[YouTube] 썸네일 적용 완료: ${thumbnailPath}`)
+                }
+            } catch (thumbError) {
+                console.warn('[YouTube] 썸네일 적용 실패 (업로드는 성공):', thumbError)
+            }
+        }
 
         const youtubeUrl = getYoutubeShortsUrl(videoId)
 
