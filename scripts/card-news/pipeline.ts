@@ -181,6 +181,15 @@ async function run() {
   console.log(`✅ 이미지 ${imagePaths.length}장 생성 완료`)
   console.log('   저장 경로:', OUTPUT_DIR)
 
+  // X(Twitter) 캡션 파일 저장 (수동 게시용 — API 무료 플랜 게시 불가)
+  const xCaption = buildCaption(effectiveMode, issues, closedIssue, 'twitter')
+  const xCaptionPath = path.join(OUTPUT_DIR, 'x-caption.txt')
+  fs.writeFileSync(xCaptionPath, xCaption, 'utf-8')
+  console.log('\n📋 X(Twitter) 캡션 저장:', xCaptionPath)
+  console.log('─'.repeat(40))
+  console.log(xCaption)
+  console.log('─'.repeat(40))
+
   if (!PUBLISH) {
     console.log('ℹ️  테스트 모드: --publish 플래그 없음, 업로드 스킵')
     console.log('🎉 완료!')
@@ -832,10 +841,10 @@ function buildCaption(
   mode: ContentMode,
   issues: Issue[],
   closedIssue: ClosedIssue | null,
-  platform: 'instagram' | 'threads' = 'instagram'
+  platform: 'instagram' | 'threads' | 'twitter' = 'instagram'
 ): string {
   const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
-  const cta = platform === 'threads' ? `왜난리인지 직접 확인 👉 ${url}` : `전체 타임라인 👉 ${url}`
+  const cta = platform === 'instagram' ? `전체 타임라인 👉 ${url}` : `왜난리인지 직접 확인 👉 ${url}`
   const tags = platform === 'threads' ? '' : buildTags(mode, issues)
 
   switch (mode) {
