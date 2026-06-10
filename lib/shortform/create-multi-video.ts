@@ -340,7 +340,7 @@ export async function create3SceneVideo(
         }
 
         // ── STEP 2: 씬별 비디오 생성 ──────────────────────────────────────────
-        const encodeOpts = `-c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
+        const encodeOpts = `-r 24 -c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
 
         // filter_complex 빌더 — 항상 [vout] 출력
         const buildSceneFilter = (sceneNumber: number, dur: number, extraFilters: string[] = [], useTextAnim = false): string => {
@@ -596,7 +596,7 @@ export async function createNSceneVideo(
         // ── STEP 2: 씬별 비디오 합성 ─────────────────────────────────────────────
         // 입력 순서: [0] bgMotion.mp4 | [1] textOverlay(loop) | [2] textAnim.mkv | [3] audio(optional)
         // zoompan 제거 — 배경 모션은 STEP 0.5에서 Sharp로 이미 처리됨.
-        const encodeOpts = `-c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
+        const encodeOpts = `-r 24 -c:v libx264 -crf 23 -preset faster -pix_fmt yuv420p`
         console.log('[FFmpeg N] Scene별 비디오 생성 중...')
 
         for (let i = 0; i < N; i++) {

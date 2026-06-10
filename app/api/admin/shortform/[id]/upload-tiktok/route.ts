@@ -28,7 +28,7 @@ export async function POST(
         // 1. shortform_job 조회
         const { data: job, error: jobError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('id, issue_id, issue_title, issue_url, approval_status, video_path, upload_status, issues(category, short_code)')
+            .select('id, issue_id, issue_title, issue_url, approval_status, video_path, upload_status, issues(short_code)')
             .eq('id', jobId)
             .single()
 
