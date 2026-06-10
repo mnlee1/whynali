@@ -17,7 +17,8 @@ type PeriodStat = {
     reactions: number
     votes: number
     issues: number
-    shortforms: { instagram: number; youtube: number; tiktok: number }
+    shortforms: number
+    cardNews: number
 }
 
 interface KPIMetrics {
@@ -122,8 +123,10 @@ interface KPIMetrics {
     // 운영 KPI (오늘 / 이번달)
     todayIssues: number
     monthlyIssues: number
-    todayShortforms: { instagram: number; youtube: number; tiktok: number }
-    monthlyShortforms: { instagram: number; youtube: number; tiktok: number }
+    todayShortforms: number
+    monthlyShortforms: number
+    todayCardNews: number
+    monthlyCardNews: number
     todayNewUsers: number
     todayComments: number
     todayReactions: number
@@ -322,23 +325,31 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const [
         { count: todayIssuesCount },
         { count: monthlyIssuesCount },
-        { data: todayShortformData },
-        { data: monthlyShortformData },
+        { count: todayShortformsCount },
+        { count: monthlyShortformsCount },
+        { count: todayCardNewsCount },
+        { count: monthlyCardNewsCount },
         { count: todayNewUsersCount },
         { count: todayCommentsCount },
         { count: todayReactionsCount },
         { count: todayVotesCount },
     ] = await Promise.all([
         supabase.from('issues').select('*', { count: 'exact', head: true })
-            .eq('approval_status', 'approved')
-            .gte('created_at', todayStart.toISOString()),
+            .eq('approval_status', '승인')
+            .gte('approved_at', todayStart.toISOString()),
         supabase.from('issues').select('*', { count: 'exact', head: true })
-            .eq('approval_status', 'approved')
+            .eq('approval_status', '승인')
+            .gte('approved_at', thisMonthStart2.toISOString()),
+        supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
+            .eq('approval_status', '승인')
+            .gte('created_at', todayStart.toISOString()),
+        supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
+            .eq('approval_status', '승인')
             .gte('created_at', thisMonthStart2.toISOString()),
-        supabase.from('shortform_jobs').select('upload_status')
-            .gte('updated_at', todayStart.toISOString()),
-        supabase.from('shortform_jobs').select('upload_status')
-            .gte('updated_at', thisMonthStart2.toISOString()),
+        supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
+            .gte('published_at', todayStart.toISOString()),
+        supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
+            .gte('published_at', thisMonthStart2.toISOString()),
         supabase.from('users').select('*', { count: 'exact', head: true })
             .gte('created_at', todayStart.toISOString()),
         supabase.from('comments').select('*', { count: 'exact', head: true })
@@ -349,16 +360,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             .gte('created_at', todayStart.toISOString()),
     ])
 
-    const todayShortforms = {
-        instagram: todayShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
-        youtube:   todayShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
-        tiktok:    todayShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
-    }
-    const monthlyShortforms = {
-        instagram: monthlyShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
-        youtube:   monthlyShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
-        tiktok:    monthlyShortformData?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
-    }
+    const todayShortforms = todayShortformsCount ?? 0
+    const monthlyShortforms = monthlyShortformsCount ?? 0
 
     // 5. 최근 7일 데이터
     const sevenDaysAgo = new Date()
@@ -390,52 +393,61 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const dailyComments = (newComments7d || 0) / 7
     const dailyReactions = (newReactions7d || 0) / 7
 
-    // 6-b. 기간 선택용: 7일·30일 이슈·숏폼·활동 집계
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    // 6-b. 기간 선택용: 이번주(일~토) · 이번달(1일~말일) 집계
+    const thisWeekStart = new Date()
+    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay()) // 이번 주 일요일
+    thisWeekStart.setHours(0, 0, 0, 0)
 
     const [
-        { count: newIssues7d },
-        { count: newIssues30d },
-        { data: shortformData7d },
-        { data: shortformData30d },
-        { count: newUsers30d },
-        { count: newComments30d },
-        { count: newReactions30d },
-        { count: newVotes30d },
+        { count: newIssuesThisWeek },
+        { count: newIssuesThisMonth },
+        { count: shortformsThisWeek },
+        { count: shortformsThisMonth },
+        { count: cardNewsThisWeek },
+        { count: cardNewsThisMonth },
+        { count: newUsersThisWeek },
+        { count: newUsersThisMonth },
+        { count: newCommentsThisWeek },
+        { count: newCommentsThisMonth },
+        { count: newReactionsThisWeek },
+        { count: newReactionsThisMonth },
+        { count: newVotesThisWeek },
+        { count: newVotesThisMonth },
     ] = await Promise.all([
         supabase.from('issues').select('*', { count: 'exact', head: true })
-            .eq('approval_status', 'approved').gte('created_at', sevenDaysAgo.toISOString()),
+            .eq('approval_status', '승인').gte('approved_at', thisWeekStart.toISOString()),
         supabase.from('issues').select('*', { count: 'exact', head: true })
-            .eq('approval_status', 'approved').gte('created_at', thirtyDaysAgo.toISOString()),
-        supabase.from('shortform_jobs').select('upload_status')
-            .gte('updated_at', sevenDaysAgo.toISOString()),
-        supabase.from('shortform_jobs').select('upload_status')
-            .gte('updated_at', thirtyDaysAgo.toISOString()),
+            .eq('approval_status', '승인').gte('approved_at', thisMonthStart2.toISOString()),
+        supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
+            .eq('approval_status', '승인').gte('created_at', thisWeekStart.toISOString()),
+        supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
+            .eq('approval_status', '승인').gte('created_at', thisMonthStart2.toISOString()),
+        supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
+            .gte('published_at', thisWeekStart.toISOString()),
+        supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
+            .gte('published_at', thisMonthStart2.toISOString()),
         supabase.from('users').select('*', { count: 'exact', head: true })
-            .gte('created_at', thirtyDaysAgo.toISOString()),
+            .gte('created_at', thisWeekStart.toISOString()),
+        supabase.from('users').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString()),
         supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thirtyDaysAgo.toISOString()).eq('is_hidden', false),
+            .gte('created_at', thisWeekStart.toISOString()).eq('is_hidden', false),
+        supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString()).eq('is_hidden', false),
         supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', thirtyDaysAgo.toISOString()),
+            .gte('created_at', thisWeekStart.toISOString()),
+        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString()),
         supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', thirtyDaysAgo.toISOString()),
+            .gte('created_at', thisWeekStart.toISOString()),
+        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString()),
     ])
 
-    const shortforms7d = {
-        instagram: shortformData7d?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
-        youtube:   shortformData7d?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
-        tiktok:    shortformData7d?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
-    }
-    const shortforms30d = {
-        instagram: shortformData30d?.filter(j => (j.upload_status as Record<string, string> | null)?.instagram === 'done').length ?? 0,
-        youtube:   shortformData30d?.filter(j => (j.upload_status as Record<string, string> | null)?.youtube === 'done').length ?? 0,
-        tiktok:    shortformData30d?.filter(j => (j.upload_status as Record<string, string> | null)?.tiktok === 'done').length ?? 0,
-    }
     const periodStats = {
-        d1:  { newUsers: todayNewUsersCount ?? 0, comments: todayCommentsCount ?? 0, reactions: todayReactionsCount ?? 0, votes: todayVotesCount ?? 0, issues: todayIssuesCount ?? 0, shortforms: todayShortforms },
-        d7:  { newUsers: newUsers7d ?? 0, comments: newComments7d ?? 0, reactions: newReactions7d ?? 0, votes: newVotes7d ?? 0, issues: newIssues7d ?? 0, shortforms: shortforms7d },
-        d30: { newUsers: newUsers30d ?? 0, comments: newComments30d ?? 0, reactions: newReactions30d ?? 0, votes: newVotes30d ?? 0, issues: newIssues30d ?? 0, shortforms: shortforms30d },
+        d1:  { newUsers: todayNewUsersCount ?? 0, comments: todayCommentsCount ?? 0, reactions: todayReactionsCount ?? 0, votes: todayVotesCount ?? 0, issues: todayIssuesCount ?? 0, shortforms: todayShortforms, cardNews: todayCardNewsCount ?? 0 },
+        d7:  { newUsers: newUsersThisWeek ?? 0, comments: newCommentsThisWeek ?? 0, reactions: newReactionsThisWeek ?? 0, votes: newVotesThisWeek ?? 0, issues: newIssuesThisWeek ?? 0, shortforms: shortformsThisWeek ?? 0, cardNews: cardNewsThisWeek ?? 0 },
+        d30: { newUsers: newUsersThisMonth ?? 0, comments: newCommentsThisMonth ?? 0, reactions: newReactionsThisMonth ?? 0, votes: newVotesThisMonth ?? 0, issues: newIssuesThisMonth ?? 0, shortforms: shortformsThisMonth ?? 0, cardNews: cardNewsThisMonth ?? 0 },
     }
 
     // 7. 방문자 데이터 (재미나이 제안)
@@ -465,16 +477,16 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     
     const weeklyUniqueVisitors = new Set(weeklyVisitors?.map(v => v.session_id) || []).size
 
-    // 최근 30일 방문자
+    // 이번달 방문자
     const { count: monthlyPageViews } = await supabase
         .from('page_views')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', thirtyDaysAgo.toISOString())
+        .gte('created_at', thisMonthStart2.toISOString())
 
     const { data: monthlyVisitors } = await supabase
         .from('page_views')
         .select('session_id')
-        .gte('created_at', thirtyDaysAgo.toISOString())
+        .gte('created_at', thisMonthStart2.toISOString())
     
     const monthlyUniqueVisitors = new Set(monthlyVisitors?.map(v => v.session_id) || []).size
 
@@ -486,7 +498,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     ] = await Promise.all([
         supabase.from('page_views').select('utm_source, session_id').gte('created_at', todayStart.toISOString()),
         supabase.from('page_views').select('utm_source, session_id').gte('created_at', sevenDaysAgo.toISOString()),
-        supabase.from('page_views').select('utm_source, session_id').gte('created_at', thirtyDaysAgo.toISOString()),
+        supabase.from('page_views').select('utm_source, session_id').gte('created_at', thisMonthStart2.toISOString()),
     ])
 
     const buildSources = (data: { utm_source: string | null; session_id: string }[] | null) => ({
@@ -813,6 +825,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             monthlyIssues: monthlyIssuesCount ?? 0,
             todayShortforms,
             monthlyShortforms,
+            todayCardNews: todayCardNewsCount ?? 0,
+            monthlyCardNews: monthlyCardNewsCount ?? 0,
             todayNewUsers: todayNewUsersCount ?? 0,
             todayComments: todayCommentsCount ?? 0,
             todayReactions: todayReactionsCount ?? 0,
@@ -945,15 +959,17 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         sparklines: { newUsers: new Array(14).fill(0), comments: new Array(14).fill(0), reactions: new Array(14).fill(0), votes: new Array(14).fill(0) },
         todayIssues: 0,
         monthlyIssues: 0,
-        todayShortforms: { instagram: 0, youtube: 0, tiktok: 0 },
-        monthlyShortforms: { instagram: 0, youtube: 0, tiktok: 0 },
+        todayShortforms: 0,
+        monthlyShortforms: 0,
+        todayCardNews: 0,
+        monthlyCardNews: 0,
         todayNewUsers: 0,
         todayComments: 0,
         todayReactions: 0,
         periodStats: {
-            d1:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: { instagram: 0, youtube: 0, tiktok: 0 } },
-            d7:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: { instagram: 0, youtube: 0, tiktok: 0 } },
-            d30: { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: { instagram: 0, youtube: 0, tiktok: 0 } },
+            d1:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+            d7:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+            d30: { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
         },
         targets: {
             users: 0,

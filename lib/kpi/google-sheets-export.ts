@@ -222,10 +222,9 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
     periodHeader('항목')
 
     ;([
-        ['이슈 (승인)',  ps.d1.issues,              ps.d7.issues,              ps.d30.issues              ],
-        ['인스타 숏폼', ps.d1.shortforms.instagram, ps.d7.shortforms.instagram, ps.d30.shortforms.instagram],
-        ['유튜브 숏폼', ps.d1.shortforms.youtube,   ps.d7.shortforms.youtube,   ps.d30.shortforms.youtube  ],
-        ['틱톡 숏폼',   ps.d1.shortforms.tiktok,    ps.d7.shortforms.tiktok,    ps.d30.shortforms.tiktok   ],
+        ['이슈 (승인)', ps.d1.issues,     ps.d7.issues,     ps.d30.issues    ],
+        ['숏폼 등록 (유튜브,인스타,틱톡)',    ps.d1.shortforms, ps.d7.shortforms, ps.d30.shortforms],
+        ['카드뉴스 등록 (인스타,스레드,X)', ps.d1.cardNews,   ps.d7.cardNews,   ps.d30.cardNews  ],
     ] as [string, number, number, number][]).forEach(([lbl, d1, d7, d30], i) => periodRow(lbl, d1, d7, d30, i))
 
     spacer()
