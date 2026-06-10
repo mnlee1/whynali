@@ -814,8 +814,7 @@ const CATEGORY_TAGS: Record<string, string> = {
   '기술': '#IT이슈',
 }
 
-// 플랫폼별 태그 수: 인스타는 5~8개, 스레드는 2~3개
-function buildTags(mode: ContentMode, issues: Issue[], platform: 'instagram' | 'threads'): string {
+function buildTags(mode: ContentMode, issues: Issue[]): string {
   const base = ['#왜난리', '#핫이슈']
 
   const modeTagsMap: Record<ContentMode, string[]> = {
@@ -826,15 +825,7 @@ function buildTags(mode: ContentMode, issues: Issue[], platform: 'instagram' | '
     'timeline':      ['#이슈정리', '#사건타임라인', '#이슈타임라인'],
   }
 
-  const modeTags = modeTagsMap[mode]
-
-  if (platform === 'threads') {
-    // 스레드는 태그 최소화 (base 2개 + 모드 1개)
-    return [...base, modeTags[0]].join(' ')
-  }
-
-  // 인스타는 base + 모드 태그 전체 (중복 제거)
-  return Array.from(new Set([...base, ...modeTags])).join(' ')
+  return Array.from(new Set([...base, ...modeTagsMap[mode]])).join(' ')
 }
 
 function buildCaption(
@@ -844,12 +835,13 @@ function buildCaption(
   platform: 'instagram' | 'threads' = 'instagram'
 ): string {
   const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
-  const tags = buildTags(mode, issues, platform)
+  const cta = platform === 'threads' ? `왜난리인지 직접 확인 👉 ${url}` : `전체 타임라인 👉 ${url}`
+  const tags = platform === 'threads' ? '' : buildTags(mode, issues)
 
   switch (mode) {
     case 'weekend-recap': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
-      return ['📸 주말 핫이슈 정리', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+      return ['📸 주말 핫이슈 정리', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'surging': {
       const issue = issues[0]
@@ -859,18 +851,17 @@ function buildCaption(
         '',
         `"${issue?.title}"`,
         '',
-        `전체 타임라인 👉 ${url}`,
-        '',
-        tags,
+        cta,
+        ...(tags ? ['', tags] : []),
       ].join('\n')
     }
     case 'weekly-top3': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
-      return ['📸 이번주 핫이슈 TOP 3', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+      return ['📸 이번주 핫이슈 TOP 3', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'by-category': {
       const lines = issues.map(i => `[${i.category}] "${i.title}"`)
-      return ['📸 오늘의 분야별 핫이슈', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+      return ['📸 오늘의 분야별 핫이슈', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'timeline': {
       return [
@@ -878,9 +869,8 @@ function buildCaption(
         '',
         '발단부터 종결까지 한눈에',
         '',
-        `전체 타임라인 👉 ${url}`,
-        '',
-        tags,
+        cta,
+        ...(tags ? ['', tags] : []),
       ].join('\n')
     }
   }
