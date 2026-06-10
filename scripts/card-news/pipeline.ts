@@ -64,7 +64,6 @@ interface Issue {
   surgePct?: number
   topic?: string | null
   topic_description?: string | null
-  brief_summary?: { intro: string; bullets: string[]; conclusion: string } | null
 }
 
 interface TimelinePoint {
@@ -267,7 +266,7 @@ async function run() {
 async function fetchTopIssues(): Promise<Issue[]> {
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description, brief_summary')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
@@ -283,7 +282,7 @@ async function fetchWeekendTopIssues(): Promise<Issue[]> {
   const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description, brief_summary')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .is('merged_into_id', null)
@@ -305,7 +304,7 @@ async function fetchWeekendTopIssues(): Promise<Issue[]> {
 async function fetchSurgingIssue(): Promise<Issue | null> {
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago, topic, topic_description, brief_summary')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago, topic, topic_description')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
@@ -336,7 +335,7 @@ async function fetchCategoryTopIssues(): Promise<Issue[]> {
   for (const cat of CARD_NEWS_CATEGORIES) {
     const { data } = await supabase
       .from('issues')
-      .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description, brief_summary')
+      .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description')
       .eq('approval_status', '승인')
       .eq('visibility_status', 'visible')
       .neq('status', '종결')
@@ -473,12 +472,6 @@ async function generateBadgeContent(
           `카테고리: ${issue.category} | 화력: ${issue.heat_index ?? 0}점`,
           issue.topic ? `주제: ${issue.topic}` : null,
           issue.topic_description ? `설명: ${issue.topic_description}` : null,
-          issue.brief_summary?.bullets?.length
-            ? `핵심 내용:\n- ${issue.brief_summary.bullets.join('\n- ')}`
-            : null,
-          issue.brief_summary?.conclusion
-            ? `결론: ${issue.brief_summary.conclusion}`
-            : null,
           context || null,
           '',
           '위 정보를 바탕으로 카드뉴스 텍스트를 JSON으로 생성해줘 (한글만, 한자 금지):',
