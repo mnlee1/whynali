@@ -843,12 +843,12 @@ async function uploadImagesToStorage(imagePaths: string[]): Promise<{ urls: stri
     const fileBuffer = fs.readFileSync(imagePath)
 
     const { error } = await supabase.storage
-      .from('public')
+      .from('cardnews')
       .upload(fileName, fileBuffer, { contentType: 'image/png', upsert: true })
 
     if (error) throw new Error(`Storage 업로드 실패: ${error.message}`)
 
-    const { data } = supabase.storage.from('public').getPublicUrl(fileName, {
+    const { data } = supabase.storage.from('cardnews').getPublicUrl(fileName, {
       transform: { width: 1080, height: 1350, format: 'origin' },
     })
     urls.push(data.publicUrl)
@@ -859,7 +859,7 @@ async function uploadImagesToStorage(imagePaths: string[]): Promise<{ urls: stri
 }
 
 async function deleteFromStorage(fileNames: string[]): Promise<void> {
-  const { error } = await supabase.storage.from('public').remove(fileNames)
+  const { error } = await supabase.storage.from('cardnews').remove(fileNames)
   if (error) console.warn(`Storage 삭제 실패 (무시):`, error.message)
 }
 
