@@ -40,6 +40,14 @@ const TAB_API_PARAMS: Record<FilterValue, Record<string, string>> = {
     '관리자반려': { approval_status: '반려', approval_type: 'manual' },
 }
 
+/** 관리자 화력 추이 표시값 — 종결+승인만 종결 시 스냅샷, 나머지는 현재 화력 */
+function getDisplayHeat(issue: Issue): number | null {
+    if (issue.status === '종결' && issue.approval_status === '승인') {
+        return issue.heat_at_close ?? null
+    }
+    return issue.heat_index ?? 0
+}
+
 export default function AdminIssuesPage() {
     const [issues, setIssues] = useState<Issue[]>([])
     const [filter, setFilter] = useState<FilterValue>('대기')
@@ -82,7 +90,7 @@ export default function AdminIssuesPage() {
                     compareResult = (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
                     break
                 case 'heat_index':
-                    compareResult = (a.heat_index ?? 0) - (b.heat_index ?? 0)
+                    compareResult = (getDisplayHeat(a) ?? 0) - (getDisplayHeat(b) ?? 0)
                     break
                 case 'created_at':
                     compareResult = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -559,7 +567,7 @@ export default function AdminIssuesPage() {
                                 >
                                     <div className="flex flex-col items-start text-left">
                                         <span>화력 추이</span>
-                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재/종결 시</span>
+                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재 (승인·종결: 종결 시)</span>
                                     </div>
                                     {sortField === 'heat_index' && (
                                         <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
@@ -662,11 +670,8 @@ export default function AdminIssuesPage() {
                                 </td>
                                 <td className="px-4 py-3 text-sm whitespace-nowrap w-36">
                                     {(() => {
-                                        const isClosed = issue.status === '종결'
-                                        // 종결 이슈: 종결 시점 화력 스냅샷 표시 (heat_index는 재점화 감지용으로 이후 변할 수 있음)
-                                        const rightHeat = isClosed
-                                            ? (issue.heat_at_close ?? null)
-                                            : (issue.heat_index ?? 0)
+                                        // 종결+승인만 heat_at_close, 나머지는 heat_index (재계산 반영)
+                                        const rightHeat = getDisplayHeat(issue)
                                         const createdHeat = issue.created_heat_index
                                         const heatMeta = getHeatMeta(rightHeat ?? 0)
                                         const diff = (createdHeat != null && rightHeat != null) ? rightHeat - createdHeat : 0
