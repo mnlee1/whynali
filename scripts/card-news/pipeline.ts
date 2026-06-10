@@ -864,7 +864,7 @@ function buildCaption(
   platform: 'instagram' | 'threads' | 'twitter' = 'instagram'
 ): string {
   const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
-  const cta = platform === 'instagram' ? `전체 타임라인 👉 ${url}` : `왜난리인지 직접 확인 👉 ${url}`
+  const cta = `왜난리인지 직접 확인 👉 ${url}`
   const tags = platform === 'threads'
     ? ''
     : platform === 'twitter'
@@ -874,15 +874,22 @@ function buildCaption(
   switch (mode) {
     case 'weekend-recap': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
-      return ['📸 주말 핫이슈 정리', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [
+        '이번 주 뭐가 터졌나요? 🔥',
+        '',
+        ...lines,
+        '',
+        cta,
+        ...(tags ? ['', tags] : []),
+      ].join('\n')
     }
     case 'surging': {
       const issue = issues[0]
       const surge = issue?.surgePct ? ` (▲${Math.round(issue.surgePct)}%)` : ''
       return [
-        `📸 지금 가장 빠르게 오르는 이슈${surge}`,
+        `지금 이 이슈 모르면 대화 못 낍니다 🚨`,
         '',
-        `"${issue?.title}"`,
+        `"${issue?.title}"${surge}`,
         '',
         cta,
         ...(tags ? ['', tags] : []),
@@ -890,17 +897,31 @@ function buildCaption(
     }
     case 'weekly-top3': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
-      return ['📸 이번주 핫이슈 TOP 3', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [
+        '이번 주 TOP 3, 다 알고 계신가요? 🔥',
+        '',
+        ...lines,
+        '',
+        cta,
+        ...(tags ? ['', tags] : []),
+      ].join('\n')
     }
     case 'by-category': {
       const lines = issues.map(i => `[${i.category}] "${i.title}"`)
-      return ['📸 오늘의 분야별 핫이슈', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [
+        '오늘 뭐가 터졌나 — 분야별 정리 📋',
+        '',
+        ...lines,
+        '',
+        cta,
+        ...(tags ? ['', tags] : []),
+      ].join('\n')
     }
     case 'timeline': {
       return [
-        `📸 이슈 타임라인: "${closedIssue?.title}"`,
+        '이 이슈, 처음부터 끝까지 정리했습니다 📌',
         '',
-        '발단부터 종결까지 한눈에',
+        `"${closedIssue?.title}"`,
         '',
         cta,
         ...(tags ? ['', tags] : []),
