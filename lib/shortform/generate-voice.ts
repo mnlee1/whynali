@@ -65,7 +65,7 @@ export async function generateGoogleTTS(script: string): Promise<Buffer | null> 
         return null
     }
 
-    const voice = process.env.GOOGLE_TTS_VOICE?.trim() ?? 'ko-KR-Neural2-A'
+    const voice = process.env.GOOGLE_TTS_VOICE?.trim() ?? 'ko-KR-Wavenet-D'
     const processedScript = preprocessForTTS(script)
 
     try {

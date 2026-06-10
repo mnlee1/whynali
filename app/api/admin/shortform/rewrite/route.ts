@@ -3,13 +3,15 @@
  *
  * [관리자 - 숏폼 씬 텍스트 AI 재작성 API]
  *
- * 관리자가 씬에 배정한 원본 텍스트를 Groq(무료)로 재작성합니다.
+ * 관리자가 씬에 배정한 원본 텍스트를 Claude Sonnet 4.6으로 재작성합니다.
  * 기승전결 맥락으로 씬별 자막을 생성하며, 중복 내용은 후처리로 제거합니다.
- * Groq API 키가 없으면 원본 텍스트를 그대로 반환합니다.
+ * Claude 일별 예산($CLAUDE_SHORTFORM_DAILY_BUDGET_USD) 초과 시 Groq으로 자동 폴백합니다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 import { requireAdmin } from '@/lib/admin'
+import { incrementApiUsage, getTodayUsage, calculateClaudeCost } from '@/lib/api-usage-tracker'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -42,21 +44,61 @@ function isIncompletePhrase(s: string): boolean {
 }
 
 
-/** "-습니다" 계열 공식체 어미를 내레이션체("-다")로 변환 */
+/** 반말 어미를 합쇼체로 변환 (AI가 반말로 생성했을 경우 보정) */
 function fixFormalEndings(s: string): string {
     return s
-        .replace(/때문입니다\.?$/, '때문이다')
-        .replace(/라고 했습니다\.?$/, '라고 했다')
-        .replace(/라고 합니다\.?$/, '라고 한다')
-        .replace(/했습니다\.?$/, '했다')
-        .replace(/됐습니다\.?$/, '됐다')
-        .replace(/됩니다\.?$/, '된다')
-        .replace(/입니다\.?$/, '이다')
-        .replace(/있습니다\.?$/, '있다')
-        .replace(/없습니다\.?$/, '없다')
-        .replace(/습니다\.?$/, '다')
+        .replace(/때문이다\.?$/, '때문입니다')
+        .replace(/라고 했다\.?$/, '라고 했습니다')
+        .replace(/라고 한다\.?$/, '라고 합니다')
+        .replace(/이었다\.?$/, '이었습니다')
+        .replace(/였다\.?$/, '였습니다')
+        .replace(/했다\.?$/, '했습니다')
+        .replace(/됐다\.?$/, '됐습니다')
+        .replace(/겠다\.?$/, '겠습니다')
+        .replace(/됩니다\.?$/, '됩니다')   // 이미 합쇼체 — 유지
+        .replace(/된다\.?$/, '됩니다')
+        .replace(/한다\.?$/, '합니다')
+        .replace(/하다\.?$/, '합니다')
+        .replace(/았다\.?$/, '았습니다')
+        .replace(/었다\.?$/, '었습니다')
+        .replace(/이다\.?$/, '입니다')
+        .replace(/있다\.?$/, '있습니다')
+        .replace(/없다\.?$/, '없습니다')
         .replace(/\.$/, '')
         .trim()
+}
+
+/** 원문 마지막 단어 추출 (구두점 제거) */
+function extractLastWord(text: string): string {
+    return text.trim().split(/\s+/).slice(-1)[0]?.replace(/[.,!?~""''·。]/g, '') ?? ''
+}
+
+/**
+ * 씬 수(2~5)에 따라 서사 역할 목록을 문자열로 반환 (최대 5씬)
+ *
+ * 2씬: 훅 → 마무리
+ * 3씬: 훅 → 전개 → 마무리
+ * 4씬: 훅 → 배경 → 전개 → 마무리
+ * 5씬: 훅 → 배경 → 전개 → 반전 → 마무리
+ */
+function buildNarrativeStructure(count: number, isConcluded: boolean): string {
+    const closing = isConcluded
+        ? '결론을 단언하는 합쇼체 (~됐습니다/~입니다)'
+        : '시청자 궁금증을 남기는 의문형 합쇼체 (~될까요?/~할까요?)'
+
+    const HOOK  = `씬1 [훅]: 가장 충격적인 사실을 강렬하게. 접속사 없이 시작. 합쇼체 (~합니다/~됩니다/~입니다)`
+    const BG    = `씬2 [배경]: 왜 이 일이 일어났는지, 맥락 제공. 합쇼체 현재형 (~합니다/~됩니다)`
+    const DEV3  = `씬3 [전개]: 어떻게 번졌는지, 핵심 파급. 합쇼체 현재형 (~합니다/~됩니다)`
+    const REV4  = `씬4 [반전]: 새롭게 드러난 사실이나 더 넓은 파급. 합쇼체 단언형 (~였습니다/~이었습니다)`
+
+    const structures: Record<number, string[]> = {
+        2: [HOOK, `씬2 [마무리]: ${closing}`],
+        3: [HOOK, `씬2 [전개]: 왜 이 일이 일어났는지 맥락 + 어떻게 번졌는지. 합쇼체`, `씬3 [마무리]: ${closing}`],
+        4: [HOOK, BG, DEV3, `씬4 [마무리]: ${closing}`],
+        5: [HOOK, BG, DEV3, REV4, `씬5 [마무리]: ${closing}`],
+    }
+
+    return (structures[count] ?? structures[5]).join('\n')
 }
 
 /** 중복 텍스트를 원본으로 대체 */
@@ -72,7 +114,7 @@ function deduplicateTexts(texts: string[], originals: string[]): string[] {
 
         if (isTooShort || isIncomplete) {
             const expanded = original.length >= 12
-                ? original.slice(0, 45)
+                ? original.slice(0, 55)
                 : original.length > 0
                     ? `${original} 사태가 주목받고 있다`
                     : `${trimmed} 상황이 주목받고 있다`
@@ -81,46 +123,13 @@ function deduplicateTexts(texts: string[], originals: string[]): string[] {
         }
         const isDuplicate = seen.some(prev => isTooSimilar(prev, trimmed))
         if (isDuplicate) {
-            return original.slice(0, 45) || trimmed
+            return original.slice(0, 55) || trimmed
         }
         seen.push(trimmed)
         return trimmed
     })
 }
 
-/** stage + 씬 위치 기반으로 서사 역할 문자열 반환 (B+A 조합) */
-function getNarrativeRole(
-    sceneIdx: number,    // 전체 영상에서의 실제 인덱스 (0-based)
-    total: number,       // 전체 씬 수
-    stage: string | undefined,
-    isConcluded: boolean,
-): string {
-    const STAGE_HINT: Record<string, string> = {
-        '발단': '사건 시작·원인',
-        '전개': '파급·반응·확산',
-        '파생': '새로운 국면·반전',
-        '진정': '갈등 수그러짐',
-        '종결': '최종 결과',
-    }
-    const hint = stage ? ` (소스: ${STAGE_HINT[stage] ?? stage})` : ''
-
-    if (sceneIdx === 0) {
-        return `훅 — 가장 충격적이거나 흥미로운 사실 한 줄. 명사형(~한다/~떠난다) 또는 짧은 단언(~였다/~이다)으로 끝낼 것. 마침표 없이.${hint}`
-    }
-    if (sceneIdx === total - 1) {
-        return isConcluded
-            ? `마무리 — 결론을 단언하는 사실 문장. ~됐다/~이다 로 끝낼 것.${hint}`
-            : `마무리 — 시청자 궁금증을 남기는 의문형. ~될까? 또는 ~할까? 로 끝낼 것.${hint}`
-    }
-
-    // 중간 씬: stage 우선, 없으면 상대 위치로 판단
-    if (stage === '파생') return `반전 — 새롭게 드러난 사실이나 숨겨진 이면. ~였다/~이었다 로 끝낼 것.${hint}`
-    if (stage === '진정') return `전환 — 갈등이 수그러드는 신호. 현재형(~한다/~된다)으로 끝낼 것.${hint}`
-
-    const ratio = sceneIdx / (total - 1) // 0.0 ~ 1.0
-    if (ratio <= 0.4) return `배경 — 왜 이 일이 일어났는지 맥락 제공. 현재형(~한다/~됐다)으로 끝낼 것.${hint}`
-    return `전개 — 어떻게 번졌는지, 핵심 파급 사실. 현재형(~한다/~된다)으로 끝낼 것.${hint}`
-}
 
 export async function POST(request: NextRequest) {
     const auth = await requireAdmin()
@@ -132,6 +141,7 @@ export async function POST(request: NextRequest) {
         issueStatus?: string
         totalScenes?: number  // 단일 씬 재생성 시 실제 전체 씬 수
         variation?: boolean   // 단일 씬 재생성 시 다른 표현 요청
+        contextBullets?: string[]  // 이슈 전체 맥락 bullets
     }
     try {
         body = await request.json()
@@ -142,99 +152,142 @@ export async function POST(request: NextRequest) {
     const issueTitle = body.issueTitle ?? ''
     const issueStatus = body.issueStatus ?? ''
     const scenes: RewriteScene[] = body.scenes ?? []
+    const contextBullets: string[] = body.contextBullets ?? []
 
     if (scenes.length === 0) {
         return NextResponse.json({ texts: [] })
     }
 
-    const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
-    if (!apiKey) {
-        return NextResponse.json({ texts: scenes.map(s => s.text) })
-    }
-
     const isConcluded = issueStatus === '종결'
     const variation = body.variation ?? false
-    // totalScenes: 단일 씬 재생성 시 실제 전체 수를 받아 역할 계산에 사용
-    const total = body.totalScenes ?? scenes.length
-
-    const sceneLines = scenes.map((s) => {
-        const role = getNarrativeRole(s.index, total, s.stage, isConcluded)
-        return `씬${s.index + 1} [${role}]: ${s.text}`
-    }).join('\n')
-
     const sceneCount = scenes.length
+    const maxTokens = Math.max(600, sceneCount * 100)
 
-    const prompt = `당신은 숏폼 자막 편집자입니다.
-각 씬에는 서사 역할이 지정되어 있습니다. 역할에 맞는 문장을 원본에서 뽑아 자연스럽게 작성해 주세요.
-원본이 이미 자연스러운 문장이면 최대한 그대로 유지하고, 길 경우에만 핵심만 남겨 압축하세요.
+    // 주 입력: allBullets 우선, 없으면 선택된 씬 원문 사용
+    const contentLines = contextBullets.length > 0
+        ? contextBullets.map((b, i) => `${i + 1}. ${b}`).join('\n')
+        : scenes.map((s, i) => `${i + 1}. ${s.text}`).join('\n')
+
+    const closingInstruction = isConcluded
+        ? '마지막 씬: 결론을 단언하는 합쇼체로 끝낼 것 (~됐습니다/~입니다)'
+        : '마지막 씬: 시청자 궁금증을 남기는 의문형 합쇼체로 끝낼 것 (~될까요?/~할까요?)'
+
+    const prompt = `당신은 숏폼 SNS 자막 작가입니다.
 
 이슈: ${issueTitle}
 
-씬별 원본 내용 (역할 포함):
-${sceneLines}
+이슈 내용:
+${contentLines}
 
-서사 역할 및 말끝 스타일:
-- 훅: 가장 충격적인 사실. 접속사 없이 강렬하게 시작. → 명사형(~한다/~떠난다) 또는 단언(~였다/~이다)
-- 배경: 왜 이 일이 일어났는지 맥락. → 현재형(~한다/~됐다)
-- 전개: 어떻게 번졌는지, 핵심 파급 사실. → 현재형(~한다/~된다)
-- 반전: 새롭게 드러난 이면이나 예상치 못한 국면. → 단언(~였다/~이었다)
-- 전환: 갈등이 수그러들거나 상황이 바뀌는 신호. → 현재형(~한다/~된다)
-- 마무리: ${isConcluded ? '결론을 단언. → ~됐다/~이다' : '시청자 궁금증을 남기는 의문형. → ~될까?/~할까?'}
+위 내용으로 SNS 숏폼 자막 ${sceneCount}개를 작성하세요.
+가장 이슈화될 사실을 중심으로, 시청자가 다음 씬이 궁금해지도록 스토리를 전개하세요.
+
+구성:
+- 씬1: 가장 충격적·핵심적인 사실. 접속사 없이 시작
+- 중간 씬: 배경 → 전개 → 반전 흐름으로 한 단계씩 진전
+- ${closingInstruction}
 
 규칙:
-- 원본의 핵심 키워드와 사실은 최대한 유지 (불필요한 생략 금지)
-- "-됩니다/-했습니다/-입니다" 같은 공식체 어미 사용 금지
-- 각 씬의 말끝은 위 역할별 스타일을 반드시 따를 것
-- 각 문장 45자 이내 — 자연스러운 완성이 우선, 인위적 생략 금지
-- "그런데", "문제는", "알고 보니", "한편", "그 결과" 등 접속사로 문장 시작 금지
-- 각 씬은 앞 씬과 다른 사실을 담아 이야기를 한 단계씩 진전시킬 것
+- 모든 문장 합쇼체 (~합니다/~됩니다/~입니다/~됐습니다/~될까요?)
+- 한 씬 55자 이내, 핵심 수치·인명·기관명은 그대로 사용
+- "그런데"/"한편"/"문제는" 등 접속사로 씬 시작 금지
+- 각 씬은 서로 다른 사실을 담을 것${variation ? '\n- 이전과 다른 각도·표현으로 새롭게 작성' : ''}
 
-${variation ? '이전 표현과 다른 각도로, 같은 사실을 새롭게 표현해 주세요.\n\n' : ''}${sceneCount}줄로만 응답 (번호·설명 없이, 한 줄에 씬 하나):
+${sceneCount}줄만 응답 (번호·설명 없이):
 `
 
+    // ── Claude Sonnet 4.6 시도 ──
+    const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim()
+    const dailyBudget = parseFloat(process.env.CLAUDE_SHORTFORM_DAILY_BUDGET_USD ?? '0.02')
 
+    let raw = ''
+    let usedClaude = false
 
-    const groqBody = JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: Math.max(600, sceneCount * 80),
-        temperature: variation ? 0.6 : 0.3,
-    })
+    if (anthropicKey) {
+        const todayUsage = await getTodayUsage('claude_shortform')
+        const todayCost = calculateClaudeCost(todayUsage?.input_tokens ?? 0, todayUsage?.output_tokens ?? 0)
 
-    const callGroq = async (): Promise<Response> => {
-        for (let attempt = 0; attempt < 3; attempt++) {
-            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        console.log(`[rewrite] Claude 예산 — 오늘 $${todayCost.toFixed(4)} / 한도 $${dailyBudget}`)
+        if (todayCost < dailyBudget) {
+            try {
+                const client = new Anthropic({ apiKey: anthropicKey })
+                const res = await client.messages.create({
+                    model: 'claude-sonnet-4-6',
+                    max_tokens: maxTokens,
+                    temperature: variation ? 0.6 : 0.3,
+                    messages: [{ role: 'user', content: prompt }],
+                })
+                await incrementApiUsage('claude_shortform', {
+                    calls: 1, successes: 1, failures: 0,
+                    inputTokens: res.usage.input_tokens,
+                    outputTokens: res.usage.output_tokens,
+                })
+                raw = res.content[0]?.type === 'text' ? res.content[0].text.trim() : ''
+                usedClaude = true
+                console.log('[rewrite] Claude Sonnet 4.6 사용 ✓, 응답:', raw.slice(0, 100))
+            } catch (e) {
+                console.error('[rewrite] Claude API 오류 — Groq 폴백:', e)
+                await incrementApiUsage('claude_shortform', { calls: 1, successes: 0, failures: 1 })
+            }
+        } else {
+            console.warn(`[rewrite] Claude 숏폼 예산 초과 ($${todayCost.toFixed(4)} / $${dailyBudget}) — Groq 폴백`)
+        }
+    }
+
+    // ── Groq 폴백 ──
+    if (!usedClaude) {
+        const groqKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
+        if (!groqKey) {
+            return NextResponse.json({ texts: scenes.map(s => s.text) })
+        }
+
+        const groqBody = JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: maxTokens,
+            temperature: variation ? 0.6 : 0.3,
+        })
+
+        const callGroq = async (): Promise<Response> => {
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+                    body: groqBody,
+                })
+                if (res.status !== 429) return res
+                const retryAfter = parseInt(res.headers.get('retry-after') ?? '5')
+                const wait = Math.min(retryAfter, 10) * 1000
+                console.warn(`[rewrite] Groq 429 — ${wait / 1000}초 후 재시도 (${attempt + 1}/3)`)
+                await new Promise(r => setTimeout(r, wait))
+            }
+            return fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
                 body: groqBody,
             })
-            if (res.status !== 429) return res
-            const retryAfter = parseInt(res.headers.get('retry-after') ?? '5')
-            const wait = Math.min(retryAfter, 10) * 1000
-            console.warn(`[rewrite] Groq 429 — ${wait / 1000}초 후 재시도 (${attempt + 1}/3)`)
-            await new Promise(r => setTimeout(r, wait))
         }
-        return fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: groqBody,
-        })
+
+        try {
+            const groqRes = await callGroq()
+            if (!groqRes.ok) {
+                const errBody = await groqRes.text().catch(() => '')
+                console.error('[rewrite] Groq API 오류:', groqRes.status, errBody.slice(0, 200))
+                return NextResponse.json(
+                    { error: 'GROQ_ERROR', message: `Groq API 오류 (${groqRes.status})` },
+                    { status: 503 }
+                )
+            }
+            const data = await groqRes.json()
+            raw = data.choices?.[0]?.message?.content?.trim() ?? ''
+            console.log('[rewrite] Groq 폴백 응답:', raw.slice(0, 100))
+        } catch (error) {
+            console.error('[rewrite] Groq 예외:', error)
+            return NextResponse.json({ error: 'INTERNAL_ERROR', message: '서버 오류' }, { status: 500 })
+        }
     }
 
     try {
-        const res = await callGroq()
-
-        if (!res.ok) {
-            const errBody = await res.text().catch(() => '')
-            console.error('[rewrite] Groq API 오류:', res.status, errBody.slice(0, 200))
-            return NextResponse.json(
-                { error: 'GROQ_ERROR', message: `Groq API 오류 (${res.status})` },
-                { status: 503 }
-            )
-        }
-
-        const data = await res.json()
-        const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
 
         // AI 응답 prefix 제거:
         //   "씬3: ..."  /  "Scene 3: ..."  /  "1. ..."  /  "1) ..."  /  "[전개]: ..."  /  "**씬1:** ..."

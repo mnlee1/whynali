@@ -9,6 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
 import { generateNSceneShortform } from '@/lib/shortform/generate-image'
+import { extractThumbnailFromVideo } from '@/lib/shortform/create-multi-video'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -85,8 +86,10 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        const videoBuffer = await generateNSceneShortform(job.issue_title, issueCategory, sceneTexts, previewImages)
-        const filename = `shortform-${job.id}-${Date.now()}.mp4`
+        const { videoBuffer, scene1TextEndTime } = await generateNSceneShortform(job.issue_title, issueCategory, sceneTexts, previewImages)
+        const ts = Date.now()
+        const filename = `shortform-${job.id}-${ts}.mp4`
+        const thumbFilename = `shortform-${job.id}-${ts}-thumb.jpg`
 
         const { data: uploadData, error: uploadError } = await supabaseAdmin
             .storage
@@ -109,9 +112,23 @@ export async function POST(request: NextRequest, { params }: Params) {
             .from('shortform')
             .getPublicUrl(storagePath)
 
+        // 씬1 텍스트가 모두 표시된 시점 프레임을 썸네일로 추출
+        let thumbnailPath: string | null = null
+        const thumbBuffer = await extractThumbnailFromVideo(videoBuffer, scene1TextEndTime)
+        if (thumbBuffer) {
+            const { data: thumbData } = await supabaseAdmin
+                .storage
+                .from('shortform')
+                .upload(thumbFilename, thumbBuffer, { contentType: 'image/jpeg', upsert: false })
+            if (thumbData) thumbnailPath = thumbData.path
+        }
+
         const { error: updateError } = await supabaseAdmin
             .from('shortform_jobs')
-            .update({ video_path: storagePath })
+            .update({
+                video_path: storagePath,
+                ...(thumbnailPath ? { upload_status: { thumbnail_path: thumbnailPath } } : {}),
+            })
             .eq('id', id)
 
         if (updateError) {

@@ -6,7 +6,7 @@
  * 우선순위: 이슈 제목 키워드(Groq 추출) → 카테고리 폴백
  */
 
-import { fetchPexelsImages, fetchPexelsImagesWithFull } from '@/lib/pexels'
+import { fetchPexelsImages, fetchPexelsImagesWithFull, fetchPexelsImagesForScenes } from '@/lib/pexels'
 
 export async function fetch3StockImages(category: string, issueTitle?: string, seed?: number): Promise<string[]> {
     return fetchPexelsImages(issueTitle ?? '', category, seed)
@@ -18,6 +18,18 @@ export async function fetchNStockImages(category: string, issueTitle: string, co
 
 export async function fetchNStockImagesWithFull(category: string, issueTitle: string, count: number, seed?: number): Promise<{ previews: string[]; fulls: string[] }> {
     return fetchPexelsImagesWithFull(issueTitle, category, seed, count)
+}
+
+/**
+ * 씬 텍스트 배열을 받아 씬마다 개별 Pexels 검색.
+ * 씬 내용에 맞는 키워드를 Groq로 추출해 각 씬에 최적화된 이미지 반환.
+ */
+export async function fetchSceneImagesWithFull(
+    sceneTexts: string[],
+    category: string,
+    seed?: number,
+): Promise<{ previews: string[]; fulls: string[] }> {
+    return fetchPexelsImagesForScenes(sceneTexts, category, seed)
 }
 
 /**
