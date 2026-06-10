@@ -2,10 +2,8 @@ name: 카드뉴스 자동 생성 및 업로드
 
 on:
     schedule:
-        # 매주 수요일 오전 9시 (KST = UTC+9, 즉 UTC 0시)
-        - cron: '0 0 * * 3'
-        # 매주 토요일 오전 9시 (KST)
-        - cron: '0 0 * * 6'
+        # 매주 월~금 오전 7시 KST (UTC -2시 = 전날 22시)
+        - cron: '0 22 * * 0-4'
     workflow_dispatch:
         inputs:
             publish:
@@ -16,6 +14,18 @@ on:
                 options:
                     - 'true'
                     - 'false'
+            mode:
+                description: '콘텐츠 모드 (비워두면 요일 자동 감지)'
+                required: false
+                default: ''
+                type: choice
+                options:
+                    - ''
+                    - 'weekend-recap'
+                    - 'surging'
+                    - 'weekly-top3'
+                    - 'by-category'
+                    - 'timeline'
 
 jobs:
     generate-and-publish:
@@ -40,10 +50,15 @@ jobs:
 
             - name: 카드뉴스 파이프라인 실행
               run: |
+                  MODE_FLAG=""
+                  if [ -n "${{ github.event.inputs.mode }}" ]; then
+                    MODE_FLAG="--mode=${{ github.event.inputs.mode }}"
+                  fi
+
                   if [ "${{ github.event.inputs.publish }}" = "false" ]; then
-                    npx tsx scripts/card-news/pipeline.ts
+                    npx tsx scripts/card-news/pipeline.ts $MODE_FLAG
                   else
-                    npx tsx scripts/card-news/pipeline.ts --publish
+                    npx tsx scripts/card-news/pipeline.ts --publish $MODE_FLAG
                   fi
               env:
                   NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
