@@ -33,6 +33,7 @@ const IG_USER_ID = process.env.IG_USER_ID
 const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN
 const THREADS_USER_ID = process.env.THREADS_USER_ID
 const THREADS_ACCESS_TOKEN = process.env.THREADS_ACCESS_TOKEN
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY
 const TWITTER_API_KEY = process.env.TWITTER_API_KEY
 const TWITTER_API_SECRET = process.env.TWITTER_API_SECRET
 const TWITTER_ACCESS_TOKEN = process.env.TWITTER_ACCESS_TOKEN
@@ -61,6 +62,9 @@ interface Issue {
   heat_index: number | null
   heat_index_1h_ago?: number | null
   surgePct?: number
+  topic?: string | null
+  topic_description?: string | null
+  brief_summary?: { intro: string; bullets: string[]; conclusion: string } | null
 }
 
 interface TimelinePoint {
@@ -263,7 +267,7 @@ async function run() {
 async function fetchTopIssues(): Promise<Issue[]> {
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description, brief_summary')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
@@ -279,7 +283,7 @@ async function fetchWeekendTopIssues(): Promise<Issue[]> {
   const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description, brief_summary')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .is('merged_into_id', null)
@@ -301,7 +305,7 @@ async function fetchWeekendTopIssues(): Promise<Issue[]> {
 async function fetchSurgingIssue(): Promise<Issue | null> {
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago, topic, topic_description, brief_summary')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
@@ -332,7 +336,7 @@ async function fetchCategoryTopIssues(): Promise<Issue[]> {
   for (const cat of CARD_NEWS_CATEGORIES) {
     const { data } = await supabase
       .from('issues')
-      .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index')
+      .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description, brief_summary')
       .eq('approval_status', '승인')
       .eq('visibility_status', 'visible')
       .neq('status', '종결')
@@ -389,43 +393,123 @@ function getIssueThumbnail(issue: Issue): string {
   return urls[idx] ?? urls[0] ?? ''
 }
 
-// ─── 2. Groq AI 텍스트 생성 헬퍼 ────────────────────────
+// ─── 2. 커버 이미지 (Pexels) ────────────────────────────
+
+async function generateCoverKeywords(issues: Issue[], mode: ContentMode): Promise<string> {
+  const topicsList = issues
+    .map((i, idx) => `${idx + 1}. "${i.topic ?? i.title}" (${i.category})`)
+    .join('\n')
+
+  const res = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: 'You are a stock photo search expert. Return ONLY valid JSON, no explanation.' },
+      {
+        role: 'user',
+        content: `Korean news topics (mode: ${mode}):\n${topicsList}\n\nPick the most visually distinctive topic and generate 2-3 English keywords suitable for a Pexels portrait-orientation stock photo search.\nReturn JSON only: {"keywords": "2-3 english words"}`,
+      },
+    ],
+    temperature: 0.4,
+    max_tokens: 60,
+  })
+
+  try {
+    const raw = res.choices[0].message.content ?? '{}'
+    const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+    return JSON.parse(cleaned).keywords ?? issues[0]?.category ?? 'news'
+  } catch {
+    return issues[0]?.category ?? 'news'
+  }
+}
+
+async function fetchPexelsImage(keywords: string): Promise<string | null> {
+  if (!PEXELS_API_KEY) {
+    console.warn('⚠️  PEXELS_API_KEY 없음 — 다크 커버 사용')
+    return null
+  }
+
+  try {
+    const searchRes = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=15&orientation=portrait&size=large`,
+      { headers: { Authorization: PEXELS_API_KEY } }
+    )
+    const json = await searchRes.json() as { photos?: Array<{ src: { large2x: string } }> }
+
+    if (!json.photos?.length) {
+      console.warn(`⚠️  Pexels 검색 결과 없음 (키워드: ${keywords})`)
+      return null
+    }
+
+    // 상위 10장 중 랜덤 1장 선택 → 매번 다른 커버
+    const pool = json.photos.slice(0, 10)
+    const photo = pool[Math.floor(Math.random() * pool.length)]
+
+    // base64 변환 (Playwright 렌더링 안정성)
+    const imgRes = await fetch(photo.src.large2x)
+    const buffer = await imgRes.arrayBuffer()
+    const base64 = Buffer.from(buffer).toString('base64')
+    console.log(`✅ Pexels 커버 이미지 로드 (키워드: ${keywords})`)
+    return `data:image/jpeg;base64,${base64}`
+  } catch (err) {
+    console.warn('⚠️  Pexels 이미지 오류 — 다크 커버 사용:', (err as Error).message)
+    return null
+  }
+}
+
+// ─── 3. Groq AI 텍스트 생성 헬퍼 ────────────────────────
 
 async function generateBadgeContent(
   issue: Issue,
   context = ''
-): Promise<{ sub_title: string; desc: string; point_text_01: string; point_text_02: string }> {
+): Promise<{ desc: string; point_text_01: string; point_text_02: string }> {
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 반드시 한글로만 작성하세요. 한자·일본어·중국어는 절대 사용하지 마세요.' },
+      { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 반드시 한글(가-힣), 숫자, 영문, 공백, 문장부호만 사용하세요. 한자(발·發·一 등 모든 CJK 문자), 일본어(히라가나·가타카나), 중국어는 단 한 글자도 절대 사용하지 마세요. 위반 시 응답 전체가 거부됩니다. 단어 나열이 아닌 완성된 짧은 문장으로 작성하세요.' },
       {
         role: 'user',
-        content: `이슈 제목: "${issue.title}"
-카테고리: ${issue.category}
-화력: ${issue.heat_index ?? 0}점
-${context}
-
-다음 JSON 형식으로 카드뉴스 텍스트를 생성해줘 (한글만 사용, 한자 금지):
-{
-  "sub_title": "이슈 핵심을 한 줄로 (20자 이내)",
-  "desc": "3줄 설명, 줄바꿈은 \\n 사용 (각 줄 25자 이내)",
-  "point_text_01": "핵심 키워드 1 (12자 이내)",
-  "point_text_02": "핵심 키워드 2 (12자 이내)"
-}
-
-JSON만 출력, 설명 없이.`,
+        content: [
+          `이슈 제목: "${issue.title}"`,
+          `카테고리: ${issue.category} | 화력: ${issue.heat_index ?? 0}점`,
+          issue.topic ? `주제: ${issue.topic}` : null,
+          issue.topic_description ? `설명: ${issue.topic_description}` : null,
+          issue.brief_summary?.bullets?.length
+            ? `핵심 내용:\n- ${issue.brief_summary.bullets.join('\n- ')}`
+            : null,
+          issue.brief_summary?.conclusion
+            ? `결론: ${issue.brief_summary.conclusion}`
+            : null,
+          context || null,
+          '',
+          '위 정보를 바탕으로 카드뉴스 텍스트를 JSON으로 생성해줘 (한글만, 한자 금지):',
+          '{',
+          '  "desc": "기승전결 3줄. 1줄=상황 설정, 2줄=반전/전개(그런데·하지만·결국 같은 접속사로 자연스럽게 연결), 3줄=의문형 또는 예고형으로 궁금증 유발. ~~다로 끝나는 줄엔 마침표(.) 필수. 마지막 줄이 의문형이면 물음표(?) 필수. 줄바꿈은 \\\\n 사용 (각 줄 22자 이내)",',
+          '  "point_text_01": "이슈 핵심 인물 또는 기관을 나타내는 짧은 구. 앞에 어울리는 이모지 1개 포함 (예: \'🏢 삼성전자 발표\', \'🏐 배구 국가대표\', 이모지 제외 12자 이내)",',
+          '  "point_text_02": "이슈의 핵심 상황 또는 쟁점을 나타내는 짧은 구. 앞에 어울리는 이모지 1개 포함 (예: \'🚨 성희롱 의혹 확산\', \'🔍 노동부 조사 착수\', 이모지 제외 12자 이내). point_text_01과 다른 이모지를 사용할 것."',
+          '}',
+          '',
+          '나쁜 예시 (금지): "논란이 일고 있다\\n조사에 착수했다\\n확산되고 있다" — 접속사 없고 마침표·물음표도 없음',
+          '좋은 예시: "조용하던 직장에 폭로 한 방.\\n그런데 피해자들이 목소리를 높이기 시작.\\n진실은 과연 드러날까?" — 한 문단처럼 읽히고 물음표로 마무리',
+          '',
+          'JSON 코드블록 없이 순수 JSON만 출력.',
+        ].filter(Boolean).join('\n'),
       },
     ],
     temperature: 0.7,
   })
 
   try {
-    return JSON.parse(res.choices[0].message.content || '{}')
+    const raw = res.choices[0].message.content || '{}'
+    const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+    const parsed = JSON.parse(cleaned)
+    return {
+      desc: stripNonKorean(parsed.desc ?? ''),
+      point_text_01: stripNonKorean(parsed.point_text_01 ?? ''),
+      point_text_02: stripNonKorean(parsed.point_text_02 ?? ''),
+    }
   } catch {
     return {
-      sub_title: issue.title.slice(0, 20),
-      desc: '내용을 불러오는 중 오류가 발생했습니다.',
+      desc: issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? '내용을 불러오는 중 오류가 발생했습니다.',
       point_text_01: issue.category,
       point_text_02: `화력 ${issue.heat_index ?? 0}점`,
     }
@@ -436,11 +520,15 @@ JSON만 출력, 설명 없이.`,
 
 // 월(주말 핫이슈) / 수(이번주 TOP 3): cover + N×badge + follow
 async function generateTop3Slides(issues: Issue[], label = '이번주 핫이슈'): Promise<SlideContent[]> {
+  const keywords = await generateCoverKeywords(issues, 'weekly-top3')
+  const coverBg = await fetchPexelsImage(keywords)
+
   const slides: SlideContent[] = [
     {
       type: 'cover',
+      sub_title: '오늘의 픽',
       main_title: `${label}\nTOP ${issues.length}`,
-      bg_image_url: getIssueThumbnail(issues[0]),
+      bg_image_url: coverBg ?? undefined,
       logo_image_url: LOGO_BASE64,
     },
   ]
@@ -449,7 +537,7 @@ async function generateTop3Slides(issues: Issue[], label = '이번주 핫이슈'
     const content = await generateBadgeContent(issue)
     slides.push({
       type: 'badge',
-      sub_title: content.sub_title,
+      sub_title: issue.topic ?? issue.title,
       desc: content.desc,
       point_text_01: content.point_text_01,
       point_text_02: content.point_text_02,
@@ -504,16 +592,20 @@ JSON만 출력, 설명 없이.`,
   }
 
   const bg = getIssueThumbnail(issue)
+  const surgingKeywords = await generateCoverKeywords([issue], 'surging')
+  const coverBg = await fetchPexelsImage(surgingKeywords)
+
   return [
     {
       type: 'cover',
-      main_title: '지금\n급상승 중!',
-      bg_image_url: bg,
+      sub_title: '실시간 급상승',
+      main_title: '지금\n화제 중!',
+      bg_image_url: coverBg ?? undefined,
       logo_image_url: LOGO_BASE64,
     },
     {
       type: 'badge',
-      sub_title: badgeContent.sub_title,
+      sub_title: issue.topic ?? issue.title,
       desc: badgeContent.desc,
       point_text_01: issue.category,
       point_text_02: surgePctStr ? `▲ ${surgePctStr}` : `화력 ${issue.heat_index ?? 0}점`,
@@ -533,11 +625,15 @@ JSON만 출력, 설명 없이.`,
 
 // 목(분야별): cover + N×badge + follow
 async function generateCategorySlides(issues: Issue[]): Promise<SlideContent[]> {
+  const keywords = await generateCoverKeywords(issues, 'by-category')
+  const coverBg = await fetchPexelsImage(keywords)
+
   const slides: SlideContent[] = [
     {
       type: 'cover',
+      sub_title: '카테고리별 정리',
       main_title: '분야별\n핫이슈',
-      bg_image_url: getIssueThumbnail(issues[0]),
+      bg_image_url: coverBg ?? undefined,
       logo_image_url: LOGO_BASE64,
     },
   ]
@@ -546,7 +642,7 @@ async function generateCategorySlides(issues: Issue[]): Promise<SlideContent[]> 
     const content = await generateBadgeContent(issue, `${issue.category} 분야 최고 화력 이슈입니다.`)
     slides.push({
       type: 'badge',
-      sub_title: content.sub_title,
+      sub_title: issue.topic ?? issue.title,
       desc: content.desc,
       point_text_01: issue.category,
       point_text_02: `화력 ${issue.heat_index ?? 0}점`,
@@ -562,11 +658,15 @@ async function generateCategorySlides(issues: Issue[]): Promise<SlideContent[]> 
 // 금(타임라인): cover + N×body + badge(종결) + follow
 async function generateTimelineSlides(issue: ClosedIssue): Promise<SlideContent[]> {
   const bg = getIssueThumbnail(issue)
+  const timelineKeywords = await generateCoverKeywords([issue], 'timeline')
+  const coverBg = await fetchPexelsImage(timelineKeywords)
+
   const slides: SlideContent[] = [
     {
       type: 'cover',
-      main_title: issue.title,
-      bg_image_url: bg,
+      sub_title: '이슈 타임라인',
+      main_title: issue.topic ?? issue.title,
+      bg_image_url: coverBg ?? undefined,
       logo_image_url: LOGO_BASE64,
     },
   ]
@@ -689,12 +789,21 @@ function getTemplateFile(type: SlideContent['type']): string {
   return path.join(TEMPLATE_DIR, map[type])
 }
 
+function normalizeNewlines(text: string): string {
+  return text.replace(/\\n/g, '\n')
+}
+
+// CJK 통합 한자·히라가나·가타카나 제거 (한글·영문·숫자·문장부호 유지)
+function stripNonKorean(text: string): string {
+  return text.replace(/[　-〿぀-ヿ㐀-䶿一-鿿豈-﫿＀-￯]/g, '')
+}
+
 function fillTemplate(template: string, slide: SlideContent): string {
   return template
     .replace(/\{\{bg_image_url\}\}/g, slide.bg_image_url || '')
-    .replace(/\{\{main_title\}\}/g, slide.main_title || '')
-    .replace(/\{\{sub_title\}\}/g, slide.sub_title || '')
-    .replace(/\{\{desc\}\}/g, slide.desc || '')
+    .replace(/\{\{main_title\}\}/g, normalizeNewlines(slide.main_title || ''))
+    .replace(/\{\{sub_title\}\}/g, normalizeNewlines(slide.sub_title || ''))
+    .replace(/\{\{desc\}\}/g, normalizeNewlines(slide.desc || ''))
     .replace(/\{\{point_text_01\}\}/g, slide.point_text_01 || '')
     .replace(/\{\{point_text_02\}\}/g, slide.point_text_02 || '')
     .replace(/\{\{logo_image_url\}\}/g, slide.logo_image_url || '')
@@ -833,6 +942,20 @@ async function uploadToInstagram(imagePaths: string[], caption: string): Promise
     const carouselJson = (await carouselRes.json()) as { id?: string; error?: { message: string } }
     if (!carouselJson.id) throw new Error(`캐러셀 생성 실패: ${carouselJson.error?.message}`)
 
+    // 캐러셀 컨테이너도 FINISHED 상태가 될 때까지 폴링
+    let carouselAttempts = 0
+    while (carouselAttempts < 15) {
+      await new Promise(r => setTimeout(r, 4000))
+      const statusRes = await fetch(
+        `https://graph.instagram.com/v21.0/${carouselJson.id}?fields=status_code&access_token=${IG_ACCESS_TOKEN}`
+      )
+      const statusJson = (await statusRes.json()) as { status_code?: string }
+      if (statusJson.status_code === 'FINISHED') break
+      if (statusJson.status_code === 'ERROR') throw new Error(`캐러셀 처리 오류`)
+      carouselAttempts++
+    }
+    if (carouselAttempts >= 15) throw new Error(`캐러셀 처리 타임아웃`)
+
     const publishRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`, {
       method: 'POST',
       body: new URLSearchParams({
@@ -940,6 +1063,7 @@ async function uploadToThreads(imagePaths: string[], caption: string): Promise<s
 // ─── 8. X(Twitter) 연계 트윗 ─────────────────────────────
 // 무료 플랜 게시 불가 (Basic $100/월 필요) — 참고용으로 보존
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function tweetCardNews(issues: Issue[]): Promise<void> {
   const twitter = new TwitterApi({
     appKey: TWITTER_API_KEY!,
