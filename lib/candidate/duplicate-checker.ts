@@ -205,13 +205,23 @@ function hasSignificantNumberDifference(
  */
 async function compareByAI(
     newTitle: string,
-    existingTitle: string
+    existingTitle: string,
+    existingCreatedAt?: string
 ): Promise<{ isDuplicate: boolean; confidence: number; reason: string }> {
     try {
+        const ageNote = existingCreatedAt
+            ? (() => {
+                  const days = Math.floor(
+                      (Date.now() - new Date(existingCreatedAt).getTime()) / (1000 * 60 * 60 * 24)
+                  )
+                  return `\n기존 이슈 생성일: ${existingCreatedAt.slice(0, 10)} (${days}일 전)`
+              })()
+            : ''
+
         const prompt = `두 이슈 제목이 같은 사건/논란인지 판단:
 
 [신규] ${newTitle}
-[기존] ${existingTitle}
+[기존] ${existingTitle}${ageNote}
 
 판단 기준:
 1. 완전히 같은 사건 → 중복
@@ -219,6 +229,7 @@ async function compareByAI(
 3. 새로운 전개 → 별개
 4. 반대 사건 → 별개
 5. 연속 사건 (1차, 2차) → 별개
+6. 같은 키워드지만 기존 이슈가 오래됐고(14일+) 원인·맥락이 다른 새 사건 → 별개
 
 응답 형식 (JSON만):
 {
@@ -362,7 +373,7 @@ export async function checkDuplicateIssue(
         console.log(`  ? [AI 검증] "${candidate.title}"`)
         filterStats.aiChecked++
         
-        const aiResult = await compareByAI(newTitle, candidate.title)
+        const aiResult = await compareByAI(newTitle, candidate.title, candidate.created_at)
         
         if (aiResult.isDuplicate) {
             console.log(
