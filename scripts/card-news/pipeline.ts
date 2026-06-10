@@ -40,6 +40,8 @@ const TWITTER_ACCESS_TOKEN = process.env.TWITTER_ACCESS_TOKEN
 const TWITTER_ACCESS_SECRET = process.env.TWITTER_ACCESS_SECRET
 
 const TEMPLATE_DIR = path.join(__dirname, 'templates')
+const ASSETS_DIR = path.join(__dirname, 'assets')
+const FOLLOW_SLIDE_PATH = path.join(ASSETS_DIR, 'slide-follow.png')
 const OUTPUT_DIR = path.join(__dirname, 'output')
 const PUBLISH = process.argv.includes('--publish')
 
@@ -180,6 +182,15 @@ async function run() {
   const imagePaths = await renderSlides(slideContents)
   console.log(`✅ 이미지 ${imagePaths.length}장 생성 완료`)
   console.log('   저장 경로:', OUTPUT_DIR)
+
+  // X(Twitter) 캡션 파일 저장 (수동 게시용 — API 무료 플랜 게시 불가)
+  const xCaption = buildCaption(effectiveMode, issues, closedIssue, 'twitter')
+  const xCaptionPath = path.join(OUTPUT_DIR, 'x-caption.txt')
+  fs.writeFileSync(xCaptionPath, xCaption, 'utf-8')
+  console.log('\n📋 X(Twitter) 캡션 저장:', xCaptionPath)
+  console.log('─'.repeat(40))
+  console.log(xCaption)
+  console.log('─'.repeat(40))
 
   if (!PUBLISH) {
     console.log('ℹ️  테스트 모드: --publish 플래그 없음, 업로드 스킵')
@@ -750,6 +761,16 @@ async function renderSlides(slides: SlideContent[]): Promise<string[]> {
   try {
     for (let i = 0; i < slides.length; i++) {
       const slide = slides[i]
+      const outputPath = path.join(OUTPUT_DIR, `slide-${String(i + 1).padStart(2, '0')}.png`)
+
+      // follow 슬라이드는 내용이 고정이므로 고정 이미지 복사 (HTML 렌더링 스킵)
+      if (slide.type === 'follow' && fs.existsSync(FOLLOW_SLIDE_PATH)) {
+        fs.copyFileSync(FOLLOW_SLIDE_PATH, outputPath)
+        imagePaths.push(outputPath)
+        console.log(`   slide-${i + 1} 저장됨 (고정 이미지)`)
+        continue
+      }
+
       const templateFile = getTemplateFile(slide.type)
       const template = fs.readFileSync(templateFile, 'utf-8')
       const html = fillTemplate(template, slide)
@@ -758,7 +779,6 @@ async function renderSlides(slides: SlideContent[]): Promise<string[]> {
       await page.setViewportSize({ width: 1080, height: 1350 })
       await page.setContent(html, { waitUntil: 'networkidle', timeout: 15000 })
 
-      const outputPath = path.join(OUTPUT_DIR, `slide-${String(i + 1).padStart(2, '0')}.png`)
       await page.screenshot({ path: outputPath, type: 'png', fullPage: false })
       await page.close()
 
@@ -804,83 +824,118 @@ function fillTemplate(template: string, slide: SlideContent): string {
 
 // ─── 5. 캡션 생성 ────────────────────────────────────────
 
-// 카테고리 → 해시태그 매핑
-const CATEGORY_TAGS: Record<string, string> = {
-  '정치': '#정치이슈',
-  '경제': '#경제이슈',
-  '사회': '#사회이슈',
-  '연예': '#연예이슈',
-  '스포츠': '#스포츠이슈',
-  '기술': '#IT이슈',
+// 카테고리 → 해시태그 매핑 (Shorts 방식과 동일: 카테고리명 + 카테고리이슈)
+const CATEGORY_TAGS: Record<string, string[]> = {
+  '정치': ['#정치', '#정치이슈'],
+  '경제': ['#경제', '#경제이슈'],
+  '사회': ['#사회', '#사회이슈'],
+  '연예': ['#연예', '#연예이슈'],
+  '스포츠': ['#스포츠', '#스포츠이슈'],
+  '기술': ['#IT', '#IT이슈'],
 }
 
-// 플랫폼별 태그 수: 인스타는 5~8개, 스레드는 2~3개
-function buildTags(mode: ContentMode, issues: Issue[], platform: 'instagram' | 'threads'): string {
-  const base = ['#왜난리', '#핫이슈']
+// topic (또는 title) 단어를 해시태그로 변환 — Shorts 방식과 동일
+function extractKeywordTags(issues: Issue[], maxPerIssue = 3): string[] {
+  const tags: string[] = []
+  for (const issue of issues) {
+    const words = (issue.topic ?? issue.title)
+      .split(/\s+/)
+      .filter(w => w.length >= 2)
+      .slice(0, maxPerIssue)
+    tags.push(...words.map(w => `#${w}`))
+  }
+  return tags
+}
 
-  const modeTagsMap: Record<ContentMode, string[]> = {
-    'weekend-recap': ['#주말이슈', '#주간핫이슈', '#이번주뭐가터졌나'],
-    'surging':       ['#급상승이슈', '#실시간이슈', '#지금화제'],
-    'weekly-top3':   ['#이번주이슈', '#주간이슈', '#TOP3'],
-    'by-category':   ['#분야별이슈', ...issues.map(i => CATEGORY_TAGS[i.category]).filter(Boolean)],
-    'timeline':      ['#이슈정리', '#사건타임라인', '#이슈타임라인'],
+function buildTags(mode: ContentMode, issues: Issue[]): string {
+  const base = ['#왜난리', '#이슈', '#뉴스', '#한국뉴스', '#카드뉴스']
+
+  // 이슈들의 고유 카테고리 태그
+  const categoryTags = Array.from(new Set(issues.map(i => i.category)))
+    .flatMap(cat => CATEGORY_TAGS[cat] ?? [])
+
+  // 이슈 키워드 태그 (1개 이슈면 5단어, 복수 이슈면 3단어씩)
+  const keywordTags = extractKeywordTags(issues, issues.length === 1 ? 5 : 3)
+
+  const modeTag: Record<ContentMode, string> = {
+    'weekend-recap': '#주간핫이슈',
+    'surging':       '#실시간이슈',
+    'weekly-top3':   '#TOP3',
+    'by-category':   '#분야별이슈',
+    'timeline':      '#이슈타임라인',
   }
 
-  const modeTags = modeTagsMap[mode]
-
-  if (platform === 'threads') {
-    // 스레드는 태그 최소화 (base 2개 + 모드 1개)
-    return [...base, modeTags[0]].join(' ')
-  }
-
-  // 인스타는 base + 모드 태그 전체 (중복 제거)
-  return Array.from(new Set([...base, ...modeTags])).join(' ')
+  return Array.from(new Set([...base, ...categoryTags, ...keywordTags, modeTag[mode]])).join(' ')
 }
 
 function buildCaption(
   mode: ContentMode,
   issues: Issue[],
   closedIssue: ClosedIssue | null,
-  platform: 'instagram' | 'threads' = 'instagram'
+  platform: 'instagram' | 'threads' | 'twitter' = 'instagram'
 ): string {
   const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
-  const tags = buildTags(mode, issues, platform)
+  const cta = `왜난리인지 직접 확인 👉 ${url}`
+  const tags = platform === 'threads'
+    ? ''
+    : platform === 'twitter'
+      ? '#왜난리 #이슈'
+      : buildTags(mode, issues)
 
   switch (mode) {
     case 'weekend-recap': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
-      return ['📸 주말 핫이슈 정리', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+      return [
+        '이번 주 뭐가 터졌나요? 🔥',
+        '',
+        ...lines,
+        '',
+        cta,
+        ...(tags ? ['', tags] : []),
+      ].join('\n')
     }
     case 'surging': {
       const issue = issues[0]
       const surge = issue?.surgePct ? ` (▲${Math.round(issue.surgePct)}%)` : ''
       return [
-        `📸 지금 가장 빠르게 오르는 이슈${surge}`,
+        `지금 이 이슈 모르면 대화 못 낍니다 🚨`,
         '',
-        `"${issue?.title}"`,
+        `"${issue?.title}"${surge}`,
         '',
-        `전체 타임라인 👉 ${url}`,
-        '',
-        tags,
+        cta,
+        ...(tags ? ['', tags] : []),
       ].join('\n')
     }
     case 'weekly-top3': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
-      return ['📸 이번주 핫이슈 TOP 3', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+      return [
+        '이번 주 TOP 3, 다 알고 계신가요? 🔥',
+        '',
+        ...lines,
+        '',
+        cta,
+        ...(tags ? ['', tags] : []),
+      ].join('\n')
     }
     case 'by-category': {
       const lines = issues.map(i => `[${i.category}] "${i.title}"`)
-      return ['📸 오늘의 분야별 핫이슈', '', ...lines, '', `전체 타임라인 👉 ${url}`, '', tags].join('\n')
+      return [
+        '오늘 뭐가 터졌나 — 분야별 정리 📋',
+        '',
+        ...lines,
+        '',
+        cta,
+        ...(tags ? ['', tags] : []),
+      ].join('\n')
     }
     case 'timeline': {
       return [
-        `📸 이슈 타임라인: "${closedIssue?.title}"`,
+        '이 이슈, 처음부터 끝까지 정리했습니다 📌',
         '',
-        '발단부터 종결까지 한눈에',
+        `"${closedIssue?.title}"`,
         '',
-        `전체 타임라인 👉 ${url}`,
-        '',
-        tags,
+        cta,
+        ...(tags ? ['', tags] : []),
       ].join('\n')
     }
   }
