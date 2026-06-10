@@ -79,5 +79,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: card-news-${{ github.run_number }}
-                  path: scripts/card-news/output/*.png
+                  path: |
+                      scripts/card-news/output/*.png
+                      scripts/card-news/output/x-caption.txt
                   retention-days: 7
