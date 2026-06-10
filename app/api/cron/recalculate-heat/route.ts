@@ -3,7 +3,8 @@
  *
  * [화력 분석 + 이슈 상태 자동 전환 Cron]
  *
- * 승인·대기 이슈의 화력 지수를 재계산하고, 두 가지 자동 전환을 수행합니다.
+ * 승인·대기·반려·병합됨 이슈의 화력 지수를 재계산하고,
+ * 승인·대기 활성 이슈에 한해 자동 전환을 수행합니다.
  * Vercel Cron으로 10분마다 실행됩니다.
  *
  * 1) approval_status 전환 (대기 이슈만):
@@ -34,6 +35,11 @@ import { generateVoteOptions } from '@/lib/ai/vote-generator'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
+
+// 화력 재계산 대상 approval_status (반려·병합됨 포함 — 화력만 갱신)
+const HEAT_RECALC_APPROVAL = ['승인', '대기', '반려', '병합됨'] as const
+// 자동 승인·status 전환 대상 (활성 이슈만)
+const ACTIVE_APPROVAL = ['승인', '대기'] as const
 
 /**
  * shouldAutoApprove - 자동 승인 조건 판단
@@ -68,7 +74,7 @@ export async function GET(request: NextRequest) {
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '점화')
-                .in('approval_status', ['승인', '대기'])
+                .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .order('approved_at', { ascending: true, nullsFirst: false })
                 .limit(30),
 
@@ -77,7 +83,7 @@ export async function GET(request: NextRequest) {
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '논란중')
-                .in('approval_status', ['승인', '대기'])
+                .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .order('updated_at', { ascending: true })
                 .limit(15),
 
@@ -86,7 +92,7 @@ export async function GET(request: NextRequest) {
             supabaseAdmin
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
-                .in('approval_status', ['승인', '대기'])
+                .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .not('status', 'in', '(점화,논란중,종결)')
                 .order('updated_at', { ascending: false })
                 .limit(15),
@@ -98,7 +104,7 @@ export async function GET(request: NextRequest) {
                 .from('issues')
                 .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
                 .eq('status', '종결')
-                .eq('approval_status', '승인')
+                .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .or(`heat_updated_at.is.null,heat_updated_at.lt.${staleHeatSince}`)
                 .order('heat_updated_at', { ascending: true, nullsFirst: true })
                 .limit(10),
@@ -173,7 +179,11 @@ export async function GET(request: NextRequest) {
                          * - 이슈 생성 후 10분 이내는 자동 반려 보류
                          * - Race Condition 방지: 뉴스 연결 완료 대기
                          */
-                        if (issue.approval_status === '대기') {
+                        // 종결+대기는 자동 승인 제외 (공개 노출 방지)
+                        if (
+                            issue.approval_status === '대기'
+                            && issue.status !== '종결'
+                        ) {
                             const category = issue.category as IssueCategory
                             
                             // 자동 승인: 화력 + 카테고리 모두 체크
@@ -201,13 +211,16 @@ export async function GET(request: NextRequest) {
                         /*
                          * status(점화/논란중/종결) 자동 전환.
                          * 08_이슈상태전환_규격.md §3 기준으로 평가.
-                         * approval_status와 무관하게 모든 이슈의 status를 전환한다.
+                         * 승인·대기 활성 이슈만 대상 (반려·병합됨은 화력 재계산만).
                          *
                          * calculateBothHeats()로 두 화력을 DB 조회 1회에 동시 계산:
                          *   - UI 표시용 화력(heatIndex): 시간 가중 화력 (실시간성)
                          *   - 상태 전환용 화력(recentHeat): 최근 7일 화력 (안정성)
                          */
-                        if (issue.status) {
+                        if (
+                            issue.status
+                            && (ACTIVE_APPROVAL as readonly string[]).includes(issue.approval_status)
+                        ) {
                             // calculateBothHeats에서 이미 계산된 recentHeat 재사용
                             const transition = await evaluateStatusTransition({
                                 id: issue.id,
@@ -364,6 +377,7 @@ export async function GET(request: NextRequest) {
                 ignite: igniteIssues.data?.length ?? 0,
                 debate: debateIssues.data?.length ?? 0,
                 recent: recentIssues.data?.length ?? 0,
+                closed: closedIssues.data?.length ?? 0,
             },
             autoApproved,
             statusTransitioned,

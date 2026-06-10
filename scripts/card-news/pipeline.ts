@@ -398,7 +398,7 @@ async function generateBadgeContent(
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 짧고 명확하게 작성하세요.' },
+      { role: 'system', content: '당신은 한국 이슈 카드뉴스 편집자입니다. 반드시 한글로만 작성하세요. 한자·일본어·중국어는 절대 사용하지 마세요.' },
       {
         role: 'user',
         content: `이슈 제목: "${issue.title}"
@@ -406,7 +406,7 @@ async function generateBadgeContent(
 화력: ${issue.heat_index ?? 0}점
 ${context}
 
-다음 JSON 형식으로 카드뉴스 텍스트를 생성해줘 (한국어):
+다음 JSON 형식으로 카드뉴스 텍스트를 생성해줘 (한글만 사용, 한자 금지):
 {
   "sub_title": "이슈 핵심을 한 줄로 (20자 이내)",
   "desc": "3줄 설명, 줄바꿈은 \\n 사용 (각 줄 25자 이내)",
@@ -805,6 +805,22 @@ async function uploadToInstagram(imagePaths: string[], caption: string): Promise
       mediaIds.push(json.id)
     }
 
+    // 각 미디어 컨테이너가 FINISHED 상태가 될 때까지 폴링
+    for (const mediaId of mediaIds) {
+      let attempts = 0
+      while (attempts < 15) {
+        await new Promise(r => setTimeout(r, 4000))
+        const statusRes = await fetch(
+          `https://graph.instagram.com/v21.0/${mediaId}?fields=status_code&access_token=${IG_ACCESS_TOKEN}`
+        )
+        const statusJson = (await statusRes.json()) as { status_code?: string }
+        if (statusJson.status_code === 'FINISHED') break
+        if (statusJson.status_code === 'ERROR') throw new Error(`미디어 처리 오류: ${mediaId}`)
+        attempts++
+      }
+      if (attempts >= 15) throw new Error(`미디어 처리 타임아웃: ${mediaId}`)
+    }
+
     const carouselRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
       method: 'POST',
       body: new URLSearchParams({
@@ -885,6 +901,10 @@ async function uploadToThreads(imagePaths: string[], caption: string): Promise<s
       if (!json.id) throw new Error(`Threads 아이템 컨테이너 생성 실패: ${json.error?.message}`)
       itemIds.push(json.id)
     }
+
+    // 아이템 컨테이너 준비 대기
+    console.log('   Threads 아이템 준비 대기 중 (10초)...')
+    await new Promise(r => setTimeout(r, 10000))
 
     const carouselRes = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
       method: 'POST',
