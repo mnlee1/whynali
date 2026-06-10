@@ -92,15 +92,17 @@ interface KPIMetrics {
     }
     todayIssues: number
     monthlyIssues: number
-    todayShortforms: { instagram: number; youtube: number; tiktok: number }
-    monthlyShortforms: { instagram: number; youtube: number; tiktok: number }
+    todayShortforms: number
+    monthlyShortforms: number
+    todayCardNews: number
+    monthlyCardNews: number
     todayNewUsers: number
     todayComments: number
     todayReactions: number
     periodStats: {
-        d1:  { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: { instagram: number; youtube: number; tiktok: number } }
-        d7:  { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: { instagram: number; youtube: number; tiktok: number } }
-        d30: { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: { instagram: number; youtube: number; tiktok: number } }
+        d1:  { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: number; cardNews: number }
+        d7:  { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: number; cardNews: number }
+        d30: { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: number; cardNews: number }
     }
     targets: {
         users: number
@@ -171,7 +173,7 @@ export default function KPIDashboardPage() {
     
     const [selectedYear, setSelectedYear] = useState(currentYear)
     const [selectedMonth, setSelectedMonth] = useState(initialMonth)
-    const [selectedPeriod, setSelectedPeriod] = useState<1 | 7 | 30>(7)
+    const [selectedPeriod, setSelectedPeriod] = useState<1 | 7 | 30>(1)
     const [selectedTab, setSelectedTab] = useState<'today' | 'plan'>('today')
 
     const fetchData = async (year?: number, month?: number) => {
@@ -531,21 +533,52 @@ export default function KPIDashboardPage() {
 
             {selectedTab === 'today' && <>
             {/* 기간 토글 */}
-            <div className="flex p-1 bg-surface-muted rounded-xl w-fit">
-                {([1, 7, 30] as const).map(p => (
-                    <button
-                        key={p}
-                        onClick={() => setSelectedPeriod(p)}
-                        className={`px-6 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                            selectedPeriod === p
-                                ? 'bg-white shadow text-content-primary'
-                                : 'text-content-muted hover:text-content-primary'
-                        }`}
-                    >
-                        {p === 1 ? '오늘' : p === 7 ? '이번주' : '이번달'}
-                    </button>
-                ))}
-            </div>
+            {(() => {
+                const now = new Date()
+                const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
+                const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`
+                const fmtDay = (d: Date) => `${fmt(d)}(${DAY_NAMES[d.getDay()]})`
+
+                const thisWeekStart = new Date(now)
+                thisWeekStart.setDate(now.getDate() - now.getDay())
+                const thisWeekEnd = new Date(thisWeekStart)
+                thisWeekEnd.setDate(thisWeekStart.getDate() + 6)
+
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+                const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
+                // 라벨용: 월 경계로 클리핑
+                const labelWeekStart = thisWeekStart < monthStart ? monthStart : thisWeekStart
+                const labelWeekEnd   = thisWeekEnd   > monthEnd   ? monthEnd   : thisWeekEnd
+
+                // 주차 계산: 이번달 1일 기준 첫 번째 일요일부터 카운트
+                const firstSunday = new Date(monthStart)
+                firstSunday.setDate(monthStart.getDate() - monthStart.getDay())
+                const weekNumber = Math.floor((thisWeekStart.getTime() - firstSunday.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
+
+                const periodLabel = (p: 1 | 7 | 30) => {
+                    if (p === 1) return '오늘'
+                    if (p === 7) return `이번 주 [${weekNumber}주차 - ${fmtDay(labelWeekStart)} ~ ${fmtDay(labelWeekEnd)}]`
+                    return `이번 달 [${fmt(monthStart)} ~ ${fmt(monthEnd)}]`
+                }
+                return (
+                    <div className="flex p-1 bg-surface-muted rounded-xl w-fit">
+                        {([1, 7, 30] as const).map(p => (
+                            <button
+                                key={p}
+                                onClick={() => setSelectedPeriod(p)}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                    selectedPeriod === p
+                                        ? 'bg-white shadow text-content-primary'
+                                        : 'text-content-muted hover:text-content-primary'
+                                }`}
+                            >
+                                {periodLabel(p)}
+                            </button>
+                        ))}
+                    </div>
+                )
+            })()}
 
             {(() => {
                 const pKey = selectedPeriod === 1 ? 'd1' as const : selectedPeriod === 7 ? 'd7' as const : 'd30' as const
@@ -579,10 +612,9 @@ export default function KPIDashboardPage() {
                     <div className="card p-5">
                         <h2 className="text-sm font-semibold text-content-primary mb-4">콘텐츠 등록</h2>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <StatCard label="이슈 (승인)"  val={pStat.issues}              target={issueTarget}     unit="개" />
-                            <StatCard label="인스타 숏폼 등록"  val={pStat.shortforms.instagram} target={shortformTarget} unit="개" />
-                            <StatCard label="유튜브 숏폼 등록"  val={pStat.shortforms.youtube}   target={shortformTarget} unit="개" />
-                            <StatCard label="틱톡 숏폼 등록"    val={pStat.shortforms.tiktok}    target={shortformTarget} unit="개" />
+                            <StatCard label="이슈 (승인)"  val={pStat.issues}     target={issueTarget}     unit="개" />
+                            <StatCard label="숏폼 등록 (유튜브,인스타,틱톡)"    val={pStat.shortforms} target={shortformTarget} unit="개" />
+                            <StatCard label="카드뉴스 등록 (인스타,스레드,X)" val={pStat.cardNews}   target={selectedPeriod}  unit="개" />
                         </div>
                     </div>
 
