@@ -813,28 +813,48 @@ function fillTemplate(template: string, slide: SlideContent): string {
 
 // ─── 5. 캡션 생성 ────────────────────────────────────────
 
-// 카테고리 → 해시태그 매핑
-const CATEGORY_TAGS: Record<string, string> = {
-  '정치': '#정치이슈',
-  '경제': '#경제이슈',
-  '사회': '#사회이슈',
-  '연예': '#연예이슈',
-  '스포츠': '#스포츠이슈',
-  '기술': '#IT이슈',
+// 카테고리 → 해시태그 매핑 (Shorts 방식과 동일: 카테고리명 + 카테고리이슈)
+const CATEGORY_TAGS: Record<string, string[]> = {
+  '정치': ['#정치', '#정치이슈'],
+  '경제': ['#경제', '#경제이슈'],
+  '사회': ['#사회', '#사회이슈'],
+  '연예': ['#연예', '#연예이슈'],
+  '스포츠': ['#스포츠', '#스포츠이슈'],
+  '기술': ['#IT', '#IT이슈'],
+}
+
+// topic (또는 title) 단어를 해시태그로 변환 — Shorts 방식과 동일
+function extractKeywordTags(issues: Issue[], maxPerIssue = 3): string[] {
+  const tags: string[] = []
+  for (const issue of issues) {
+    const words = (issue.topic ?? issue.title)
+      .split(/\s+/)
+      .filter(w => w.length >= 2)
+      .slice(0, maxPerIssue)
+    tags.push(...words.map(w => `#${w}`))
+  }
+  return tags
 }
 
 function buildTags(mode: ContentMode, issues: Issue[]): string {
-  const base = ['#왜난리', '#핫이슈']
+  const base = ['#왜난리', '#이슈', '#뉴스', '#한국뉴스', '#카드뉴스']
 
-  const modeTagsMap: Record<ContentMode, string[]> = {
-    'weekend-recap': ['#주말이슈', '#주간핫이슈', '#이번주뭐가터졌나'],
-    'surging':       ['#급상승이슈', '#실시간이슈', '#지금화제'],
-    'weekly-top3':   ['#이번주이슈', '#주간이슈', '#TOP3'],
-    'by-category':   ['#분야별이슈', ...issues.map(i => CATEGORY_TAGS[i.category]).filter(Boolean)],
-    'timeline':      ['#이슈정리', '#사건타임라인', '#이슈타임라인'],
+  // 이슈들의 고유 카테고리 태그
+  const categoryTags = Array.from(new Set(issues.map(i => i.category)))
+    .flatMap(cat => CATEGORY_TAGS[cat] ?? [])
+
+  // 이슈 키워드 태그 (1개 이슈면 5단어, 복수 이슈면 3단어씩)
+  const keywordTags = extractKeywordTags(issues, issues.length === 1 ? 5 : 3)
+
+  const modeTag: Record<ContentMode, string> = {
+    'weekend-recap': '#주간핫이슈',
+    'surging':       '#실시간이슈',
+    'weekly-top3':   '#TOP3',
+    'by-category':   '#분야별이슈',
+    'timeline':      '#이슈타임라인',
   }
 
-  return Array.from(new Set([...base, ...modeTagsMap[mode]])).join(' ')
+  return Array.from(new Set([...base, ...categoryTags, ...keywordTags, modeTag[mode]])).join(' ')
 }
 
 function buildCaption(
@@ -845,7 +865,11 @@ function buildCaption(
 ): string {
   const url = `whynali.com?utm_source=${platform}&utm_medium=cardnews`
   const cta = platform === 'instagram' ? `전체 타임라인 👉 ${url}` : `왜난리인지 직접 확인 👉 ${url}`
-  const tags = platform === 'threads' ? '' : buildTags(mode, issues)
+  const tags = platform === 'threads'
+    ? ''
+    : platform === 'twitter'
+      ? '#왜난리 #이슈'
+      : buildTags(mode, issues)
 
   switch (mode) {
     case 'weekend-recap': {
