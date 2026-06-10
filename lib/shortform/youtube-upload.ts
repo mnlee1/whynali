@@ -90,6 +90,23 @@ export async function uploadToYouTube(
 }
 
 /**
+ * YouTube 동영상 썸네일 설정 (업로드 후 호출)
+ * @param videoId       - 업로드된 영상 ID
+ * @param thumbBuffer   - JPEG 이미지 버퍼 (9:16)
+ */
+export async function setYouTubeThumbnail(videoId: string, thumbBuffer: Buffer): Promise<void> {
+    const youtube = getYoutubeClient()
+    const { Readable } = await import('stream')
+    await youtube.thumbnails.set({
+        videoId,
+        media: {
+            mimeType: 'image/jpeg',
+            body: Readable.from(thumbBuffer),
+        },
+    })
+}
+
+/**
  * YouTube 동영상 URL 생성
  */
 export function getYoutubeUrl(videoId: string): string {

@@ -1,14 +1,18 @@
 /**
  * lib/shortform/generate-text.ts
  *
- * 숏폼 텍스트 자동 생성 (Groq)
+ * 숏폼 텍스트 자동 생성
  *
- * brief_summary가 있으면 desc를 코드에서 직접 처리 (원문 그대로 사용, Groq 미경유)
+ * brief_summary가 있으면 desc를 코드에서 직접 처리 (원문 그대로 사용, AI 미경유)
  * title은 항상 Groq로 생성.
- * brief_summary가 없으면 Groq 프리 생성.
+ * brief_summary가 없으면 Claude Sonnet 4.6 프리 생성.
+ * desc 압축(35자 초과)도 Claude Sonnet 4.6 사용.
+ * 숏폼 Claude 사용량은 'claude_shortform' 키로 별도 추적 ($0.02/day 한도).
  */
 
 import Groq from 'groq-sdk'
+import Anthropic from '@anthropic-ai/sdk'
+import { incrementApiUsage, getTodayUsage, calculateClaudeCost } from '@/lib/api-usage-tracker'
 
 export interface ShortformTextInput {
     title: string
@@ -81,13 +85,48 @@ JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
 }
 
 /**
+ * Claude Sonnet 4.6으로 숏폼 desc 생성 (별도 예산 추적)
+ * 일별 한도($CLAUDE_SHORTFORM_DAILY_BUDGET_USD) 초과 시 null 반환 → 호출부에서 폴백 처리
+ */
+async function callClaudeShortform(prompt: string, maxTokens: number): Promise<string | null> {
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
+    if (!apiKey) return null
+
+    const dailyBudget = parseFloat(process.env.CLAUDE_SHORTFORM_DAILY_BUDGET_USD ?? '0.02')
+    const todayUsage = await getTodayUsage('claude_shortform')
+    const todayCost = calculateClaudeCost(todayUsage?.input_tokens ?? 0, todayUsage?.output_tokens ?? 0)
+    if (todayCost >= dailyBudget) {
+        console.warn(`[Claude 숏폼] 일별 예산 초과 ($${todayCost.toFixed(4)} / $${dailyBudget}) — Groq 폴백`)
+        return null
+    }
+
+    const client = new Anthropic({ apiKey })
+    try {
+        const res = await client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: maxTokens,
+            temperature: 0.3,
+            messages: [{ role: 'user', content: prompt }],
+        })
+        const inputTokens = res.usage.input_tokens
+        const outputTokens = res.usage.output_tokens
+        await incrementApiUsage('claude_shortform', {
+            calls: 1, successes: 1, failures: 0,
+            inputTokens, outputTokens,
+        })
+        return res.content[0]?.type === 'text' ? res.content[0].text.trim() : null
+    } catch (e) {
+        console.error('[Claude 숏폼] API 오류:', e)
+        await incrementApiUsage('claude_shortform', { calls: 1, successes: 0, failures: 1 })
+        return null
+    }
+}
+
+/**
  * 숏폼 텍스트 자동 생성
  */
 export async function generateShortformText(input: ShortformTextInput): Promise<ShortformTextOutput> {
-    const apiKeys = (process.env.GROQ_API_KEY ?? '').split(',').map(k => k.trim()).filter(Boolean)
-    if (apiKeys.length === 0) {
-        throw new Error('GROQ_API_KEY가 설정되지 않았습니다')
-    }
+    const groqApiKeys = (process.env.GROQ_API_KEY ?? '').split(',').map(k => k.trim()).filter(Boolean)
 
     const rawTitle = input.title.replace(/^\[.*?\]\s*/, '').trim()
     const scene1Title = `"${rawTitle}"`
@@ -182,37 +221,42 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
             }
         }
 
-        // 35자 초과 항목 → Groq 압축 전용 콜
-        for (const apiKey of apiKeys) {
+        // 35자 초과 항목 → Claude Sonnet 4.6 압축 전용 콜 (예산 초과 시 Groq 폴백)
+        const s2Inst = d2Code
+            ? `씬2 (확정): "${d2Code}"`
+            : `씬2 (압축 필요): "${d2Base}" → 35자 이내, 원문 의미 보존, 새 내용 금지`
+        const s3Inst = d3Code
+            ? `씬3 (확정): "${d3Code}"`
+            : `씬3 (압축 필요): "${d3Base}" → 35자 이내, 원문 의미 보존, 새 내용 금지`
+        const compressPrompt = `숏폼 씬 설명 텍스트를 처리하세요.\n\n${s2Inst}\n${s3Inst}\n\n규칙: 이모지 금지, 한글과 기본 문장부호만, 조사/연결어미로 끝나지 말 것\n\nJSON으로만 응답: {"scene2Desc":"...","scene3Desc":"..."}`
+
+        const claudeResult = await callClaudeShortform(compressPrompt, 150)
+        if (claudeResult) {
+            try {
+                const parsed = JSON.parse((claudeResult.match(/\{[\s\S]*\}/) ?? ['{}'])[0])
+                const scene2Desc = d2Code ?? safeD(parsed.scene2Desc, fallback.scene2Desc)
+                const scene3Desc = d3Code ?? safeD(parsed.scene3Desc, fallback.scene3Desc)
+                console.log('[brief Claude 압축]', { d2Base, d3Base, scene2Desc, scene3Desc })
+                return { scene1Title: clean(scene1Title), scene1Desc, scene2Title: sceneTitle, scene2Desc, scene3Title: sceneTitle, scene3Desc }
+            } catch { /* JSON 파싱 실패 → Groq 폴백 */ }
+        }
+
+        // Groq 폴백
+        for (const apiKey of groqApiKeys) {
             try {
                 const groq = new Groq({ apiKey })
-
-                const s2Inst = d2Code
-                    ? `씬2 (확정): "${d2Code}"`
-                    : `씬2 (압축 필요): "${d2Base}" → 35자 이내, 원문 의미 보존, 새 내용 금지`
-                const s3Inst = d3Code
-                    ? `씬3 (확정): "${d3Code}"`
-                    : `씬3 (압축 필요): "${d3Base}" → 35자 이내, 원문 의미 보존, 새 내용 금지`
-
                 const r = await groq.chat.completions.create({
                     model: 'llama-3.1-8b-instant',
-                    messages: [{ role: 'user', content:
-                        `숏폼 씬 설명 텍스트를 처리하세요.\n\n${s2Inst}\n${s3Inst}\n\n규칙: 이모지 금지, 한글과 기본 문장부호만, 조사/연결어미로 끝나지 말 것\n\nJSON으로만 응답: {"scene2Desc":"...","scene3Desc":"..."}` }],
+                    messages: [{ role: 'user', content: compressPrompt }],
                     temperature: 0.2, max_tokens: 150,
                 })
                 const parsed = JSON.parse((r.choices[0]?.message?.content?.match(/\{[\s\S]*\}/) ?? ['{}'])[0])
-
                 const scene2Desc = d2Code ?? safeD(parsed.scene2Desc, fallback.scene2Desc)
                 const scene3Desc = d3Code ?? safeD(parsed.scene3Desc, fallback.scene3Desc)
-
-                console.log('[brief Groq 압축]', { d2Base, d3Base, scene2Desc, scene3Desc })
-                return {
-                    scene1Title: clean(scene1Title), scene1Desc,
-                    scene2Title: sceneTitle, scene2Desc,
-                    scene3Title: sceneTitle, scene3Desc,
-                }
+                console.log('[brief Groq 압축 폴백]', { scene2Desc, scene3Desc })
+                return { scene1Title: clean(scene1Title), scene1Desc, scene2Title: sceneTitle, scene2Desc, scene3Title: sceneTitle, scene3Desc }
             } catch (error) {
-                console.error(`[Groq 압축 실패] key=...${apiKey.slice(-6)}:`, error)
+                console.error(`[Groq 압축 폴백 실패] key=...${apiKey.slice(-6)}:`, error)
             }
         }
         // 모든 키 실패 → 코드 truncate 폴백
@@ -223,7 +267,7 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
         }
     }
 
-    // ── brief 내용 없는 경우: Groq 프리 생성 ──
+    // ── brief 내용 없는 경우: Claude Sonnet 4.6 프리 생성 (예산 초과 시 Groq 폴백) ──
     const freeGenPrompt = `당신은 숏폼 SNS 콘텐츠 기획자입니다.
 아래 이슈의 Scene 2, 3 텍스트를 생성하세요.
 
@@ -244,7 +288,27 @@ scene3: scene3Title 15자 이내 / scene3Desc 35자 이내
 JSON으로만 응답:
 {"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
 
-    for (const apiKey of apiKeys) {
+    // Claude 먼저 시도
+    const claudeFreeResult = await callClaudeShortform(freeGenPrompt, 300)
+    if (claudeFreeResult) {
+        try {
+            const jsonMatch = claudeFreeResult.match(/\{[\s\S]*\}/)
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0])
+                console.log('[Claude 숏폼 프리 생성]', claudeFreeResult)
+                return {
+                    scene1Title: clean(scene1Title), scene1Desc,
+                    scene2Title: safeT(parsed.scene2Title, fallback.scene2Title),
+                    scene2Desc:  safeD(parsed.scene2Desc,  fallback.scene2Desc),
+                    scene3Title: safeT(parsed.scene3Title, fallback.scene3Title),
+                    scene3Desc:  safeD(parsed.scene3Desc,  fallback.scene3Desc),
+                }
+            }
+        } catch { /* JSON 파싱 실패 → Groq 폴백 */ }
+    }
+
+    // Groq 폴백
+    for (const apiKey of groqApiKeys) {
         try {
             const groq = new Groq({ apiKey })
             const completion = await groq.chat.completions.create({
@@ -253,7 +317,7 @@ JSON으로만 응답:
                 temperature: 0.3, max_tokens: 300,
             })
             const text = completion.choices[0]?.message?.content?.trim() ?? ''
-            console.log(`[Groq 프리 생성] key=...${apiKey.slice(-6)}:`, text)
+            console.log(`[Groq 프리 생성 폴백] key=...${apiKey.slice(-6)}:`, text)
             const jsonMatch = text.match(/\{[\s\S]*\}/)
             if (!jsonMatch) { console.warn('[Groq] JSON 파싱 실패'); continue }
             const parsed = JSON.parse(jsonMatch[0])
@@ -265,10 +329,10 @@ JSON으로만 응답:
                 scene3Desc:  safeD(parsed.scene3Desc,  fallback.scene3Desc),
             }
         } catch (error) {
-            console.error(`[Groq 프리 생성 실패] key=...${apiKey.slice(-6)}:`, error)
+            console.error(`[Groq 프리 생성 폴백 실패] key=...${apiKey.slice(-6)}:`, error)
         }
     }
 
-    console.error('[Groq] 모든 키 실패 — 폴백 사용')
+    console.error('[숏폼 텍스트] 모든 시도 실패 — 폴백 사용')
     return fallback
 }

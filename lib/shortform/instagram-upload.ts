@@ -15,6 +15,7 @@
 export interface InstagramUploadOptions {
     caption: string          // 설명 + 해시태그
     shareToFeed?: boolean    // 피드에도 공유 여부
+    coverUrl?: string        // 썸네일 공개 URL (9:16 JPEG)
 }
 
 const GRAPH_API = 'https://graph.instagram.com/v21.0'
@@ -37,6 +38,7 @@ async function createContainer(
         caption: options.caption,
         share_to_feed: String(options.shareToFeed ?? true),
         access_token: accessToken,
+        ...(options.coverUrl ? { cover_url: options.coverUrl } : {}),
     })
 
     const res = await fetch(`${GRAPH_API}/${userId}/media`, {

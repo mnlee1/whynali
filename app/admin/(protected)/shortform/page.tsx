@@ -55,7 +55,7 @@ const STAGE_STYLE: Record<string, { badge: string; border: string; header: strin
     '종결': { badge: 'bg-gray-200 text-gray-600',     border: 'border-gray-300',  header: 'bg-gray-100',  row: 'hover:bg-gray-50/60' },
 }
 
-/** 유사한 항목 제거 — 문자 집합 기준 Jaccard 유사도 0.6 초과 시 중복 처리 */
+/** 유사한 항목 제거 — 문자 집합 기준 Jaccard 유사도 0.72 초과 시 중복 처리 */
 function deduplicateItems(items: SelectedContentItem[]): SelectedContentItem[] {
     const norm = (s: string) => s.replace(/[\s.,!?~""''·]/g, '')
     const kept: SelectedContentItem[] = []
@@ -69,7 +69,7 @@ function deduplicateItems(items: SelectedContentItem[]): SelectedContentItem[] {
             const sb = new Set(nb.split(''))
             const intersection = [...sa].filter(c => sb.has(c)).length
             const union = new Set([...sa, ...sb]).size
-            return intersection / union > 0.6
+            return intersection / union > 0.72
         })
         if (!isDuplicate) kept.push(item)
     }
@@ -102,6 +102,7 @@ interface ImagePreviewModal {
     error: string | null
     contentLoading: boolean
     selectedItems: SelectedContentItem[]
+    allBullets: string[]
     rewrittenTexts: string[]
     rewriteLoading: boolean
     rewriteError: string | null
@@ -160,6 +161,7 @@ export default function AdminShortformPage() {
     const [uploadingAction, setUploadingAction] = useState<'youtube' | 'tiktok' | 'instagram' | 'all' | null>(null)
     const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
     const [rewritingIndex, setRewritingIndex] = useState<number | null>(null)
+    const [copiedTiktokId, setCopiedTiktokId] = useState<string | null>(null)
 
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
@@ -176,6 +178,7 @@ export default function AdminShortformPage() {
         error: null,
         contentLoading: false,
         selectedItems: [],
+        allBullets: [],
         rewrittenTexts: [],
         rewriteLoading: false,
         rewriteError: null,
@@ -361,12 +364,16 @@ export default function AdminShortformPage() {
         }
     }
 
-    const fetchPreviewImages = async (jobId: string, count: number, seed?: number) => {
+    const fetchPreviewImages = async (jobId: string, sceneTexts: string[], seed?: number) => {
         setImagePreview((prev) => ({ ...prev, loading: true, error: null, images: [], fullImages: [] }))
         try {
-            const params = new URLSearchParams({ count: String(count) })
-            if (seed !== undefined) params.set('seed', String(seed))
-            const res = await fetch(`/api/admin/shortform/${jobId}/preview-images?${params}`)
+            const body: { sceneTexts: string[]; seed?: number } = { sceneTexts }
+            if (seed !== undefined) body.seed = seed
+            const res = await fetch(`/api/admin/shortform/${jobId}/preview-images`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
             setImagePreview((prev) => ({
@@ -398,6 +405,7 @@ export default function AdminShortformPage() {
             error: null,
             contentLoading: true,
             selectedItems: [],
+            allBullets: [],
             rewrittenTexts: [],
             rewriteLoading: false,
             rewriteError: null,
@@ -407,22 +415,33 @@ export default function AdminShortformPage() {
             const summaryJson = await summaryRes.json()
             const stageSummaries: StageSummary[] = summaryJson.data ?? []
 
+            const MIN_SCENES = 3
             const MAX_SCENES = 5
-            const allItems = deduplicateItems(buildItemsFromSummaries(stageSummaries)).slice(0, MAX_SCENES)
+            const rawItems = buildItemsFromSummaries(stageSummaries)
+            const dedupedItems = deduplicateItems(rawItems).slice(0, MAX_SCENES)
+            // 중복 제거 후 MIN_SCENES 미만이면 원본(비중복 제거)으로 보완
+            const allItems = dedupedItems.length >= MIN_SCENES
+                ? dedupedItems
+                : rawItems.slice(0, MAX_SCENES)
+
+            // 전체 이슈 맥락 — AI에 배경 정보로 전달하기 위해 모든 bullets 수집
+            const allBullets = stageSummaries.flatMap(s =>
+                s.bullets.map((b) => (typeof b === 'string' ? b : b.text))
+            ).filter(Boolean)
 
             setImagePreview(prev => ({
                 ...prev,
                 contentLoading: false,
                 selectedItems: allItems,
+                allBullets,
                 loading: allItems.length > 0,
                 rewriteLoading: allItems.length > 0,
             }))
             if (allItems.length === 0) return
 
-            const imgCount = Math.max(Math.ceil(allItems.length / 2), 1)
             await Promise.all([
-                fetchRewrittenTexts(allItems, job.issue_title, job.issue_status),
-                fetchPreviewImages(job.id, imgCount),
+                fetchRewrittenTexts(allItems, job.issue_title, job.issue_status, allBullets),
+                fetchPreviewImages(job.id, allItems.map(item => item.text)),
             ])
         } catch {
             setImagePreview(prev => ({ ...prev, contentLoading: false }))
@@ -430,7 +449,7 @@ export default function AdminShortformPage() {
     }
 
     /** timeline/points 소스 텍스트를 1회 AI로 압축·흐름 처리 */
-    const fetchRewrittenTexts = async (items: SelectedContentItem[], issueTitle: string, issueStatus?: string) => {
+    const fetchRewrittenTexts = async (items: SelectedContentItem[], issueTitle: string, issueStatus?: string, contextBullets?: string[]) => {
         setImagePreview(prev => ({ ...prev, rewriteLoading: true, rewriteError: null }))
         const sceneTexts = items.map(item => item.text)
         try {
@@ -441,6 +460,7 @@ export default function AdminShortformPage() {
                     issueTitle,
                     issueStatus: issueStatus ?? '',
                     scenes: items.map((item, i) => ({ index: i, text: item.text, stage: item.stage })),
+                    contextBullets: contextBullets ?? [],
                 }),
             })
             const json = await res.json()
@@ -469,12 +489,14 @@ export default function AdminShortformPage() {
     }
 
     const handleRefreshAllTexts = () => {
-        fetchRewrittenTexts(imagePreview.selectedItems, imagePreview.jobTitle, imagePreview.jobIssueStatus)
+        fetchRewrittenTexts(imagePreview.selectedItems, imagePreview.jobTitle, imagePreview.jobIssueStatus, imagePreview.allBullets)
     }
 
     const handleRefreshAllImages = () => {
-        const imgCount = Math.max(Math.ceil(imagePreview.selectedItems.length / 2), 1)
-        fetchPreviewImages(imagePreview.jobId, imgCount, Math.floor(Math.random() * 100000))
+        const sceneTexts = imagePreview.selectedItems.map((item, i) =>
+            imagePreview.rewrittenTexts[i] ?? item.text
+        )
+        fetchPreviewImages(imagePreview.jobId, sceneTexts, Math.floor(Math.random() * 100000))
     }
 
     const handleRefreshSingleText = async (index: number) => {
@@ -492,6 +514,7 @@ export default function AdminShortformPage() {
                     totalScenes: imagePreview.selectedItems.length,
                     variation: true,
                     scenes: [{ index: index, text: item.text, stage: item.stage }],
+                    contextBullets: imagePreview.allBullets,
                 }),
             })
             const json = await res.json()
@@ -517,23 +540,24 @@ export default function AdminShortformPage() {
 
     const handleRefreshSingleImage = async (index: number) => {
         if (regeneratingIndex !== null || imagePreview.generating) return
-        const imgIndex = Math.floor(index / 2)  // 씬 2개가 이미지 1장 공유
         setRegeneratingIndex(index)
         try {
             const seed = Math.floor(Math.random() * 100000)
-            const res = await fetch(`/api/admin/shortform/${imagePreview.jobId}/preview-images?count=8&seed=${seed}`)
+            const sceneText = imagePreview.rewrittenTexts[index] ?? imagePreview.selectedItems[index]?.text ?? ''
+            const res = await fetch(`/api/admin/shortform/${imagePreview.jobId}/preview-images`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sceneTexts: [sceneText], seed }),
+            })
             const json = await res.json()
             if (res.ok && json.images?.length > 0) {
-                const allCurrentImages = imagePreview.images
-                const pickedIdx = (json.images as string[]).findIndex(url => !allCurrentImages.includes(url))
-                const idx = pickedIdx >= 0 ? pickedIdx : 0
-                const picked = json.images[idx]
-                const pickedFull = json.fullImages?.[idx] ?? picked
+                const picked = json.images[0] as string
+                const pickedFull = json.fullImages?.[0] ?? picked
                 setImagePreview(prev => {
                     const newImages = [...prev.images]
                     const newFullImages = [...prev.fullImages]
-                    newImages[imgIndex] = picked
-                    newFullImages[imgIndex] = pickedFull
+                    newImages[index] = picked
+                    newFullImages[index] = pickedFull
                     return { ...prev, images: newImages, fullImages: newFullImages }
                 })
             }
@@ -541,6 +565,24 @@ export default function AdminShortformPage() {
             // 실패 무시
         } finally {
             setRegeneratingIndex(null)
+        }
+    }
+
+    const handleDownload = async (videoPath: string, issueTitle: string) => {
+        try {
+            const url = getStoragePublicUrl(videoPath)
+            const res = await fetch(url)
+            const blob = await res.blob()
+            const blobUrl = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = blobUrl
+            a.download = `${issueTitle}.mp4`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(blobUrl)
+        } catch {
+            alert('다운로드 실패')
         }
     }
 
@@ -1027,6 +1069,7 @@ export default function AdminShortformPage() {
 
                                                 const tiktokStatus = (job.upload_status as any)?.tiktok?.status
                                                 const tiktokProfileUrl = (job.upload_status as any)?.tiktok?.profileUrl
+                                                const tiktokUtmUrl = (job.upload_status as any)?.tiktok?.utmUrl as string | undefined
                                                 const isTiktokUploaded = tiktokStatus === 'success'
 
                                                 const instagramStatus = (job.upload_status as any)?.instagram?.status
@@ -1124,6 +1167,27 @@ export default function AdminShortformPage() {
 
                                                         {hasAnySuccessfulUpload ? (
                                                             <>
+                                                                {isTiktokUploaded && tiktokUtmUrl && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const caption = `지금 뜨거운 이슈! ${job.issue_title}\n📌 왜난리에서 실시간 여론·토론·타임라인 확인하기\n${tiktokUtmUrl}`
+                                                                            navigator.clipboard.writeText(caption)
+                                                                            setCopiedTiktokId(job.id)
+                                                                            setTimeout(() => setCopiedTiktokId(null), 2000)
+                                                                        }}
+                                                                        className="text-xs px-2.5 py-1.5 bg-cyan-50 text-cyan-700 rounded-full hover:bg-cyan-100 whitespace-nowrap border border-cyan-200"
+                                                                    >
+                                                                        {copiedTiktokId === job.id ? 'TikTok 게시글 복사됨 ✓' : 'TikTok 게시글 복사'}
+                                                                    </button>
+                                                                )}
+                                                                {job.video_path && (
+                                                                    <button
+                                                                        onClick={() => handleDownload(job.video_path!, job.issue_title)}
+                                                                        className="text-xs px-2.5 py-1.5 bg-pink-50 text-pink-700 rounded-full hover:bg-pink-100 whitespace-nowrap border border-pink-200"
+                                                                    >
+                                                                        숏폼 다운로드
+                                                                    </button>
+                                                                )}
                                                                 {allUploaded && job.video_path && (
                                                                     <button
                                                                         onClick={() => handleDeleteStorage(job.id)}
@@ -1254,13 +1318,13 @@ export default function AdminShortformPage() {
                                                 {imagePreview.error}
                                             </p>
                                         )}
-                                        {/* 안 A 레이아웃: 이미지 그룹 → 씬 카드 2열 */}
+                                        {/* 씬 별 이미지 1:1 레이아웃 */}
                                         {(() => {
                                             const N = imagePreview.selectedItems.length
-                                            const imgCount = Math.ceil(N / 2)
+                                            const imgCount = N
                                             const groups = Array.from({ length: imgCount }, (_, gi) => ({
                                                 imgIndex: gi,
-                                                sceneIndices: [gi * 2, gi * 2 + 1].filter(si => si < N),
+                                                sceneIndices: [gi],
                                             }))
                                             return (
                                                 <div className="grid grid-cols-2 gap-4">

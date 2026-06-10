@@ -232,3 +232,52 @@ export async function fetchPexelsImagesWithFull(
         return { previews: [], fulls: [] }
     }
 }
+
+/**
+ * 씬 텍스트 배열을 받아 씬마다 개별 Pexels 검색.
+ * 각 씬 텍스트에서 키워드를 추출해 씬에 최적화된 이미지를 반환.
+ * 키워드 추출 실패 시 카테고리 폴백 이미지 사용.
+ */
+export async function fetchPexelsImagesForScenes(
+    sceneTexts: string[],
+    category: string,
+    seed?: number,
+): Promise<{ previews: string[]; fulls: string[] }> {
+    const apiKey = process.env.PEXELS_API_KEY
+    if (!apiKey) return { previews: [], fulls: [] }
+
+    const fallbackQuery = CATEGORY_FALLBACK[category] ?? 'news'
+    const usedUrls = new Set<string>()
+
+    const results = await Promise.all(
+        sceneTexts.map(async (text, idx) => {
+            // 씬마다 다른 seed를 사용해 동일 키워드라도 다른 사진이 선택되도록
+            const sceneSeed = seed !== undefined ? seed + idx * 7919 : undefined
+            const groqResult = await extractKeywordsAndTone(text, category)
+            try {
+                const query = groqResult?.keywords ?? fallbackQuery
+                const photos = await searchPexels(query, apiKey, sceneSeed, 5)
+                const pick = photos.find(p => !usedUrls.has(p.large))
+                if (pick) {
+                    usedUrls.add(pick.large)
+                    return { preview: pick.large, full: pick.original }
+                }
+            } catch { /* 폴백으로 진행 */ }
+            // 폴백
+            try {
+                const photos = await searchPexels(fallbackQuery, apiKey, sceneSeed, 5)
+                const pick = photos.find(p => !usedUrls.has(p.large))
+                if (pick) {
+                    usedUrls.add(pick.large)
+                    return { preview: pick.large, full: pick.original }
+                }
+            } catch { /* 최종 실패 */ }
+            return null
+        })
+    )
+
+    return {
+        previews: results.map(r => r?.preview ?? ''),
+        fulls: results.map(r => r?.full ?? ''),
+    }
+}

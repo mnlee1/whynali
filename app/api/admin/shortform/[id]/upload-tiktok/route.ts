@@ -12,7 +12,6 @@ import { requireAdmin } from '@/lib/admin'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { writeAdminLog } from '@/lib/admin-log'
 import { uploadToTikTok, getTikTokProfileUrl } from '@/lib/shortform/tiktok-upload'
-import { extractYoutubeHashtags } from '@/lib/shortform/generate-text'
 
 /**
  * POST /api/admin/shortform/:id/upload-tiktok
@@ -29,7 +28,7 @@ export async function POST(
         // 1. shortform_job 조회
         const { data: job, error: jobError } = await supabaseAdmin
             .from('shortform_jobs')
-            .select('id, issue_id, issue_title, issue_url, approval_status, video_path, upload_status, issues(category)')
+            .select('id, issue_id, issue_title, issue_url, approval_status, video_path, upload_status, issues(category, short_code)')
             .eq('id', jobId)
             .single()
 
@@ -88,28 +87,13 @@ export async function POST(
             videoBuffer = Buffer.from(await videoData.arrayBuffer())
         }
 
-        // 카테고리별 해시태그 매핑
-        const CATEGORY_HASHTAGS: Record<string, string> = {
-            '연예': '#연예 #연예이슈 #셀럽',
-            '정치': '#정치 #정치이슈',
-            '스포츠': '#스포츠 #스포츠이슈',
-            '사회': '#사회 #사회이슈',
-            '경제': '#경제 #경제이슈',
-            '기술': '#기술 #IT #테크',
-            '세계': '#세계 #해외이슈 #글로벌',
-            '생활문화': '#생활 #문화 #라이프',
-        }
-        const issueCategory = (job.issues as any)?.[0]?.category ?? (job.issues as any)?.category ?? ''
-        const categoryTag = CATEGORY_HASHTAGS[issueCategory] ?? ''
+        const shortCode = (job.issues as any)?.[0]?.short_code ?? (job.issues as any)?.short_code ?? ''
+        const issueUUID = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
+        const issueSlug = shortCode || issueUUID
+        const utmUrl = issueSlug ? `https://whynali.com/i/${issueSlug}?utm_source=tiktok&utm_medium=shorts` : ''
+        const shortUrl = utmUrl ? ` ${utmUrl}` : ''
 
-        // 이슈 제목 파생 키워드 (Groq) — YouTube와 동일 로직
-        const titleKeywords = await extractYoutubeHashtags(job.issue_title)
-        const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
-
-        const issueId = job.issue_url?.split('/issue/')[1]?.split('?')[0] ?? ''
-        const shortUrl = issueId ? ` https://whynali.com/i/${issueId}` : ''
-
-        const tiktokTitle = `${job.issue_title} | 왜난리${shortUrl} #왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        const tiktokTitle = `${job.issue_title} | 왜난리${shortUrl}`.trim()
 
         // 3. TikTok 업로드
         let publishId: string
@@ -131,6 +115,7 @@ export async function POST(
                     status: 'success',
                     publishId,
                     profileUrl,
+                    utmUrl,
                     uploadedAt: new Date().toISOString(),
                 },
             }
