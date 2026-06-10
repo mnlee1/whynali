@@ -40,6 +40,8 @@ const TWITTER_ACCESS_TOKEN = process.env.TWITTER_ACCESS_TOKEN
 const TWITTER_ACCESS_SECRET = process.env.TWITTER_ACCESS_SECRET
 
 const TEMPLATE_DIR = path.join(__dirname, 'templates')
+const ASSETS_DIR = path.join(__dirname, 'assets')
+const FOLLOW_SLIDE_PATH = path.join(ASSETS_DIR, 'slide-follow.png')
 const OUTPUT_DIR = path.join(__dirname, 'output')
 const PUBLISH = process.argv.includes('--publish')
 
@@ -759,6 +761,16 @@ async function renderSlides(slides: SlideContent[]): Promise<string[]> {
   try {
     for (let i = 0; i < slides.length; i++) {
       const slide = slides[i]
+      const outputPath = path.join(OUTPUT_DIR, `slide-${String(i + 1).padStart(2, '0')}.png`)
+
+      // follow 슬라이드는 내용이 고정이므로 고정 이미지 복사 (HTML 렌더링 스킵)
+      if (slide.type === 'follow' && fs.existsSync(FOLLOW_SLIDE_PATH)) {
+        fs.copyFileSync(FOLLOW_SLIDE_PATH, outputPath)
+        imagePaths.push(outputPath)
+        console.log(`   slide-${i + 1} 저장됨 (고정 이미지)`)
+        continue
+      }
+
       const templateFile = getTemplateFile(slide.type)
       const template = fs.readFileSync(templateFile, 'utf-8')
       const html = fillTemplate(template, slide)
@@ -767,7 +779,6 @@ async function renderSlides(slides: SlideContent[]): Promise<string[]> {
       await page.setViewportSize({ width: 1080, height: 1350 })
       await page.setContent(html, { waitUntil: 'networkidle', timeout: 15000 })
 
-      const outputPath = path.join(OUTPUT_DIR, `slide-${String(i + 1).padStart(2, '0')}.png`)
       await page.screenshot({ path: outputPath, type: 'png', fullPage: false })
       await page.close()
 
