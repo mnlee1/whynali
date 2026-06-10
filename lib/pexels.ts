@@ -52,7 +52,7 @@ Tone: append ::dark or ::bright based on topic sentiment.
 - ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
 
 CRITICAL RULES (override all other logic):
-1. [연예] ALWAYS use entertainment/media visual keywords (cinema, stage, film, screen, neon, spotlight). NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
+1. [연예] IGNORE all Korean person names in the headline — they are celebrity names, NOT literal words (e.g. "수영"=celebrity name not swimming, "지수"=celebrity name not index). Focus ONLY on what EVENT occurred. ALWAYS use entertainment/media visual keywords. NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
 2. For legal/crime topics (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category: choose the most contextually fitting scene below. NEVER use "court" alone (it maps to sports courts on Pexels).
    - 영장 발부 / 재판 / 기소 → "courthouse exterior dark" or "gavel justice law"
    - 구속 / 체포 → "prison bars metal dark" or "police badge justice"
@@ -67,6 +67,7 @@ Examples:
 - [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
 - [연예] "배우 음주운전 적발" → "night road rain::dark"
 - [연예] "아이돌 열애설 인정" → "couple romantic flowers::bright"
+- [연예] "정경호 수영 결별" → "couple heartbreak dark::dark"
 - [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
 - [연예] "배우 마약 혐의 구속" → "prison bars metal dark::dark"
 - [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
