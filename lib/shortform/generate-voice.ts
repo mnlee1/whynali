@@ -54,7 +54,9 @@ const KOREAN_DIGITS: Record<string, string> = {
  */
 function preprocessForTTS(text: string): string {
     const toKorean = (n: string) => n.split('').map(d => KOREAN_DIGITS[d] ?? d).join('')
-    return text.replace(/(?<!\d)(\d{1,2})[.·](\d{2})(?!\d)/g, (_, a, b) => toKorean(a) + toKorean(b))
+    return text
+        .replace(/(\d+)\s*[-:]\s*(\d+)/g, (_, a, b) => `${a}대${b}`)
+        .replace(/(?<!\d)(\d{1,2})[.·](\d{2})(?!\d)/g, (_, a, b) => toKorean(a) + toKorean(b))
 }
 
 export async function generateGoogleTTS(script: string): Promise<Buffer | null> {
