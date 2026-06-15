@@ -66,6 +66,12 @@ async function buildTextAnimationVideo(
         `-vf fps=${fps} -pix_fmt rgba -c:v png -t ${sceneDuration.toFixed(4)} -y "${outputPath}"`
     )
 
+    const { rm } = await import('fs/promises')
+    await Promise.all([
+        ...framePaths.map(p => rm(p, { force: true }).catch(() => {})),
+        rm(concatPath, { force: true }).catch(() => {}),
+    ])
+
     return outputPath
 }
 
@@ -144,6 +150,12 @@ async function buildBackgroundMotionVideo(
         `-vf fps=${BG_FPS} -pix_fmt yuv420p -c:v libx264 -crf 18 -preset ultrafast ` +
         `-t ${sceneDuration.toFixed(4)} -y "${outputPath}"`
     )
+
+    const { rm } = await import('fs/promises')
+    await Promise.all([
+        ...framePaths.map(p => rm(p, { force: true }).catch(() => {})),
+        rm(concatPath, { force: true }).catch(() => {}),
+    ])
 
     return outputPath
 }
