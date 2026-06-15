@@ -8,6 +8,15 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase-server'
+import {
+    getKSTDaysAgoStart,
+    getKSTDayOffset,
+    getKSTLastMonthStart,
+    getKSTMonthStart,
+    getKSTTodayStart,
+    getKSTWeekStart,
+    getKSTYearMonth,
+} from '@/lib/kpi/kst-date'
 
 const supabase = supabaseAdmin
 
@@ -207,10 +216,10 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         notes: string | null
     } | null
 }> {
-    // 기본값: 현재 연월
-    const now = new Date()
-    const targetYear = year || now.getFullYear()
-    const targetMonth = month || now.getMonth() + 1
+    // 기본값: KST 기준 현재 연월
+    const kstNow = getKSTYearMonth()
+    const targetYear = year || kstNow.year
+    const targetMonth = month || kstNow.month
 
     // 1. 해당 월의 KPI 목표 가져오기
     const { data: goal, error: goalError } = await supabase
@@ -285,10 +294,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .from('user_votes')
         .select('*', { count: 'exact', head: true })
 
-    // 4. 이달 활성 참여자 수 (중복 제거)
-    const thisMonthForParticipation = new Date()
-    thisMonthForParticipation.setDate(1)
-    thisMonthForParticipation.setHours(0, 0, 0, 0)
+    // 4. 이달 활성 참여자 수 (중복 제거, KST 기준)
+    const thisMonthForParticipation = getKSTMonthStart()
 
     const [
         { data: monthlyCommentUsers },
@@ -315,12 +322,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const reactionParticipation = (totalUsers || 0) > 0 ? (monthlyActiveReactors    / (totalUsers || 0)) * 100 : 0
     const voteParticipation     = (totalUsers || 0) > 0 ? (monthlyActiveVoters      / (totalUsers || 0)) * 100 : 0
 
-    // 4-1. 오늘 운영 KPI (이슈 / 숏폼)
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-
-    const now3 = new Date()
-    const thisMonthStart2 = new Date(now3.getFullYear(), now3.getMonth(), 1)
+    // 4-1. 오늘 운영 KPI (이슈 / 숏폼, KST 기준)
+    const todayStart = getKSTTodayStart()
+    const thisMonthStart2 = getKSTMonthStart()
 
     const [
         { count: todayIssuesCount },
@@ -363,9 +367,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const todayShortforms = todayShortformsCount ?? 0
     const monthlyShortforms = monthlyShortformsCount ?? 0
 
-    // 5. 최근 7일 데이터
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    // 5. 최근 7일 데이터 (KST 기준)
+    const sevenDaysAgo = getKSTDaysAgoStart(7)
 
     const { count: newUsers7d } = await supabase
         .from('users')
@@ -393,10 +396,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const dailyComments = (newComments7d || 0) / 7
     const dailyReactions = (newReactions7d || 0) / 7
 
-    // 6-b. 기간 선택용: 이번주(일~토) · 이번달(1일~말일) 집계
-    const thisWeekStart = new Date()
-    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay()) // 이번 주 일요일
-    thisWeekStart.setHours(0, 0, 0, 0)
+    // 6-b. 기간 선택용: 이번주(일~토) · 이번달(1일~말일) 집계 (KST 기준)
+    const thisWeekStart = getKSTWeekStart()
 
     const [
         { count: newIssuesThisWeek },
@@ -652,9 +653,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         deltaPercent: previous > 0 ? ((current - previous) / previous) * 100 : null,
     })
 
-    // 지난주 (7-14일 전)
-    const fourteenDaysAgo = new Date()
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    // 지난주 (7-14일 전, KST 기준)
+    const fourteenDaysAgo = getKSTDaysAgoStart(14)
 
     const [
         { count: prevUsers7d },
@@ -677,10 +677,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             .lt('created_at', sevenDaysAgo.toISOString()),
     ])
 
-    // 이번 달 / 지난달
-    const now2 = new Date()
-    const thisMonthStart = new Date(now2.getFullYear(), now2.getMonth(), 1)
-    const lastMonthStart = new Date(now2.getFullYear(), now2.getMonth() - 1, 1)
+    // 이번 달 / 지난달 (KST 기준)
+    const thisMonthStart = getKSTMonthStart()
+    const lastMonthStart = getKSTLastMonthStart()
 
     const [
         { count: thisMonthUsers },
@@ -742,9 +741,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
 
     const toDaily = (rows: { created_at: string }[] | null, days = 14): number[] => {
         const buckets = new Array(days).fill(0)
-        const now = Date.now()
         rows?.forEach(r => {
-            const daysAgo = Math.floor((now - new Date(r.created_at).getTime()) / 86400000)
+            const daysAgo = getKSTDayOffset(new Date(r.created_at))
             if (daysAgo >= 0 && daysAgo < days) buckets[days - 1 - daysAgo]++
         })
         return buckets

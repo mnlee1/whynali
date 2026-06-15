@@ -7,24 +7,21 @@
  * - 2026-03-16: 수동 생성 기능 제거, track_a만 허용
  */
 
-export type SourceTrack = 'track_a'
+export type SourceTrack = 'track_a' | 'manual'
 
 export interface IssueCreationData {
     title: string
     category: string
     source_track: SourceTrack
     approval_status?: string
+    approval_type?: string | null
     status?: string
     topic?: string | null
     topic_description?: string | null
 }
 
-/**
- * 이슈 생성 데이터 검증
- * 
- * source_track이 null로 생성되는 것을 방지하기 위한 필수 검증
- * 이슈는 트랙 A 프로세스를 통해서만 생성됨
- */
+const VALID_SOURCE_TRACKS: SourceTrack[] = ['track_a', 'manual']
+
 export function validateIssueCreation(data: Partial<IssueCreationData>): {
     isValid: boolean
     error?: string
@@ -41,17 +38,17 @@ export function validateIssueCreation(data: Partial<IssueCreationData>): {
 
     // 2. source_track 필수 검증 (null 방지)
     if (!data.source_track) {
-        return { 
-            isValid: false, 
-            error: 'source_track은 필수 필드입니다. "track_a"만 허용됩니다' 
+        return {
+            isValid: false,
+            error: `source_track은 필수 필드입니다. 허용값: ${VALID_SOURCE_TRACKS.join(', ')}`
         }
     }
 
-    // 3. source_track 값 검증 (track_a만 허용)
-    if (data.source_track !== 'track_a') {
-        return { 
-            isValid: false, 
-            error: `source_track은 "track_a"만 가능합니다. 현재 값: ${data.source_track}` 
+    // 3. source_track 값 검증
+    if (!VALID_SOURCE_TRACKS.includes(data.source_track)) {
+        return {
+            isValid: false,
+            error: `source_track 허용값: ${VALID_SOURCE_TRACKS.join(', ')}. 현재 값: ${data.source_track}`
         }
     }
 
@@ -63,6 +60,7 @@ export function validateIssueCreation(data: Partial<IssueCreationData>): {
             category: data.category,
             source_track: data.source_track,
             approval_status: data.approval_status ?? '대기',
+            approval_type: data.approval_type ?? null,
             status: data.status ?? '점화',
             topic: data.topic ?? null,
             topic_description: data.topic_description ?? null,

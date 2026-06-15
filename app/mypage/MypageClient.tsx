@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react'
 import { ThumbsUp, ThumbsDown } from 'lucide-react'
 import { validateEmail } from '@/lib/validate-email'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 
 type IssueRef = { id: string; title: string; category?: string }
 
@@ -158,10 +158,7 @@ export default function MypageClient({
     const [isWithdrawing, setIsWithdrawing] = useState(false)
     const [withdrawError, setWithdrawError] = useState<string | null>(null)
 
-    const sb = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
+    const sb = supabase
 
     const providerInfo = isAdmin
         ? { text: '관리자', badge: '운', badgeClass: 'bg-red-500 text-white' }

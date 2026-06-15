@@ -326,7 +326,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     <TimelineSection
                         issueId={id}
                         issueStatus={issue.status}
-                        initialSummaries={timelineSummaries}
+                        initialSummaries={timelineSummaries.length > 0 ? timelineSummaries : undefined}
                     />
                 </div>
             </div>

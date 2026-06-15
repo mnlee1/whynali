@@ -14,8 +14,7 @@
  *  3. votes, vote_choices: 단순 이동 (target에 이미 있으면 소스 votes는 삭제)
  *  4. 소스 이슈 → approval_status='병합됨', merged_into_id=target_id
  *  5. 타깃 화력 재계산 (합산된 수집 데이터 기준)
- *  6. 종결 타깃이면 heat_at_close 동기화
- *  7. 캐시 무효화
+ *  6. 캐시 무효화
  */
 
 import { NextRequest, NextResponse, after } from 'next/server'
@@ -164,13 +163,7 @@ export async function POST(
             .eq('id', sourceId)
 
         // 9. 타깃 화력 재계산 — 합산된 news/community 기준 (단순 heat 합산 아님)
-        const newHeat = await calculateHeatIndex(targetId)
-        if (targetIssue.status === '종결') {
-            await supabaseAdmin
-                .from('issues')
-                .update({ heat_at_close: newHeat })
-                .eq('id', targetId)
-        }
+        await calculateHeatIndex(targetId)
 
         await writeAdminLog(
             '이슈 병합',

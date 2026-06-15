@@ -40,14 +40,6 @@ const TAB_API_PARAMS: Record<FilterValue, Record<string, string>> = {
     '관리자반려': { approval_status: '반려', approval_type: 'manual' },
 }
 
-/** 관리자 화력 추이 표시값 — 종결+승인만 종결 시 스냅샷, 나머지는 현재 화력 */
-function getDisplayHeat(issue: Issue): number | null {
-    if (issue.status === '종결' && issue.approval_status === '승인') {
-        return issue.heat_at_close ?? null
-    }
-    return issue.heat_index ?? 0
-}
-
 export default function AdminIssuesPage() {
     const [issues, setIssues] = useState<Issue[]>([])
     const [filter, setFilter] = useState<FilterValue>('대기')
@@ -62,6 +54,18 @@ export default function AdminIssuesPage() {
     const [criteriaOpen, setCriteriaOpen] = useState(false)
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+
+    // 수동 등록 모달
+    const [manualModalOpen, setManualModalOpen] = useState(false)
+    const [manualKeyword, setManualKeyword] = useState('')
+    const [manualPreview, setManualPreview] = useState<{
+        community: { count: number; posts: Array<{ title: string; source_site: string }> }
+        news: { count: number; items: Array<{ title: string }> }
+        similarIssues: Array<{ id: string; title: string; status: string; heat_index: number }>
+    } | null>(null)
+    const [manualPreviewing, setManualPreviewing] = useState(false)
+    const [manualRegistering, setManualRegistering] = useState(false)
+    const [manualResult, setManualResult] = useState<{ success: boolean; message: string; issueId?: string; issueTitle?: string; warning?: string } | null>(null)
 
 
     const STATUS_ORDER: Record<string, number> = { '대기': 0, '승인': 1, '반려': 2 }
@@ -90,7 +94,7 @@ export default function AdminIssuesPage() {
                     compareResult = (STATUS_ORDER[a.approval_status] ?? 9) - (STATUS_ORDER[b.approval_status] ?? 9)
                     break
                 case 'heat_index':
-                    compareResult = (getDisplayHeat(a) ?? 0) - (getDisplayHeat(b) ?? 0)
+                    compareResult = (a.heat_index ?? 0) - (b.heat_index ?? 0)
                     break
                 case 'created_at':
                     compareResult = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -273,6 +277,59 @@ export default function AdminIssuesPage() {
         }
     }
 
+    const handleManualPreview = async () => {
+        if (!manualKeyword.trim()) return
+        setManualPreviewing(true)
+        setManualPreview(null)
+        setManualResult(null)
+        try {
+            const res = await fetch('/api/admin/issues/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keyword: manualKeyword.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error ?? '미리보기 실패')
+            setManualPreview(data)
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '미리보기 실패')
+        } finally {
+            setManualPreviewing(false)
+        }
+    }
+
+    const handleManualRegister = async () => {
+        if (!manualKeyword.trim()) return
+        if (!confirm(`"${manualKeyword.trim()}" 키워드로 이슈를 등록합니다.\n파이프라인 실행에 30초 정도 소요됩니다. 계속하시겠습니까?`)) return
+        setManualRegistering(true)
+        setManualResult(null)
+        try {
+            const res = await fetch('/api/admin/issues/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keyword: manualKeyword.trim() }),
+            })
+            const data = await res.json()
+            if (data.success) {
+                setManualResult({
+                    success: true,
+                    message: `"${data.issueTitle}" 이슈가 등록되었습니다 (화력 ${data.heatIndex}점, 커뮤니티 ${data.communityCount}건, 뉴스 ${data.newsCount}건)`,
+                    issueId: data.issueId,
+                    issueTitle: data.issueTitle,
+                    warning: data.warning ?? data.parentWarning,
+                })
+                fetchIssues()
+                loadTabCounts()
+            } else {
+                setManualResult({ success: false, message: data.message ?? '등록 실패' })
+            }
+        } catch (err) {
+            setManualResult({ success: false, message: err instanceof Error ? err.message : '등록 실패' })
+        } finally {
+            setManualRegistering(false)
+        }
+    }
+
     const formatDate = (dateString: string) => {
         const date = new Date(dateString)
         const year = date.getFullYear()
@@ -368,8 +425,14 @@ export default function AdminIssuesPage() {
 
     return (
         <div>
-            <div className="mb-6">
+            <div className="mb-6 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-content-primary">이슈 관리</h1>
+                <button
+                    onClick={() => { setManualModalOpen(true); setManualKeyword(''); setManualPreview(null); setManualResult(null) }}
+                    className="text-sm px-4 py-2 bg-primary text-white rounded-full hover:bg-primary/90 font-medium"
+                >
+                    수동 등록
+                </button>
             </div>
 
             {/* 이슈 생성 프로세스 안내 */}
@@ -567,7 +630,7 @@ export default function AdminIssuesPage() {
                                 >
                                     <div className="flex flex-col items-start text-left">
                                         <span>화력 추이</span>
-                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재 (승인·종결: 종결 시)</span>
+                                        <span className="text-sm text-content-muted font-normal normal-case">등록 시 → 현재</span>
                                     </div>
                                     {sortField === 'heat_index' && (
                                         <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
@@ -670,8 +733,7 @@ export default function AdminIssuesPage() {
                                 </td>
                                 <td className="px-4 py-3 text-sm whitespace-nowrap w-36">
                                     {(() => {
-                                        // 종결+승인만 heat_at_close, 나머지는 heat_index (재계산 반영)
-                                        const rightHeat = getDisplayHeat(issue)
+                                        const rightHeat = issue.heat_index ?? null
                                         const createdHeat = issue.created_heat_index
                                         const heatMeta = getHeatMeta(rightHeat ?? 0)
                                         const diff = (createdHeat != null && rightHeat != null) ? rightHeat - createdHeat : 0
@@ -785,6 +847,171 @@ export default function AdminIssuesPage() {
                         loadTabCounts()
                     }}
                 />
+            )}
+
+            {/* 수동 등록 모달 */}
+            {manualModalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+                    onClick={(e) => { if (e.target === e.currentTarget && !manualRegistering) setManualModalOpen(false) }}
+                >
+                    <div className="w-full max-w-lg bg-surface rounded-2xl shadow-xl overflow-hidden">
+                        {/* 헤더 */}
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                            <h2 className="text-base font-bold text-content-primary">이슈 수동 등록</h2>
+                            <button
+                                onClick={() => setManualModalOpen(false)}
+                                disabled={manualRegistering}
+                                className="text-content-muted hover:text-content-secondary disabled:opacity-40"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="px-5 py-4 space-y-4">
+                            {/* 키워드 입력 */}
+                            <div>
+                                <label className="block text-xs font-medium text-content-secondary mb-1.5">키워드 / 주제</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={manualKeyword}
+                                        onChange={e => { setManualKeyword(e.target.value); setManualPreview(null); setManualResult(null) }}
+                                        onKeyDown={e => { if (e.key === 'Enter' && !manualPreviewing) handleManualPreview() }}
+                                        placeholder="예: 이재명 피습, 카카오 서버 장애"
+                                        disabled={manualRegistering}
+                                        className="flex-1 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+                                    />
+                                    <button
+                                        onClick={handleManualPreview}
+                                        disabled={!manualKeyword.trim() || manualPreviewing || manualRegistering}
+                                        className="text-sm px-4 py-2 bg-surface-subtle border border-border text-content-secondary rounded-lg hover:bg-surface-muted disabled:opacity-40 whitespace-nowrap font-medium"
+                                    >
+                                        {manualPreviewing ? '조회 중...' : '미리보기'}
+                                    </button>
+                                </div>
+                                <p className="mt-1 text-xs text-content-muted">커뮤니티·뉴스 현황을 먼저 확인한 뒤 등록하세요</p>
+                            </div>
+
+                            {/* 미리보기 로딩 */}
+                            {manualPreviewing && (
+                                <div className="py-4 text-center text-sm text-content-secondary">커뮤니티 및 뉴스 현황 조회 중...</div>
+                            )}
+
+                            {/* 미리보기 결과 */}
+                            {manualPreview && !manualPreviewing && (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className={`p-3 rounded-xl border ${manualPreview.community.count > 0 ? 'bg-green-50 border-green-200' : 'bg-surface-subtle border-border'}`}>
+                                            <p className={`text-xs font-semibold mb-0.5 ${manualPreview.community.count > 0 ? 'text-green-700' : 'text-content-muted'}`}>커뮤니티 반응</p>
+                                            <p className={`text-lg font-bold ${manualPreview.community.count > 0 ? 'text-green-600' : 'text-content-muted'}`}>{manualPreview.community.count}건</p>
+                                            {manualPreview.community.count === 0 && (
+                                                <p className="text-xs text-amber-600 mt-0.5">뉴스만으로 등록됩니다</p>
+                                            )}
+                                        </div>
+                                        <div className={`p-3 rounded-xl border ${manualPreview.news.count > 0 ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
+                                            <p className={`text-xs font-semibold mb-0.5 ${manualPreview.news.count > 0 ? 'text-blue-700' : 'text-red-700'}`}>네이버 뉴스</p>
+                                            <p className={`text-lg font-bold ${manualPreview.news.count > 0 ? 'text-blue-600' : 'text-red-600'}`}>{manualPreview.news.count}건</p>
+                                            {manualPreview.news.count === 0 && (
+                                                <p className="text-xs text-red-600 mt-0.5">뉴스 없으면 등록 불가</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {manualPreview.community.posts.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-medium text-content-secondary mb-1.5">커뮤니티 매칭 글 (최근 48h 샘플)</p>
+                                            <ul className="space-y-1">
+                                                {manualPreview.community.posts.map((p, i) => (
+                                                    <li key={i} className="text-xs text-content-primary bg-surface-subtle px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                                                        <span className="text-content-muted shrink-0">[{p.source_site}]</span>
+                                                        <span className="line-clamp-1">{p.title}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {manualPreview.news.items.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-medium text-content-secondary mb-1.5">뉴스 샘플</p>
+                                            <ul className="space-y-1">
+                                                {manualPreview.news.items.map((n, i) => (
+                                                    <li key={i} className="text-xs text-content-primary bg-surface-subtle px-2.5 py-1.5 rounded-lg line-clamp-1">{n.title}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {manualPreview.similarIssues.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-medium text-amber-700 mb-1.5">유사 이슈 (중복 가능)</p>
+                                            <ul className="space-y-1">
+                                                {manualPreview.similarIssues.map(issue => (
+                                                    <li key={issue.id} className="text-xs bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-2">
+                                                        <span className="line-clamp-1 text-content-primary">{issue.title}</span>
+                                                        <span className="shrink-0 text-amber-700">{issue.heat_index}점</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 등록 결과 */}
+                            {manualResult && (
+                                <div className={`p-3 rounded-xl border text-sm ${manualResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                    <p className="font-medium">{manualResult.success ? '등록 완료' : '등록 실패'}</p>
+                                    <p className="mt-0.5 text-xs">{manualResult.message}</p>
+                                    {manualResult.warning && (
+                                        <p className="mt-1 text-xs text-amber-700">{manualResult.warning}</p>
+                                    )}
+                                    {manualResult.success && manualResult.issueId && (
+                                        <a
+                                            href={`/issue/${manualResult.issueId}`}
+                                            target="_blank"
+                                            className="mt-1.5 inline-block text-xs text-green-700 underline underline-offset-2"
+                                        >
+                                            이슈 페이지 열기 →
+                                        </a>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 파이프라인 실행 중 */}
+                            {manualRegistering && (
+                                <div className="py-3 text-center space-y-1">
+                                    <div className="text-sm font-medium text-content-primary">파이프라인 실행 중...</div>
+                                    <div className="text-xs text-content-secondary">AI 검증 → 뉴스 검색 → 중복 체크 → 타임라인 생성 순으로 진행됩니다</div>
+                                    <div className="text-xs text-content-muted">30초 정도 소요됩니다</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 푸터 */}
+                        <div className="px-5 py-4 border-t border-border flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => setManualModalOpen(false)}
+                                disabled={manualRegistering}
+                                className="text-sm px-4 py-2 bg-surface-subtle border border-border text-content-secondary rounded-full hover:bg-surface-muted disabled:opacity-40"
+                            >
+                                닫기
+                            </button>
+                            {manualPreview && !manualResult?.success && (
+                                <button
+                                    onClick={handleManualRegister}
+                                    disabled={manualRegistering || manualPreview.news.count === 0}
+                                    className="text-sm px-5 py-2 bg-primary text-white rounded-full hover:bg-primary/90 disabled:opacity-40 font-medium"
+                                >
+                                    {manualRegistering ? '등록 중...' : '등록하기'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )
