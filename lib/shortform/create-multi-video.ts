@@ -559,51 +559,45 @@ export async function createNSceneVideo(
         // BG_MOTION_CYCLE 순서로 씬마다 다른 모션 패턴 적용.
         // 마지막 일반씬 + 검색바씬: 동일 모션·배경을 50/50 분할해 끊김없이 이어받기.
         console.log('[FFmpeg N] 배경 모션 프레임 생성 중...')
-        const bgMotionPaths = await Promise.all(
-            backgrounds.map(async (bgBuf, i) => {
-                const isSearch = !!sceneContents[i]?.isSearchScene
-                const isLastBeforeSearch = !isSearch && !!sceneContents[i + 1]?.isSearchScene
+        const bgMotionPaths: string[] = []
+        for (let i = 0; i < backgrounds.length; i++) {
+            const bgBuf = backgrounds[i]
+            const isSearch = !!sceneContents[i]?.isSearchScene
+            const isLastBeforeSearch = !isSearch && !!sceneContents[i + 1]?.isSearchScene
 
-                const motionType = isSearch
-                    ? BG_MOTION_CYCLE[(i - 1) % BG_MOTION_CYCLE.length]  // 이전 씬과 동일 모션
-                    : BG_MOTION_CYCLE[i % BG_MOTION_CYCLE.length]
+            const motionType = isSearch
+                ? BG_MOTION_CYCLE[(i - 1) % BG_MOTION_CYCLE.length]
+                : BG_MOTION_CYCLE[i % BG_MOTION_CYCLE.length]
 
-                let bgBufToUse = bgBuf
-                let startT = 0
-                let endT = 1
+            let bgBufToUse = bgBuf
+            let startT = 0
+            let endT = 1
 
-                if (isSearch && i > 0) {
-                    bgBufToUse = backgrounds[i - 1]
-                    const prevDur = sceneDurations[i - 1]
-                    const searchDur = sceneDurations[i]
-                    startT = prevDur / (prevDur + searchDur)
-                } else if (isLastBeforeSearch) {
-                    const prevDur = sceneDurations[i]
-                    const searchDur = sceneDurations[i + 1]
-                    endT = prevDur / (prevDur + searchDur)
-                }
+            if (isSearch && i > 0) {
+                bgBufToUse = backgrounds[i - 1]
+                const prevDur = sceneDurations[i - 1]
+                const searchDur = sceneDurations[i]
+                startT = prevDur / (prevDur + searchDur)
+            } else if (isLastBeforeSearch) {
+                const prevDur = sceneDurations[i]
+                const searchDur = sceneDurations[i + 1]
+                endT = prevDur / (prevDur + searchDur)
+            }
 
-                const frames = await createBackgroundFrames(bgBufToUse, motionType, sceneDurations[i], BG_FPS, startT, endT)
-                return buildBackgroundMotionVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i])
-            })
-        )
+            const frames = await createBackgroundFrames(bgBufToUse, motionType, sceneDurations[i], BG_FPS, startT, endT)
+            bgMotionPaths.push(await buildBackgroundMotionVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i]))
+        }
 
         // ── STEP 1: Sharp 타이핑 프레임 생성 ────────────────────────────────────
-        console.log('[FFmpeg N] Sharp 타이핑 프레임 생성 중...')
-        const allFrames = await Promise.all(
-            sceneContents.map((sc, i) =>
-                sc.isSearchScene
-                    ? createSearchTypingFrames(sceneDurations[i])
-                    : createTypingFrames(sc.title, sc.desc, i + 1, sceneDurations[i])
-            )
-        )
-
         console.log('[FFmpeg N] 텍스트 애니메이션 영상 생성 중...')
-        const textAnimPaths = await Promise.all(
-            allFrames.map((frames, i) =>
-                buildTextAnimationVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i], fps)
-            )
-        )
+        const textAnimPaths: string[] = []
+        for (let i = 0; i < sceneContents.length; i++) {
+            const sc = sceneContents[i]
+            const frames = sc.isSearchScene
+                ? await createSearchTypingFrames(sceneDurations[i])
+                : await createTypingFrames(sc.title, sc.desc, i + 1, sceneDurations[i])
+            textAnimPaths.push(await buildTextAnimationVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i], fps))
+        }
 
         // ── STEP 2: 씬별 비디오 합성 ─────────────────────────────────────────────
         // 입력 순서: [0] bgMotion.mp4 | [1] textOverlay(loop) | [2] textAnim.mkv | [3] audio(optional)
