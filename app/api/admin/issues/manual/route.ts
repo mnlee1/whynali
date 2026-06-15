@@ -40,6 +40,12 @@ export async function POST(request: NextRequest) {
     if (auth.error) return auth.error
 
     const body = await request.json()
+
+    // 위저드 commit 모드: 미리보기 단계에서 생성된 데이터를 그대로 저장 (AI 재호출 없음)
+    if (body.mode === 'commit') {
+        return handleCommit(body)
+    }
+
     const keyword: string = (body.keyword ?? '').trim()
 
     if (!keyword || keyword.length < 2) {
@@ -298,5 +304,217 @@ export async function POST(request: NextRequest) {
         ...(parentResult && {
             parentWarning: `관련 이슈 "${parentResult.parentIssueTitle}"가 있었지만 별개 이슈로 등록했습니다`,
         }),
+    })
+}
+
+// ─── 위저드 commit 핸들러 ───────────────────────────────────────────────────
+
+interface CommitTimelinePoint {
+    stage: string
+    title: string
+    occurred_at: string
+    source_url: string
+    ai_summary: string | null
+}
+
+interface CommitTimelineSummary {
+    stage: string
+    stageTitle: string
+    summary: string
+    dateStart: string
+    dateEnd: string
+}
+
+interface CommitBriefSummary {
+    intro: string
+    bullets: string[]
+    conclusion: string
+}
+
+interface CommitBody {
+    mode: 'commit'
+    keyword: string
+    confirmedTitle: string
+    category: string
+    topic: string
+    topicDescription: string | null
+    communityPostIds: string[]
+    newsIds: string[]
+    timelinePoints: CommitTimelinePoint[]
+    timelineSummaries: CommitTimelineSummary[]
+    briefSummary: CommitBriefSummary | null
+}
+
+async function handleCommit(body: CommitBody): Promise<NextResponse> {
+    const {
+        keyword,
+        confirmedTitle,
+        category,
+        topic,
+        topicDescription,
+        communityPostIds,
+        newsIds,
+        timelinePoints,
+        timelineSummaries,
+        briefSummary,
+    } = body
+
+    if (!confirmedTitle || confirmedTitle.length < 2) {
+        return NextResponse.json({ error: '이슈 제목을 입력하세요' }, { status: 400 })
+    }
+    if (!newsIds || newsIds.length === 0) {
+        return NextResponse.json({ error: '연결할 뉴스가 없습니다' }, { status: 400 })
+    }
+    if (!timelinePoints || timelinePoints.length === 0) {
+        return NextResponse.json({ error: '타임라인 데이터가 없습니다' }, { status: 400 })
+    }
+
+    console.log(`[위저드 등록] 시작: "${confirmedTitle}"`)
+
+    const issueValidation = validateIssueCreation({
+        title: confirmedTitle,
+        category,
+        source_track: 'manual',
+        approval_status: '승인',
+        approval_type: 'manual',
+        status: '점화',
+        topic,
+        topic_description: topicDescription,
+    })
+
+    if (!issueValidation.isValid) {
+        return NextResponse.json({ success: false, reason: 'validation', message: issueValidation.error })
+    }
+
+    // 이슈 생성
+    const { data: newIssue, error: createError } = await supabaseAdmin
+        .from('issues')
+        .insert({ ...issueValidation.validated!, approved_at: new Date().toISOString() })
+        .select('id, created_at')
+        .single()
+
+    if (createError || !newIssue) {
+        console.error('[위저드 등록] 이슈 생성 에러:', createError)
+        return NextResponse.json({ success: false, reason: 'db_error', message: '이슈 생성 실패' }, { status: 500 })
+    }
+
+    // 커뮤니티 연결
+    if (communityPostIds.length > 0) {
+        await supabaseAdmin
+            .from('community_data')
+            .update({ issue_id: newIssue.id })
+            .in('id', communityPostIds)
+        console.log(`  커뮤니티 연결: ${communityPostIds.length}건`)
+    }
+
+    // 뉴스 연결 (아직 다른 이슈에 연결되지 않은 것만)
+    const { data: linkedNews } = await supabaseAdmin
+        .from('news_data')
+        .update({ issue_id: newIssue.id })
+        .in('id', newsIds)
+        .is('issue_id', null)
+        .select('id')
+
+    const linkedNewsCount = linkedNews?.length ?? 0
+    console.log(`  뉴스 연결: ${linkedNewsCount}건`)
+
+    if (linkedNewsCount === 0) {
+        await cleanupOrphanedRecords(newIssue.id)
+        await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+        return NextResponse.json({
+            success: false,
+            reason: 'no_news_linked',
+            message: '해당 뉴스들이 이미 다른 이슈에 연결되어 있습니다.',
+        })
+    }
+
+    // 타임라인 포인트 저장
+    const pointsToInsert = timelinePoints.map(p => ({
+        issue_id: newIssue.id,
+        stage: p.stage,
+        title: p.title,
+        occurred_at: p.occurred_at,
+        source_url: p.source_url,
+        ai_summary: p.ai_summary,
+    }))
+
+    const { error: timelineError } = await supabaseAdmin.from('timeline_points').insert(pointsToInsert)
+    if (timelineError) {
+        await cleanupOrphanedRecords(newIssue.id)
+        await supabaseAdmin.from('issues').delete().eq('id', newIssue.id)
+        return NextResponse.json({ success: false, reason: 'timeline_error', message: '타임라인 저장 실패' })
+    }
+
+    // 타임라인 요약 저장 (관리자 확인·수정된 내용 우선, bullets 형식 변환)
+    const now = new Date().toISOString()
+    if (timelineSummaries.length > 0) {
+        const summaryRows = timelineSummaries.map(s => ({
+            issue_id: newIssue.id,
+            stage: s.stage,
+            stage_title: s.stageTitle,
+            summary: s.summary,
+            bullets: s.summary.trim()
+                ? [{ date: '', text: s.summary.trim() }]
+                : [],
+            date_start: s.dateStart,
+            date_end: s.dateEnd,
+            generated_at: now,
+        }))
+        await supabaseAdmin
+            .from('timeline_summaries')
+            .upsert(summaryRows, { onConflict: 'issue_id,stage' })
+        console.log(`  타임라인 요약 저장: ${summaryRows.length}개 단계`)
+    } else {
+        // 요약 없으면 generateAndCacheSummaries로 생성
+        await generateAndCacheSummaries(newIssue.id, confirmedTitle, topicDescription)
+            .catch(err => console.warn('  ⚠️ [타임라인 요약 생성 실패]', err))
+    }
+
+    // 브리핑 저장
+    if (briefSummary) {
+        await supabaseAdmin
+            .from('issues')
+            .update({ brief_summary: briefSummary })
+            .eq('id', newIssue.id)
+    }
+
+    // 원인 기사 역방향 탐색 (비동기)
+    searchAndLinkCauseArticles(
+        newIssue.id, confirmedTitle, topicDescription,
+        newIssue.created_at, category,
+    ).catch(() => null)
+
+    // 화력 계산
+    const heatIndex = await calculateHeatIndex(newIssue.id).catch(() => 0)
+    await supabaseAdmin
+        .from('issues')
+        .update({ heat_index: heatIndex, created_heat_index: heatIndex })
+        .eq('id', newIssue.id)
+
+    // 이미지 자동 생성 (비동기)
+    Promise.resolve().then(async () => {
+        try {
+            const { fetchPexelsImages } = await import('@/lib/pexels')
+            const thumbnailUrls = await fetchPexelsImages(confirmedTitle, category)
+            if (thumbnailUrls.length > 0) {
+                await supabaseAdmin
+                    .from('issues')
+                    .update({ thumbnail_urls: thumbnailUrls, primary_thumbnail_index: 0 })
+                    .eq('id', newIssue.id)
+            }
+        } catch { /* 이미지 실패는 무시 */ }
+    })
+
+    console.log(`  ✅ [위저드 등록 완료] "${confirmedTitle}" (ID: ${newIssue.id}, 화력: ${heatIndex}점)`)
+
+    return NextResponse.json({
+        success: true,
+        issueId: newIssue.id,
+        issueTitle: confirmedTitle,
+        category,
+        heatIndex,
+        communityCount: communityPostIds.length,
+        newsCount: linkedNewsCount,
+        ...(communityPostIds.length === 0 && { warning: '커뮤니티 반응 없음 — 뉴스만으로 등록되었습니다' }),
     })
 }

@@ -82,15 +82,28 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
+        const issues = data ?? []
+
+        // 병합 대상 이슈 ID 조회 (다른 이슈들이 이 이슈로 병합된 경우)
+        const { data: mergeRows } = await supabaseAdmin
+            .from('issues')
+            .select('merged_into_id')
+            .not('merged_into_id', 'is', null)
+
+        const mergeTargetIds = new Set((mergeRows ?? []).map(r => r.merged_into_id as string))
+
         // 긴급 이슈 개수 계산 (화력 30점 이상 + 연예/정치 + 대기 상태)
-        const urgentCount = (data ?? []).filter(issue => 
+        const urgentCount = issues.filter(issue =>
             issue.approval_status === '대기' &&
             (issue.heat_index ?? 0) >= 30 &&
             ['연예', '정치'].includes(issue.category)
         ).length
 
         return NextResponse.json({
-            data: data ?? [],
+            data: issues.map(issue => ({
+                ...issue,
+                is_merge_target: mergeTargetIds.has(issue.id),
+            })),
             total: count ?? 0,
             urgentCount,
         })
