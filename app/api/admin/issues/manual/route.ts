@@ -59,14 +59,16 @@ export async function POST(request: NextRequest) {
     const tokens = tokenize(keyword).filter(t => t.length >= 2)
     const effectiveTokens = tokens.length > 0 ? tokens : [keyword]
 
+    // 3자 이상 토큰만 OR 검색 — 짧은 일반 단어로 인한 AND 과필터 방지
+    const significantTokens = effectiveTokens.filter(t => t.length >= 3)
+    const orTokens = significantTokens.length > 0 ? significantTokens : effectiveTokens.slice(0, 1)
+    const orFilter = orTokens.map(t => `title.ilike.%${t}%`).join(',')
+
     let communityQuery = supabaseAdmin
         .from('community_data')
         .select('id, title, source_site, created_at')
         .gte('updated_at', cutoff48h)
-
-    for (const token of effectiveTokens) {
-        communityQuery = communityQuery.ilike('title', `%${token}%`)
-    }
+        .or(orFilter)
 
     const { data: communityPostsData } = await communityQuery
         .order('updated_at', { ascending: false })

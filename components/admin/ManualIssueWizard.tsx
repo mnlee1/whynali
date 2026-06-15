@@ -297,16 +297,45 @@ export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
                                 <HeatBar score={step1.estimatedHeat} />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className={`p-3 rounded-xl border ${step1.community.count > 0 ? 'bg-green-50 border-green-200' : 'bg-surface-subtle border-border'}`}>
-                                    <p className={`text-xs font-semibold mb-0.5 ${step1.community.count > 0 ? 'text-green-700' : 'text-content-muted'}`}>커뮤니티 반응</p>
-                                    <p className={`text-lg font-bold ${step1.community.count > 0 ? 'text-green-600' : 'text-content-muted'}`}>{step1.community.count}건</p>
+                            <div className="space-y-3">
+                                {/* 카운트 카드 */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className={`p-3 rounded-xl border ${step1.community.count > 0 ? 'bg-green-50 border-green-200' : 'bg-surface-subtle border-border'}`}>
+                                        <p className={`text-xs font-semibold mb-0.5 ${step1.community.count > 0 ? 'text-green-700' : 'text-content-muted'}`}>커뮤니티 반응</p>
+                                        <p className={`text-2xl font-bold ${step1.community.count > 0 ? 'text-green-600' : 'text-content-muted'}`}>{step1.community.count}건</p>
+                                    </div>
+                                    <div className={`p-3 rounded-xl border ${step1.news.count > 0 ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
+                                        <p className={`text-xs font-semibold mb-0.5 ${step1.news.count > 0 ? 'text-blue-700' : 'text-red-700'}`}>네이버 뉴스</p>
+                                        <p className={`text-2xl font-bold ${step1.news.count > 0 ? 'text-blue-600' : 'text-red-600'}`}>{step1.news.count}건</p>
+                                        {step1.news.count === 0 && <p className="text-xs text-red-600 mt-0.5">뉴스 없으면 등록 불가</p>}
+                                    </div>
                                 </div>
-                                <div className={`p-3 rounded-xl border ${step1.news.count > 0 ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
-                                    <p className={`text-xs font-semibold mb-0.5 ${step1.news.count > 0 ? 'text-blue-700' : 'text-red-700'}`}>네이버 뉴스</p>
-                                    <p className={`text-lg font-bold ${step1.news.count > 0 ? 'text-blue-600' : 'text-red-600'}`}>{step1.news.count}건</p>
-                                    {step1.news.count === 0 && <p className="text-xs text-red-600 mt-0.5">뉴스 없으면 등록 불가</p>}
-                                </div>
+
+                                {/* 커뮤니티 목록 */}
+                                {step1.community.posts.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-medium text-content-secondary mb-1">커뮤니티 매칭 글 <span className="font-normal text-content-muted">(최근 48h 샘플)</span></p>
+                                        <ul className="space-y-1">
+                                            {step1.community.posts.map((p, i) => (
+                                                <li key={i} className="text-xs text-content-secondary bg-surface-subtle rounded-lg px-2.5 py-1.5 line-clamp-1">
+                                                    <span className="text-content-muted mr-1">[{p.source_site}]</span>{p.title}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {/* 뉴스 목록 */}
+                                {step1.news.items.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-medium text-content-secondary mb-1">네이버 뉴스 검색 목록</p>
+                                        <ul className="space-y-1">
+                                            {step1.news.items.map((n, i) => (
+                                                <li key={i} className="text-xs text-content-secondary bg-surface-subtle rounded-lg px-2.5 py-1.5 line-clamp-1">{n.title}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
 
                             {/* AI 생성 제목 (수정 가능) */}
