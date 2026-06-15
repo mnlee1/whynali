@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { User as UserIcon, ChevronDown, Search, X } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 import Nav from './Nav'
 import SearchBar from './SearchBar'
 
@@ -31,20 +31,13 @@ export default function Header() {
     const router = useRouter()
     const userMenuRef = useRef<HTMLDivElement>(null)
     const userMenuRefDesktop = useRef<HTMLDivElement>(null)
-    const sbRef = useRef(
-        createBrowserClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        )
-    )
 
     useEffect(() => {
-        const sb = sbRef.current
-        sb.auth.getUser().then((result) => {
+        supabase.auth.getUser().then((result) => {
             setUser(result.data.user ?? null)
         })
 
-        const { data: { subscription } } = sb.auth.onAuthStateChange((_, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
             setUser(session?.user ?? null)
         })
 
@@ -87,7 +80,7 @@ export default function Header() {
     }, [])
 
     const handleLogout = async () => {
-        await sbRef.current.auth.signOut()
+        await supabase.auth.signOut()
         setUser(null)
         setDisplayName(null)
         router.push('/')
