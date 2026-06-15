@@ -19,13 +19,32 @@ import { verifyIssueByAI, samplePostTitles } from '@/lib/pipeline/issue-pipeline
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-function estimateHeat(communityCount: number, newsCount: number): number {
-    const communityHeat = Math.min(100, Math.round((communityCount / 15) * 100))
-    const newsHeat = Math.min(100, Math.round((newsCount / 20) * 100))
-    if (communityCount > 0) {
-        return Math.min(100, Math.round(communityHeat * 0.6 + newsHeat * 0.4))
+// 실제 calculateHeatIndex와 동일한 공식으로 추산
+// (view_count, comment_count 기반 — 시간가중치 미적용)
+function estimateHeat(
+    posts: Array<{ view_count?: number | null; comment_count?: number | null }>,
+    newsCount: number
+): number {
+    let communityHeat = 0
+    if (posts.length > 0) {
+        const avgViews = posts.reduce((s, p) => s + (p.view_count ?? 0), 0) / posts.length
+        const avgComments = posts.reduce((s, p) => s + (p.comment_count ?? 0), 0) / posts.length
+        const viewScore = Math.min(100, (avgViews / 5000) * 100)
+        const commentScore = Math.min(100, (avgComments / 500) * 100)
+        communityHeat = Math.min(100, Math.max(0, Math.round(viewScore * 0.35 + commentScore * 0.45)))
     }
-    return Math.min(30, Math.round(newsHeat * 0.3))
+
+    // 뉴스: 소스 다양성 알 수 없으므로 건수만으로 근사
+    const newsCredibility = Math.min(100, Math.max(0, Math.round(
+        Math.min(100, newsCount * 2) * 0.4 +
+        (Math.min(20, newsCount) / 20 * 100) * 0.6
+    )))
+
+    const communityAmp = communityHeat <= 3
+        ? 0
+        : Math.min(1, Math.sqrt(Math.max(0, communityHeat - 3) / 70))
+
+    return Math.round(Math.min(100, Math.max(0, newsCredibility * (0.3 + 0.7 * communityAmp))))
 }
 
 export async function POST(request: NextRequest) {
@@ -45,14 +64,16 @@ export async function POST(request: NextRequest) {
     const tokens = tokenize(keyword).filter(t => t.length >= 2)
     const effectiveTokens = tokens.length > 0 ? tokens : [keyword]
 
+    // 3자 이상 토큰만 OR 검색 — 짧은 일반 단어("심사","태도")로 인한 AND 과필터 방지
+    const significantTokens = effectiveTokens.filter(t => t.length >= 3)
+    const orTokens = significantTokens.length > 0 ? significantTokens : effectiveTokens.slice(0, 1)
+    const orFilter = orTokens.map(t => `title.ilike.%${t}%`).join(',')
+
     let communityQuery = supabaseAdmin
         .from('community_data')
-        .select('id, title, source_site, view_count')
+        .select('id, title, source_site, view_count, comment_count')
         .gte('updated_at', cutoff48h)
-
-    for (const token of effectiveTokens) {
-        communityQuery = communityQuery.ilike('title', `%${token}%`)
-    }
+        .or(orFilter)
 
     const { data: matchingPostsData } = await communityQuery
         .order('updated_at', { ascending: false })
@@ -122,7 +143,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
         keyword,
         ai: aiResult,
-        estimatedHeat: estimateHeat(matchingPosts.length, newsCount),
+        estimatedHeat: estimateHeat(matchingPosts, newsCount),
         community: {
             count: matchingPosts.length,
             posts: matchingPosts.slice(0, 5).map(p => ({
