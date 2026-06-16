@@ -55,6 +55,16 @@ const groq = new Groq({ apiKey: GROQ_API_KEY })
 
 type ContentMode = 'weekend-recap' | 'surging' | 'weekly-top3' | 'by-category' | 'timeline'
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  '정치': '🏛️',
+  '경제': '💰',
+  '사회': '🚨',
+  '연예': '🎭',
+  '스포츠': '⚽',
+  '기술': '💻',
+}
+const catEmoji = (category: string) => `${CATEGORY_EMOJI[category] ?? '📌'} ${category}`
+
 interface Issue {
   id: string
   title: string
@@ -120,34 +130,39 @@ async function run() {
   let closedIssue: ClosedIssue | null = null
   let effectiveMode = mode
 
+  // 최근 7일 카드뉴스에서 사용된 이슈 ID — 중복 방지
+  const usedIssueIds = await fetchRecentlyUsedIssueIds()
+  console.log(`ℹ️  최근 7일 사용 이슈 ${usedIssueIds.size}개 제외`)
+
   if (mode === 'weekend-recap') {
-    issues = await fetchWeekendTopIssues()
+    issues = await fetchWeekendTopIssues(usedIssueIds)
   } else if (mode === 'surging') {
-    const issue = await fetchSurgingIssue()
+    const issue = await fetchSurgingIssue(usedIssueIds)
     if (issue) {
       issues = [issue]
     } else {
-      issues = await fetchTopIssues()
+      issues = await fetchTopIssues(usedIssueIds)
       effectiveMode = 'weekly-top3'
       console.warn('⚠️  급상승 이슈 없음, weekly-top3로 대체')
     }
   } else if (mode === 'weekly-top3') {
-    issues = await fetchTopIssues()
+    issues = await fetchTopIssues(usedIssueIds)
   } else if (mode === 'by-category') {
-    issues = await fetchCategoryTopIssues()
+    issues = await fetchCategoryTopIssues(usedIssueIds)
   } else if (mode === 'timeline') {
-    closedIssue = await fetchClosedIssueTimeline()
+    closedIssue = await fetchClosedIssueTimeline(usedIssueIds)
     if (!closedIssue) {
-      issues = await fetchTopIssues()
+      issues = await fetchTopIssues(usedIssueIds)
       effectiveMode = 'weekly-top3'
       console.warn('⚠️  타임라인 이슈 없음, weekly-top3로 대체')
     }
   }
 
   if (effectiveMode !== 'timeline' && issues.length === 0) {
+    // excludeIds 없이 재시도 (이슈 풀이 너무 좁을 경우 안전망)
     issues = await fetchTopIssues()
     effectiveMode = 'weekly-top3'
-    console.warn('⚠️  이슈 없음, weekly-top3로 대체')
+    console.warn('⚠️  이슈 없음 (중복 제외 후), excludeIds 없이 weekly-top3 대체')
   }
 
   const fetchedLabel = effectiveMode === 'timeline'
@@ -274,7 +289,23 @@ async function run() {
 
 // ─── 1. Supabase 데이터 조회 ────────────────────────────
 
-async function fetchTopIssues(): Promise<Issue[]> {
+// 최근 N일 카드뉴스에 사용된 이슈 ID 세트 (중복 방지)
+async function fetchRecentlyUsedIssueIds(days = 7): Promise<Set<string>> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await supabase
+    .from('card_news_logs')
+    .select('issues')
+    .gte('created_at', since)
+  if (!data || data.length === 0) return new Set()
+  const ids = data.flatMap(log =>
+    (log.issues as Array<{ id: string }> | null)?.map(i => i.id) ?? []
+  )
+  return new Set(ids)
+}
+
+const SEVEN_DAYS_AGO = () => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+async function fetchTopIssues(excludeIds: Set<string> = new Set()): Promise<Issue[]> {
   const { data, error } = await supabase
     .from('issues')
     .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description')
@@ -282,14 +313,15 @@ async function fetchTopIssues(): Promise<Issue[]> {
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
     .is('merged_into_id', null)
+    .gte('updated_at', SEVEN_DAYS_AGO())
     .order('heat_index', { ascending: false, nullsFirst: false })
-    .limit(3)
+    .limit(20)
   if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
-  return data || []
+  return ((data || []) as Issue[]).filter(i => !excludeIds.has(i.id)).slice(0, 3)
 }
 
 // 월요일: 직전 금~일 동안 업데이트된 이슈 중 heat_index 상위 3개
-async function fetchWeekendTopIssues(): Promise<Issue[]> {
+async function fetchWeekendTopIssues(excludeIds: Set<string> = new Set()): Promise<Issue[]> {
   const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await supabase
     .from('issues')
@@ -299,20 +331,20 @@ async function fetchWeekendTopIssues(): Promise<Issue[]> {
     .is('merged_into_id', null)
     .gte('updated_at', since)
     .order('heat_index', { ascending: false, nullsFirst: false })
-    .limit(3)
+    .limit(20)
   if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
 
-  const result = (data || []) as Issue[]
+  const result = ((data || []) as Issue[]).filter(i => !excludeIds.has(i.id)).slice(0, 3)
   if (result.length >= 3) return result
 
   // 주말 이슈 부족 시 전체 top으로 보충
-  const fallback = await fetchTopIssues()
+  const fallback = await fetchTopIssues(excludeIds)
   const existing = new Set(result.map(i => i.id))
   return [...result, ...fallback.filter(i => !existing.has(i.id))].slice(0, 3)
 }
 
 // 화요일: surgePct 기준 1위 이슈
-async function fetchSurgingIssue(): Promise<Issue | null> {
+async function fetchSurgingIssue(excludeIds: Set<string> = new Set()): Promise<Issue | null> {
   const { data, error } = await supabase
     .from('issues')
     .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago, topic, topic_description')
@@ -320,13 +352,14 @@ async function fetchSurgingIssue(): Promise<Issue | null> {
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
     .is('merged_into_id', null)
+    .gte('updated_at', SEVEN_DAYS_AGO())
     .not('heat_index_1h_ago', 'is', null)
     .gt('heat_index_1h_ago', 0)
     .order('heat_index', { ascending: false, nullsFirst: false })
     .limit(50)
   if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
 
-  const candidates = (data || []) as Issue[]
+  const candidates = ((data || []) as Issue[]).filter(i => !excludeIds.has(i.id))
   const withSurge = candidates
     .map(i => ({
       ...i,
@@ -341,7 +374,7 @@ async function fetchSurgingIssue(): Promise<Issue | null> {
 // 목요일: 카테고리별 heat_index 1위
 const CARD_NEWS_CATEGORIES = ['정치', '경제', '사회', '연예'] as const
 
-async function fetchCategoryTopIssues(): Promise<Issue[]> {
+async function fetchCategoryTopIssues(excludeIds: Set<string> = new Set()): Promise<Issue[]> {
   const results: Issue[] = []
   for (const cat of CARD_NEWS_CATEGORIES) {
     const { data } = await supabase
@@ -351,16 +384,20 @@ async function fetchCategoryTopIssues(): Promise<Issue[]> {
       .eq('visibility_status', 'visible')
       .neq('status', '종결')
       .is('merged_into_id', null)
+      .gte('updated_at', SEVEN_DAYS_AGO())
       .eq('category', cat)
       .order('heat_index', { ascending: false, nullsFirst: false })
-      .limit(1)
-    if (data && data.length > 0) results.push(data[0] as Issue)
+      .limit(10)
+    if (data && data.length > 0) {
+      const pick = (data as Issue[]).find(i => !excludeIds.has(i.id))
+      if (pick) results.push(pick)
+    }
   }
   return results
 }
 
 // 금요일: 이번주 종결 이슈 중 timeline_points가 2개 이상인 것
-async function fetchClosedIssueTimeline(): Promise<ClosedIssue | null> {
+async function fetchClosedIssueTimeline(excludeIds: Set<string> = new Set()): Promise<ClosedIssue | null> {
   const queries = [
     new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 이번주 (금 기준 월요일)
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30일 fallback
@@ -376,11 +413,11 @@ async function fetchClosedIssueTimeline(): Promise<ClosedIssue | null> {
       .is('merged_into_id', null)
       .gte('updated_at', since)
       .order('heat_index', { ascending: false, nullsFirst: false })
-      .limit(5)
+      .limit(10)
 
     if (!data || data.length === 0) continue
 
-    for (const issue of data as Issue[]) {
+    for (const issue of (data as Issue[]).filter(i => !excludeIds.has(i.id))) {
       const { data: points } = await supabase
         .from('timeline_points')
         .select('stage, title, occurred_at')
@@ -432,6 +469,30 @@ async function generateCoverKeywords(issues: Issue[], mode: ContentMode): Promis
   }
 }
 
+// timeline 단계별 Pexels 키워드 생성
+async function generateStageKeywords(issue: Issue, stage: string, points: TimelinePoint[]): Promise<string> {
+  const pointTitles = points.slice(0, 3).map(p => p.title).join(', ')
+  const res = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: 'You are a stock photo search expert. Return ONLY valid JSON.' },
+      {
+        role: 'user',
+        content: `Korean news issue: "${issue.title}" — stage: ${stage}\nKey events: ${pointTitles}\n\nGenerate 2-3 English keywords for a Pexels portrait photo that visually represents this stage's mood or theme.\nReturn JSON only: {"keywords": "2-3 english words"}`,
+      },
+    ],
+    temperature: 0.5,
+    max_tokens: 60,
+  })
+  try {
+    const raw = res.choices[0].message.content ?? '{}'
+    const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+    return JSON.parse(cleaned).keywords ?? issue.category
+  } catch {
+    return issue.category
+  }
+}
+
 async function fetchPexelsImage(keywords: string): Promise<string | null> {
   if (!PEXELS_API_KEY) {
     console.warn('⚠️  PEXELS_API_KEY 없음 — 다크 커버 사용')
@@ -468,10 +529,25 @@ async function fetchPexelsImage(keywords: string): Promise<string | null> {
 
 // ─── 3. Groq AI 텍스트 생성 헬퍼 ────────────────────────
 
+// 이슈에 연결된 뉴스 기사 제목 최대 N개 조회
+async function fetchNewsHeadlines(issueId: string, limit = 5): Promise<string[]> {
+  const { data } = await supabase
+    .from('news_data')
+    .select('title, source')
+    .eq('issue_id', issueId)
+    .not('title', 'is', null)
+    .order('published_at', { ascending: false })
+    .limit(limit)
+  if (!data || data.length === 0) return []
+  return data.map(n => `- ${n.title}${n.source ? ` (${n.source})` : ''}`)
+}
+
 async function generateBadgeContent(
   issue: Issue,
   context = ''
 ): Promise<{ desc: string; point_text_01: string; point_text_02: string }> {
+  const headlines = await fetchNewsHeadlines(issue.id)
+
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -483,16 +559,17 @@ async function generateBadgeContent(
           `카테고리: ${issue.category} | 화력: ${issue.heat_index ?? 0}점`,
           issue.topic ? `주제: ${issue.topic}` : null,
           issue.topic_description ? `설명: ${issue.topic_description}` : null,
+          headlines.length > 0 ? `\n관련 뉴스 기사 제목 (최신순):\n${headlines.join('\n')}` : null,
           context || null,
           '',
           '위 정보를 바탕으로 카드뉴스 텍스트를 JSON으로 생성해줘 (한글만, 한자 금지):',
           '{',
-          '  "desc": "기승전결 3줄. 1줄=상황 설정, 2줄=반전/전개(그런데·하지만·결국 같은 접속사로 자연스럽게 연결), 3줄=의문형 또는 예고형으로 궁금증 유발. ~~다로 끝나는 줄엔 마침표(.) 필수. 마지막 줄이 의문형이면 물음표(?) 필수. 줄바꿈은 \\\\n 사용 (각 줄 22자 이내)",',
+          '  "desc": "기승전결 3줄. 뉴스 기사 제목에서 구체적 사실(인물명·기관명·수치·사건명)을 반드시 1개 이상 언급할 것. 1줄=상황 설정, 2줄=반전/전개(그런데·하지만·결국 같은 접속사로 자연스럽게 연결), 3줄=의문형 또는 예고형으로 궁금증 유발. ~~다로 끝나는 줄엔 마침표(.) 필수. 마지막 줄이 의문형이면 물음표(?) 필수. 줄바꿈은 \\\\n 사용 (각 줄 22자 이내)",',
           '  "point_text_01": "이슈 핵심 인물 또는 기관을 나타내는 짧은 구. 앞에 어울리는 이모지 1개 포함 (예: \'🏢 삼성전자 발표\', \'🏐 배구 국가대표\', 이모지 제외 12자 이내)",',
           '  "point_text_02": "이슈의 핵심 상황 또는 쟁점을 나타내는 짧은 구. 앞에 어울리는 이모지 1개 포함 (예: \'🚨 성희롱 의혹 확산\', \'🔍 노동부 조사 착수\', 이모지 제외 12자 이내). point_text_01과 다른 이모지를 사용할 것."',
           '}',
           '',
-          '나쁜 예시 (금지): "논란이 일고 있다\\n조사에 착수했다\\n확산되고 있다" — 접속사 없고 마침표·물음표도 없음',
+          '나쁜 예시 (금지): "논란이 일고 있다\\n조사에 착수했다\\n확산되고 있다" — 구체적 사실 없고 접속사·마침표·물음표도 없음',
           '좋은 예시: "조용하던 직장에 폭로 한 방.\\n그런데 피해자들이 목소리를 높이기 시작.\\n진실은 과연 드러날까?" — 한 문단처럼 읽히고 물음표로 마무리',
           '',
           'JSON 코드블록 없이 순수 JSON만 출력.',
@@ -514,8 +591,8 @@ async function generateBadgeContent(
   } catch {
     return {
       desc: issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? '내용을 불러오는 중 오류가 발생했습니다.',
-      point_text_01: issue.category,
-      point_text_02: `화력 ${issue.heat_index ?? 0}점`,
+      point_text_01: `📌 ${(issue.topic ?? issue.title).slice(0, 14)}`,
+      point_text_02: `📢 지금 주목`,
     }
   }
 }
@@ -611,8 +688,8 @@ JSON만 출력, 설명 없이.`,
       type: 'badge',
       sub_title: issue.topic ?? issue.title,
       desc: badgeContent.desc,
-      point_text_01: issue.category,
-      point_text_02: surgePctStr ? `▲ ${surgePctStr}` : `화력 ${issue.heat_index ?? 0}점`,
+      point_text_01: badgeContent.point_text_01,
+      point_text_02: surgePctStr ? `📈 ▲ ${surgePctStr}` : `🔥 지금 급상승`,
       bg_image_url: bg,
       logo_image_url: LOGO_BASE64,
     },
@@ -648,8 +725,8 @@ async function generateCategorySlides(issues: Issue[]): Promise<SlideContent[]> 
       type: 'badge',
       sub_title: issue.topic ?? issue.title,
       desc: content.desc,
-      point_text_01: issue.category,
-      point_text_02: `화력 ${issue.heat_index ?? 0}점`,
+      point_text_01: content.point_text_01,
+      point_text_02: `🏆 분야 1위`,
       bg_image_url: getIssueThumbnail(issue),
       logo_image_url: LOGO_BASE64,
     })
@@ -722,11 +799,15 @@ JSON: {"desc": "요약"} 만 출력.`,
       }
     }
 
+    // 단계별 고유 Pexels 이미지 (없으면 이슈 썸네일로 fallback)
+    const stageKeywords = await generateStageKeywords(issue, stage, points)
+    const stageBg = await fetchPexelsImage(stageKeywords) ?? bg
+
     slides.push({
       type: 'body',
       sub_title: stage,
       desc,
-      bg_image_url: bg,
+      bg_image_url: stageBg,
       logo_image_url: LOGO_BASE64,
     })
   }
@@ -736,14 +817,16 @@ JSON: {"desc": "요약"} 만 출력.`,
     const closingPoints = grouped.get(closingStage)!
     const lastOccurred = new Date(closingPoints[closingPoints.length - 1].occurred_at)
     const dateStr = `${lastOccurred.getMonth() + 1}/${lastOccurred.getDate()} 종결`
+    const closingKeywords = await generateStageKeywords(issue, '종결', closingPoints)
+    const closingBg = await fetchPexelsImage(closingKeywords) ?? bg
 
     slides.push({
       type: 'badge',
       sub_title: '종결',
       desc: closingPoints.slice(0, 3).map(p => p.title).join('\n'),
-      point_text_01: dateStr,
-      point_text_02: `화력 ${issue.heat_index ?? 0}점`,
-      bg_image_url: bg,
+      point_text_01: `📅 ${dateStr}`,
+      point_text_02: `✅ 이슈 종결`,
+      bg_image_url: closingBg,
       logo_image_url: LOGO_BASE64,
     })
   }
