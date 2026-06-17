@@ -14,18 +14,52 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import NextTopLoader from 'nextjs-toploader'
 import PageTracker from '@/components/analytics/PageTracker'
+import {
+    SITE_ALTERNATE_NAMES,
+    SITE_DESCRIPTION,
+    SITE_KEYWORDS,
+    SITE_LOGO,
+    SITE_NAME,
+    SITE_OG_IMAGE,
+    SITE_SOCIAL_LINKS,
+    SITE_TAGLINE,
+    SITE_URL,
+} from '@/lib/seo/site'
+
+const defaultTitle = `${SITE_NAME}(whynali.com) - ${SITE_TAGLINE}`
 
 export const metadata: Metadata = {
-    title: '왜난리 - 요즘 난리, 한눈에',
-    description: '지금 한국에서 가장 뜨거운 이슈를 한눈에 확인하세요. 연예·정치·사회·스포츠 실시간 논란을 왜난리에서 빠르게 파악하세요.',
-    keywords: ['왜난리', '왜 난리', 'whynali', '이슈', '논란', '실시간 이슈', '화제', '뉴스', '연예이슈', '정치이슈', '사회이슈', '실시간 화제', '논쟁', '토론'],
+    metadataBase: new URL(SITE_URL),
+    title: {
+        default: defaultTitle,
+        template: `%s | ${SITE_NAME}`,
+    },
+    description: SITE_DESCRIPTION,
+    keywords: [...SITE_KEYWORDS],
+    alternates: {
+        canonical: '/',
+    },
     openGraph: {
-        title: '왜난리 - 요즘 난리, 한눈에',
-        description: '왜난리에서 지금 한국에서 가장 뜨거운 이슈를 한눈에 확인하세요.',
-        url: 'https://whynali.com',
-        siteName: '왜난리',
+        title: defaultTitle,
+        description: SITE_DESCRIPTION,
+        url: '/',
+        siteName: SITE_NAME,
         locale: 'ko_KR',
         type: 'website',
+        images: [
+            {
+                url: SITE_OG_IMAGE,
+                width: 1200,
+                height: 630,
+                alt: defaultTitle,
+            },
+        ],
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: defaultTitle,
+        description: SITE_DESCRIPTION,
+        images: [SITE_OG_IMAGE],
     },
     verification: {
         google: ['J9cnf6UOrn5T_W38YOde3BnpgoLRpxbzMPjuM23QazE', 'oLeSnP_W1iS3crjqf9RtO1koomeIm860DTAP-WSclWg'],
@@ -39,9 +73,11 @@ export const metadata: Metadata = {
 const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: '왜난리',
-    url: 'https://whynali.com',
-    logo: 'https://whynali.com/whynali-logo.png',
+    name: SITE_NAME,
+    alternateName: [...SITE_ALTERNATE_NAMES],
+    url: SITE_URL,
+    logo: `${SITE_URL}${SITE_LOGO}`,
+    sameAs: [...SITE_SOCIAL_LINKS],
 }
 
 export default function RootLayout({

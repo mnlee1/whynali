@@ -20,9 +20,10 @@
 import { MetadataRoute } from 'next'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import type { IssueStatus } from '@/types/issue'
+import { SITE_URL } from '@/lib/seo/site'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const baseUrl = SITE_URL
 
     // 승인된 이슈 목록 가져오기 (visibility_status='visible'만)
     const { data: issues } = await supabaseAdmin
@@ -106,6 +107,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             lastModified: new Date(),
             changeFrequency: 'monthly',
             priority: 0.3,
+        },
+        {
+            url: `${baseUrl}/feed.xml`,
+            lastModified: new Date(),
+            changeFrequency: 'hourly',
+            priority: 0.6,
         },
     ]
 

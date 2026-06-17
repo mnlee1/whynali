@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const approvalType = searchParams.get('approval_type')
     const search = searchParams.get('search')
     const sourceTrack = searchParams.get('source_track')
+    const createdAfter = searchParams.get('created_after')
 
     // approval_status 파라미터 파싱: "승인:auto", "반려:manual" 등 처리
     let filterStatus: string | null = null
@@ -76,6 +77,10 @@ export async function GET(request: NextRequest) {
 
         if (search && search.trim()) {
             query = query.ilike('title', `%${search.trim()}%`)
+        }
+
+        if (createdAfter) {
+            query = query.gte('created_at', createdAfter)
         }
 
         const { data, error, count } = await query
