@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { User as UserIcon, ChevronDown, Search, X } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
@@ -29,8 +29,37 @@ export default function Header() {
     const [termsAgreedAt, setTermsAgreedAt] = useState<string | null>(null)
     const [userInfoLoading, setUserInfoLoading] = useState(false)
     const router = useRouter()
+    const pathname = usePathname()
+    const isHome = pathname === '/'
     const userMenuRef = useRef<HTMLDivElement>(null)
     const userMenuRefDesktop = useRef<HTMLDivElement>(null)
+
+    const renderLogo = (className: string) => {
+        const logoImage = (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+                src="/whynali-logo.png"
+                alt="왜난리(whynali.com)"
+                className={className}
+            />
+        )
+
+        if (isHome) {
+            return (
+                <h1 className="flex items-center m-0 text-base font-normal">
+                    <Link href="/" className="flex items-center">
+                        {logoImage}
+                    </Link>
+                </h1>
+            )
+        }
+
+        return (
+            <Link href="/" className="flex items-center">
+                {logoImage}
+            </Link>
+        )
+    }
 
     useEffect(() => {
         supabase.auth.getUser().then((result) => {
@@ -234,14 +263,7 @@ export default function Header() {
                 <div className="container mx-auto px-4">
                     <div className="flex items-center justify-between h-14">
                         <div className="flex items-center gap-8 h-full">
-                            <Link href="/" className="flex items-center">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                    src="/whynali-logo.png"
-                                    alt="왜난리"
-                                    className="h-8 w-auto"
-                                />
-                            </Link>
+                            {renderLogo('h-8 w-auto')}
                             <Nav />
                         </div>
 
@@ -258,14 +280,7 @@ export default function Header() {
             {/* 모바일 레이아웃 (1280px 미만) - 상단 바 */}
             <div className="xl:hidden px-4">
                 <div className="flex items-center justify-between h-12">
-                    <Link href="/" className="flex items-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src="/whynali-logo.png"
-                            alt="왜난리"
-                            className="h-6 w-auto"
-                        />
-                    </Link>
+                    {renderLogo('h-6 w-auto')}
 
                     <div className="flex items-center gap-1">
                         <button

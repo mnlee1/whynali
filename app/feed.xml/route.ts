@@ -1,9 +1,10 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { SITE_URL } from '@/lib/seo/site'
 
 export const revalidate = 3600
 
 export async function GET() {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const baseUrl = SITE_URL
 
     const { data: issues } = await supabaseAdmin
         .from('issues')
