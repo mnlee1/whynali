@@ -11,7 +11,7 @@
       height: 1350px;
       overflow: hidden;
       position: relative;
-      background-color: #ffffff;
+      background-color: #0d0d0d;
     }
 
     .bg-image {
@@ -26,78 +26,84 @@
       position: absolute;
       left: 0;
       right: 0;
-      top: 408px;
-      height: 942px;
+      top: 350px;
+      height: 1000px;
       background: linear-gradient(
         to bottom,
         rgba(5, 5, 5, 0) 0%,
-        rgba(5, 5, 5, 0.5) 50%,
-        rgba(5, 5, 5, 0.92) 100%
+        rgba(5, 5, 5, 0.55) 40%,
+        rgba(5, 5, 5, 0.93) 75%,
+        rgba(5, 5, 5, 1.0) 100%
       );
     }
 
-    /* #point-text-01 badge: x=113, y=377, w=387, h=53 */
+    /* 뱃지 01 — 좌상단 영역 */
     .badge-01 {
       position: absolute;
-      left: 113px;
-      top: 377px;
-      height: 53px;
-      background: #ffffff;
-      border: 1px solid #000000;
+      left: 90px;
+      top: 380px;
+      height: 56px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 6px;
       display: inline-flex;
       align-items: center;
-      padding: 0 10px;
+      padding: 0 18px;
       white-space: nowrap;
     }
 
-    /* #point-text-02 badge: x=623, y=649, w=387, h=53 */
+    /* 뱃지 02 — 우측 */
     .badge-02 {
       position: absolute;
-      left: 623px;
-      top: 649px;
-      height: 53px;
-      background: #ffffff;
-      border: 1px solid #000000;
+      right: 90px;
+      top: 640px;
+      height: 56px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 6px;
       display: inline-flex;
       align-items: center;
-      padding: 0 10px;
+      padding: 0 18px;
       white-space: nowrap;
     }
 
     .badge-text {
       font-family: 'Pretendard', sans-serif;
-      font-weight: 500;
+      font-weight: 600;
       font-size: 28px;
-      color: #050505;
-      line-height: 33.41px;
+      color: #111111;
+      line-height: 1;
+    }
+
+    /* 타이틀 + 설명글 플렉스 컨테이너 — 하단 기준으로 위로 쌓임 */
+    .content-block {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 110px;
+      padding: 0 90px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
     }
 
     .sub-title {
-      position: absolute;
-      left: 90px;
-      top: 957px;
-      width: 800px;
       font-family: 'Pretendard', sans-serif;
       font-weight: 800;
-      font-size: 60px;
+      font-size: 56px;
       color: #ffffff;
-      line-height: normal;
+      line-height: 1.25;
+      letter-spacing: -1px;
     }
 
     .desc {
-      position: absolute;
-      left: 90px;
-      top: 1048px;
-      width: 800px;
       font-family: 'Pretendard', sans-serif;
       font-weight: 300;
-      font-size: 35px;
-      color: #ffffff;
-      line-height: 52.5px;
+      font-size: 33px;
+      color: rgba(255, 255, 255, 0.92);
+      line-height: 1.6;
       white-space: pre-line;
     }
 
-    /* 하단 로고 이미지 — 가운데 정렬 */
+    /* 하단 로고 */
     .bottom-logo {
       position: absolute;
       left: 50%;
@@ -116,7 +122,6 @@
       object-fit: contain;
     }
 
-    /* 화살표: 오른쪽 끝, 로고와 수직 중앙 정렬 */
     .arrow {
       position: absolute;
       right: 70px;
@@ -131,22 +136,34 @@
   <div class="bg-image"></div>
   <div class="gradient-overlay"></div>
 
-  <div class="badge-01">
+  <div class="badge-01" id="badge-01">
     <span class="badge-text">{{point_text_01}}</span>
   </div>
-  <div class="badge-02">
+  <div class="badge-02" id="badge-02">
     <span class="badge-text">{{point_text_02}}</span>
   </div>
 
-  <div class="sub-title">{{sub_title}}</div>
-  <div class="desc">{{desc}}</div>
+  <div class="content-block">
+    <div class="sub-title">{{sub_title}}</div>
+    <div class="desc">{{desc}}</div>
+  </div>
 
   <div class="bottom-logo">
     <img src="{{logo_image_url}}" alt="왜난리">
   </div>
-  
+
   <svg class="arrow" viewBox="0 0 120 29.4558" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M119.414 16.1421C120.195 15.3611 120.195 14.0948 119.414 13.3137L106.686 0.585787C105.905 -0.195262 104.639 -0.195262 103.858 0.585787C103.077 1.36684 103.077 2.63317 103.858 3.41421L115.172 14.7279L103.858 26.0416C103.077 26.8227 103.077 28.089 103.858 28.8701C104.639 29.6511 105.905 29.6511 106.686 28.8701L119.414 16.1421ZM0 14.7279V16.7279H118V14.7279V12.7279H0V14.7279Z" fill="#FFFFFF"/>
   </svg>
+
+  <script>
+    // 뱃지 텍스트 없으면 숨김
+    if (!document.getElementById('badge-01').querySelector('span').textContent.trim()) {
+      document.getElementById('badge-01').style.display = 'none';
+    }
+    if (!document.getElementById('badge-02').querySelector('span').textContent.trim()) {
+      document.getElementById('badge-02').style.display = 'none';
+    }
+  </script>
 </body>
 </html>

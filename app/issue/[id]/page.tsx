@@ -37,6 +37,7 @@ import IssueStatBar from '@/components/issue/IssueStatBar'
 import ShareButton from '@/components/issue/ShareButton'
 import { formatFullDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
+import { SITE_NAME, SITE_OG_IMAGE, SITE_URL } from '@/lib/seo/site'
 
 // ISR: 1시간(3600초)마다 페이지 재생성
 export const revalidate = 3600
@@ -77,9 +78,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
         }
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const baseUrl = SITE_URL
     const title = `${issue.title}`
-    const description = issue.topic_description || `${issue.category} 카테고리의 ${issue.status} 이슈. 화력 지수 ${issue.heat_index ?? 0}점. 실시간 반응, 타임라인, 투표, 댓글을 확인하세요.`
+    const description = issue.topic_description || `${issue.category} 카테고리의 ${issue.status} 이슈. 왜난리(whynali.com)에서 화력 지수 ${issue.heat_index ?? 0}점, 실시간 반응·타임라인·투표·댓글을 확인하세요.`
 
     const categoryKeywords: Record<string, string[]> = {
         '연예': ['연예', '연예계', '셀럽', '아이돌', '배우', '가수'],
@@ -91,7 +92,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
         '세계': ['세계', '국제', '해외', '외교', '글로벌'],
     }
 
-    const keywords = ['이슈', '논란', '왜난리', issue.title, issue.category, ...(categoryKeywords[issue.category] || [])]
+    const keywords = ['이슈', '논란', '왜난리', 'whynali', issue.title, issue.category, ...(categoryKeywords[issue.category] || [])]
 
     return {
         title,
@@ -101,7 +102,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             type: 'article',
             locale: 'ko_KR',
             url: `/issue/${id}`,
-            siteName: '왜난리',
+            siteName: SITE_NAME,
             title,
             description,
             publishedTime: issue.created_at,
@@ -110,7 +111,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             tags: keywords,
             images: [
                 {
-                    url: '/whynali-share-og.png',
+                    url: SITE_OG_IMAGE,
                     width: 1200,
                     height: 630,
                     alt: issue.title,
@@ -121,7 +122,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             card: 'summary_large_image',
             title,
             description,
-            images: ['/whynali-share-og.png'],
+            images: [SITE_OG_IMAGE],
         },
         alternates: {
             canonical: `${baseUrl}/issue/${id}`,
@@ -241,7 +242,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     const { data: { user } } = await sessionClient.auth.getUser()
     const userId = user?.id ?? null
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+    const baseUrl = SITE_URL
 
     const categoryUrls: Record<string, string> = {
         '연예': '/entertain',

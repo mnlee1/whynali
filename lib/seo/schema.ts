@@ -13,8 +13,17 @@
  */
 
 import type { Issue, IssueCategory } from '@/types/issue'
+import {
+    SITE_ALTERNATE_NAMES,
+    SITE_DESCRIPTION,
+    SITE_LOGO,
+    SITE_NAME,
+    SITE_OG_IMAGE,
+    SITE_SOCIAL_LINKS,
+    SITE_URL,
+} from '@/lib/seo/site'
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+const BASE_URL = SITE_URL
 
 /**
  * Article 스키마 - 이슈 상세 페이지
@@ -31,16 +40,16 @@ export function generateArticleSchema(issue: Issue) {
         dateModified: issue.updated_at,
         author: {
             '@type': 'Organization',
-            name: '왜난리',
+            name: SITE_NAME,
             url: BASE_URL,
         },
         publisher: {
             '@type': 'Organization',
-            name: '왜난리',
+            name: SITE_NAME,
             url: BASE_URL,
             logo: {
                 '@type': 'ImageObject',
-                url: `${BASE_URL}/logo.png`,
+                url: `${BASE_URL}${SITE_LOGO}`,
             },
         },
         mainEntityOfPage: {
@@ -48,8 +57,8 @@ export function generateArticleSchema(issue: Issue) {
             '@id': `${BASE_URL}/issue/${issue.id}`,
         },
         url: `${BASE_URL}/issue/${issue.id}`,
-        image: `${BASE_URL}/og-image.png`,
-        keywords: [issue.title, issue.category, '이슈', '논란', '왜난리'].join(', '),
+        image: `${BASE_URL}${SITE_OG_IMAGE}`,
+        keywords: [issue.title, issue.category, '이슈', '논란', SITE_NAME, 'whynali'].join(', '),
         inLanguage: 'ko-KR',
         isAccessibleForFree: true,
     }
@@ -80,11 +89,18 @@ export function generateWebSiteSchema() {
     return {
         '@context': 'https://schema.org',
         '@type': 'WebSite',
-        name: '왜난리',
-        alternateName: 'WhyNali',
+        name: SITE_NAME,
+        alternateName: [...SITE_ALTERNATE_NAMES],
         url: BASE_URL,
-        description: '한국의 모든 이슈를 한눈에. 연예, 스포츠, 정치, 사회 등 실시간 논란과 사건을 타임라인으로 정리해서 보여드립니다.',
+        description: SITE_DESCRIPTION,
         inLanguage: 'ko-KR',
+        publisher: {
+            '@type': 'Organization',
+            name: SITE_NAME,
+            url: BASE_URL,
+            logo: `${BASE_URL}${SITE_LOGO}`,
+            sameAs: [...SITE_SOCIAL_LINKS],
+        },
         potentialAction: {
             '@type': 'SearchAction',
             target: {
@@ -130,7 +146,7 @@ export function generateCollectionPageSchema(category: IssueCategory) {
         inLanguage: 'ko-KR',
         isPartOf: {
             '@type': 'WebSite',
-            name: '왜난리',
+            name: SITE_NAME,
             url: BASE_URL,
         },
     }

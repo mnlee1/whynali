@@ -14,6 +14,7 @@ Allow: /community
 Allow: /search
 Allow: /privacy
 Allow: /terms
+Allow: /feed.xml
 Disallow: /admin/
 Disallow: /api/
 Disallow: /auth/
