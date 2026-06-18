@@ -26,7 +26,7 @@ import {
     SITE_URL,
 } from '@/lib/seo/site'
 
-const defaultTitle = `${SITE_NAME}(whynali.com) - ${SITE_TAGLINE}`
+const defaultTitle = `${SITE_NAME} - ${SITE_TAGLINE}`
 
 export const metadata: Metadata = {
     metadataBase: new URL(SITE_URL),
