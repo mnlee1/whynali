@@ -22,12 +22,9 @@ export default function Footer() {
         <footer className="border-t border-border bg-surface mt-auto">
             <div className="container mx-auto px-4 py-6">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-content-secondary">
-                    <div className="flex flex-col items-center sm:items-start gap-0.5">
-                        <Link href="/" className="font-medium text-content-primary hover:underline">
-                            왜난리
-                        </Link>
-                        <span className="text-xs text-content-secondary">whynali.com</span>
-                    </div>
+                    <Link href="/" className="font-medium text-content-primary hover:underline">
+                        왜난리
+                    </Link>
                     <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1">
                         <Link href="/terms" className="hover:text-content-primary transition-colors">
                             이용약관

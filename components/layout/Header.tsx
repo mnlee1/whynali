@@ -39,7 +39,7 @@ export default function Header() {
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
                 src="/whynali-logo.png"
-                alt="왜난리(whynali.com)"
+                alt="왜난리"
                 className={className}
             />
         )
