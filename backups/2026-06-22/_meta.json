@@ -1,0 +1,60 @@
+{
+  "backup_date": "2026-06-22",
+  "backup_time": "03-29-32",
+  "timestamp": "2026-06-22T03:29:32.369Z",
+  "total_tables": 8,
+  "total_rows": 17835,
+  "success_count": 8,
+  "failed_count": 0,
+  "tables": [
+    {
+      "table": "issues",
+      "rows": 283,
+      "file": "issues.json",
+      "success": true
+    },
+    {
+      "table": "users",
+      "rows": 23,
+      "file": "users.json",
+      "success": true
+    },
+    {
+      "table": "comments",
+      "rows": 19,
+      "file": "comments.json",
+      "success": true
+    },
+    {
+      "table": "reactions",
+      "rows": 17,
+      "file": "reactions.json",
+      "success": true
+    },
+    {
+      "table": "votes",
+      "rows": 62,
+      "file": "votes.json",
+      "success": true
+    },
+    {
+      "table": "discussion_topics",
+      "rows": 98,
+      "file": "discussion_topics.json",
+      "success": true
+    },
+    {
+      "table": "news_data",
+      "rows": 12175,
+      "file": "news_data.json",
+      "success": true
+    },
+    {
+      "table": "timeline_points",
+      "rows": 5158,
+      "file": "timeline_points.json",
+      "success": true
+    }
+  ],
+  "duration_ms": 4967
+}
