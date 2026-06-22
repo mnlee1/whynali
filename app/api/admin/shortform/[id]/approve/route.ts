@@ -47,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         // 승인 처리
         const { error: updateError } = await supabaseAdmin
             .from('shortform_jobs')
-            .update({ approval_status: 'approved' })
+            .update({ approval_status: 'approved', approved_at: new Date().toISOString() })
             .eq('id', id)
 
         if (updateError) {
