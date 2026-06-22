@@ -19,7 +19,7 @@
 import type { Metadata } from 'next'
 import { cache } from 'react'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Eye, MessageCircleMore } from 'lucide-react'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
@@ -212,13 +212,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
     const discussionTopicsWithStats = [...active, ...closed].slice(0, 5)
 
     if (!issue) {
-        return (
-            <div className="container mx-auto px-4 py-6 md:py-8">
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-                    이슈를 불러올 수 없습니다.
-                </div>
-            </div>
-        )
+        notFound()
     }
 
     // 병합된 이슈인 경우 원본 이슈로 리다이렉트
