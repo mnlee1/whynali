@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { Eye, MessageCircleMore } from 'lucide-react'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import DiscussionComments from '@/components/issue/DiscussionComments'
@@ -21,16 +22,7 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
         .single()
 
     if (error || !topic) {
-        return (
-            <div className="container mx-auto px-4 py-6 md:py-8">
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-                    토론 주제를 찾을 수 없습니다.
-                </div>
-                <Link href="/community" className="inline-block mt-4 text-sm text-content-secondary hover:text-content-primary underline underline-offset-2">
-                    커뮤니티 목록으로 돌아가기
-                </Link>
-            </div>
-        )
+        notFound()
     }
 
     // 의견(댓글) 수 조회
