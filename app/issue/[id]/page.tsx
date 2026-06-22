@@ -18,7 +18,6 @@
 
 import type { Metadata } from 'next'
 import { cache } from 'react'
-import Script from 'next/script'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Eye, MessageCircleMore } from 'lucide-react'
@@ -270,13 +269,11 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
     return (
         <>
-            <Script
-                id="issue-article-schema"
+            <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={createJsonLd(articleSchema)}
             />
-            <Script
-                id="issue-breadcrumb-schema"
+            <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
             />

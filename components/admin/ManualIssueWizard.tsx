@@ -239,7 +239,7 @@ export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
             onClick={e => { if (e.target === e.currentTarget && !isBusy) onClose() }}
         >
-            <div className="w-full max-w-lg bg-surface rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="w-full max-w-lg bg-surface rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
 
                 {/* 헤더 */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
@@ -265,7 +265,7 @@ export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
                                     value={keyword}
                                     onChange={e => { setKeyword(e.target.value); setStep('input'); setStep1(null) }}
                                     onKeyDown={e => { if (e.key === 'Enter' && step === 'input') handleStep1() }}
-                                    placeholder="예: 이재명 피습, 카카오 서버 장애"
+                                    placeholder="예: 뉴진스 계약 분쟁, 배달의민족 수수료 인상"
                                     disabled={isBusy}
                                     className="flex-1 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
                                 />

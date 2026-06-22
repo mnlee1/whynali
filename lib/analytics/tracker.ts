@@ -49,8 +49,14 @@ function getUTMParams(): {
         } else if (referrer.includes('instagram.com')) {
             utm.utm_source = 'instagram'
             utm.utm_medium = 'social'
-        } else if (referrer.includes('twitter.com') || referrer.includes('t.co')) {
-            utm.utm_source = 'twitter'
+        } else if (referrer.includes('twitter.com') || referrer.includes('t.co') || referrer.includes('x.com')) {
+            utm.utm_source = 'x'
+            utm.utm_medium = 'social'
+        } else if (referrer.includes('youtube.com') || referrer.includes('youtu.be')) {
+            utm.utm_source = 'youtube'
+            utm.utm_medium = 'social'
+        } else if (referrer.includes('tiktok.com')) {
+            utm.utm_source = 'tiktok'
             utm.utm_medium = 'social'
         } else if (referrer.includes('google.com')) {
             utm.utm_source = 'google'

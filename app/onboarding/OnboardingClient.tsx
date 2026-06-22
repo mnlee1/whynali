@@ -151,7 +151,10 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
                 return
             }
 
-            window.location.replace('/')
+            const params = new URLSearchParams(window.location.search)
+            const next = params.get('next') ?? '/'
+            const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'
+            window.location.replace(safeNext)
         } catch (err) {
             console.error('온보딩 제출 오류:', err)
             setError('서버 오류가 발생했습니다.')

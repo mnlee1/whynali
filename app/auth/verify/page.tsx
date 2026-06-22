@@ -73,7 +73,8 @@ function AuthVerifyContent() {
                                 trackConversion({ eventType: 'signup' })
                             }
                             setStatus('ok')
-                            window.location.replace('/onboarding')
+                            const onboardingNext = next !== '/' ? `?next=${encodeURIComponent(next)}` : ''
+                            window.location.replace(`/onboarding${onboardingNext}`)
                             return
                         }
                     }
