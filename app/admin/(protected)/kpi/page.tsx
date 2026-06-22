@@ -14,6 +14,26 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, AlertCircle } from 'lucide-react'
 
+interface ConversionRatePeriod {
+    signupRate: number
+    voteRate: number
+    commentRate: number
+    reactionRate: number
+    uniqueVisitors: number
+    signups: number
+    votes: number
+    comments: number
+    reactions: number
+}
+
+interface ChannelInboundStat {
+    visitors: number
+    signups: number
+    signupRate: number
+}
+
+type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'organic'
+
 interface KPIMetrics {
     currentUsers: number
     currentActiveIssues: number   // 진행중 (점화 + 논란중)
@@ -36,11 +56,21 @@ interface KPIMetrics {
         d7:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
         d30: { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
     }
+    channelInboundByPeriod: {
+        d1:  Record<ChannelKey, ChannelInboundStat>
+        d7:  Record<ChannelKey, ChannelInboundStat>
+        d30: Record<ChannelKey, ChannelInboundStat>
+    }
     conversionRates: {
         signupRate: number
         voteRate: number
         commentRate: number
         reactionRate: number
+    }
+    conversionRatesByPeriod: {
+        d1: ConversionRatePeriod
+        d7: ConversionRatePeriod
+        d30: ConversionRatePeriod
     }
     issueQuality: {
         avgVotesPerIssue: number
@@ -511,6 +541,86 @@ export default function KPIDashboardPage() {
                 </div>
             </div>
 
+            {/* 월말 달성 역산 */}
+            {(() => {
+                const isCurrentMonth =
+                    selectedYear === currentYear && selectedMonth === currentMonth
+                if (!isCurrentMonth || !data.goalInfo?.periodEnd) return null
+
+                const periodEnd = new Date(`${data.goalInfo.periodEnd}T23:59:59`)
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                const endDay = new Date(periodEnd)
+                endDay.setHours(0, 0, 0, 0)
+                const daysLeft = Math.max(1, Math.round((endDay.getTime() - today.getTime()) / 86400000) + 1)
+
+                const lackUsers = Math.max(metrics.targets.users - metrics.currentUsers, 0)
+                const lackComments = Math.max(metrics.targets.comments - metrics.currentComments, 0)
+                const lackReactions = Math.max(metrics.targets.reactions - metrics.currentReactions, 0)
+                const dailyUsersNeeded = lackUsers / daysLeft
+                const dailyCommentsNeeded = lackComments / daysLeft
+                const dailyReactionsNeeded = lackReactions / daysLeft
+
+                const conv = metrics.conversionRatesByPeriod?.d30 ?? metrics.conversionRatesByPeriod?.d7
+                const signupRatePct = conv?.signupRate ?? 0
+                const visitorsNeededDaily =
+                    signupRatePct > 0
+                        ? Math.ceil(dailyUsersNeeded / (signupRatePct / 100))
+                        : null
+
+                const fmt = (n: number) => (Number.isInteger(n) ? n.toString() : n.toFixed(1))
+
+                return (
+                    <div className="card p-5 border-l-4 border-l-amber-400 bg-amber-50/40">
+                        <h2 className="text-sm font-semibold text-content-primary mb-1">월말 달성 역산</h2>
+                        <p className="text-xs text-content-muted mb-4">
+                            {data.goalInfo.periodEnd}까지 {daysLeft}일 남음
+                            (오늘 포함)
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="p-4 bg-white rounded-xl border border-amber-200">
+                                <p className="text-xs text-content-muted mb-1">일평균 신규 가입 필요</p>
+                                <p className="text-2xl font-bold text-content-primary">
+                                    {fmt(dailyUsersNeeded)}명/일
+                                </p>
+                                <p className="text-xs text-content-muted mt-2">
+                                    부족 {lackUsers.toLocaleString()}명 ÷ {daysLeft}일
+                                </p>
+                                {visitorsNeededDaily !== null && (
+                                    <p className="text-xs text-amber-800 mt-2">
+                                        이번 달 가입 전환율 {signupRatePct.toFixed(1)}% 기준
+                                        → 순방문자 약 {visitorsNeededDaily.toLocaleString()}명/일 필요
+                                    </p>
+                                )}
+                                {visitorsNeededDaily === null && (
+                                    <p className="text-xs text-amber-800 mt-2">
+                                        가입 전환 데이터가 없어 방문자 역산 불가
+                                    </p>
+                                )}
+                            </div>
+                            <div className="p-4 bg-white rounded-xl border border-amber-200">
+                                <p className="text-xs text-content-muted mb-1">일평균 댓글 필요</p>
+                                <p className="text-2xl font-bold text-content-primary">
+                                    {fmt(dailyCommentsNeeded)}개/일
+                                </p>
+                                <p className="text-xs text-content-muted mt-2">
+                                    부족 {lackComments.toLocaleString()}개 ÷ {daysLeft}일
+                                </p>
+                            </div>
+                            <div className="p-4 bg-white rounded-xl border border-amber-200">
+                                <p className="text-xs text-content-muted mb-1">일평균 반응 필요</p>
+                                <p className="text-2xl font-bold text-content-primary">
+                                    {fmt(dailyReactionsNeeded)}개/일
+                                </p>
+                                <p className="text-xs text-content-muted mt-2">
+                                    부족 {lackReactions.toLocaleString()}개 ÷ {daysLeft}일
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
+
             {/* 탭 네비게이션 */}
             <div className="flex border-b border-border-muted">
                 {([
@@ -637,25 +747,143 @@ export default function KPIDashboardPage() {
             {(() => {
                 const pKey = selectedPeriod === 1 ? 'd1' as const : selectedPeriod === 7 ? 'd7' as const : 'd30' as const
                 const src = metrics.visitorsBySource[pKey]
+                const conv = metrics.conversionRatesByPeriod?.[pKey]
+                const periodVisitors =
+                    selectedPeriod === 1
+                        ? metrics.todayUniqueVisitors
+                        : selectedPeriod === 7
+                            ? metrics.weeklyUniqueVisitors
+                            : metrics.monthlyUniqueVisitors
+
+                const ConversionCard = ({
+                    label,
+                    rate,
+                    count,
+                    highlight = false,
+                }: {
+                    label: string
+                    rate: number
+                    count: number
+                    highlight?: boolean
+                }) => (
+                    <div className={`p-4 rounded-xl border text-center ${
+                        highlight
+                            ? 'bg-blue-50 border-blue-200'
+                            : 'bg-surface-subtle border-border'
+                    }`}>
+                        <p className={`text-xs mb-1 ${highlight ? 'text-blue-700 font-semibold' : 'text-content-muted'}`}>
+                            {label}
+                        </p>
+                        <p className={`text-2xl font-bold ${highlight ? 'text-blue-900' : 'text-content-primary'}`}>
+                            {rate.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-content-muted mt-1">
+                            {count.toLocaleString()}건 / {periodVisitors.toLocaleString()}명
+                        </p>
+                    </div>
+                )
+
                 return (
+                    <>
                     <div className="card p-5">
-                        <h2 className="text-sm font-semibold text-content-primary mb-4">유입 체크</h2>
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                            {[
-                                { label: '인스타', val: src.instagram },
-                                { label: '유튜브', val: src.youtube },
-                                { label: '틱톡',   val: src.tiktok },
-                                { label: 'X',      val: src.x },
-                                { label: '스레드', val: src.threads },
-                                { label: '검색',   val: src.organic },
-                            ].map(({ label, val }) => (
-                                <div key={label} className="p-3 bg-surface-subtle rounded-xl border border-border text-center">
-                                    <p className="text-xs text-content-muted mb-1">{label}</p>
-                                    <p className="text-2xl font-bold text-content-primary">{val}</p>
-                                </div>
-                            ))}
+                        <h2 className="text-sm font-semibold text-content-primary mb-1">가입·행동 전환율</h2>
+                        <p className="text-xs text-content-muted mb-4">
+                            순방문자 대비 전환 비율
+                            (conversion_events 기준, 선택 기간과 동기화)
+                        </p>
+                        {conv ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <ConversionCard
+                                    label="가입 전환율"
+                                    rate={conv.signupRate}
+                                    count={conv.signups}
+                                    highlight
+                                />
+                                <ConversionCard
+                                    label="투표 전환율"
+                                    rate={conv.voteRate}
+                                    count={conv.votes}
+                                />
+                                <ConversionCard
+                                    label="댓글 전환율"
+                                    rate={conv.commentRate}
+                                    count={conv.comments}
+                                />
+                                <ConversionCard
+                                    label="반응 전환율"
+                                    rate={conv.reactionRate}
+                                    count={conv.reactions}
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm text-content-muted">전환율 데이터를 불러올 수 없습니다.</p>
+                        )}
+                    </div>
+
+                    <div className="card p-5">
+                        <h2 className="text-sm font-semibold text-content-primary mb-1">유입 체크</h2>
+                        <p className="text-xs text-content-muted mb-4">
+                            채널별 순방문자와 가입 전환율
+                            (가입은 첫 방문 UTM 기준)
+                        </p>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-xs text-content-muted border-b border-border">
+                                        <th className="text-left py-2 pr-4 font-medium">채널</th>
+                                        <th className="text-right py-2 px-3 font-medium">방문자</th>
+                                        <th className="text-right py-2 px-3 font-medium">가입</th>
+                                        <th className="text-right py-2 pl-3 font-medium">가입 전환율</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {([
+                                        { label: '인스타', key: 'instagram' as ChannelKey },
+                                        { label: '스레드', key: 'threads' as ChannelKey },
+                                        { label: 'X',      key: 'x' as ChannelKey },
+                                        { label: '유튜브', key: 'youtube' as ChannelKey },
+                                        { label: '틱톡',   key: 'tiktok' as ChannelKey },
+                                        { label: '검색',   key: 'organic' as ChannelKey },
+                                    ]).map(({ label, key }) => {
+                                        const fallbackVisitors = {
+                                            instagram: src.instagram,
+                                            threads: src.threads,
+                                            x: src.x,
+                                            youtube: src.youtube,
+                                            tiktok: src.tiktok,
+                                            organic: src.organic,
+                                        }[key]
+                                        const stat = metrics.channelInboundByPeriod?.[pKey]?.[key]
+                                            ?? { visitors: fallbackVisitors, signups: 0, signupRate: 0 }
+                                        const hasVisitors = stat.visitors > 0
+                                        return (
+                                            <tr key={key} className="border-b border-border-muted last:border-0">
+                                                <td className="py-3 pr-4 font-medium text-content-primary">{label}</td>
+                                                <td className="py-3 px-3 text-right text-content-primary">
+                                                    {stat.visitors.toLocaleString()}명
+                                                </td>
+                                                <td className="py-3 px-3 text-right text-content-primary">
+                                                    {stat.signups.toLocaleString()}건
+                                                </td>
+                                                <td className="py-3 pl-3 text-right">
+                                                    <span className={`font-semibold ${
+                                                        stat.signupRate >= 5
+                                                            ? 'text-emerald-700'
+                                                            : hasVisitors
+                                                                ? 'text-content-primary'
+                                                                : 'text-content-muted'
+                                                    }`}>
+                                                        {hasVisitors ? `${stat.signupRate.toFixed(1)}%` : '-'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+                    </>
                 )
             })()}
             </>}

@@ -153,7 +153,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
         const { error: updateError } = await supabaseAdmin
             .from('shortform_jobs')
-            .update({ upload_status: newUploadStatus })
+            .update({ upload_status: newUploadStatus, youtube_uploaded_at: new Date().toISOString() })
             .eq('id', id)
 
         if (updateError) {

@@ -19,7 +19,6 @@
  * - JSON-LD WebSite 스키마 (사이트 검색 기능)
  */
 
-import Script from 'next/script'
 import IssueList from '@/components/issues/IssueList'
 import HotIssueHighlight from '@/components/issues/HotIssueHighlight'
 import PopularRanking from '@/components/issues/PopularRanking'
@@ -152,8 +151,7 @@ export default async function HomePage() {
 
     return (
         <>
-            <Script
-                id="home-website-schema"
+            <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={createJsonLd(websiteSchema)}
             />

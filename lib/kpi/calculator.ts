@@ -30,6 +30,160 @@ type PeriodStat = {
     cardNews: number
 }
 
+type ConversionRatePeriod = {
+    signupRate: number
+    voteRate: number
+    commentRate: number
+    reactionRate: number
+    uniqueVisitors: number
+    signups: number
+    votes: number
+    comments: number
+    reactions: number
+}
+
+const emptyConversionRatePeriod = (): ConversionRatePeriod => ({
+    signupRate: 0,
+    voteRate: 0,
+    commentRate: 0,
+    reactionRate: 0,
+    uniqueVisitors: 0,
+    signups: 0,
+    votes: 0,
+    comments: 0,
+    reactions: 0,
+})
+
+function buildConversionRatePeriod(
+    uniqueVisitors: number,
+    signups: number,
+    votes: number,
+    comments: number,
+    reactions: number,
+): ConversionRatePeriod {
+    const rate = (count: number) => uniqueVisitors > 0 ? (count / uniqueVisitors) * 100 : 0
+    return {
+        uniqueVisitors,
+        signups,
+        votes,
+        comments,
+        reactions,
+        signupRate: rate(signups),
+        voteRate: rate(votes),
+        commentRate: rate(comments),
+        reactionRate: rate(reactions),
+    }
+}
+
+type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'organic'
+
+type VisitorCountsByChannel = Record<ChannelKey, number>
+
+type ChannelInboundStat = {
+    visitors: number
+    signups: number
+    signupRate: number
+}
+
+type ChannelInboundBreakdown = Record<ChannelKey, ChannelInboundStat>
+
+const CHANNEL_KEYS: ChannelKey[] = ['instagram', 'threads', 'x', 'youtube', 'tiktok', 'organic']
+
+function emptyVisitorCounts(): VisitorCountsByChannel {
+    return { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 }
+}
+
+function emptyChannelInboundBreakdown(): ChannelInboundBreakdown {
+    const zero = (): ChannelInboundStat => ({ visitors: 0, signups: 0, signupRate: 0 })
+    return {
+        threads: zero(),
+        instagram: zero(),
+        x: zero(),
+        youtube: zero(),
+        tiktok: zero(),
+        organic: zero(),
+    }
+}
+
+function mapUtmToChannelKey(utm: string | null): ChannelKey | null {
+    if (!utm) return null
+    if (utm === 'threads') return 'threads'
+    if (utm === 'instagram') return 'instagram'
+    if (utm === 'twitter') return 'x'
+    if (utm === 'youtube') return 'youtube'
+    if (utm === 'tiktok') return 'tiktok'
+    if (['google', 'naver', 'organic'].includes(utm)) return 'organic'
+    return null
+}
+
+function buildVisitorCounts(data: { utm_source: string | null; session_id: string }[] | null): VisitorCountsByChannel {
+    return {
+        threads:   new Set(data?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
+        instagram: new Set(data?.filter(v => v.utm_source === 'instagram').map(v => v.session_id) || []).size,
+        x:         new Set(data?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
+        youtube:   new Set(data?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
+        tiktok:    new Set(data?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
+        organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
+    }
+}
+
+function buildChannelInboundBreakdown(
+    visitorCounts: VisitorCountsByChannel,
+    signupEvents: { first_utm_source: string | null }[] | null,
+): ChannelInboundBreakdown {
+    const signupCounts = emptyVisitorCounts()
+    for (const event of signupEvents || []) {
+        const channel = mapUtmToChannelKey(event.first_utm_source)
+        if (channel) signupCounts[channel]++
+    }
+
+    const toRate = (visitors: number, signups: number) => visitors > 0 ? (signups / visitors) * 100 : 0
+    const result = emptyChannelInboundBreakdown()
+    for (const key of CHANNEL_KEYS) {
+        result[key] = {
+            visitors: visitorCounts[key],
+            signups: signupCounts[key],
+            signupRate: toRate(visitorCounts[key], signupCounts[key]),
+        }
+    }
+    return result
+}
+
+async function fetchConversionCounts(sinceIso: string) {
+    const [
+        { count: signups },
+        { count: votes },
+        { count: comments },
+        { count: reactions },
+    ] = await Promise.all([
+        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'signup').gte('created_at', sinceIso),
+        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'vote').gte('created_at', sinceIso),
+        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'comment').gte('created_at', sinceIso),
+        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'reaction').gte('created_at', sinceIso),
+    ])
+
+    return {
+        signups: signups || 0,
+        votes: votes || 0,
+        comments: comments || 0,
+        reactions: reactions || 0,
+    }
+}
+
+async function fetchSignupEventsBySource(sinceIso: string) {
+    const { data } = await supabase
+        .from('conversion_events')
+        .select('first_utm_source')
+        .eq('event_type', 'signup')
+        .gte('created_at', sinceIso)
+
+    return data || []
+}
+
 interface KPIMetrics {
     // 현재 지표
     currentUsers: number
@@ -55,13 +209,24 @@ interface KPIMetrics {
         d7:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
         d30: { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
     }
+    // 채널별 방문자 + 가입 + 가입 전환율 (기간별)
+    channelInboundByPeriod: {
+        d1: ChannelInboundBreakdown
+        d7: ChannelInboundBreakdown
+        d30: ChannelInboundBreakdown
+    }
     
     // 전환율 (재미나이 제안 2번)
     conversionRates: {
-        signupRate: number              // 방문 → 가입 (%)
-        voteRate: number                // 방문 → 투표 (%)
-        commentRate: number             // 방문 → 댓글 (%)
-        reactionRate: number            // 방문 → 반응 (%)
+        signupRate: number              // 방문 → 가입 (%), 최근 7일 기준 (하위 호환)
+        voteRate: number
+        commentRate: number
+        reactionRate: number
+    }
+    conversionRatesByPeriod: {
+        d1: ConversionRatePeriod
+        d7: ConversionRatePeriod
+        d30: ConversionRatePeriod
     }
     
     // 이슈 품질 지표 (재미나이 제안 3번)
@@ -345,11 +510,11 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             .eq('approval_status', '승인')
             .gte('approved_at', thisMonthStart2.toISOString()),
         supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
-            .eq('approval_status', '승인')
-            .gte('created_at', todayStart.toISOString()),
+            .not('youtube_uploaded_at', 'is', null)
+            .gte('youtube_uploaded_at', todayStart.toISOString()),
         supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
-            .eq('approval_status', '승인')
-            .gte('created_at', thisMonthStart2.toISOString()),
+            .not('youtube_uploaded_at', 'is', null)
+            .gte('youtube_uploaded_at', thisMonthStart2.toISOString()),
         supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
             .gte('published_at', todayStart.toISOString()),
         supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
@@ -420,9 +585,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         supabase.from('issues').select('*', { count: 'exact', head: true })
             .eq('approval_status', '승인').gte('approved_at', thisMonthStart2.toISOString()),
         supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
-            .eq('approval_status', '승인').gte('created_at', thisWeekStart.toISOString()),
+            .not('youtube_uploaded_at', 'is', null).gte('youtube_uploaded_at', thisWeekStart.toISOString()),
         supabase.from('shortform_jobs').select('*', { count: 'exact', head: true })
-            .eq('approval_status', '승인').gte('created_at', thisMonthStart2.toISOString()),
+            .not('youtube_uploaded_at', 'is', null).gte('youtube_uploaded_at', thisMonthStart2.toISOString()),
         supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
             .gte('published_at', thisWeekStart.toISOString()),
         supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
@@ -491,62 +656,57 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     
     const monthlyUniqueVisitors = new Set(monthlyVisitors?.map(v => v.session_id) || []).size
 
-    // 유입 경로별 방문자 (오늘/7일/30일)
+    // 유입 경로별 방문자 + 채널별 가입 (오늘/7일/30일)
     const [
         { data: sourceDataD1 },
         { data: sourceDataD7 },
         { data: sourceDataD30 },
+        signupEventsD1,
+        signupEventsD7,
+        signupEventsD30,
     ] = await Promise.all([
         supabase.from('page_views').select('utm_source, session_id').gte('created_at', todayStart.toISOString()),
         supabase.from('page_views').select('utm_source, session_id').gte('created_at', sevenDaysAgo.toISOString()),
         supabase.from('page_views').select('utm_source, session_id').gte('created_at', thisMonthStart2.toISOString()),
+        fetchSignupEventsBySource(todayStart.toISOString()),
+        fetchSignupEventsBySource(sevenDaysAgo.toISOString()),
+        fetchSignupEventsBySource(thisMonthStart2.toISOString()),
     ])
 
-    const buildSources = (data: { utm_source: string | null; session_id: string }[] | null) => ({
-        threads:   new Set(data?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
-        instagram: new Set(data?.filter(v => v.utm_source === 'instagram').map(v => v.session_id) || []).size,
-        x:         new Set(data?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
-        youtube:   new Set(data?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
-        tiktok:    new Set(data?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
-        organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
-    })
+    const visitorsD1 = buildVisitorCounts(sourceDataD1)
+    const visitorsD7 = buildVisitorCounts(sourceDataD7)
+    const visitorsD30 = buildVisitorCounts(sourceDataD30)
 
     const visitorsBySource = {
-        d1:  buildSources(sourceDataD1),
-        d7:  buildSources(sourceDataD7),
-        d30: buildSources(sourceDataD30),
+        d1:  visitorsD1,
+        d7:  visitorsD7,
+        d30: visitorsD30,
     }
 
-    // 전환율 계산 (최근 7일)
-    const { count: signups7d } = await supabase
-        .from('conversion_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_type', 'signup')
-        .gte('created_at', sevenDaysAgo.toISOString())
+    const channelInboundByPeriod = {
+        d1:  buildChannelInboundBreakdown(visitorsD1, signupEventsD1),
+        d7:  buildChannelInboundBreakdown(visitorsD7, signupEventsD7),
+        d30: buildChannelInboundBreakdown(visitorsD30, signupEventsD30),
+    }
 
-    const { count: votes7d } = await supabase
-        .from('conversion_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_type', 'vote')
-        .gte('created_at', sevenDaysAgo.toISOString())
+    // 전환율 계산 (기간별: 오늘 / 7일 / 30일)
+    const [convD1, convD7, convD30] = await Promise.all([
+        fetchConversionCounts(todayStart.toISOString()),
+        fetchConversionCounts(sevenDaysAgo.toISOString()),
+        fetchConversionCounts(thisMonthStart2.toISOString()),
+    ])
 
-    const { count: comments7dConv } = await supabase
-        .from('conversion_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_type', 'comment')
-        .gte('created_at', sevenDaysAgo.toISOString())
-
-    const { count: reactions7dConv } = await supabase
-        .from('conversion_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_type', 'reaction')
-        .gte('created_at', sevenDaysAgo.toISOString())
+    const conversionRatesByPeriod = {
+        d1: buildConversionRatePeriod(todayUniqueVisitors, convD1.signups, convD1.votes, convD1.comments, convD1.reactions),
+        d7: buildConversionRatePeriod(weeklyUniqueVisitors, convD7.signups, convD7.votes, convD7.comments, convD7.reactions),
+        d30: buildConversionRatePeriod(monthlyUniqueVisitors, convD30.signups, convD30.votes, convD30.comments, convD30.reactions),
+    }
 
     const conversionRates = {
-        signupRate: weeklyUniqueVisitors > 0 ? ((signups7d || 0) / weeklyUniqueVisitors) * 100 : 0,
-        voteRate: weeklyUniqueVisitors > 0 ? ((votes7d || 0) / weeklyUniqueVisitors) * 100 : 0,
-        commentRate: weeklyUniqueVisitors > 0 ? ((comments7dConv || 0) / weeklyUniqueVisitors) * 100 : 0,
-        reactionRate: weeklyUniqueVisitors > 0 ? ((reactions7dConv || 0) / weeklyUniqueVisitors) * 100 : 0,
+        signupRate: conversionRatesByPeriod.d7.signupRate,
+        voteRate: conversionRatesByPeriod.d7.voteRate,
+        commentRate: conversionRatesByPeriod.d7.commentRate,
+        reactionRate: conversionRatesByPeriod.d7.reactionRate,
     }
 
     // 이슈 품질 지표 (재미나이 제안 3번)
@@ -797,7 +957,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             monthlyPageViews: monthlyPageViews || 0,
             monthlyUniqueVisitors,
             visitorsBySource,
+            channelInboundByPeriod,
             conversionRates,
+            conversionRatesByPeriod,
             issueQuality,
             
             monthlyActiveCommenters,
@@ -923,11 +1085,21 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
             d7:  { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
             d30: { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
         },
+        channelInboundByPeriod: {
+            d1:  emptyChannelInboundBreakdown(),
+            d7:  emptyChannelInboundBreakdown(),
+            d30: emptyChannelInboundBreakdown(),
+        },
         conversionRates: {
             signupRate: 0,
             voteRate: 0,
             commentRate: 0,
             reactionRate: 0,
+        },
+        conversionRatesByPeriod: {
+            d1: emptyConversionRatePeriod(),
+            d7: emptyConversionRatePeriod(),
+            d30: emptyConversionRatePeriod(),
         },
         issueQuality: {
             avgVotesPerIssue: 0,
