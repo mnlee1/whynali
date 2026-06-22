@@ -23,5 +23,11 @@ Disallow: /mypage
 Disallow: /login
 Disallow: /debug-env
 Disallow: /i/
+Disallow: /ig
+Disallow: /tt
+Disallow: /yt
+Disallow: /threads
+Disallow: /kakao
+Disallow: /x
 
 Sitemap: https://whynali.com/sitemap.xml
