@@ -22,6 +22,10 @@
             "schedule": "15 3 * * *"
         },
         {
+            "path": "/api/cron/collect-shortform-stats",
+            "schedule": "0 3 * * *"
+        },
+        {
             "path": "/api/cron/auto-end-discussions",
             "schedule": "0 * * * *"
         },

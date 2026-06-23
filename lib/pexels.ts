@@ -145,13 +145,18 @@ async function searchPexels(
     }
 
     const data = await res.json()
-    const photos: Array<{ src: { large: string; original: string } }> = data.photos ?? []
+    const photos: Array<{ width: number; height: number; src: { large: string; original: string } }> = data.photos ?? []
     if (photos.length === 0) return []
+
+    // 품질 필터: 저해상도(800px 미만) 및 정사각형에 가까운 이미지 제외
+    // 세로형(9:16) 영상 배경으로 가로형 이미지를 쓸 때 ratio < 1.2면 좌우가 많이 잘림
+    const qualified = photos.filter(p => p.width >= 800 && (p.width / p.height) >= 1.2)
+    const pool = qualified.length >= count ? qualified : photos  // 필터 후 후보가 부족하면 원본 사용
 
     // seed 기반 Fisher-Yates 셔플 (재검색마다 다른 결과)
     let rng = seed !== undefined ? seed : Math.floor(Math.random() * 100000)
     const nextRng = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0x100000000 }
-    const shuffled = [...photos]
+    const shuffled = [...pool]
     for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(nextRng() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
