@@ -11,6 +11,11 @@ import Link from 'next/link'
 import AdminPagination from '@/components/admin/AdminPagination'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
 
+interface PlatformStats {
+    youtube?: { views: number; likes: number; comments: number; averageViewPercentage: number | null; fetched_at: string }
+    instagram?: { plays: number; reach: number; likes: number; comments: number; shares: number; saved: number; avgWatchTimeMs: number | null; fetched_at: string }
+}
+
 interface ShortformJob {
     id: string
     issue_id: string
@@ -22,6 +27,7 @@ interface ShortformJob {
     video_path: string | null
     approval_status: 'pending' | 'approved' | 'rejected'
     upload_status: Record<string, string> | null
+    platform_stats: PlatformStats | null
     trigger_type: 'issue_created' | 'status_changed' | 'daily_batch'
     created_at: string
 }
@@ -921,6 +927,9 @@ export default function AdminShortformPage() {
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 이슈 정보
                             </th>
+                            <th className="w-36 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
+                                성과
+                            </th>
                             <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 생성 타입
                             </th>
@@ -939,14 +948,14 @@ export default function AdminShortformPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={5} className="px-4 py-3">
+                                    <td colSpan={6} className="px-4 py-3">
                                         <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : jobs.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-4 py-12 text-center text-sm text-content-muted">
+                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 숏폼 job이 없습니다.
                                 </td>
                             </tr>
@@ -991,6 +1000,30 @@ export default function AdminShortformPage() {
                                                         </div>
                                                     </button>
                                                 </div>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-xs text-content-secondary">
+                                            {job.platform_stats?.youtube ? (
+                                                <div className="space-y-0.5">
+                                                    <p className="font-medium text-content-primary">YT</p>
+                                                    <p>조회 {job.platform_stats.youtube.views.toLocaleString()}</p>
+                                                    <p>좋아요 {job.platform_stats.youtube.likes.toLocaleString()}</p>
+                                                    <p>완시청률 {job.platform_stats.youtube.averageViewPercentage != null ? `${job.platform_stats.youtube.averageViewPercentage}%` : '—'}</p>
+                                                </div>
+                                            ) : null}
+                                            {job.platform_stats?.youtube && job.platform_stats?.instagram && (
+                                                <div className="my-1.5 border-t border-border" />
+                                            )}
+                                            {job.platform_stats?.instagram ? (
+                                                <div className="space-y-0.5">
+                                                    <p className="font-medium text-content-primary">IG</p>
+                                                    <p>재생 {job.platform_stats.instagram.plays.toLocaleString()}</p>
+                                                    <p>좋아요 {job.platform_stats.instagram.likes.toLocaleString()}</p>
+                                                    <p>평균시청 {job.platform_stats.instagram.avgWatchTimeMs != null ? `${(job.platform_stats.instagram.avgWatchTimeMs / 1000).toFixed(1)}초` : '—'}</p>
+                                                </div>
+                                            ) : null}
+                                            {!job.platform_stats?.youtube && !job.platform_stats?.instagram && (
+                                                <span className="text-content-muted">—</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">

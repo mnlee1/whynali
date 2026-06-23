@@ -114,7 +114,7 @@ function getKenBurnsFilter(
     return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=720x1280,setpts=PTS-STARTPTS`
 }
 
-const BG_FPS = 12 // 배경은 12fps로 충분 — 처리 시간 절반, 시각적으로 부드러움
+const BG_FPS = 24
 
 /**
  * 배경 모션 프레임 배열을 yuv420p MP4로 인코딩.
@@ -158,6 +158,30 @@ async function buildBackgroundMotionVideo(
     ])
 
     return outputPath
+}
+
+type BgEasingType = 'ease-in' | 'ease-out' | 'linear'
+
+// 프레임 duration 재조정으로 시각적 easing 구현 (위치는 linear 유지)
+// ease-in: 초반 느리게(duration 길게) → 후반 빠르게
+// ease-out: 초반 빠르게 → 후반 느리게(duration 길게)
+function applyBgEasing(
+    frames: { buffer: Buffer; duration: number }[],
+    easing: BgEasingType,
+): { buffer: Buffer; duration: number }[] {
+    if (easing === 'linear' || frames.length <= 1) return frames
+    const totalDuration = frames.reduce((sum, f) => sum + f.duration, 0)
+    const N = frames.length
+    const weights = frames.map((_, i) => {
+        const t = N > 1 ? i / (N - 1) : 0
+        if (easing === 'ease-in') return 1 - t * 0.7   // 1.0 → 0.3
+        else                       return t * 0.7 + 0.3  // 0.3 → 1.0
+    })
+    const sumW = weights.reduce((s, w) => s + w, 0)
+    return frames.map((frame, i) => ({
+        buffer: frame.buffer,
+        duration: (weights[i] / sumW) * totalDuration,
+    }))
 }
 
 /**
@@ -584,7 +608,14 @@ export async function createNSceneVideo(
                 endT = prevDur / (prevDur + searchDur)
             }
 
-            const frames = await createBackgroundFrames(bgBufToUse, motionType, sceneDurations[i], BG_FPS, startT, endT)
+            const bgEasing: BgEasingType =
+                i === 0              ? 'ease-in'  :  // 첫 씬: 느리게 출발
+                isSearch             ? 'ease-out' :  // 검색바씬: 느리게 마무리
+                isLastBeforeSearch   ? 'linear'   :  // 마지막 콘텐츠 씬: 일정 속도로 검색바에 연결
+                'linear'                             // 중간 씬: 일정 속도
+
+            const rawFrames = await createBackgroundFrames(bgBufToUse, motionType, sceneDurations[i], BG_FPS, startT, endT)
+            const frames = applyBgEasing(rawFrames, bgEasing)
             bgMotionPaths.push(await buildBackgroundMotionVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i]))
         }
 
