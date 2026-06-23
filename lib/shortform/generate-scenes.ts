@@ -398,13 +398,13 @@ export async function createBackgroundScene(backgroundUrl: string): Promise<Buff
  * @param bgBuffer - createBackgroundScene() 결과 (BG_SRC_W×BG_SRC_H)
  * @param motionType - 모션 방향/종류
  * @param duration - 씬 길이(초)
- * @param fps - 배경 프레임레이트 (기본 12 — 배경은 12fps로도 충분히 부드러움)
+ * @param fps - 배경 프레임레이트
  */
 export async function createBackgroundFrames(
     bgBuffer: Buffer,
     motionType: BgMotionType,
     duration: number,
-    fps: number = 12,
+    fps: number = 24,
     startT: number = 0,  // 모션 시작 지점 (0.0~1.0)
     endT: number = 1,    // 모션 종료 지점 (0.0~1.0) — 다음 씬과 연속 재생 시 사용
 ): Promise<{ buffer: Buffer; duration: number }[]> {

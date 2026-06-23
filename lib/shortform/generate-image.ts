@@ -322,48 +322,56 @@ export async function generateNSceneShortform(
     const N = sceneTexts.length
     if (N === 0) throw new Error('씬 텍스트가 없습니다')
 
-    // 1. 이미지 확보 (씬별 1:1 — 씬 텍스트 기반 개별 Pexels 검색)
-    let stockImages: string[]
-    if (previewImages && previewImages.length >= N) {
-        stockImages = previewImages.slice(0, N)
-    } else {
-        const { fulls } = await fetchSceneImagesWithFull(sceneTexts, issueCategory)
-        stockImages = fulls.filter(Boolean)
-        if (stockImages.length === 0) throw new Error('스톡 이미지 조회 실패')
-    }
-
     const {
         createBackgroundScene,
         createSceneTextOverlay,
         createSearchSceneOverlay,
     } = await import('./generate-scenes')
 
-    // 2. 배경 생성 — 씬 i → stockImages[i] 1:1 배정, 검색씬은 마지막 씬 버퍼 재사용 (중복 생성 방지)
-    const sceneBgs = await Promise.all(
-        Array.from({ length: N }, (_, i) =>
-            createBackgroundScene(stockImages[Math.min(i, stockImages.length - 1)])
-        )
-    ) as Buffer[]
-    const allBgs = [...sceneBgs, sceneBgs[sceneBgs.length - 1]]
-
-    // 3. 텍스트 오버레이 — 씬1은 타이틀 애니메이션, 이후는 정적, 마지막은 검색씬
-    const allOverlays = await Promise.all([
-        ...sceneTexts.map((desc, i) => createSceneTextOverlay(i + 1, issueTitle, desc)),
-        createSearchSceneOverlay(),
-    ]) as Buffer[]
-
-    // 4. TTS 생성 — 씬1은 타이틀도 함께 읽기, 검색씬은 고정 멘트
+    // TTS 텍스트 사전 준비 (sceneTexts, issueTitle만 필요 — 이미지 대기 불필요)
     const cleanTitle = issueTitle.replace(/^\[.*?\]\s*/, '').trim()
     const audioTexts = sceneTexts.map((desc, i) =>
         i === 0 ? (desc ? `${cleanTitle}. ${desc}` : cleanTitle) : desc
     )
-    const [audioBuffers, searchAudio] = await Promise.all([
-        generateNSceneAudios(audioTexts),
-        generateGoogleTTS('더 자세히 알고 싶다면? 지금 검색창에 왜난리를 검색하세요'),
-    ])
-    const allAudios: (Buffer | null)[] = [...audioBuffers, searchAudio]
 
-    // 5. 씬 콘텐츠 구성
+    // 체인 A (이미지 → 배경), 체인 B (텍스트 오버레이), 체인 C (TTS) 병렬 실행
+    // 체인 B, C는 sceneTexts/issueTitle만 필요하므로 이미지 fetch 대기 없이 즉시 시작
+    const [{ allBgs }, allOverlays, allAudios] = await Promise.all([
+        // 체인 A: 이미지 확보 → 배경 생성 (순차 의존)
+        (async () => {
+            let stockImages: string[]
+            if (previewImages && previewImages.length >= N) {
+                stockImages = previewImages.slice(0, N)
+            } else {
+                const { fulls } = await fetchSceneImagesWithFull(sceneTexts, issueCategory)
+                stockImages = fulls.filter(Boolean)
+                if (stockImages.length === 0) throw new Error('스톡 이미지 조회 실패')
+            }
+            const sceneBgs = await Promise.all(
+                Array.from({ length: N }, (_, i) =>
+                    createBackgroundScene(stockImages[Math.min(i, stockImages.length - 1)])
+                )
+            ) as Buffer[]
+            return { allBgs: [...sceneBgs, sceneBgs[sceneBgs.length - 1]] }
+        })(),
+
+        // 체인 B: 텍스트 오버레이 생성 (독립)
+        Promise.all([
+            ...sceneTexts.map((desc, i) => createSceneTextOverlay(i + 1, issueTitle, desc)),
+            createSearchSceneOverlay(),
+        ]) as Promise<Buffer[]>,
+
+        // 체인 C: TTS 생성 (독립)
+        (async (): Promise<(Buffer | null)[]> => {
+            const [audioBuffers, searchAudio] = await Promise.all([
+                generateNSceneAudios(audioTexts),
+                generateGoogleTTS('더 자세히 알고 싶다면? 지금 검색창에 왜난리를 검색하세요'),
+            ])
+            return [...audioBuffers, searchAudio]
+        })(),
+    ])
+
+    // 씬 콘텐츠 구성
     const sceneContents: SceneContent[] = [
         ...sceneTexts.map(desc => ({ title: issueTitle, desc })),
         { title: '', desc: '', isSearchScene: true },
