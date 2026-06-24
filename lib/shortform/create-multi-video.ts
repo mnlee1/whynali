@@ -114,7 +114,7 @@ function getKenBurnsFilter(
     return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:fps=${fps}:s=720x1280,setpts=PTS-STARTPTS`
 }
 
-const BG_FPS = 24
+const BG_FPS = 15
 
 /**
  * 배경 모션 프레임 배열을 yuv420p MP4로 인코딩.
