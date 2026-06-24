@@ -53,10 +53,21 @@ async function saveTokensToDB(tokens: InstagramTokens): Promise<void> {
         }, { onConflict: 'key' })
 }
 
+// Instagram Graph API (Business) 토큰 갱신은 Facebook 엔드포인트 사용
+// graph.instagram.com/refresh_access_token 은 Basic Display API 전용 → 사용 금지
 async function refreshInstagramToken(currentToken: string): Promise<InstagramTokens> {
-    const url = new URL('https://graph.instagram.com/refresh_access_token')
-    url.searchParams.set('grant_type', 'ig_refresh_token')
-    url.searchParams.set('access_token', currentToken)
+    const appId = process.env.INSTAGRAM_APP_ID
+    const appSecret = process.env.INSTAGRAM_APP_SECRET
+
+    if (!appId || !appSecret) {
+        throw new Error('INSTAGRAM_APP_ID 또는 INSTAGRAM_APP_SECRET 환경변수가 없습니다')
+    }
+
+    const url = new URL('https://graph.facebook.com/oauth/access_token')
+    url.searchParams.set('grant_type', 'fb_exchange_token')
+    url.searchParams.set('client_id', appId)
+    url.searchParams.set('client_secret', appSecret)
+    url.searchParams.set('fb_exchange_token', currentToken)
 
     const response = await fetch(url.toString())
     const json = await response.json()
