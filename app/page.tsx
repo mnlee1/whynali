@@ -38,27 +38,27 @@ interface VoteWithChoices extends Vote {
 
 async function fetchPageData() {
     const [hotResult, surgingResult, latestResult, votesResult] = await Promise.all([
-        // HotIssueHighlight용 (heat 상위 100개, 급상승 보충용으로도 사용)
+        // HotIssueHighlight용: 최신 이슈 (종결 제외)
         supabaseAdmin
             .from('issues')
             .select('*')
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .order('heat_index', { ascending: false, nullsFirst: false })
-            .limit(100),
+            .neq('status', '종결')
+            .order('created_at', { ascending: false })
+            .limit(10),
 
-        // PopularRanking용 급상승 이슈 (heat_index_1h_ago가 있는 이슈만, 종결 제외)
+        // PopularRanking용: 화력 상위 이슈 (종결 제외)
         supabaseAdmin
             .from('issues')
             .select('*')
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .not('heat_index_1h_ago', 'is', null)
             .neq('status', '종결')
             .order('heat_index', { ascending: false, nullsFirst: false })
-            .limit(50),
+            .limit(20),
 
         // IssueList 초기 데이터 (최신순 10개)
         supabaseAdmin
@@ -97,41 +97,14 @@ async function fetchPageData() {
             issues: v.issues ? { id: v.issues.id, title: v.issues.title } : null,
         }))
 
-    // 슬라이드 이슈 확정 (전체 카테고리, 종결 제외 상위 5개, 부족 시 종결으로 보충)
-    const hotIssues = (hotResult.data ?? []) as Issue[]
-    const nonClosedHero = hotIssues.filter(i => i.status !== '종결').slice(0, 5)
-    const heroIssues = nonClosedHero.length >= 5
-        ? nonClosedHero
-        : [
-            ...nonClosedHero,
-            ...hotIssues
-                .filter(i => i.status === '종결')
-                .slice(0, 5 - nonClosedHero.length),
-          ]
+    // 슬라이드: 최신 이슈 상위 5개 (쿼리에서 이미 종결 제외)
+    const heroIssues = (hotResult.data ?? []).slice(0, 5) as Issue[]
     const heroIds = new Set(heroIssues.map(i => i.id))
 
-    // 급상승 이슈 계산: 증가율 기준 정렬 + 슬라이드 이슈 제외
-    const surgingCandidates = (surgingResult.data ?? []) as Issue[]
-    let surgingIssues = surgingCandidates
-        .filter(issue => !heroIds.has(issue.id) && issue.heat_index_1h_ago && issue.heat_index_1h_ago > 0)
-        .map(issue => {
-            const currentHeat = issue.heat_index ?? 0
-            const previousHeat = issue.heat_index_1h_ago ?? 0
-            const surgePct = ((currentHeat - previousHeat) / previousHeat) * 100
-            return { ...issue, surgePct }
-        })
-        .sort((a, b) => b.surgePct - a.surgePct)
-        .slice(0, 5)
-
-    // 급상승 이슈 6개 미달 시 화력 상위 이슈로 보충 (슬라이드 이슈 제외, 종결 포함)
-    if (surgingIssues.length < 6) {
-        const surgingIds = new Set(surgingIssues.map(i => i.id))
-        const fallback = hotIssues
-            .filter(i => !heroIds.has(i.id) && !surgingIds.has(i.id))
-            .map(i => ({ ...i, surgePct: 0 }))
-            .slice(0, 6 - surgingIssues.length)
-        surgingIssues = [...surgingIssues, ...fallback]
-    }
+    // 급상승중: 화력 상위 이슈 5개 (슬라이드 이슈 제외)
+    const surgingIssues = (surgingResult.data ?? [])
+        .filter(i => !heroIds.has(i.id))
+        .slice(0, 5) as Issue[]
 
     return {
         heroIssues,
@@ -174,7 +147,7 @@ export default async function HomePage() {
 
             {/* 전체 이슈 목록 */}
             <section>
-                <IssueList initialData={latestIssues} initialLimit={6} hideSearch showFullLabel />
+                <IssueList initialData={latestIssues} initialLimit={6} hideSearch showFullLabel infiniteScroll />
             </section>
 
         </div>

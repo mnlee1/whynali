@@ -4,11 +4,10 @@
  * [헤더 검색바 컴포넌트]
  *
  * 헤더에서 사용하는 글로벌 검색바입니다.
- * 포커스 시 인기 검색어 드롭다운을 표시합니다.
- * 상위 이슈에서 2-3개 핵심 단어 조합 키워드를 추출하여 제공합니다.
- * 검색은 OR 조건으로 작동하여 단어 중 하나라도 포함되면 검색됩니다.
+ * 유휴 상태에서 인기 키워드가 3초마다 롤링 표시됩니다.
+ * 포커스 시 전체 키워드 드롭다운을 표시합니다.
  * 클릭 시 해당 키워드로 검색 페이지로 이동합니다.
- * 
+ *
  * Props:
  * - mobile: 모바일 토글 영역용 스타일 (흰색 배경에 맞춤)
  * - onSearchComplete: 검색 실행 후 호출되는 콜백
@@ -36,6 +35,7 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
     const [query, setQuery] = useState('')
     const [showSuggestions, setShowSuggestions] = useState(false)
     const [popularKeywords, setPopularKeywords] = useState<PopularKeyword[]>([])
+    const [rollingIndex, setRollingIndex] = useState(0)
     const router = useRouter()
     const pathname = usePathname()
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -49,20 +49,20 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
         }
     }, [pathname])
 
-    // 인기 검색어 로드 (2-3개 단어 조합)
+    // 인기 검색어 로드
     useEffect(() => {
         async function loadPopularKeywords() {
             try {
                 const res = await fetch('/api/issues?sort=heat&limit=15')
                 const data = await res.json()
-                
+
                 if (data.data && data.data.length > 0) {
                     const keywords: PopularKeyword[] = []
                     const usedKeywords = new Set<string>()
-                    
+
                     for (const issue of data.data) {
                         if (keywords.length >= 5) break
-                        
+
                         const title = issue.title || ''
                         const decodedTitle = title
                             .replace(/&quot;/g, '"')
@@ -70,28 +70,39 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
                             .replace(/&lt;/g, '<')
                             .replace(/&gt;/g, '>')
                             .replace(/&amp;/g, '&')
-                        
+
                         const keyword = extractKeyword(decodedTitle)
-                        
+
                         if (keyword && !usedKeywords.has(keyword)) {
                             keywords.push({
-                                keyword: keyword,
+                                keyword,
                                 issueId: issue.id,
                                 rank: keywords.length + 1
                             })
                             usedKeywords.add(keyword)
                         }
                     }
-                    
+
                     setPopularKeywords(keywords)
                 }
             } catch (error) {
                 console.error('Failed to load popular keywords:', error)
             }
         }
-        
+
         loadPopularKeywords()
     }, [])
+
+    // 3초마다 키워드 롤링
+    useEffect(() => {
+        if (popularKeywords.length < 2) return
+
+        const interval = setInterval(() => {
+            setRollingIndex(prev => (prev + 1) % popularKeywords.length)
+        }, 3000)
+
+        return () => clearInterval(interval)
+    }, [popularKeywords.length])
 
     // 외부 클릭 시 드롭다운 닫기
     useEffect(() => {
@@ -104,7 +115,6 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
-
 
     const handleSearch = () => {
         if (query.trim().length >= 2) {
@@ -128,10 +138,8 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
         onSearchComplete?.()
     }
 
-    // 유휴 오버레이 표시 조건 (모바일/데스크톱 공통)
     const showIdleOverlay = !showSuggestions && !query && popularKeywords.length > 0
-
-    const currentPlaceholder = '실시간 인기 이슈 검색'
+    const currentKeyword = popularKeywords[rollingIndex]
 
     return (
         <div ref={wrapperRef} className={`relative ${mobile ? 'w-full' : 'w-full md:w-auto'}`}>
@@ -143,7 +151,7 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={() => setShowSuggestions(true)}
                     onKeyDown={handleKeyDown}
-                    placeholder={currentPlaceholder}
+                    placeholder="검색"
                     className={`${mobile ? 'w-full' : 'w-72'} pl-3 pr-10 py-2 text-sm rounded-full bg-white text-content-primary placeholder:text-content-muted focus:outline-none transition-colors border ${
                         showIdleOverlay
                             ? 'border-primary/60 cursor-pointer'
@@ -151,21 +159,29 @@ export default function SearchBar({ mobile = false, onSearchComplete }: SearchBa
                     }`}
                 />
 
-                {/* 유휴 상태 오버레이 (모바일/데스크톱 공통) */}
-                <div
-                    className={`absolute inset-0 flex items-center pl-3 pr-10 transition-opacity duration-150 ${
-                        showIdleOverlay ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'
-                    }`}
-                    onClick={() => {
-                        setShowSuggestions(true)
-                        inputRef.current?.focus()
-                    }}
-                >
-                    <span className="flex items-center gap-1.5 bg-white">
-                        <span className="text-sm text-content-secondary whitespace-nowrap">실시간 인기 이슈 키워드</span>
-                        <ChevronDown className="w-3.5 h-3.5 text-content-muted shrink-0" strokeWidth={2.5} />
-                    </span>
-                </div>
+                {/* 유휴 상태: 롤링 키워드 오버레이 — bg-white로 placeholder 완전 차단 */}
+                {showIdleOverlay && currentKeyword && (
+                    <div
+                        className="absolute inset-px flex items-center pl-3 pr-10 bg-white rounded-full cursor-pointer overflow-hidden"
+                        onClick={() => {
+                            setShowSuggestions(true)
+                            inputRef.current?.focus()
+                        }}
+                    >
+                        <span
+                            key={rollingIndex}
+                            className="flex items-center gap-1.5 min-w-0 animate-rolling-in"
+                        >
+                            <span className="text-xs font-bold text-primary shrink-0">
+                                {currentKeyword.rank}
+                            </span>
+                            <span className="text-sm text-content-secondary truncate">
+                                {currentKeyword.keyword}
+                            </span>
+                        </span>
+                        <ChevronDown className="absolute right-9 w-3.5 h-3.5 text-content-muted shrink-0" strokeWidth={2.5} />
+                    </div>
+                )}
 
                 <button
                     type="button"

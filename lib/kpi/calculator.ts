@@ -415,10 +415,22 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     if (milestonesError) {
         console.error('[calculateKPI] 마일스톤 조회 실패:', milestonesError)
     }
-    // 3. 기본 집계
+    // 3. 내부 계정 ID 목록 (KPI 집계에서 제외)
+    const { data: internalUserRows } = await supabase
+        .from('users')
+        .select('id')
+        .eq('is_internal', true)
+    const internalIds = internalUserRows?.map(r => r.id) || []
+    const internalIdSet = new Set(internalIds)
+    // 내부 계정 활동 제외 헬퍼: comments/reactions/user_votes 쿼리에 NOT IN 추가
+    const fi = (q: any): any =>
+        internalIds.length > 0 ? q.not('user_id', 'in', `(${internalIds.join(',')})`) : q
+
+    // 3. 기본 집계 (내부 계정 제외)
     const { count: totalUsers } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
+        .eq('is_internal', false)
 
     // 진행중 이슈 (점화 + 논란중) — KPI 목표 기준
     const { count: activeIssues } = await supabase
@@ -436,28 +448,28 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .eq('is_hidden', false)
 
     // 이슈 댓글 (issue_id가 있는 것)
-    const { count: issueComments } = await supabase
+    const { count: issueComments } = await fi(supabase
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .not('issue_id', 'is', null)
-        .eq('is_hidden', false)
+        .eq('is_hidden', false))
 
     // 토론 의견 (discussion_topic_id가 있는 것)
-    const { count: discussionOpinions } = await supabase
+    const { count: discussionOpinions } = await fi(supabase
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .not('discussion_topic_id', 'is', null)
-        .eq('is_hidden', false)
+        .eq('is_hidden', false))
 
     const totalComments = (issueComments || 0) + (discussionOpinions || 0)
 
-    const { count: totalReactions } = await supabase
+    const { count: totalReactions } = await fi(supabase
         .from('reactions')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true }))
 
-    const { count: totalVotes } = await supabase
+    const { count: totalVotes } = await fi(supabase
         .from('user_votes')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true }))
 
     // 4. 이달 활성 참여자 수 (중복 제거, KST 기준)
     const thisMonthForParticipation = getKSTMonthStart()
@@ -467,21 +479,21 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { data: monthlyReactionUsers },
         { data: monthlyVoteUsers },
     ] = await Promise.all([
-        supabase.from('comments').select('user_id')
+        fi(supabase.from('comments').select('user_id')
             .gte('created_at', thisMonthForParticipation.toISOString())
             .eq('is_hidden', false)
-            .not('user_id', 'is', null),
-        supabase.from('reactions').select('user_id')
+            .not('user_id', 'is', null)),
+        fi(supabase.from('reactions').select('user_id')
             .gte('created_at', thisMonthForParticipation.toISOString())
-            .not('user_id', 'is', null),
-        supabase.from('user_votes').select('user_id')
+            .not('user_id', 'is', null)),
+        fi(supabase.from('user_votes').select('user_id')
             .gte('created_at', thisMonthForParticipation.toISOString())
-            .not('user_id', 'is', null),
+            .not('user_id', 'is', null)),
     ])
 
-    const monthlyActiveCommenters  = new Set(monthlyCommentUsers?.map(r => r.user_id)  || []).size
-    const monthlyActiveReactors    = new Set(monthlyReactionUsers?.map(r => r.user_id) || []).size
-    const monthlyActiveVoters      = new Set(monthlyVoteUsers?.map(r => r.user_id)     || []).size
+    const monthlyActiveCommenters  = new Set(monthlyCommentUsers?.filter(r => !internalIdSet.has(r.user_id)).map(r => r.user_id)  || []).size
+    const monthlyActiveReactors    = new Set(monthlyReactionUsers?.filter(r => !internalIdSet.has(r.user_id)).map(r => r.user_id) || []).size
+    const monthlyActiveVoters      = new Set(monthlyVoteUsers?.filter(r => !internalIdSet.has(r.user_id)).map(r => r.user_id)     || []).size
 
     const commentParticipation  = (totalUsers || 0) > 0 ? (monthlyActiveCommenters  / (totalUsers || 0)) * 100 : 0
     const reactionParticipation = (totalUsers || 0) > 0 ? (monthlyActiveReactors    / (totalUsers || 0)) * 100 : 0
@@ -520,13 +532,13 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
             .gte('published_at', thisMonthStart2.toISOString()),
         supabase.from('users').select('*', { count: 'exact', head: true })
-            .gte('created_at', todayStart.toISOString()),
-        supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', todayStart.toISOString()).eq('is_hidden', false),
-        supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', todayStart.toISOString()),
-        supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', todayStart.toISOString()),
+            .eq('is_internal', false).gte('created_at', todayStart.toISOString()),
+        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()).eq('is_hidden', false)),
+        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString())),
+        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString())),
     ])
 
     const todayShortforms = todayShortformsCount ?? 0
@@ -538,23 +550,24 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const { count: newUsers7d } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
+        .eq('is_internal', false)
         .gte('created_at', sevenDaysAgo.toISOString())
 
-    const { count: newComments7d } = await supabase
+    const { count: newComments7d } = await fi(supabase
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', sevenDaysAgo.toISOString())
-        .eq('is_hidden', false)
+        .eq('is_hidden', false))
 
-    const { count: newReactions7d } = await supabase
+    const { count: newReactions7d } = await fi(supabase
         .from('reactions')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', sevenDaysAgo.toISOString())
+        .gte('created_at', sevenDaysAgo.toISOString()))
 
-    const { count: newVotes7d } = await supabase
+    const { count: newVotes7d } = await fi(supabase
         .from('user_votes')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', sevenDaysAgo.toISOString())
+        .gte('created_at', sevenDaysAgo.toISOString()))
 
     // 6. 일평균 계산
     const dailyNewUsers = (newUsers7d || 0) / 7
@@ -593,21 +606,21 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         supabase.from('card_news_logs').select('*', { count: 'exact', head: true })
             .gte('published_at', thisMonthStart2.toISOString()),
         supabase.from('users').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisWeekStart.toISOString()),
+            .eq('is_internal', false).gte('created_at', thisWeekStart.toISOString()),
         supabase.from('users').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart2.toISOString()),
-        supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisWeekStart.toISOString()).eq('is_hidden', false),
-        supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart2.toISOString()).eq('is_hidden', false),
-        supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisWeekStart.toISOString()),
-        supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart2.toISOString()),
-        supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisWeekStart.toISOString()),
-        supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart2.toISOString()),
+            .eq('is_internal', false).gte('created_at', thisMonthStart2.toISOString()),
+        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisWeekStart.toISOString()).eq('is_hidden', false)),
+        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString()).eq('is_hidden', false)),
+        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisWeekStart.toISOString())),
+        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString())),
+        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisWeekStart.toISOString())),
+        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart2.toISOString())),
     ])
 
     const periodStats = {
@@ -730,21 +743,21 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         // 이슈별 투표/댓글/반응 수 가져오기
         const issueIds = issues!.map(i => i.id)
         
-        const { data: votes } = await supabase
+        const { data: votes } = await fi(supabase
             .from('user_votes')
             .select('issue_id')
-            .in('issue_id', issueIds)
+            .in('issue_id', issueIds))
 
-        const { data: comments } = await supabase
+        const { data: comments } = await fi(supabase
             .from('comments')
             .select('issue_id')
             .in('issue_id', issueIds)
-            .eq('is_hidden', false)
+            .eq('is_hidden', false))
 
-        const { data: reactions } = await supabase
+        const { data: reactions } = await fi(supabase
             .from('reactions')
             .select('issue_id')
-            .in('issue_id', issueIds)
+            .in('issue_id', issueIds))
 
         // 이슈별 집계
         const issueStatsMap: Record<string, { votes: number, comments: number, reactions: number, category: string }> = {}
@@ -823,18 +836,19 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { count: prevVotes7d },
     ] = await Promise.all([
         supabase.from('users').select('*', { count: 'exact', head: true })
+            .eq('is_internal', false)
             .gte('created_at', fourteenDaysAgo.toISOString())
             .lt('created_at', sevenDaysAgo.toISOString()),
-        supabase.from('comments').select('*', { count: 'exact', head: true })
+        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
             .gte('created_at', fourteenDaysAgo.toISOString())
             .lt('created_at', sevenDaysAgo.toISOString())
-            .eq('is_hidden', false),
-        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .eq('is_hidden', false)),
+        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
             .gte('created_at', fourteenDaysAgo.toISOString())
-            .lt('created_at', sevenDaysAgo.toISOString()),
-        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .lt('created_at', sevenDaysAgo.toISOString())),
+        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
             .gte('created_at', fourteenDaysAgo.toISOString())
-            .lt('created_at', sevenDaysAgo.toISOString()),
+            .lt('created_at', sevenDaysAgo.toISOString())),
     ])
 
     // 이번 달 / 지난달 (KST 기준)
@@ -852,25 +866,26 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { count: lastMonthVotes },
     ] = await Promise.all([
         supabase.from('users').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()),
-        supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()).eq('is_hidden', false),
-        supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()),
-        supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()),
+            .eq('is_internal', false).gte('created_at', thisMonthStart.toISOString()),
+        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()).eq('is_hidden', false)),
+        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString())),
+        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString())),
         supabase.from('users').select('*', { count: 'exact', head: true })
+            .eq('is_internal', false)
             .gte('created_at', lastMonthStart.toISOString())
             .lt('created_at', thisMonthStart.toISOString()),
-        supabase.from('comments').select('*', { count: 'exact', head: true })
+        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
             .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString()).eq('is_hidden', false),
-        supabase.from('reactions').select('*', { count: 'exact', head: true })
+            .lt('created_at', thisMonthStart.toISOString()).eq('is_hidden', false)),
+        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
             .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString()),
-        supabase.from('user_votes').select('*', { count: 'exact', head: true })
+            .lt('created_at', thisMonthStart.toISOString())),
+        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
             .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString()),
+            .lt('created_at', thisMonthStart.toISOString())),
     ])
 
     const weekOverWeek = {
@@ -893,10 +908,10 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { data: sparkReactionRows },
         { data: sparkVoteRows },
     ] = await Promise.all([
-        supabase.from('users').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()),
-        supabase.from('comments').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()).eq('is_hidden', false),
-        supabase.from('reactions').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()),
-        supabase.from('user_votes').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()),
+        supabase.from('users').select('created_at').eq('is_internal', false).gte('created_at', fourteenDaysAgo.toISOString()),
+        fi(supabase.from('comments').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()).eq('is_hidden', false)),
+        fi(supabase.from('reactions').select('created_at').gte('created_at', fourteenDaysAgo.toISOString())),
+        fi(supabase.from('user_votes').select('created_at').gte('created_at', fourteenDaysAgo.toISOString())),
     ])
 
     const toDaily = (rows: { created_at: string }[] | null, days = 14): number[] => {
@@ -1025,6 +1040,7 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
     const { count: totalUsers } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
+        .eq('is_internal', false)
 
     // 진행중 이슈 (점화 + 논란중) — KPI 목표 기준
     const { count: activeIssues } = await supabase
