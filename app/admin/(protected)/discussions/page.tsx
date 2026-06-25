@@ -183,14 +183,15 @@ export default function AdminDiscussionsPage() {
                     issue_id: selectedIssue.id,
                     content: newContent.trim(),
                     is_ai_generated: isAiFilled,
-                    approval_status: '대기',
+                    approval_status: '진행중',
                 }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
 
             handleCloseForm()
-            loadTopics(filter)
+            setFilter('진행중')
+            loadTopics('진행중')
             loadTabCounts()
         } catch (e) {
             setFormError(e instanceof Error ? e.message : '생성 실패')

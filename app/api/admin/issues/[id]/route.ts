@@ -12,6 +12,9 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
+import { closeVotesOnIssueClosed } from '@/lib/vote-auto-closer'
+import { closeDiscussionsOnIssueClosed } from '@/lib/discussion-auto-closer'
+import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +60,17 @@ export async function PATCH(
                 .from('shortform_jobs')
                 .update({ issue_title: updates.title })
                 .eq('issue_id', id)
+        }
+
+        // status를 '종결'로 수동 변경 시 크론과 동일한 사이드이펙트 실행
+        if (updates.status === '종결') {
+            const { count: voteCount } = await closeVotesOnIssueClosed(id)
+            if (voteCount > 0) console.log(`[관리자 종결] 이슈 ${id} → 투표 ${voteCount}개 마감`)
+            const { count: discussionCount } = await closeDiscussionsOnIssueClosed(id)
+            if (discussionCount > 0) console.log(`[관리자 종결] 이슈 ${id} → 토론 ${discussionCount}개 마감 예약`)
+            generateCloseSummary(id, data.title).catch(err =>
+                console.warn(`[관리자 종결] 종결 요약 생성 실패:`, err)
+            )
         }
 
         await writeAdminLog(

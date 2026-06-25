@@ -478,7 +478,6 @@ export default function AdminVotesPage() {
                                         setIsAiFilled(false)
                                     }}
                                     placeholder={`선택지 ${idx + 1}`}
-                                    maxLength={20}
                                     className="flex-1 px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
                                 />
                                 {voteChoices.length > 2 && (

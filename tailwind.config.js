@@ -45,6 +45,15 @@ module.exports = {
                 card: '0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
                 'card-hover': '0 4px 12px 0 rgb(0 0 0 / 0.08)',
             },
+            keyframes: {
+                'rolling-in': {
+                    '0%':   { opacity: '0', transform: 'translateY(6px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                },
+            },
+            animation: {
+                'rolling-in': 'rolling-in 0.25s ease forwards',
+            },
         },
     },
     plugins: [],

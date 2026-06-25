@@ -18,6 +18,7 @@ import StatusBadge from '@/components/common/StatusBadge'
 import CategoryBadge from '@/components/common/CategoryBadge'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
 import ManualIssueWizard from '@/components/admin/ManualIssueWizard'
+import { getCategoryIds } from '@/lib/config/categories'
 
 type SortField = 'title' | 'status' | 'approval_status' | 'heat_index' | 'created_at'
 type SortOrder = 'asc' | 'desc'
@@ -52,6 +53,8 @@ export default function AdminIssuesPage() {
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
     const [editingTitleValue, setEditingTitleValue] = useState('')
     const [savingTitle, setSavingTitle] = useState(false)
+    const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+    const [savingCategory, setSavingCategory] = useState(false)
     const [criteriaOpen, setCriteriaOpen] = useState(false)
     const [sortField, setSortField] = useState<SortField>('created_at')
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -267,6 +270,56 @@ export default function AdminIssuesPage() {
             alert(err instanceof Error ? err.message : '제목 수정 실패')
         } finally {
             setSavingTitle(false)
+        }
+    }
+
+    const saveCategory = async (issue: Issue, newCategory: string) => {
+        const MANUAL_ONLY_CATEGORIES = ['정치', '연예']
+        const willEnableAutoApprove =
+            issue.approval_status === '대기' &&
+            MANUAL_ONLY_CATEGORIES.includes(issue.category) &&
+            !MANUAL_ONLY_CATEGORIES.includes(newCategory)
+
+        if (willEnableAutoApprove) {
+            const confirmed = confirm(
+                `"${newCategory}" 카테고리는 화력 30점 이상 시 자동 승인 대상입니다.\n수동 검토 없이 자동 승인될 수 있습니다. 계속하시겠습니까?`
+            )
+            if (!confirmed) {
+                setEditingCategoryId(null)
+                return
+            }
+        }
+
+        setSavingCategory(true)
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category: newCategory }),
+            })
+            if (!res.ok) throw new Error('카테고리 수정 실패')
+            setEditingCategoryId(null)
+            fetchIssues()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '카테고리 수정 실패')
+        } finally {
+            setSavingCategory(false)
+        }
+    }
+
+    const handleSetStatus = async (issue: Issue, newStatus: string) => {
+        const label = newStatus === '종결' ? '종결 처리' : `"${newStatus}"로 변경`
+        if (!confirm(`"${decodeHtml(issue.title)}"\n\n이 이슈를 ${label}하시겠습니까?`)) return
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            })
+            if (!res.ok) throw new Error(`상태 변경 실패`)
+            fetchIssues()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '상태 변경 실패')
         }
     }
 
@@ -687,7 +740,34 @@ export default function AdminIssuesPage() {
                                     )}
                                 </td>
                                 <td className="px-4 py-3 w-24 whitespace-nowrap">
-                                    <CategoryBadge category={issue.category} size="sm" />
+                                    {editingCategoryId === issue.id ? (
+                                        <select
+                                            value={issue.category}
+                                            onChange={e => saveCategory(issue, e.target.value)}
+                                            onBlur={() => setEditingCategoryId(null)}
+                                            disabled={savingCategory}
+                                            autoFocus
+                                            className="text-xs border border-primary rounded-lg px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface disabled:opacity-50"
+                                        >
+                                            {getCategoryIds().map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="flex items-center gap-1 group">
+                                            <CategoryBadge category={issue.category} size="sm" />
+                                            <button
+                                                onClick={() => setEditingCategoryId(issue.id)}
+                                                className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-content-muted hover:text-content-secondary transition-opacity"
+                                                title="카테고리 수정"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="px-4 py-3 w-24 whitespace-nowrap">
                                     <StatusBadge status={issue.status} />
@@ -771,6 +851,14 @@ export default function AdminIssuesPage() {
                                                             className="w-full text-left px-3 py-1.5 hover:bg-surface-subtle text-content-secondary"
                                                         >
                                                             복구
+                                                        </button>
+                                                    )}
+                                                    {issue.approval_status === '승인' && issue.status !== '종결' && (
+                                                        <button
+                                                            onClick={() => { handleSetStatus(issue, '종결'); setOpenDropdownId(null) }}
+                                                            className="w-full text-left px-3 py-1.5 hover:bg-surface-subtle text-gray-600"
+                                                        >
+                                                            종결 처리
                                                         </button>
                                                     )}
                                                     <button
