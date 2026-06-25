@@ -763,9 +763,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         const issueStatsMap: Record<string, { votes: number, comments: number, reactions: number, category: string }> = {}
         issues!.forEach(issue => {
             issueStatsMap[issue.id] = {
-                votes: votes?.filter(v => v.issue_id === issue.id).length || 0,
-                comments: comments?.filter(c => c.issue_id === issue.id).length || 0,
-                reactions: reactions?.filter(r => r.issue_id === issue.id).length || 0,
+                votes: votes?.filter((v: { issue_id: string }) => v.issue_id === issue.id).length || 0,
+                comments: comments?.filter((c: { issue_id: string }) => c.issue_id === issue.id).length || 0,
+                reactions: reactions?.filter((r: { issue_id: string }) => r.issue_id === issue.id).length || 0,
                 category: issue.category || '기타',
             }
         })
