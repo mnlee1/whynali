@@ -1,17 +1,18 @@
 /**
  * lib/shortform/instagram-token.ts
  *
- * Instagram 액세스 토큰 관리
+ * Instagram 액세스 토큰 관리 (Instagram Login 방식 — whynali-IG 앱)
  * - Supabase app_settings 테이블에 토큰 저장
- * - 만료 7일 전 자동 갱신 (Instagram Long-lived token: 60일 유효)
+ * - 단기 토큰(1시간) → 장기 토큰(60일) 자동 교환
+ * - 만료 7일 전 자동 갱신
  *
- * Instagram 갱신 방식: refresh_token 없음 → 현재 토큰 자체로 연장
- * GET https://graph.instagram.com/refresh_access_token
- *   ?grant_type=ig_refresh_token&access_token={long_lived_token}
+ * 엔드포인트:
+ * - 단기→장기 교환: GET graph.instagram.com/access_token?grant_type=ig_exchange_token
+ * - 장기 토큰 갱신: GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token
  *
  * 토큰 우선순위:
  * 1. Supabase app_settings.instagram_tokens (런타임 갱신 가능)
- * 2. .env.local INSTAGRAM_ACCESS_TOKEN (초기값 폴백)
+ * 2. .env.local INSTAGRAM_ACCESS_TOKEN (초기값 폴백 → 자동 교환 후 DB 저장)
  */
 
 import { supabaseAdmin } from '@/lib/supabase-server'
@@ -53,9 +54,11 @@ async function saveTokensToDB(tokens: InstagramTokens): Promise<void> {
         }, { onConflict: 'key' })
 }
 
-// Instagram Graph API (Business) 토큰 갱신은 Facebook 엔드포인트 사용
-// graph.instagram.com/refresh_access_token 은 Basic Display API 전용 → 사용 금지
-async function refreshInstagramToken(currentToken: string): Promise<InstagramTokens> {
+/**
+ * 단기 토큰(1시간) → 장기 토큰(60일) 교환
+ * Instagram Login 앱 전용 엔드포인트 사용
+ */
+async function exchangeForLongLived(shortLivedToken: string): Promise<InstagramTokens> {
     const appId = process.env.INSTAGRAM_APP_ID
     const appSecret = process.env.INSTAGRAM_APP_SECRET
 
@@ -63,11 +66,38 @@ async function refreshInstagramToken(currentToken: string): Promise<InstagramTok
         throw new Error('INSTAGRAM_APP_ID 또는 INSTAGRAM_APP_SECRET 환경변수가 없습니다')
     }
 
-    const url = new URL('https://graph.facebook.com/oauth/access_token')
-    url.searchParams.set('grant_type', 'fb_exchange_token')
+    const url = new URL('https://graph.instagram.com/access_token')
+    url.searchParams.set('grant_type', 'ig_exchange_token')
     url.searchParams.set('client_id', appId)
     url.searchParams.set('client_secret', appSecret)
-    url.searchParams.set('fb_exchange_token', currentToken)
+    url.searchParams.set('access_token', shortLivedToken)
+
+    const response = await fetch(url.toString())
+    const json = await response.json()
+
+    if (!response.ok || json.error) {
+        const msg = json.error?.message || json.error_description || response.statusText
+        throw new Error(`Instagram 장기 토큰 교환 실패: ${msg}`)
+    }
+
+    const expiresIn = Number(json.expires_in) || INSTAGRAM_TOKEN_LIFETIME_MS / 1000
+    const tokens: InstagramTokens = {
+        access_token: json.access_token,
+        expires_at: Date.now() + expiresIn * 1000,
+    }
+
+    console.log(`[Instagram Token] 장기 토큰 교환 완료 (만료: ${new Date(tokens.expires_at).toISOString()})`)
+    return tokens
+}
+
+/**
+ * 장기 토큰 갱신 (60일 연장)
+ * graph.instagram.com/refresh_access_token 사용 — 앱 자격증명 불필요
+ */
+async function refreshInstagramToken(longLivedToken: string): Promise<InstagramTokens> {
+    const url = new URL('https://graph.instagram.com/refresh_access_token')
+    url.searchParams.set('grant_type', 'ig_refresh_token')
+    url.searchParams.set('access_token', longLivedToken)
 
     const response = await fetch(url.toString())
     const json = await response.json()
@@ -89,7 +119,8 @@ async function refreshInstagramToken(currentToken: string): Promise<InstagramTok
 
 /**
  * 유효한 Instagram access_token 반환.
- * 만료 7일 이내면 자동 갱신.
+ * - expires_at=0(신규 단기 토큰): 장기 토큰으로 교환 후 DB 저장
+ * - 만료 7일 이내: 자동 갱신
  */
 export async function getInstagramAccessToken(): Promise<string> {
     let tokens = await loadTokensFromDB()
@@ -100,17 +131,24 @@ export async function getInstagramAccessToken(): Promise<string> {
         if (!envToken) {
             throw new Error('Instagram Access Token이 없습니다. Supabase app_settings에 instagram_tokens를 설정해주세요.')
         }
-        tokens = {
-            access_token: envToken,
-            expires_at: 0,  // 0이면 만료 여부 미확인 → 일단 사용
+        tokens = { access_token: envToken, expires_at: 0 }
+    }
+
+    // expires_at=0 → 단기 토큰이거나 만료 미확인 → 장기 토큰으로 교환
+    if (tokens.expires_at === 0) {
+        console.log('[Instagram Token] 단기 토큰 감지 → 장기 토큰으로 교환 중...')
+        try {
+            const longLived = await exchangeForLongLived(tokens.access_token)
+            await saveTokensToDB(longLived)
+            return longLived.access_token
+        } catch (e) {
+            console.warn('[Instagram Token] 장기 교환 실패 → 현재 토큰 그대로 사용:', e)
+            return tokens.access_token
         }
     }
 
-    // 만료 7일 이내이면 갱신
-    const needsRefresh = tokens.expires_at > 0
-        ? tokens.expires_at - REFRESH_BUFFER_MS < Date.now()
-        : false
-
+    // 만료 7일 이내 → 갱신
+    const needsRefresh = tokens.expires_at - REFRESH_BUFFER_MS < Date.now()
     if (!needsRefresh) {
         return tokens.access_token
     }
@@ -123,11 +161,9 @@ export async function getInstagramAccessToken(): Promise<string> {
 
 /**
  * 강제 갱신 (cron에서 호출).
- * 만료 여부와 무관하게 갱신.
  */
 export async function forceRefreshInstagramToken(): Promise<string> {
-    let tokens = await loadTokensFromDB()
-
+    const tokens = await loadTokensFromDB()
     const currentToken = tokens?.access_token || process.env.INSTAGRAM_ACCESS_TOKEN
     if (!currentToken) {
         throw new Error('갱신할 Instagram 토큰이 없습니다. 먼저 초기 토큰을 등록해주세요.')
