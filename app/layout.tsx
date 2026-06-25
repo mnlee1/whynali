@@ -12,6 +12,7 @@ import { Suspense } from 'react'
 import './globals.css'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
+import ScrollToTopButton from '@/components/common/ScrollToTopButton'
 import NextTopLoader from 'nextjs-toploader'
 import PageTracker from '@/components/analytics/PageTracker'
 import {
@@ -125,6 +126,7 @@ export default function RootLayout({
                     {children}
                 </main>
                 <Footer />
+                <ScrollToTopButton />
             </body>
         </html>
     )
