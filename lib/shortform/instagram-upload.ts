@@ -119,11 +119,12 @@ export async function uploadToInstagram(
     videoPublicUrl: string,
     options: InstagramUploadOptions
 ): Promise<string> {
-    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
+    const { getInstagramAccessToken } = await import('./instagram-token')
+    const accessToken = await getInstagramAccessToken()
     const userId = process.env.INSTAGRAM_USER_ID
 
-    if (!accessToken || !userId) {
-        throw new Error('Instagram 인증 정보가 없습니다 (INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID)')
+    if (!userId) {
+        throw new Error('Instagram 인증 정보가 없습니다 (INSTAGRAM_USER_ID)')
     }
 
     // 1단계: 컨테이너 생성
