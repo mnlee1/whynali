@@ -491,9 +491,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             .not('user_id', 'is', null)),
     ])
 
-    const monthlyActiveCommenters  = new Set(monthlyCommentUsers?.filter(r => !internalIdSet.has(r.user_id)).map(r => r.user_id)  || []).size
-    const monthlyActiveReactors    = new Set(monthlyReactionUsers?.filter(r => !internalIdSet.has(r.user_id)).map(r => r.user_id) || []).size
-    const monthlyActiveVoters      = new Set(monthlyVoteUsers?.filter(r => !internalIdSet.has(r.user_id)).map(r => r.user_id)     || []).size
+    const monthlyActiveCommenters  = new Set(monthlyCommentUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id)  || []).size
+    const monthlyActiveReactors    = new Set(monthlyReactionUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id) || []).size
+    const monthlyActiveVoters      = new Set(monthlyVoteUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id)     || []).size
 
     const commentParticipation  = (totalUsers || 0) > 0 ? (monthlyActiveCommenters  / (totalUsers || 0)) * 100 : 0
     const reactionParticipation = (totalUsers || 0) > 0 ? (monthlyActiveReactors    / (totalUsers || 0)) * 100 : 0
