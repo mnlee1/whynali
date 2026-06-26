@@ -98,7 +98,7 @@ JSON 응답:
 
     const content = await callGroq(
         [{ role: 'user', content: prompt }],
-        { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 2000 },
+        { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 2000 },
     )
 
     const parsed = parseJsonObject<{

@@ -89,7 +89,7 @@ JSON 배열로만 응답: ["키워드1", "키워드2"]`
     try {
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 100 },
+            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 100 },
         )
         const parsed = parseJsonArray<string>(content)
         return (parsed ?? []).filter(k => typeof k === 'string' && k.length >= 2).slice(0, 2)
