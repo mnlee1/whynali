@@ -35,7 +35,7 @@ async function extractKeywordsAndTone(title: string, category: string): Promise<
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'qwen/qwen3.6-27b',
             messages: [{
                 role: 'user',
                 content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords for the visual background image, then add ::dark or ::bright based on the issue tone.

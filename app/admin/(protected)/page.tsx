@@ -420,7 +420,7 @@ export default function AdminDashboardPage() {
                                     <div className="flex items-center gap-2">
                                         <div>
                                             <p className="text-base font-semibold text-content-primary">Groq AI</p>
-                                <p className="text-sm text-content-secondary mt-0.5">Llama 3.1 8B Instant</p>
+                                <p className="text-sm text-content-secondary mt-0.5">Qwen 3.6 27B</p>
                                         </div>
                                     </div>
                                     <span className="px-2.5 py-1 text-xs font-semibold bg-green-500 text-white rounded-full">
