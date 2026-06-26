@@ -59,8 +59,8 @@ export class FallbackProvider implements AIProvider {
 
             // 2순위 프로바이더에 맞는 모델로 교체
             const fallbackOptions = options
-                ? { ...options, model: 'llama-3.1-8b-instant' }
-                : { model: 'llama-3.1-8b-instant' }
+                ? { ...options, model: 'qwen/qwen3.6-27b' }
+                : { model: 'qwen/qwen3.6-27b' }
 
             return this.secondary.complete(userPrompt, fallbackOptions)
         }

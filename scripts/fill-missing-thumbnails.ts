@@ -42,7 +42,7 @@ async function extractKeywords(title: string, category: string): Promise<string 
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
+                model: 'qwen/qwen3.6-27b',
                 messages: [{ role: 'user', content: `You are finding stock photos for Korean news articles. Extract 2-3 English keywords that describe the visual theme or scene (NOT literal word translation). Focus on what background image would fit the topic.\n\nCategory: ${category}\nExamples:\n- [연예] "BTS 새 앨범 발매" → "music concert stage"\n- [연예] "워너원 컴백 무대" → "kpop concert performance"\n- [스포츠] "토트넘 강등 위기" → "soccer stadium match"\n- [정치] "국회의원 막말 논란" → "parliament building debate"\n- [경제] "삼성전자 노조 파업" → "factory strike protest"\n- [기술] "AI 주식 투자 열풍" → "stock market technology"\n\nKorean headline: "${title}"\nReply with ONLY the keywords, nothing else.` }],
                 max_tokens: 20,
                 temperature: 0,

@@ -130,7 +130,7 @@ ${sampleTitles}
         const systemPrompt = '당신은 뉴스 카테고리 분류 전문가입니다. 맥락을 정확히 이해하고 올바른 카테고리를 판단합니다.'
         
         const completion = await aiClient.complete(prompt, {
-            model: 'llama-3.1-8b-instant',
+            model: 'qwen/qwen3.6-27b',
             temperature: 0.1,
             maxTokens: 200,
             systemPrompt,
