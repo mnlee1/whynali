@@ -86,7 +86,7 @@ ${titlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'qwen/qwen3.6-27b',
+                model: 'openai/gpt-oss-120b',
                 temperature: 0.2,
                 max_tokens: 200,
             }
