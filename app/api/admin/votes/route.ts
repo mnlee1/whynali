@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
         let query = supabaseAdmin
             .from('votes')
-            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, is_ai_generated, created_at, issues(id, title), vote_choices(id, label, count)')
+            .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, is_ai_generated, created_at, issues(id, title, status), vote_choices(id, label, count)')
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 

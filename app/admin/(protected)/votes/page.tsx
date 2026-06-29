@@ -18,6 +18,7 @@ import { decodeHtml } from '@/lib/utils/decode-html'
 import AdminPagination from '@/components/admin/AdminPagination'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
 import IssueSearchSelect from '@/components/admin/IssueSearchSelect'
+import StatusBadge from '@/components/common/StatusBadge'
 
 interface Issue {
     id: string
@@ -43,7 +44,7 @@ interface Vote {
     auto_end_date: string | null
     created_at: string
     is_ai_generated?: boolean
-    issues: { id: string; title: string } | null
+    issues: { id: string; title: string; status: string } | null
     vote_choices: VoteChoice[]
 }
 
@@ -669,11 +670,6 @@ export default function AdminVotesPage() {
                                             <p className="font-medium">
                                                 {vote.title || '(제목 없음)'}
                                             </p>
-                                            {vote.issue_status_snapshot && (
-                                                <span className="text-sm text-content-muted block">
-                                                    시점: {vote.issue_status_snapshot}
-                                                </span>
-                                            )}
                                             {vote.auto_end_date && vote.phase === '진행중' && (
                                                 <span className="text-xs text-primary block">
                                                     📅 {new Date(vote.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료예정
@@ -701,13 +697,20 @@ export default function AdminVotesPage() {
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {vote.issues ? (
-                                                <Link
-                                                    href={`/issue/${vote.issues.id}`}
-                                                    target="_blank"
-                                                    className="text-primary hover:underline line-clamp-1"
-                                                >
-                                                    {decodeHtml(vote.issues.title)}
-                                                </Link>
+                                                <>
+                                                    <Link
+                                                        href={`/issue/${vote.issues.id}`}
+                                                        target="_blank"
+                                                        className="text-primary hover:underline line-clamp-1"
+                                                    >
+                                                        {decodeHtml(vote.issues.title)}
+                                                    </Link>
+                                                    {vote.issues.status && (
+                                                        <span className="block mt-1">
+                                                            <StatusBadge status={vote.issues.status as any} size="xs" />
+                                                        </span>
+                                                    )}
+                                                </>
                                             ) : (
                                                 <span className="text-content-muted">연결 없음</span>
                                             )}

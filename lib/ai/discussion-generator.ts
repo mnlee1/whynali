@@ -61,7 +61,7 @@ export async function generateDiscussionTopics(
                 content: buildPrompt(issue, count),
             },
         ],
-        { model: 'llama-3.3-70b-versatile', temperature: 0.8, max_tokens: 800 }
+        { model: 'qwen/qwen3.6-27b', temperature: 0.8, max_tokens: 800 }
     )
 
     return parseTopics(raw)
