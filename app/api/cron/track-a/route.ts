@@ -239,7 +239,7 @@ ${postTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
                 temperature: 0.1,
                 max_tokens: 300,
             }
@@ -320,7 +320,7 @@ ${newsTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
                 temperature: 0.1,
                 max_tokens: 300,
             }
@@ -414,7 +414,7 @@ ${newsTitlesText}
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
             {
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
                 temperature: 0.2,
                 max_tokens: 200,
             }

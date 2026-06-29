@@ -122,7 +122,7 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'llama-3.3-70b-versatile', temperature: 0.15, max_tokens: 4000 },
+            { model: 'openai/gpt-oss-120b', temperature: 0.15, max_tokens: 4000 },
         )
 
         const parsed = parseJsonObject<{

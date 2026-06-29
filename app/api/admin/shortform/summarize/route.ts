@@ -95,7 +95,7 @@ ${longScenes.length}줄로만 응답 (번호·설명 없이, 한 줄에 항목 �
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
                 messages: [{ role: 'user', content: prompt }],
                 max_tokens: Math.max(150, longScenes.length * 50),
                 temperature: 0.2,
