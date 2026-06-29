@@ -159,7 +159,7 @@ ${issueList}
 
     try {
         const content = await getGroq().complete(prompt, {
-            model: 'qwen/qwen3.6-27b',
+            model: 'openai/gpt-oss-120b',
             temperature: 0.2,
             maxTokens: 200,
         })

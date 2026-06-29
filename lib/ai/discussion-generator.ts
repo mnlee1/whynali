@@ -61,7 +61,7 @@ export async function generateDiscussionTopics(
                 content: buildPrompt(issue, count),
             },
         ],
-        { model: 'qwen/qwen3.6-27b', temperature: 0.8, max_tokens: 800 }
+        { model: 'openai/gpt-oss-120b', temperature: 0.8, max_tokens: 800 }
     )
 
     return parseTopics(raw)

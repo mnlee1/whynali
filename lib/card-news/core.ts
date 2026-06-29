@@ -561,7 +561,7 @@ export async function generateCoverKeywords(issues: Issue[], mode: ContentMode):
     .join('\n')
 
   const res = await groq.chat.completions.create({
-    model: 'qwen/qwen3-32b',
+    model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: 'You are a stock photo search expert. Return ONLY valid JSON, no explanation.' },
       {
@@ -586,7 +586,7 @@ export async function generateStageKeywords(issue: Issue, stage: string, points:
   const groq = getGroq()
   const pointTitles = points.slice(0, 3).map(p => p.title).join(', ')
   const res = await groq.chat.completions.create({
-    model: 'qwen/qwen3-32b',
+    model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: 'You are a stock photo search expert. Return ONLY valid JSON.' },
       {
@@ -638,7 +638,7 @@ export async function generateBadgeContent(
   const issueContext = await buildIssueContext(issue)
 
   const res = await groq.chat.completions.create({
-    model: 'qwen/qwen3.6-27b',
+    model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
       {
@@ -790,7 +790,7 @@ export async function generateSurgingSlides(issue: Issue, logoBase64: string): P
 
   // 콘텐츠 생성
   const contentRes = await groq.chat.completions.create({
-    model: 'qwen/qwen3-32b',
+    model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
       {
@@ -1000,7 +1000,7 @@ export async function generateTimelineSlides(issue: ClosedIssue, logoBase64: str
   const [coverKeywords, res] = await Promise.all([
     generateCoverKeywords([issue], 'timeline'),
     groq.chat.completions.create({
-      model: 'qwen/qwen3-32b',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
         {
@@ -1121,7 +1121,7 @@ export async function generateQASlides(issue: Issue, logoBase64: string): Promis
 
   const [res] = await Promise.all([
     groq.chat.completions.create({
-      model: 'qwen/qwen3-32b',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
         {
@@ -1222,7 +1222,7 @@ export async function generateDebateSlides(issue: Issue, logoBase64: string): Pr
 
   const [res] = await Promise.all([
     groq.chat.completions.create({
-      model: 'qwen/qwen3-32b',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
         {

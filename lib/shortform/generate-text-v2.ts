@@ -42,7 +42,7 @@ export async function extractYoutubeHashtags(title: string): Promise<string[]> {
 
     try {
         const completion = await groq.chat.completions.create({
-            model: 'qwen/qwen3.6-27b',
+            model: 'openai/gpt-oss-120b',
             messages: [{
                 role: 'user',
                 content: `한국어 뉴스 이슈 제목에서 YouTube 해시태그에 쓸 핵심 키워드 2~3개를 추출하세요.
@@ -177,7 +177,7 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
                     : ''
 
                 const r = await groq.chat.completions.create({
-                    model: 'qwen/qwen3.6-27b',
+                    model: 'openai/gpt-oss-120b',
                     messages: [{
                         role: 'user',
                         content: `숏폼 씬 텍스트를 생성하세요.
@@ -268,7 +268,7 @@ JSON으로만 응답:
         try {
             const groq = new Groq({ apiKey })
             const completion = await groq.chat.completions.create({
-                model: 'qwen/qwen3.6-27b',
+                model: 'openai/gpt-oss-120b',
                 messages: [{ role: 'user', content: freeGenPrompt }],
                 temperature: 0.6,
                 max_tokens: 300,
