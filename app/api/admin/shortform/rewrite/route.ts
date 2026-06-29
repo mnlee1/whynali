@@ -242,7 +242,7 @@ ${sceneCount}줄만 응답 (번호·설명 없이):
         }
 
         const groqBody = JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: 'openai/gpt-oss-120b',
             messages: [{ role: 'user', content: prompt }],
             max_tokens: maxTokens,
             temperature: variation ? 0.6 : 0.3,
