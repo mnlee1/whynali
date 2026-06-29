@@ -1,6 +1,6 @@
 name: Weekly Auth Backup Reminder
 
-# 매주 월요일 오전 10시에 두레이로 알림
+# 매주 월요일 오전 10시 (KST) 에 사용자 수 변화 감지 시에만 두레이 알림
 on:
     schedule:
         - cron: '0 1 * * 1'  # UTC 01:00, 매주 월요일 = 한국 오전 10시
@@ -10,36 +10,98 @@ jobs:
     remind:
         runs-on: ubuntu-latest
         timeout-minutes: 5
-        
+
         steps:
-            - name: 두레이 알림 전송
+            - name: Restore cached user count
+              id: restore-cache
+              uses: actions/cache/restore@v4
+              with:
+                  path: .auth-user-count
+                  key: auth-user-count-${{ github.run_id }}
+                  restore-keys: auth-user-count-
+
+            - name: Check user count change and notify
+              id: check
               env:
                   DOORAY_WEBHOOK_URL: ${{ secrets.DOORAY_WEBHOOK_URL }}
+                  SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+                  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
               run: |
-                  if [ -z "$DOORAY_WEBHOOK_URL" ]; then
-                      echo "⚠️  DOORAY_WEBHOOK_URL이 설정되지 않았습니다."
-                      exit 0
+                  # 현재 사용자 수 조회
+                  RESPONSE=$(curl -s "$SUPABASE_URL/auth/v1/admin/users?per_page=1000" \
+                    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+                    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+
+                  CURRENT_COUNT=$(echo "$RESPONSE" | jq '.users | length')
+
+                  if [ -z "$CURRENT_COUNT" ] || [ "$CURRENT_COUNT" = "null" ]; then
+                    echo "⚠️ 사용자 수 조회 실패 — 알림 건너뜀"
+                    exit 0
                   fi
-                  
+
+                  echo "현재 사용자 수: $CURRENT_COUNT"
+
+                  # 이전 사용자 수 읽기 (캐시 없으면 현재값으로 초기화)
+                  if [ -f ".auth-user-count" ]; then
+                    PREV_COUNT=$(cat .auth-user-count)
+                  else
+                    echo "캐시 없음 — 현재 값으로 초기화, 알림 건너뜀"
+                    echo "$CURRENT_COUNT" > .auth-user-count
+                    exit 0
+                  fi
+
+                  echo "이전 사용자 수: $PREV_COUNT"
+
+                  # 현재 사용자 수 저장
+                  echo "$CURRENT_COUNT" > .auth-user-count
+
+                  # 변화 없으면 종료
+                  if [ "$CURRENT_COUNT" = "$PREV_COUNT" ]; then
+                    echo "✅ 사용자 변화 없음 — 알림 건너뜀"
+                    exit 0
+                  fi
+
+                  # 변화 내용 메시지 생성
+                  DIFF=$((CURRENT_COUNT - PREV_COUNT))
+                  if [ "$DIFF" -gt 0 ]; then
+                    CHANGE_MSG="신규 가입 +${DIFF}명 (${PREV_COUNT} → ${CURRENT_COUNT}명)"
+                  else
+                    ABS_DIFF=$(( -DIFF ))
+                    CHANGE_MSG="탈퇴 -${ABS_DIFF}명 (${PREV_COUNT} → ${CURRENT_COUNT}명)"
+                  fi
+
+                  echo "변화 감지: $CHANGE_MSG"
+
+                  # 두레이 알림 발송
+                  if [ -z "$DOORAY_WEBHOOK_URL" ]; then exit 0; fi
+
                   DATE=$(date +'%Y년 %m월')
-                  
+
                   BODY=$(jq -n \
                       --arg botName "왜난리 알림봇" \
                       --arg text "📅 주간 Auth 백업 알림" \
                       --arg date "$DATE" \
+                      --arg change "$CHANGE_MSG" \
                       '{
                           botName: $botName,
                           text: ($text + " — " + $date),
                           attachments: [{
                               title: "🔐 Auth 사용자 백업 실행 필요",
-                              text: "Supabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnpm run backup:auth\n```\n\n완료 후 Google Drive (nhnad.deflow@gmail.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분\n📆 백업 빈도: 주 1회 (매주 월요일)",
+                              text: ("사용자 변화 감지: " + $change + "\n\nSupabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnpm run backup:auth\n```\n\n완료 후 Google Drive (nhnad.deflow@gmail.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분"),
                               color: "orange"
                           }]
                       }'
                   )
-                  
+
                   curl -s -X POST "$DOORAY_WEBHOOK_URL" \
                       -H "Content-Type: application/json" \
                       -d "$BODY"
-                  
+
                   echo "✅ 두레이 알림 전송 완료"
+
+            - name: Save user count cache
+              uses: actions/cache/save@v4
+              if: always()
+              with:
+                  path: .auth-user-count
+                  key: auth-user-count-${{ github.run_id }}
