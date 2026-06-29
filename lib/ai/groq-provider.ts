@@ -219,7 +219,7 @@ export class GroqProvider implements AIProvider {
                     messages,
                     temperature,
                     max_tokens: maxTokens,
-                    response_format: { type: 'json_object' },
+                    ...(options?.jsonMode ? { response_format: { type: 'json_object' } } : {}),
                 })
 
                 const content = completion.choices?.[0]?.message?.content

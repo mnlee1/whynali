@@ -12,6 +12,7 @@ export interface AIOptions {
     temperature?: number
     maxTokens?: number
     systemPrompt?: string
+    jsonMode?: boolean
 }
 
 export interface AIProvider {
