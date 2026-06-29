@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
 import IssueSearchSelect from '@/components/admin/IssueSearchSelect'
+import StatusBadge from '@/components/common/StatusBadge'
 
 interface Issue {
     id: string
@@ -21,7 +22,7 @@ interface DiscussionTopic {
     auto_end_date?: string | null
     created_at: string
     updated_at?: string | null
-    issues: { id: string; title: string } | null
+    issues: { id: string; title: string; status: string } | null
     view_count?: number
     comment_count?: number
 }
@@ -40,6 +41,7 @@ const STATUS_STYLE: Record<string, string> = {
     '진행중': 'bg-green-100 text-green-700',
     '마감': 'bg-gray-100 text-gray-600',
 }
+
 
 function formatDate(dateString: string): string {
     const date = new Date(dateString)
@@ -698,13 +700,20 @@ export default function AdminDiscussionsPage() {
                                         </td>
                                         <td className="px-4 py-3 text-sm max-w-xs">
                                             {topic.issues ? (
-                                                <Link
-                                                    href={`/issue/${topic.issues.id}`}
-                                                    target="_blank"
-                                                    className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full"
-                                                >
-                                                    {decodeHtml(topic.issues?.title ?? '')}
-                                                </Link>
+                                                <>
+                                                    <Link
+                                                        href={`/issue/${topic.issues.id}`}
+                                                        target="_blank"
+                                                        className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full"
+                                                    >
+                                                        {decodeHtml(topic.issues?.title ?? '')}
+                                                    </Link>
+                                                    {topic.issues.status && (
+                                                        <span className="block mt-1">
+                                                            <StatusBadge status={topic.issues.status as any} size="xs" />
+                                                        </span>
+                                                    )}
+                                                </>
                                             ) : (
                                                 <span className="text-content-muted">연결 없음</span>
                                             )}

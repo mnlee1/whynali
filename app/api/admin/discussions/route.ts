@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     try {
         let query = supabaseAdmin
             .from('discussion_topics')
-            .select('*, issues(id, title, merged_into_id)', { count: 'exact' })
+            .select('*, issues(id, title, status, merged_into_id)', { count: 'exact' })
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
