@@ -37,23 +37,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '키워드를 입력하세요' }, { status: 400 })
     }
 
-    // 커뮤니티 데이터 재조회 (id, created_at 포함 — filterAndTitleByAI에 필요)
+    // 커뮤니티 데이터 재조회 — AI 검색 키워드 기준으로 매칭 (id, created_at 포함 — filterAndTitleByAI에 필요)
     const cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-    const tokens = tokenize(keyword).filter(t => t.length >= 2)
-    const effectiveTokens = tokens.length > 0 ? tokens : [keyword]
+    const searchKey = searchKeyword || keyword
+    const tokens = tokenize(searchKey).filter(t => t.length >= 2)
+    const effectiveTokens = tokens.length > 0 ? tokens : [searchKey]
 
     // 3자 이상 토큰만 OR 검색 — 짧은 일반 단어로 인한 AND 과필터 방지
     const significantTokens = effectiveTokens.filter(t => t.length >= 3)
     const orTokens = significantTokens.length > 0 ? significantTokens : effectiveTokens.slice(0, 1)
     const orFilter = orTokens.map(t => `title.ilike.%${t}%`).join(',')
 
-    let communityQuery = supabaseAdmin
+    const { data: communityPostsData } = await supabaseAdmin
         .from('community_data')
         .select('id, title, source_site, created_at')
         .gte('updated_at', cutoff48h)
         .or(orFilter)
-
-    const { data: communityPostsData } = await communityQuery
         .order('updated_at', { ascending: false })
         .limit(200)
 
@@ -74,23 +73,24 @@ export async function POST(request: NextRequest) {
         )
     }
 
-    // AI 필터링 + 최종 제목 정제
-    const { finalIssueTitle, relevantNewsIds, relevantCommunityIds } = await filterAndTitleByAI(
-        keyword,
-        title,
+    // AI 필터링 — AI 검색 키워드 기준으로 필터링, 관리자 입력 제목은 유지
+    const { relevantNewsIds, relevantCommunityIds } = await filterAndTitleByAI(
+        searchKey,
+        searchKey,
         newsItems,
         communityPosts,
     )
 
-    if (relevantNewsIds.length === 0) {
-        return NextResponse.json(
-            { error: 'AI 필터링 후 관련 뉴스가 없습니다. 제목을 더 구체적으로 수정해보세요.' },
-            { status: 422 }
-        )
-    }
+    // 수동 등록: AI 필터링 실패 시 전체 뉴스 폴백 (관리자 판단 존중)
+    const finalNewsIds = relevantNewsIds.length > 0
+        ? relevantNewsIds
+        : newsItems.slice(0, 10).map(n => n.id)
+
+    // 관리자가 입력한 제목을 그대로 사용
+    const finalIssueTitle = title
 
     // 타임라인 분류 + 요약 생성 (저장 없음)
-    const relevantNews = newsItems.filter(n => relevantNewsIds.includes(n.id))
+    const relevantNews = newsItems.filter(n => finalNewsIds.includes(n.id))
     const sampledNews = [...relevantNews]
         .sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
         .slice(0, 5)
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
         timeline,
         commitData: {
             communityPostIds: relevantCommunityIds,
-            newsIds: relevantNewsIds,
+            newsIds: finalNewsIds,
             timelinePoints,
             briefSummary: briefSummary ?? null,
             topicDescription,

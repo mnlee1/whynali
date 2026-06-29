@@ -43,6 +43,10 @@ export default function IssuePreviewDrawer({
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [localThumbnailUrls, setLocalThumbnailUrls] = useState<string[]>([])
     const [refreshSuccess, setRefreshSuccess] = useState(false)
+    const [showKeywordPanel, setShowKeywordPanel] = useState(false)
+    const [keywordInput, setKeywordInput] = useState('')
+    const [suggestedKeyword, setSuggestedKeyword] = useState('')
+    const [isSuggesting, setIsSuggesting] = useState(false)
     const [timelineTab, setTimelineTab] = useState<'preview' | 'manage'>('preview')
     const [summaryKey, setSummaryKey] = useState(0)
     const [sourcesKey, setSourcesKey] = useState(0)
@@ -55,6 +59,9 @@ export default function IssuePreviewDrawer({
             setTimelineTab('preview')
             setSummaryKey(0)
             setSourcesKey(0)
+            setShowKeywordPanel(false)
+            setKeywordInput('')
+            setSuggestedKeyword('')
         }
     }, [issue])
 
@@ -149,13 +156,42 @@ export default function IssuePreviewDrawer({
         }
     }
 
-    const handleRefreshThumbnails = async () => {
+    const fetchSuggestedKeyword = async (retry = false) => {
+        if (!issue) return
+        setIsSuggesting(true)
+        try {
+            const params = new URLSearchParams()
+            if (retry) {
+                params.set('retry', 'true')
+                if (suggestedKeyword) params.set('exclude', suggestedKeyword)
+            }
+            const qs = params.toString()
+            const url = `/api/admin/issues/${issue.id}/suggest-image-keyword${qs ? `?${qs}` : ''}`
+            const res = await fetch(url)
+            const data = await res.json()
+            if (res.ok && data.keyword) {
+                setSuggestedKeyword(data.keyword)
+            }
+        } catch {
+        } finally {
+            setIsSuggesting(false)
+        }
+    }
+
+    const handleOpenKeywordPanel = async () => {
+        setShowKeywordPanel(true)
+        if (!suggestedKeyword) await fetchSuggestedKeyword()
+    }
+
+    const handleRefreshThumbnails = async (keyword?: string) => {
         if (!issue) return
         setIsRefreshing(true)
 
         try {
             const res = await fetch(`/api/admin/issues/${issue.id}/refresh-thumbnails`, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(keyword ? { keyword } : {}),
             })
 
             if (!res.ok) {
@@ -167,6 +203,7 @@ export default function IssuePreviewDrawer({
             setLocalThumbnailUrls(data.thumbnail_urls ?? [])
             setSelectedThumbnailIndex(0)
             setRefreshSuccess(true)
+            setShowKeywordPanel(false)
             setTimeout(() => setRefreshSuccess(false), 2000)
             onIssueUpdate?.()
         } catch (error) {
@@ -262,12 +299,20 @@ export default function IssuePreviewDrawer({
                                     <span className="text-xs text-green-600 font-medium">✓ 이미지 검색 완료</span>
                                 )}
                                 <button
-                                    onClick={handleRefreshThumbnails}
-                                    disabled={isRefreshing}
+                                    onClick={() => handleRefreshThumbnails()}
+                                    disabled={isRefreshing || isSuggesting}
                                     className="px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary-dark text-white rounded-lg disabled:opacity-50 whitespace-nowrap"
-                                    title="Pexels에서 이슈 제목·카테고리 기준으로 스톡 이미지 3장을 새로 검색합니다"
+                                    title="AI 키워드로 이미지를 다시 검색합니다"
                                 >
                                     {isRefreshing ? '검색 중...' : '이미지 재검색'}
+                                </button>
+                                <button
+                                    onClick={handleOpenKeywordPanel}
+                                    disabled={isRefreshing || isSuggesting}
+                                    className="px-3 py-1.5 text-xs font-medium border border-border hover:bg-surface-muted text-content-secondary rounded-lg disabled:opacity-50 whitespace-nowrap"
+                                    title="검색 키워드를 직접 입력합니다"
+                                >
+                                    키워드 직접 입력
                                 </button>
                                 {localThumbnailUrls.length > 0 && selectedThumbnailIndex >= 0 && (
                                     <button
@@ -279,6 +324,62 @@ export default function IssuePreviewDrawer({
                                 )}
                             </div>
                         </div>
+                        {showKeywordPanel && (
+                            <div className="px-4 py-3 border-b border-border-muted bg-surface-muted space-y-2">
+                                <p className="text-xs text-content-muted">Pexels 검색 키워드 (영문)</p>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={keywordInput}
+                                        onChange={e => setKeywordInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && !isRefreshing && keywordInput.trim() && handleRefreshThumbnails(keywordInput.trim())}
+                                        placeholder="예: football coach sideline"
+                                        className="flex-1 px-3 py-1.5 text-xs border border-border rounded-lg bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                        disabled={isSuggesting || isRefreshing}
+                                    />
+                                    <button
+                                        onClick={() => handleRefreshThumbnails(keywordInput.trim() || undefined)}
+                                        disabled={isRefreshing || isSuggesting || !keywordInput.trim()}
+                                        className="px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary-dark text-white rounded-lg disabled:opacity-50 whitespace-nowrap"
+                                    >
+                                        {isRefreshing ? '검색 중...' : '검색'}
+                                    </button>
+                                    <button
+                                        onClick={() => setShowKeywordPanel(false)}
+                                        className="px-2.5 py-1.5 text-xs text-content-muted hover:text-content-secondary"
+                                    >
+                                        닫기
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs text-content-muted shrink-0">AI 추천</span>
+                                    {isSuggesting ? (
+                                        <span className="text-xs text-content-muted animate-pulse">추천 중...</span>
+                                    ) : suggestedKeyword ? (
+                                        suggestedKeyword.split(' ').filter(Boolean).map(word => (
+                                            <button
+                                                key={word}
+                                                onClick={() => setKeywordInput(prev => {
+                                                    const trimmed = prev.trim()
+                                                    return trimmed ? `${trimmed} ${word}` : word
+                                                })}
+                                                className="px-2.5 py-1 text-xs border border-border rounded-full text-content-secondary bg-surface hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                                            >
+                                                {word}
+                                            </button>
+                                        ))
+                                    ) : null}
+                                    <button
+                                        onClick={() => fetchSuggestedKeyword(true)}
+                                        disabled={isSuggesting || isRefreshing}
+                                        className="text-xs text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
+                                        title="다른 키워드 추천"
+                                    >
+                                        {isSuggesting ? '' : '↺ 재추천'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div className="p-4 space-y-3">
                             {localThumbnailUrls.length === 0 ? (
                                 <p className="text-xs text-content-muted text-center py-4">
