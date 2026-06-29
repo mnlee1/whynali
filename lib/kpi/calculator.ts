@@ -1088,6 +1088,7 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
 
     return {
         currentUsers: totalUsers || 0,
+        internalUsersCount: 0,
         currentActiveIssues: activeIssues || 0,
         currentTotalIssues: totalApprovedIssues || 0,
         currentComments: totalComments,
