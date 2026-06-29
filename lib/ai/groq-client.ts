@@ -22,6 +22,7 @@ export interface GroqCallOptions {
     model?: string
     temperature?: number
     max_tokens?: number
+    jsonMode?: boolean
 }
 
 /**
@@ -39,17 +40,18 @@ export async function callGroq(
     const model = options?.model ?? 'qwen/qwen3.6-27b'
     const temperature = options?.temperature ?? 0.1
     const maxTokens = options?.max_tokens ?? 500
-    
+
     const systemMessage = messages.find(m => m.role === 'system')
     const userMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant')
-    
+
     const userPrompt = userMessages.map(m => m.content).join('\n\n')
-    
+
     const content = await groqProvider.complete(userPrompt, {
         model,
         temperature,
         maxTokens,
         systemPrompt: systemMessage?.content,
+        jsonMode: options?.jsonMode,
     })
     
     return content
