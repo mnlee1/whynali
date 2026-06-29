@@ -36,6 +36,7 @@ type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'organi
 
 interface KPIMetrics {
     currentUsers: number
+    internalUsersCount: number
     currentActiveIssues: number   // 진행중 (점화 + 논란중)
     currentTotalIssues: number    // 전체 승인 (종결 포함)
     currentComments: number
@@ -503,6 +504,28 @@ export default function KPIDashboardPage() {
                             </div>
                         </div>
                     )}
+
+            {/* 가입자 현황 */}
+            <div className="card p-5">
+                <h2 className="text-sm font-semibold text-content-primary mb-3">가입자 현황</h2>
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                        <p className="text-xs text-slate-500 mb-1">전체</p>
+                        <p className="text-2xl font-bold text-slate-900">{(metrics.currentUsers + metrics.internalUsersCount).toLocaleString()}</p>
+                        <p className="text-xs text-slate-400 mt-1">명</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-center">
+                        <p className="text-xs text-blue-600 mb-1">일반 유저</p>
+                        <p className="text-2xl font-bold text-blue-900">{metrics.currentUsers.toLocaleString()}</p>
+                        <p className="text-xs text-blue-400 mt-1">KPI 집계 기준</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                        <p className="text-xs text-slate-500 mb-1">내부 계정</p>
+                        <p className="text-2xl font-bold text-slate-400">{metrics.internalUsersCount.toLocaleString()}</p>
+                        <p className="text-xs text-slate-400 mt-1">팀·테스트 (KPI 제외)</p>
+                    </div>
+                </div>
+            </div>
 
             {/* 이달 달성 현황 */}
             <div className="card p-5">

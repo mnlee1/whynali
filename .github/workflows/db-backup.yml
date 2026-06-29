@@ -7,24 +7,84 @@ on:
     workflow_dispatch:  # GitHub에서 수동 실행 버튼
 
 jobs:
+    check-new-users:
+        runs-on: ubuntu-latest
+        outputs:
+            should_backup: ${{ steps.check.outputs.should_backup }}
+        steps:
+            - name: 코드 체크아웃
+              uses: actions/checkout@v4
+
+            - name: 신규 유저 확인
+              id: check
+              env:
+                  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+                  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+              run: |
+                  # 수동 실행은 항상 백업
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                      echo "수동 실행 - 백업 강제 진행"
+                      echo "should_backup=true" >> $GITHUB_OUTPUT
+                      exit 0
+                  fi
+
+                  # 마지막 백업의 _meta.json 찾기
+                  LAST_META=$(ls backups/20*/_meta.json 2>/dev/null | sort -r | head -1)
+
+                  if [ -z "$LAST_META" ]; then
+                      echo "첫 백업 - 진행"
+                      echo "should_backup=true" >> $GITHUB_OUTPUT
+                      exit 0
+                  fi
+
+                  # 마지막 백업의 유저 수
+                  LAST_USER_COUNT=$(jq -r '.tables[] | select(.table=="users") | .rows' "$LAST_META" 2>/dev/null || echo "0")
+                  LAST_USER_COUNT=${LAST_USER_COUNT:-0}
+
+                  # 현재 Supabase 유저 수 (REST API)
+                  HTTP_HEADERS=$(curl -s \
+                      "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/users?select=id&limit=0" \
+                      -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                      -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                      -H "Prefer: count=exact" \
+                      -D - -o /dev/null)
+
+                  CURRENT_USER_COUNT=$(echo "$HTTP_HEADERS" | grep -i "content-range" | grep -oE '[0-9]+$' | tr -d '\r\n')
+
+                  echo "마지막 백업 유저 수: $LAST_USER_COUNT"
+                  echo "현재 유저 수: ${CURRENT_USER_COUNT:-확인불가}"
+
+                  if [ -z "$CURRENT_USER_COUNT" ]; then
+                      echo "유저 수 확인 실패 - 안전하게 백업 진행"
+                      echo "should_backup=true" >> $GITHUB_OUTPUT
+                  elif [ "$CURRENT_USER_COUNT" -gt "$LAST_USER_COUNT" ]; then
+                      echo "신규 유저 발생 ($LAST_USER_COUNT → $CURRENT_USER_COUNT) - 백업 진행"
+                      echo "should_backup=true" >> $GITHUB_OUTPUT
+                  else
+                      echo "신규 유저 없음 (${CURRENT_USER_COUNT}명 유지) - 오늘 백업 스킵"
+                      echo "should_backup=false" >> $GITHUB_OUTPUT
+                  fi
+
     backup:
+        needs: check-new-users
+        if: needs.check-new-users.outputs.should_backup == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 10
-        
+
         steps:
             - name: 코드 체크아웃
               uses: actions/checkout@v4
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
-            
+
             - name: Node.js 설치
               uses: actions/setup-node@v4
               with:
                   node-version: '20'
-            
+
             - name: 패키지 설치
               run: npm ci
-            
+
             - name: DB 백업 실행
               id: backup
               env:

@@ -65,7 +65,7 @@ export async function generateVoteOptions(
                 content: buildPrompt(issue, count),
             },
         ],
-        { model: 'llama-3.3-70b-versatile', temperature: 0.5, max_tokens: 1000 }
+        { model: 'qwen/qwen3.6-27b', temperature: 0.5, max_tokens: 1000 }
     )
 
     return parseVotes(raw)

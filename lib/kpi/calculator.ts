@@ -149,21 +149,23 @@ function buildChannelInboundBreakdown(
     return result
 }
 
-async function fetchConversionCounts(sinceIso: string) {
+async function fetchConversionCounts(sinceIso: string, excludeIds: string[] = []) {
+    const fi = (q: any) =>
+        excludeIds.length > 0 ? q.not('user_id', 'in', `(${excludeIds.join(',')})`) : q
     const [
         { count: signups },
         { count: votes },
         { count: comments },
         { count: reactions },
     ] = await Promise.all([
-        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'signup').gte('created_at', sinceIso),
-        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'vote').gte('created_at', sinceIso),
-        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'comment').gte('created_at', sinceIso),
-        supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'reaction').gte('created_at', sinceIso),
+        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'signup').gte('created_at', sinceIso)),
+        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'vote').gte('created_at', sinceIso)),
+        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'comment').gte('created_at', sinceIso)),
+        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'reaction').gte('created_at', sinceIso)),
     ])
 
     return {
@@ -187,6 +189,7 @@ async function fetchSignupEventsBySource(sinceIso: string) {
 interface KPIMetrics {
     // 현재 지표
     currentUsers: number
+    internalUsersCount: number
     currentActiveIssues: number   // 진행중 이슈 (점화 + 논란중)
     currentTotalIssues: number    // 전체 승인 이슈 (종결 포함)
     currentComments: number
@@ -427,10 +430,13 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         internalIds.length > 0 ? q.not('user_id', 'in', `(${internalIds.join(',')})`) : q
 
     // 3. 기본 집계 (내부 계정 제외)
-    const { count: totalUsers } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_internal', false)
+    const [
+        { count: totalUsers },
+        { count: internalUsersCount },
+    ] = await Promise.all([
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('is_internal', false),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('is_internal', true),
+    ])
 
     // 진행중 이슈 (점화 + 논란중) — KPI 목표 기준
     const { count: activeIssues } = await supabase
@@ -704,9 +710,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
 
     // 전환율 계산 (기간별: 오늘 / 7일 / 30일)
     const [convD1, convD7, convD30] = await Promise.all([
-        fetchConversionCounts(todayStart.toISOString()),
-        fetchConversionCounts(sevenDaysAgo.toISOString()),
-        fetchConversionCounts(thisMonthStart2.toISOString()),
+        fetchConversionCounts(todayStart.toISOString(), internalIds),
+        fetchConversionCounts(sevenDaysAgo.toISOString(), internalIds),
+        fetchConversionCounts(thisMonthStart2.toISOString(), internalIds),
     ])
 
     const conversionRatesByPeriod = {
@@ -956,6 +962,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     return {
         metrics: {
             currentUsers: totalUsers || 0,
+            internalUsersCount: internalUsersCount || 0,
             currentActiveIssues: activeIssues || 0,
             currentTotalIssues: totalApprovedIssues || 0,
             currentComments: totalComments,
