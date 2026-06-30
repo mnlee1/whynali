@@ -32,8 +32,9 @@ export type ContentMode =
   | 'timeline'
   | 'qa'
   | 'debate'
+  | 'by-numbers'
 
-export const SINGLE_ISSUE_MODES: ContentMode[] = ['surging', 'timeline', 'qa', 'debate']
+export const SINGLE_ISSUE_MODES: ContentMode[] = ['surging', 'timeline', 'qa', 'debate', 'by-numbers']
 
 export interface Issue {
   id: string
@@ -60,7 +61,7 @@ export interface ClosedIssue extends Issue {
 }
 
 export interface SlideContent {
-  type: 'cover' | 'body' | 'badge' | 'follow'
+  type: 'cover' | 'body' | 'badge' | 'follow' | 'numbers'
   main_title?: string
   sub_title?: string
   desc?: string
@@ -227,6 +228,7 @@ export function getTemplateHtml(type: SlideContent['type']): string {
     body: 'slide-02-body.html',
     badge: 'slide-03-badge.html',
     follow: 'slide-04-follow.html',
+    numbers: 'slide-05-numbers.html',
   }
   return fs.readFileSync(path.join(TEMPLATE_DIR, fileMap[type]), 'utf-8')
 }
@@ -555,31 +557,117 @@ export async function buildIssueContext(issue: Issue): Promise<string> {
   return parts.join('\n\n')
 }
 
+function getEnglishKeywordFallback(issue: Issue): string {
+  const text = `${issue.title ?? ''} ${issue.topic ?? ''}`.toLowerCase()
+  const cat = issue.category ?? ''
+
+  if (cat === '스포츠') {
+    if (/축구|월드컵|soccer|football/.test(text)) return 'soccer football stadium'
+    if (/야구|baseball/.test(text))               return 'baseball player pitch'
+    if (/농구|basketball/.test(text))             return 'basketball court player'
+    if (/배구|volleyball/.test(text))             return 'volleyball player court'
+    if (/테니스|tennis/.test(text))               return 'tennis player court'
+    if (/골프|golf/.test(text))                   return 'golf course player'
+    if (/수영|swimming/.test(text))               return 'swimming pool athlete'
+    if (/육상|마라톤|marathon|track/.test(text))  return 'track athletics runner'
+    if (/복싱|권투|boxing/.test(text))            return 'boxing ring fighter'
+    return 'sports athlete stadium'
+  }
+  if (cat === '연예') {
+    if (/아이돌|콘서트|concert/.test(text))       return 'concert stage lights'
+    if (/드라마|영화|film|actor/.test(text))       return 'film set actor scene'
+    return 'entertainment stage spotlight'
+  }
+  if (cat === '정치') return 'parliament podium politician'
+  if (cat === '경제') {
+    if (/주식|증시|stock|finance/.test(text))     return 'stock market finance chart'
+    return 'business office meeting'
+  }
+  if (cat === '사회') {
+    if (/재판|법원|판결|trial|court/.test(text))  return 'courtroom judge gavel'
+    if (/시위|집회|protest/.test(text))           return 'protest crowd street'
+    return 'city street crowd'
+  }
+  if (cat === '기술') return 'technology circuit innovation'
+  if (cat === '세계') return 'world map international'
+  if (cat === '커뮤니티') return 'community gathering people'
+  return 'news current events'
+}
+
 export async function generateCoverKeywords(issues: Issue[], mode: ContentMode): Promise<string> {
   const groq = getGroq()
   const topicsList = issues
-    .map((i, idx) => `${idx + 1}. "${i.topic ?? i.title}" (${i.category})`)
+    .map((i, idx) => {
+      const topic = i.topic ?? i.title
+      return `${idx + 1}. title="${i.title}" topic="${topic}" category=${i.category}`
+    })
     .join('\n')
+
+  const modeHint: Partial<Record<ContentMode, string>> = {
+    'surging':    'breaking news urgency momentum',
+    'by-numbers': 'data statistics numbers facts',
+    'timeline':   'story sequence time progression',
+    'qa':         'question answer explanation',
+    'debate':     'conflict two sides argument',
+  }
+  const hint = modeHint[mode] ?? 'current events'
 
   const res = await groq.chat.completions.create({
     model: 'openai/gpt-oss-120b',
     messages: [
-      { role: 'system', content: 'You are a stock photo search expert. Return ONLY valid JSON, no explanation.' },
+      { role: 'system', content: 'You are a Pexels stock photo search expert. Return ONLY valid JSON, no explanation.' },
       {
         role: 'user',
-        content: `/nothink\nKorean news topics (mode: ${mode}):\n${topicsList}\n\nPick the most visually distinctive topic and generate 2-3 English keywords suitable for a Pexels portrait-orientation stock photo search.\nReturn JSON only: {"keywords": "2-3 english words"}`,
+        content: `/nothink
+Korean news topic(s):
+${topicsList}
+Mode mood: ${hint}
+
+Generate 2-3 SPECIFIC English keywords for a Pexels portrait-orientation stock photo.
+
+RULES — follow exactly:
+1. Match the EXACT subject from the title/topic. If it mentions soccer/football → use "soccer". If basketball → "basketball". Never substitute another sport.
+2. Keywords must be visually concrete and searchable on Pexels.
+3. NEVER use: "korea", "korean", "news", "event", "story", "people", "issue"
+
+Category keyword guides (pick the most specific match):
+- 스포츠 soccer/football: "soccer player stadium"
+- 스포츠 baseball: "baseball player pitch"
+- 스포츠 basketball: "basketball court player"
+- 스포츠 other: use the specific sport name
+- 연예 idol/concert: "concert stage lights"
+- 연예 actor/drama: "film set actor scene"
+- 정치: "parliament podium politician"
+- 경제 stock/finance: "stock market finance"
+- 경제 corporate: "business office meeting"
+- 사회 crime/trial: "courtroom judge gavel"
+- 사회 protest: "protest crowd street"
+- 기술: "technology circuit innovation"
+
+Examples:
+✅ "soccer football stadium" for 월드컵 경기
+✅ "courtroom judge gavel" for 재판 이슈
+✅ "concert stage lights" for 아이돌 콘서트
+❌ "tennis court sport" for a soccer topic (WRONG sport — never substitute)
+❌ "sport athlete game" (too generic)
+
+Return JSON only: {"keywords": "2-3 specific english words"}`,
       },
     ],
-    temperature: 0.4,
-    max_tokens: 60,
+    temperature: 0.3,
+    max_tokens: 80,
   })
 
   try {
     const raw = res.choices[0].message.content ?? '{}'
     const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    return JSON.parse(cleaned).keywords ?? issues[0]?.category ?? 'news'
+    const keywords: string = JSON.parse(cleaned).keywords ?? ''
+    if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
+      return getEnglishKeywordFallback(issues[0])
+    }
+    return keywords
   } catch {
-    return issues[0]?.category ?? 'news'
+    return getEnglishKeywordFallback(issues[0])
   }
 }
 
@@ -589,21 +677,34 @@ export async function generateStageKeywords(issue: Issue, stage: string, points:
   const res = await groq.chat.completions.create({
     model: 'openai/gpt-oss-120b',
     messages: [
-      { role: 'system', content: 'You are a stock photo search expert. Return ONLY valid JSON.' },
+      { role: 'system', content: 'You are a Pexels stock photo search expert. Return ONLY valid JSON.' },
       {
         role: 'user',
-        content: `/nothink\nKorean news issue: "${issue.title}" — stage: ${stage}\nKey events: ${pointTitles}\n\nGenerate 2-3 English keywords for a Pexels portrait photo that visually represents this stage's mood or theme.\nReturn JSON only: {"keywords": "2-3 english words"}`,
+        content: `/nothink
+Issue: "${issue.title}" (category: ${issue.category}) — stage: ${stage}
+Key events: ${pointTitles}
+
+Generate 2-3 SPECIFIC English keywords for a Pexels portrait photo that visually matches this stage's subject and mood.
+- Match the exact activity/subject (soccer → "soccer", trial → "courtroom", protest → "crowd protest")
+- NEVER substitute a different activity (no "tennis" for soccer, no generic "sport")
+- NEVER use: "korea", "korean", "news", "people"
+
+Return JSON only: {"keywords": "2-3 specific english words"}`,
       },
     ],
-    temperature: 0.5,
-    max_tokens: 60,
+    temperature: 0.3,
+    max_tokens: 80,
   })
   try {
     const raw = res.choices[0].message.content ?? '{}'
     const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    return JSON.parse(cleaned).keywords ?? issue.category
+    const keywords: string = JSON.parse(cleaned).keywords ?? ''
+    if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
+      return getEnglishKeywordFallback(issue)
+    }
+    return keywords
   } catch {
-    return issue.category
+    return getEnglishKeywordFallback(issue)
   }
 }
 
@@ -1340,11 +1441,109 @@ JSON (순수 JSON만, 코드블록 없이):
   ]
 }
 
+// ─── 숫자형 슬라이드 ─────────────────────────────────────
+
+export async function generateNumbersSlides(issue: Issue, logoBase64: string): Promise<SlideContent[]> {
+  const groq = getGroq()
+  const thumbnail = getIssueThumbnail(issue)
+
+  const [issueContext, coverKeywords] = await Promise.all([
+    buildIssueContext(issue),
+    generateCoverKeywords([issue], 'by-numbers'),
+  ])
+
+  const res = await groq.chat.completions.create({
+    model: 'openai/gpt-oss-120b',
+    messages: [
+      { role: 'system', content: SYSTEM_BASE },
+      {
+        role: 'user',
+        content: `/nothink
+이슈 제목: "${issue.title}"
+카테고리: ${issue.category}
+${issue.topic ? `주제: ${issue.topic}` : ''}
+${issueContext}
+
+이 이슈를 핵심 수치·숫자 3개로 설명하는 SNS 카드뉴스를 만들어줘.
+수치는 반드시 위 내용에 실제로 등장하는 팩트여야 해. 없는 숫자 절대 만들지 말 것.
+숫자가 부족하면 기간·횟수·순위·날짜 같은 수치로 채울 것.
+
+[각 필드 기준]
+number: 핵심 수치. 최대 8자. 단위 포함. 임팩트 있게.
+  ✅ "1.2조원" "징역 8년" "2,400명" "▲346%" "역대 1위"
+  ❌ "약 1조원대" (애매함) "많다" (수치 아님) "10자 초과하는 긴 숫자 표현"
+label: 이 숫자가 뭘 뜻하는지 한 마디. 최대 10자.
+  ✅ "피해 추정액" "검찰 구형량" "피해자 수"
+desc: 이 숫자의 맥락. 구어체 2문장. \\n 구분. 반드시 서술어로 완결.
+  1줄: 이 숫자가 왜 중요한지 (마침표로 끝낼 것)
+  2줄: 독자가 체감할 비교·배경 (마침표 또는 물음표로 끝낼 것)
+  ❌ 문장 중간 줄바꿈 금지. 한 문장은 하나의 줄에서 완결.
+pexels_keywords: 슬라이드 배경사진용 영어 키워드 2-3개.
+
+[공통 규칙]
+영어·전문 용어 금지. 구어체. 사실에 없는 수치 절대 금지.
+인물·기업 2개 이상 나열 시 가운뎃점(·)으로 구분.
+
+JSON (순수 JSON만, 코드블록 없이):
+{
+  "numbers": [
+    {"number": "...", "label": "...", "desc": "...", "pexels_keywords": "..."},
+    {"number": "...", "label": "...", "desc": "...", "pexels_keywords": "..."},
+    {"number": "...", "label": "...", "desc": "...", "pexels_keywords": "..."}
+  ]
+}`,
+      },
+    ],
+    temperature: 0.5,
+  })
+
+  type NumberItem = { number: string; label: string; desc: string; pexels_keywords?: string }
+  let numbers: NumberItem[] = []
+
+  try {
+    const raw = res.choices[0].message.content || '{}'
+    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+    const parsed = JSON.parse(cleaned).numbers ?? []
+    numbers = (parsed as NumberItem[]).slice(0, 3).map(n => ({
+      number: safeStrip(n.number ?? '', '?', 1),
+      label: safeStrip(n.label ?? '', '핵심 수치'),
+      desc: safeStrip(n.desc ?? '', issue.topic ?? issue.title),
+      pexels_keywords: n.pexels_keywords,
+    }))
+  } catch {
+    numbers = [{ number: '?', label: '핵심 수치', desc: issue.topic ?? issue.title }]
+  }
+
+  const [coverBg, ...slideBgs] = await Promise.all([
+    fetchPexelsImage(coverKeywords),
+    ...numbers.map(n => fetchPexelsImage(n.pexels_keywords ?? `${issue.category} data statistics`)),
+  ])
+
+  return [
+    {
+      type: 'cover',
+      sub_title: '숫자로 읽는 이슈',
+      main_title: issue.topic ?? issue.title,
+      bg_image_url: coverBg ?? undefined,
+      logo_image_url: logoBase64,
+    },
+    ...numbers.map((n, i) => ({
+      type: 'numbers' as const,
+      main_title: n.number,
+      sub_title: n.label,
+      desc: n.desc,
+      bg_image_url: slideBgs[i] ?? thumbnail,
+      logo_image_url: logoBase64,
+    })),
+    { type: 'follow' as const, logo_image_url: logoBase64 },
+  ]
+}
+
 // ─── 단일 이슈 슬라이드 생성 (관리자 수동용) ──────────────
 
 export async function generateSlidesForIssue(
   issueId: string,
-  mode: 'surging' | 'timeline' | 'qa' | 'debate',
+  mode: 'surging' | 'timeline' | 'qa' | 'debate' | 'by-numbers',
   logoBase64: string,
 ): Promise<SlideContent[]> {
   if (mode === 'timeline') {
@@ -1358,6 +1557,7 @@ export async function generateSlidesForIssue(
 
   if (mode === 'surging') return generateSurgingSlides(issue, logoBase64)
   if (mode === 'qa') return generateQASlides(issue, logoBase64)
+  if (mode === 'by-numbers') return generateNumbersSlides(issue, logoBase64)
   if (mode === 'debate') return generateDebateSlides(issue, logoBase64)
 
   throw new Error(`지원하지 않는 모드: ${mode}`)
