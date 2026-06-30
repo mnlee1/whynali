@@ -206,13 +206,20 @@ export class GroqProvider implements AIProvider {
             try {
                 const client = new Groq({ apiKey: keyStatus.apiKey })
 
+                // reasoning 모델(openai/gpt-oss-*)은 system 메시지 미지원 → user 메시지에 합침
+                const isReasoningModel = model.startsWith('openai/gpt-oss')
                 const messages: Array<{ role: 'system' | 'user'; content: string }> = []
 
-                if (systemPrompt) {
+                if (systemPrompt && !isReasoningModel) {
                     messages.push({ role: 'system', content: systemPrompt })
                 }
 
-                messages.push({ role: 'user', content: userPrompt })
+                const finalUserPrompt =
+                    systemPrompt && isReasoningModel
+                        ? `${systemPrompt}\n\n${userPrompt}`
+                        : userPrompt
+
+                messages.push({ role: 'user', content: finalUserPrompt })
 
                 const completion = await client.chat.completions.create({
                     model,
