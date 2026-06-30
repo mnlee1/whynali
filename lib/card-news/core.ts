@@ -46,6 +46,7 @@ export interface Issue {
   surgePct?: number
   topic?: string | null
   topic_description?: string | null
+  created_at?: string | null
 }
 
 export interface TimelinePoint {
@@ -113,6 +114,9 @@ const SYSTEM_BASE = `CRITICAL: Write ALL text exclusively in Korean (Hangul). Ze
 
 const SEVEN_DAYS_AGO = () =>
   new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+const THREE_DAYS_AGO = () =>
+  new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
 
 // ─── 헬퍼 ───────────────────────────────────────────────
 
@@ -316,28 +320,25 @@ export async function fetchSurgingIssue(excludeIds: Set<string> = new Set()): Pr
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('issues')
-    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago, topic, topic_description')
+    .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, heat_index_1h_ago, topic, topic_description, created_at')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
     .neq('status', '종결')
     .is('merged_into_id', null)
-    .gte('updated_at', SEVEN_DAYS_AGO())
-    .not('heat_index_1h_ago', 'is', null)
-    .gt('heat_index_1h_ago', 0)
+    .gte('created_at', THREE_DAYS_AGO())
     .order('heat_index', { ascending: false, nullsFirst: false })
     .limit(50)
   if (error) throw new Error(`Supabase 조회 실패: ${error.message}`)
 
+  // 3일 이내 생성 이슈 중 화력 1위 선택 (DB에서 heat_index DESC로 정렬됨)
   const candidates = ((data || []) as Issue[]).filter(i => !excludeIds.has(i.id))
-  const withSurge = candidates
-    .map(i => ({
-      ...i,
-      surgePct: ((i.heat_index ?? 0) - (i.heat_index_1h_ago ?? 0)) / (i.heat_index_1h_ago ?? 1) * 100,
-    }))
-    .filter(i => i.surgePct > 0)
-    .sort((a, b) => b.surgePct - a.surgePct)
+  if (candidates.length === 0) return null
 
-  return withSurge[0] ?? (candidates[0] ? { ...candidates[0], surgePct: 0 } : null)
+  const top = candidates[0]
+  const surgePct = top.heat_index_1h_ago && top.heat_index_1h_ago > 0
+    ? ((top.heat_index ?? 0) - top.heat_index_1h_ago) / top.heat_index_1h_ago * 100
+    : 0
+  return { ...top, surgePct: Math.max(surgePct, 0) }
 }
 
 const CARD_NEWS_CATEGORIES = ['정치', '경제', '사회', '연예'] as const

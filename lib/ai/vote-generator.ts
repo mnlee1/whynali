@@ -15,6 +15,7 @@
  */
 
 import { callGroq } from '@/lib/ai/groq-client'
+import { parseJsonObject } from '@/lib/ai/parse-json-response'
 
 export interface IssueMetadata {
     id: string
@@ -133,11 +134,19 @@ JSON 형식으로만 응답:
 function parseVotes(raw: string): GeneratedVote[] {
     try {
         console.log('[parseVotes] Raw:', raw)
-        const parsed = JSON.parse(raw)
-        const votesArray = parsed.votes || parsed
 
-        if (!Array.isArray(votesArray)) {
-            console.error('[parseVotes] 배열이 아닙니다. Raw:', raw)
+        const parsed = parseJsonObject<{ votes?: unknown[] } | unknown[]>(raw)
+        if (!parsed) {
+            console.error('[parseVotes] JSON 파싱 실패. Raw:', raw)
+            return []
+        }
+
+        const votesArray: unknown[] = Array.isArray(parsed)
+            ? parsed
+            : (parsed as { votes?: unknown[] }).votes ?? []
+
+        if (!Array.isArray(votesArray) || votesArray.length === 0) {
+            console.error('[parseVotes] votes 배열이 없습니다. Raw:', raw)
             return []
         }
 
