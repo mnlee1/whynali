@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('comments')
             .select(
-                'id, body, created_at, visibility, user_id, issue_id, discussion_topic_id, users(display_name), issues(id, title), discussion_topics(id, body)',
+                'id, body, created_at, visibility, user_id, issue_id, discussion_topic_id, users(display_name), issues!issue_id(id, title), discussion_topics!discussion_topic_id(id, body)',
                 { count: 'exact' }
             )
             .in('user_id', personaId ? [personaId] : BOT_USER_IDS)
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({ data: data ?? [], total: count ?? 0 })
     } catch (e) {
+        console.error('[bot-comments] 조회 실패:', e)
         return NextResponse.json({ error: '봇 댓글 조회 실패' }, { status: 500 })
     }
 }
