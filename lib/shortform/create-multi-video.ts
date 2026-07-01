@@ -27,6 +27,7 @@ export interface SceneContent {
     title: string
     desc: string
     isSearchScene?: boolean
+    highlights?: string[]
 }
 
 const exec = promisify(execCallback)
@@ -359,12 +360,12 @@ export async function create3SceneVideo(
         if (sceneContents) {
             console.log('[FFmpeg] Sharp 타이핑 프레임 생성 중...')
             const [frames1, frames2] = await Promise.all([
-                createTypingFrames(sceneContents[0].title, sceneContents[0].desc, 1, sceneDurations[0]),
-                createTypingFrames(sceneContents[1].title, sceneContents[1].desc, 2, sceneDurations[1]),
+                createTypingFrames(sceneContents[0].title, sceneContents[0].desc, 1, sceneDurations[0], sceneContents[0].highlights ?? []),
+                createTypingFrames(sceneContents[1].title, sceneContents[1].desc, 2, sceneDurations[1], sceneContents[1].highlights ?? []),
             ])
             const frames3 = isSearchScene3
                 ? await createSearchTypingFrames(sceneDurations[2])
-                : await createTypingFrames(sceneContents[2].title, sceneContents[2].desc, 3, sceneDurations[2])
+                : await createTypingFrames(sceneContents[2].title, sceneContents[2].desc, 3, sceneDurations[2], sceneContents[2].highlights ?? [])
 
             console.log('[FFmpeg] 텍스트 애니메이션 영상 생성 중...')
             const [ta1, ta2, ta3] = await Promise.all([
@@ -626,7 +627,7 @@ export async function createNSceneVideo(
             const sc = sceneContents[i]
             const frames = sc.isSearchScene
                 ? await createSearchTypingFrames(sceneDurations[i])
-                : await createTypingFrames(sc.title, sc.desc, i + 1, sceneDurations[i])
+                : await createTypingFrames(sc.title, sc.desc, i + 1, sceneDurations[i], sc.highlights ?? [])
             textAnimPaths.push(await buildTextAnimationVideo(frames, tmpDir, i, ffmpegPath, sceneDurations[i], fps))
         }
 

@@ -108,10 +108,14 @@ export async function POST(_request: NextRequest, { params }: Params) {
         const categoryTag = CATEGORY_HASHTAGS[issueCategory] ?? ''
 
         // 이슈 제목 파생 키워드 (Groq)
+        console.log('[YouTube 태그] 이슈 제목:', job.issue_title, '/ 카테고리:', issueCategory)
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
+        console.log('[YouTube 태그] 추출 키워드:', titleKeywords)
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        console.log('[YouTube 태그] 최종 해시태그:', hashtagLine)
+        console.log('[YouTube 태그] tags 배열:', ['왜난리', '이슈', '뉴스', '한국뉴스', ...titleKeywords])
 
         const videoId = await uploadToYouTube(videoBuffer, {
             title: job.issue_title,

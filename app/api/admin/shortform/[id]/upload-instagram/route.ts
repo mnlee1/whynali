@@ -99,7 +99,9 @@ export async function POST(
         const categoryTag = CATEGORY_HASHTAGS[issueCategory] ?? ''
 
         // 이슈 제목 파생 키워드 (Groq)
+        console.log('[Instagram 태그] 이슈 제목:', job.issue_title, '/ 카테고리:', issueCategory)
         const titleKeywords = await extractYoutubeHashtags(job.issue_title)
+        console.log('[Instagram 태그] 추출 키워드:', titleKeywords)
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
         const shortCode = (job.issues as any)?.[0]?.short_code ?? (job.issues as any)?.short_code ?? ''
@@ -107,13 +109,16 @@ export async function POST(
         const issueSlug = shortCode || issueUUID
         const publicIssueUrl = issueSlug ? `https://whynali.com/i/${issueSlug}?utm_source=instagram&utm_medium=reels` : 'https://whynali.com'
 
+        const hashtagLineInsta = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        console.log('[Instagram 태그] 최종 해시태그:', hashtagLineInsta)
+
         const caption = [
             job.issue_title,
             '',
             `📌 실시간 여론·토론·타임라인 확인하기`,
             publicIssueUrl,
             '',
-            `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim(),
+            hashtagLineInsta,
         ].join('\n')
 
         // 썸네일 공개 URL 가져오기

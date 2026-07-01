@@ -31,6 +31,8 @@ export interface ShortformTextOutput {
     scene2Desc: string
     scene3Title: string
     scene3Desc: string
+    scene2Highlights: string[]
+    scene3Highlights: string[]
 }
 
 export async function extractYoutubeHashtags(title: string): Promise<string[]> {
@@ -145,6 +147,8 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
         scene2Desc: '온라인이 완전히 달아올랐다',
         scene3Title: '여론은?',
         scene3Desc: '의견이 완전히 갈렸다',
+        scene2Highlights: [],
+        scene3Highlights: [],
     }
 
     const rawDesc2 = (input.briefBullets?.filter(Boolean)[0] ?? '').trim()
@@ -219,6 +223,7 @@ JSON으로만 응답:
                     scene1Title: clean(scene1Title), scene1Desc,
                     scene2Title, scene2Desc,
                     scene3Title, scene3Desc,
+                    scene2Highlights: [], scene3Highlights: [],
                 }
             } catch (error) {
                 console.error(`[Groq v2 brief 실패] key=...${apiKey.slice(-6)}:`, error)
@@ -232,6 +237,7 @@ JSON으로만 응답:
             scene2Desc: d2Code ?? processDesc(d2Base),
             scene3Title: fallback.scene3Title,
             scene3Desc: d3Code ?? processDesc(d3Base),
+            scene2Highlights: [], scene3Highlights: [],
         }
     }
 
@@ -284,6 +290,7 @@ JSON으로만 응답:
                 scene2Desc:  safeD(parsed.scene2Desc,  fallback.scene2Desc),
                 scene3Title: safeT(parsed.scene3Title, fallback.scene3Title),
                 scene3Desc:  safeD(parsed.scene3Desc,  fallback.scene3Desc),
+                scene2Highlights: [], scene3Highlights: [],
             }
         } catch (error) {
             console.error(`[Groq v2 프리 생성 실패] key=...${apiKey.slice(-6)}:`, error)

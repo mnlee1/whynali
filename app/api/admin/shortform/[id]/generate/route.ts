@@ -24,6 +24,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     let previewImages: string[] | undefined
     let sceneTexts: string[] | undefined
+    let sceneHighlights: string[][] | undefined
     try {
         const body = await request.json()
         if (Array.isArray(body?.images) && body.images.length > 0) {
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest, { params }: Params) {
             sceneTexts = (body.sceneTexts as unknown[])
                 .map(t => (typeof t === 'string' ? t : ''))
                 .filter(Boolean)
+        }
+        if (Array.isArray(body?.highlights) && body.highlights.length > 0) {
+            sceneHighlights = body.highlights
         }
     } catch { /* body 없거나 파싱 실패 시 무시 */ }
 
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest, { params }: Params) {
             )
         }
 
-        const { videoBuffer, scene1TextEndTime } = await generateNSceneShortform(job.issue_title, issueCategory, sceneTexts, previewImages)
+        const { videoBuffer, scene1TextEndTime } = await generateNSceneShortform(job.issue_title, issueCategory, sceneTexts, previewImages, sceneHighlights)
         const ts = Date.now()
         const filename = `shortform-${job.id}-${ts}.mp4`
         const thumbFilename = `shortform-${job.id}-${ts}-thumb.jpg`

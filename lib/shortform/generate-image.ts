@@ -239,6 +239,8 @@ export async function generate3SceneShortform(
             scene2Desc: input.sceneTexts[1] ?? '',
             scene3Title: input.issueTitle,
             scene3Desc: input.sceneTexts[2] ?? '',
+            scene2Highlights: [],
+            scene3Highlights: [],
         }
         console.log('[Scene 자막] UI 편집 텍스트 사용:', input.sceneTexts)
     } else {
@@ -288,7 +290,7 @@ export async function generate3SceneShortform(
     // 6. 동영상 합성 — 씬별 오디오 duration에 따라 각 씬 길이 자동 조정
     const sceneContents: [SceneContent, SceneContent, SceneContent] = [
         { title: generatedText.scene1Title, desc: generatedText.scene1Desc },
-        { title: generatedText.scene2Title, desc: generatedText.scene2Desc },
+        { title: generatedText.scene2Title, desc: generatedText.scene2Desc, highlights: generatedText.scene2Highlights },
         { title: '', desc: '', isSearchScene: true },
     ]
     const videoBuffer = await create3SceneVideo(
@@ -317,7 +319,8 @@ export async function generateNSceneShortform(
     issueTitle: string,
     issueCategory: string,
     sceneTexts: string[],
-    previewImages?: string[]
+    previewImages?: string[],
+    highlights?: string[][]
 ): Promise<{ videoBuffer: Buffer; scene1TextEndTime: number }> {
     const N = sceneTexts.length
     if (N === 0) throw new Error('씬 텍스트가 없습니다')
@@ -371,9 +374,14 @@ export async function generateNSceneShortform(
         })(),
     ])
 
+    // UI에서 전달된 하이라이트 사용 (없으면 빈 배열)
+    const sceneHighlights: string[][] = highlights && highlights.length >= N
+        ? highlights.slice(0, N)
+        : Array.from({ length: N }, () => [])
+
     // 씬 콘텐츠 구성
     const sceneContents: SceneContent[] = [
-        ...sceneTexts.map(desc => ({ title: issueTitle, desc })),
+        ...sceneTexts.map((desc, i) => ({ title: issueTitle, desc, highlights: sceneHighlights[i] ?? [] })),
         { title: '', desc: '', isSearchScene: true },
     ]
 
