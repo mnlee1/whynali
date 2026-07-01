@@ -167,8 +167,8 @@ export default function BotCommentsPage() {
     }, [loadComments, personaId, commentsOffset])
 
     useEffect(() => {
-        if (tab === 'logs') loadLogs(logStatus, logsOffset)
-    }, [loadLogs, tab, logStatus, logsOffset])
+        loadLogs(logStatus, logsOffset)
+    }, [loadLogs, logStatus, logsOffset])
 
     // ── 핸들러 ──
 
@@ -198,14 +198,8 @@ export default function BotCommentsPage() {
     return (
         <div>
             {/* 헤더 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+            <div className="mb-6">
                 <h1 className="text-2xl font-bold text-content-primary">댓글 Bot 관리</h1>
-                <button
-                    onClick={() => tab === 'comments' ? loadComments(personaId, commentsOffset) : loadLogs(logStatus, logsOffset)}
-                    className="btn-neutral btn-sm"
-                >
-                    새로고침
-                </button>
             </div>
 
             {/* 탭 */}
@@ -330,7 +324,7 @@ export default function BotCommentsPage() {
                                                             {c.issues.title}
                                                         </Link>
                                                     ) : c.discussion_topics ? (
-                                                        <Link href={`/community/discussion/${c.discussion_topics.id}`} target="_blank" className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full">
+                                                        <Link href={`/community/${c.discussion_topics.id}`} target="_blank" className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full">
                                                             {c.discussion_topics.body.slice(0, 60)}
                                                         </Link>
                                                     ) : <span className="text-content-muted">—</span>}
