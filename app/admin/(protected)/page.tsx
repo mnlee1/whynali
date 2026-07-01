@@ -14,13 +14,6 @@ import Link from 'next/link'
 
 // ─── 타입 ────────────────────────────────────────────────
 
-interface DashboardStats {
-    issuesPending: number
-    discussionsPending: number
-    safetyPending: number
-    votesPending: number
-}
-
 interface RecentLog {
     id: string
     action: string
@@ -74,6 +67,14 @@ interface ApiCostsSummary {
     }
 }
 
+interface AutoOpLog {
+    id: string
+    job_type: string
+    status: string
+    details: Record<string, unknown> | null
+    created_at: string
+}
+
 interface Stats24h {
     warnings: Array<{
         type: string
@@ -84,53 +85,6 @@ interface Stats24h {
 }
 
 // ─── 서브 컴포넌트 ────────────────────────────────────────
-
-function StatCard({
-    label,
-    value,
-    href,
-    accent,
-    loading,
-}: {
-    label: string
-    value: number
-    href: string
-    accent?: 'yellow' | 'red' | 'blue' | 'green'
-    loading?: boolean
-}) {
-    const accentClass = {
-        yellow: 'border-yellow-300 bg-yellow-50',
-        red: 'border-red-300 bg-red-50',
-        blue: 'border-blue-200 bg-blue-50',
-        green: 'border-green-200 bg-green-50',
-    }[accent ?? 'blue']
-
-    const valueClass = {
-        yellow: 'text-yellow-700',
-        red: 'text-red-600',
-        blue: 'text-blue-700',
-        green: 'text-green-700',
-    }[accent ?? 'blue']
-
-    return (
-        <Link
-            href={href}
-            className={`block rounded-xl border p-5 hover:shadow-md transition-shadow ${accentClass}`}
-        >
-            <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-content-muted">{label}</p>
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-content-muted" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                </svg>
-            </div>
-            {loading ? (
-                <div className="h-8 w-12 bg-surface-muted rounded animate-pulse" />
-            ) : (
-                <p className={`text-3xl font-bold ${valueClass}`}>{value.toLocaleString()}</p>
-            )}
-        </Link>
-    )
-}
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
     discussion_topic: '토론 주제',
@@ -162,10 +116,10 @@ const ACTION_BADGE: Record<string, string> = {
 // ─── 메인 컴포넌트 ────────────────────────────────────────
 
 export default function AdminDashboardPage() {
-    const [stats, setStats] = useState<DashboardStats | null>(null)
-    const [statsLoading, setStatsLoading] = useState(true)
     const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
     const [logsLoading, setLogsLoading] = useState(true)
+    const [recentAutoOpLogs, setRecentAutoOpLogs] = useState<AutoOpLog[]>([])
+    const [autoOpLogsLoading, setAutoOpLogsLoading] = useState(true)
     const [apiCosts, setApiCosts] = useState<ApiCostsSummary | null>(null)
     const [costsLoading, setCostsLoading] = useState(true)
     const [stats24h, setStats24h] = useState<Stats24h | null>(null)
@@ -176,52 +130,40 @@ export default function AdminDashboardPage() {
 
     const fetchAll = useCallback(async () => {
         console.log('[Admin Dashboard] fetchAll 시작')
-        setStatsLoading(true)
         setLogsLoading(true)
+        setAutoOpLogsLoading(true)
         setCostsLoading(true)
         setStats24hLoading(true)
 
         try {
             console.log('[Admin Dashboard] 핵심 API 호출 시작 (병렬 처리)')
-            const [issuesRes, discussionsRes, safetyRes, votesRes, logsRes, apiUsageRes, stats24hRes] =
+            const [logsRes, apiUsageRes, stats24hRes, autoOpLogsRes] =
                 await Promise.all([
-                    fetch('/api/admin/issues?approval_status=대기'),
-                    fetch('/api/admin/discussions?approval_status=대기'),
-                    fetch('/api/admin/reports?status=대기&limit=1'),
-                    fetch('/api/admin/votes?approval_status=대기&limit=1'),
                     fetch('/api/admin/logs?limit=8'),
                     fetch('/api/admin/api-usage'),
                     fetch('/api/admin/stats-24h'),
+                    fetch('/api/admin/auto-op-logs?limit=8'),
                 ])
 
             console.log('[Admin Dashboard] 핵심 API 응답 받음')
 
-            const [issuesData, discussionsData, safetyData, votesData, logsData, apiUsageData, stats24hData] =
+            const [logsData, apiUsageData, stats24hData, autoOpLogsData] =
                 await Promise.all([
-                    issuesRes.ok ? issuesRes.json() : null,
-                    discussionsRes.ok ? discussionsRes.json() : null,
-                    safetyRes.ok ? safetyRes.json() : null,
-                    votesRes.ok ? votesRes.json() : null,
                     logsRes.ok ? logsRes.json() : null,
                     apiUsageRes.ok ? apiUsageRes.json() : null,
                     stats24hRes.ok ? stats24hRes.json() : null,
+                    autoOpLogsRes.ok ? autoOpLogsRes.json() : null,
                 ])
 
-            setStats({
-                issuesPending: issuesData?.total ?? 0,
-                discussionsPending: discussionsData?.total ?? 0,
-                safetyPending: safetyData?.total ?? 0,
-                votesPending: votesData?.total ?? 0,
-            })
-
             setRecentLogs(logsData?.data ?? [])
+            setRecentAutoOpLogs(autoOpLogsData?.data ?? [])
             setApiCosts(apiUsageData)
             setStats24h(stats24hData)
         } catch (error) {
             console.error('[Admin Dashboard] 데이터 로드 에러:', error)
         } finally {
-            setStatsLoading(false)
             setLogsLoading(false)
+            setAutoOpLogsLoading(false)
             setCostsLoading(false)
             setStats24hLoading(false)
         }
@@ -291,38 +233,6 @@ export default function AdminDashboardPage() {
                     ))}
                 </div>
             )}
-
-            {/* 핵심 지표 카드 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                <StatCard
-                    label="이슈 승인 대기"
-                    value={stats?.issuesPending ?? 0}
-                    href="/admin/issues"
-                    accent="yellow"
-                    loading={statsLoading}
-                />
-                <StatCard
-                    label="토론 주제 대기"
-                    value={stats?.discussionsPending ?? 0}
-                    href="/admin/discussions"
-                    accent="blue"
-                    loading={statsLoading}
-                />
-                <StatCard
-                    label="세이프티 검토 대기"
-                    value={stats?.safetyPending ?? 0}
-                    href="/admin/safety"
-                    accent="red"
-                    loading={statsLoading}
-                />
-                <StatCard
-                    label="투표 승인 대기"
-                    value={stats?.votesPending ?? 0}
-                    href="/admin/votes"
-                    accent="green"
-                    loading={statsLoading}
-                />
-            </div>
 
             {/* AI 시스템 현황 */}
             <div className="mb-6">
@@ -603,6 +513,74 @@ export default function AdminDashboardPage() {
                                         </td>
                                     </tr>
                                 ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+
+            {/* 최근 자동 운영 로그 (봇 댓글) */}
+            <div className="mt-6 card overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                    <h2 className="text-base font-semibold text-content-primary">최근 자동 운영 로그</h2>
+                    <Link href="/admin/bot-comments" className="text-sm text-content-muted hover:text-content-secondary">
+                        전체 보기 →
+                    </Link>
+                </div>
+                {autoOpLogsLoading ? (
+                    <div className="p-5 space-y-2">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="h-8 bg-surface-muted rounded animate-pulse" />
+                        ))}
+                    </div>
+                ) : recentAutoOpLogs.length === 0 ? (
+                    <p className="text-sm text-content-muted py-8 text-center">자동 운영 로그가 없습니다</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-border">
+                            <thead className="bg-surface-subtle">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-content-muted">시간</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-content-muted">작업</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-content-muted">상태</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-content-muted">상세</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-surface divide-y divide-border">
+                                {recentAutoOpLogs.map((log) => {
+                                    const d = log.details
+                                    const detailText = d
+                                        ? 'posted' in d
+                                            ? `스캔 ${String(d.scanned ?? 0)}건 → ${String(d.posted ?? 0)}개 등록`
+                                            : `${String(d.persona ?? '')} · ${String(d.issue_title ?? '')}`
+                                        : ''
+                                    const statusBadge: Record<string, string> = {
+                                        success: 'bg-green-100 text-green-700',
+                                        failed: 'bg-red-100 text-red-700',
+                                        skipped: 'bg-gray-100 text-gray-500',
+                                    }
+                                    const jobLabel: Record<string, string> = {
+                                        bot_comment: '봇 댓글',
+                                        bot_comment_batch: '봇 배치',
+                                    }
+                                    return (
+                                        <tr key={log.id} className="hover:bg-surface-subtle">
+                                            <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">{fmt(log.created_at)}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-content-primary whitespace-nowrap">
+                                                {jobLabel[log.job_type] ?? log.job_type}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge[log.status] ?? 'bg-surface-muted text-content-secondary'}`}>
+                                                    {log.status === 'success' ? '성공' : log.status === 'failed' ? '실패' : '스킵'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-content-secondary max-w-xs">
+                                                <span className="line-clamp-1">{detailText}</span>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
                             </tbody>
                         </table>
                     </div>

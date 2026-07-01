@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 import { sanitizeText } from '@/lib/safety'
 import { BOT_PERSONAS, BOT_USER_IDS } from './personas'
 import { generateBotComment } from './comment-generator'
+import { writeAutoOpLog } from '@/lib/auto-op-log'
 
 // 이슈 1개당 최대 봇 댓글 수
 const MAX_BOT_COMMENTS_PER_ISSUE = 3
@@ -66,20 +67,44 @@ export async function postBotComment(issueId: string): Promise<boolean> {
     if (!issue) return false
 
     const body = await generateBotComment(persona, issue)
-    if (!body) return false
+    if (!body) {
+        await writeAutoOpLog({
+            job_type: 'bot_comment',
+            status: 'failed',
+            target_type: 'issue',
+            target_id: issueId,
+            details: { persona: persona.displayName, persona_type: persona.type, issue_title: issue.title, reason: 'AI 생성 실패' },
+        })
+        return false
+    }
 
+    const sanitized = sanitizeText(body)
     const { error } = await supabaseAdmin.from('comments').insert({
         issue_id: issueId,
         user_id: persona.id,
-        body: sanitizeText(body),
+        body: sanitized,
         visibility: 'public',
     })
 
     if (error) {
         console.error('[bot-commenter] 댓글 삽입 실패:', error.message)
+        await writeAutoOpLog({
+            job_type: 'bot_comment',
+            status: 'failed',
+            target_type: 'issue',
+            target_id: issueId,
+            details: { persona: persona.displayName, persona_type: persona.type, issue_title: issue.title, reason: error.message },
+        })
         return false
     }
 
+    await writeAutoOpLog({
+        job_type: 'bot_comment',
+        status: 'success',
+        target_type: 'issue',
+        target_id: issueId,
+        details: { persona: persona.displayName, persona_type: persona.type, issue_title: issue.title, comment: sanitized },
+    })
     console.log(`[bot-commenter] "${persona.displayName}" → 이슈 ${issueId} 댓글 등록 완료`)
     return true
 }
@@ -113,6 +138,12 @@ export async function runBotCommentBatch(): Promise<{ processed: number; posted:
         const ok = await postBotComment(issueId)
         if (ok) posted++
     }
+
+    await writeAutoOpLog({
+        job_type: 'bot_comment_batch',
+        status: posted > 0 ? 'success' : 'skipped',
+        details: { processed: candidates.length, posted, scanned: issues.length },
+    })
 
     return { processed: candidates.length, posted }
 }
