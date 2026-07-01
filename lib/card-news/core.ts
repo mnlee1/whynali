@@ -19,7 +19,39 @@ function getSupabase() {
 }
 
 function getGroq() {
-  return new Groq({ apiKey: process.env.GROQ_API_KEY!.split(',')[0].trim() })
+  const keys = (process.env.GROQ_API_KEY ?? '').split(',').map(k => k.trim()).filter(Boolean)
+  if (keys.length === 0) throw new Error('GROQ_API_KEY 없음')
+  const apiKey = keys[Math.floor(Math.random() * keys.length)]
+  return new Groq({ apiKey })
+}
+
+// 429 발생 시 순서대로 폴백 (각 모델 TPD 한도 200K 독립)
+const GROQ_MODEL_CHAIN = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+]
+
+async function groqCreate(
+  client: Groq,
+  params: Parameters<Groq['chat']['completions']['create']>[0],
+) {
+  const p = { ...params, stream: false as const }
+  const startIndex = GROQ_MODEL_CHAIN.indexOf(p.model as string)
+  const candidates = startIndex >= 0
+    ? GROQ_MODEL_CHAIN.slice(startIndex)
+    : [p.model as string, ...GROQ_MODEL_CHAIN.slice(1)]
+
+  let lastError: any
+  for (const model of candidates) {
+    try {
+      return await client.chat.completions.create({ ...p, model })
+    } catch (error: any) {
+      if (error.status !== 429) throw error
+      lastError = error
+      console.warn(`[card-news] ${model} 429 → 다음 모델로 폴백`)
+    }
+  }
+  throw lastError
 }
 
 // ─── 타입 ───────────────────────────────────────────────
@@ -612,7 +644,7 @@ export async function generateCoverKeywords(issues: Issue[], mode: ContentMode):
   }
   const hint = modeHint[mode] ?? 'current events'
 
-  const res = await groq.chat.completions.create({
+  const res = await groqCreate(groq,{
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: 'You are a Pexels stock photo search expert. Return ONLY valid JSON, no explanation.' },
@@ -674,7 +706,7 @@ Return JSON only: {"keywords": "2-3 specific english words"}`,
 export async function generateStageKeywords(issue: Issue, stage: string, points: TimelinePoint[]): Promise<string> {
   const groq = getGroq()
   const pointTitles = points.slice(0, 3).map(p => p.title).join(', ')
-  const res = await groq.chat.completions.create({
+  const res = await groqCreate(groq,{
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: 'You are a Pexels stock photo search expert. Return ONLY valid JSON.' },
@@ -739,7 +771,7 @@ export async function generateBadgeContent(
   const groq = getGroq()
   const issueContext = await buildIssueContext(issue)
 
-  const res = await groq.chat.completions.create({
+  const res = await groqCreate(groq,{
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
@@ -891,7 +923,7 @@ export async function generateSurgingSlides(issue: Issue, logoBase64: string): P
   ])
 
   // 콘텐츠 생성
-  const contentRes = await groq.chat.completions.create({
+  const contentRes = await groqCreate(groq,{
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
@@ -1101,7 +1133,7 @@ export async function generateTimelineSlides(issue: ClosedIssue, logoBase64: str
   // 커버 키워드 + 콘텐츠 3장 + 배경 이미지를 병렬로
   const [coverKeywords, res] = await Promise.all([
     generateCoverKeywords([issue], 'timeline'),
-    groq.chat.completions.create({
+    groqCreate(groq,{
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
@@ -1222,7 +1254,7 @@ export async function generateQASlides(issue: Issue, logoBase64: string): Promis
   ])
 
   const [res] = await Promise.all([
-    groq.chat.completions.create({
+    groqCreate(groq,{
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
@@ -1323,7 +1355,7 @@ export async function generateDebateSlides(issue: Issue, logoBase64: string): Pr
   ])
 
   const [res] = await Promise.all([
-    groq.chat.completions.create({
+    groqCreate(groq,{
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
@@ -1452,7 +1484,7 @@ export async function generateNumbersSlides(issue: Issue, logoBase64: string): P
     generateCoverKeywords([issue], 'by-numbers'),
   ])
 
-  const res = await groq.chat.completions.create({
+  const res = await groqCreate(groq,{
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
