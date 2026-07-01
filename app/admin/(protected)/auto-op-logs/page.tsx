@@ -15,6 +15,8 @@ interface AutoOpLog {
 const JOB_TYPE_LABELS: Record<string, string> = {
     bot_comment: '봇 댓글',
     bot_comment_batch: '봇 배치',
+    bot_discussion_comment: '봇 토론의견',
+    bot_discussion_batch: '토론 배치',
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -35,6 +37,8 @@ const JOB_FILTER_OPTIONS = [
     { value: '', label: '전체' },
     { value: 'bot_comment', label: '봇 댓글' },
     { value: 'bot_comment_batch', label: '봇 배치' },
+    { value: 'bot_discussion_comment', label: '봇 토론의견' },
+    { value: 'bot_discussion_batch', label: '토론 배치' },
 ]
 
 const STATUS_FILTER_OPTIONS = [
@@ -68,6 +72,11 @@ function DetailsCell({ details }: { details: Record<string, unknown> | null }) {
             {Boolean(details.issue_title) && (
                 <span className="block text-xs text-content-muted truncate max-w-xs mt-0.5">
                     이슈: {String(details.issue_title)}
+                </span>
+            )}
+            {Boolean(details.topic_body) && (
+                <span className="block text-xs text-content-muted truncate max-w-xs mt-0.5">
+                    토론: {String(details.topic_body)}
                 </span>
             )}
             {Boolean(details.comment) && (
