@@ -243,6 +243,17 @@ function safeStrip(text: string, fallback: string, minLen = 5): string {
   return stripped.length >= minLen ? stripped : fallback
 }
 
+// AI가 잘못 축약한 비표준 한국어 서술어 교정
+function fixKoreanContractions(text: string): string {
+  return text
+    .replace(/올랄([가-힣])/g, '올라갈$1')    // 올랄까 → 올라갈까
+    .replace(/늘랄([가-힣])/g, '늘어날$1')    // 늘랄까 → 늘어날까
+    .replace(/줄랄([가-힣])/g, '줄어들$1')    // 줄랄까 → 줄어들까
+    .replace(/커질랄([가-힣])/g, '커질$1')    // 커질랄까 → 커질까
+    .replace(/갈랄([가-힣])/g, '갈$1')        // 갈랄까 → 갈까
+    .replace(/될랄([가-힣])/g, '될$1')        // 될랄까 → 될까
+}
+
 export function getIssueThumbnail(issue: Issue): string {
   const urls = issue.thumbnail_urls
   if (!urls || urls.length === 0) return ''
@@ -807,6 +818,9 @@ export async function generateBadgeContent(
           '',
           '[언어 규칙]',
           '일반 독자가 바로 이해할 수 있는 쉬운 한국어 표현 사용. 영어·전문 용어 금지.',
+          '비표준 한국어 축약 절대 금지: "올랄까" "갈랄게" "늘랄까" 같이 동사를 잘못 줄인 표현 사용 금지.',
+          '  ❌ "계속 올랄까?" → ✅ "계속 오를까?" 또는 "계속 올라갈까?"',
+          '  ❌ "더 커질랄까?" → ✅ "더 커질까?"',
           '  ❌ HBM → ✅ AI용 고성능 메모리',
           '  ❌ PCE → ✅ 물가 지수',
           '  ❌ 가이던스 → ✅ 다음 분기 전망',
@@ -853,9 +867,9 @@ export async function generateBadgeContent(
     const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
     const parsed = JSON.parse(cleaned)
 
-    let d1 = safeStrip(parsed.desc_1 ?? parsed.desc?.split('\n')[0] ?? '', '')
-    let d2 = safeStrip(parsed.desc_2 ?? parsed.desc?.split('\n')[1] ?? '', '')
-    let d3 = safeStrip(parsed.desc_3 ?? parsed.desc?.split('\n')[2] ?? '', '')
+    let d1 = fixKoreanContractions(safeStrip(parsed.desc_1 ?? parsed.desc?.split('\n')[0] ?? '', ''))
+    let d2 = fixKoreanContractions(safeStrip(parsed.desc_2 ?? parsed.desc?.split('\n')[1] ?? '', ''))
+    let d3 = fixKoreanContractions(safeStrip(parsed.desc_3 ?? parsed.desc?.split('\n')[2] ?? '', ''))
     const desc = [d1, d2, d3].filter(Boolean).join('\n') || fallbackDesc
 
     return {
@@ -1090,7 +1104,7 @@ export async function generateCategorySlides(issues: Issue[], logoBase64: string
       sub_title: issue.topic ?? issue.title,
       desc: content.desc,
       point_text_01: content.point_text_01,
-      point_text_02: `🏆 분야 1위`,
+      point_text_02: content.point_text_02,
       bg_image_url: getIssueThumbnail(issue),
       logo_image_url: logoBase64,
     })
