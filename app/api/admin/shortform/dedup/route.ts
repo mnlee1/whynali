@@ -71,7 +71,7 @@ JSON으로만 응답 (유지할 씬 번호 배열, 1부터 시작):
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'openai/gpt-oss-120b',
+                model: 'qwen/qwen3.6-27b',
                 messages: [{ role: 'user', content: prompt }],
                 max_tokens: 80,
                 temperature: 0.1,
