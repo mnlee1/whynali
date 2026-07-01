@@ -15,6 +15,7 @@
  */
 
 import { callGroq } from '@/lib/ai/groq-client'
+import { parseJsonObject } from '@/lib/ai/parse-json-response'
 
 export interface IssueMetadata {
     id: string
@@ -61,7 +62,7 @@ export async function generateDiscussionTopics(
                 content: buildPrompt(issue, count),
             },
         ],
-        { model: 'llama-3.3-70b-versatile', temperature: 0.8, max_tokens: 800 }
+        { model: 'openai/gpt-oss-120b', temperature: 0.8, max_tokens: 800 }
     )
 
     return parseTopics(raw)
@@ -129,9 +130,16 @@ JSON 형식으로만 응답:
 function parseTopics(raw: string): GeneratedTopic[] {
     try {
         console.log('[parseTopics] Raw:', raw)
-        const parsed = JSON.parse(raw)
-        // topics 배열 또는 직접 배열 처리
-        const topicsArray = parsed.topics || parsed
+
+        const parsed = parseJsonObject<{ topics?: unknown[] } | unknown[]>(raw)
+        if (!parsed) {
+            console.error('[parseTopics] JSON 파싱 실패. Raw:', raw)
+            return []
+        }
+
+        const topicsArray: unknown[] = Array.isArray(parsed)
+            ? parsed
+            : (parsed as { topics?: unknown[] }).topics ?? []
 
         // 질문형 마무리 패턴 (반드시 의문형으로 끝나야 함)
         const QUESTION_ENDINGS = /[?？]$|는가\??$|인가\??$|ㄴ가\??$|겠는가\??$|있나\??$|하나\??$/
@@ -165,30 +173,12 @@ function parseTopics(raw: string): GeneratedTopic[] {
             return true
         }
 
-        if (Array.isArray(topicsArray)) {
-            const results = topicsArray
-                .filter((item): item is string =>
-                    typeof item === 'string' && isValidTopic(item)
-                )
-                .map((content) => ({ content: content.trim() }))
-            console.log(`[parseTopics] ${topicsArray.length}개 중 ${results.length}개 통과`)
-            return results
-        }
-
-        // JSON 객체에서 배열 찾기 시도 (greedy)
-        const match = raw.match(/\[[\s\S]*\]/)
-        if (!match) {
-            console.error('[parseTopics] 배열 없음. Raw:', raw)
-            return []
-        }
-
-        const arr: unknown[] = JSON.parse(match[0])
-        const results = arr
+        const results = topicsArray
             .filter((item): item is string =>
                 typeof item === 'string' && isValidTopic(item)
             )
             .map((content) => ({ content: content.trim() }))
-        console.log(`[parseTopics] 배열추출 ${arr.length}개 중 ${results.length}개 통과`)
+        console.log(`[parseTopics] ${topicsArray.length}개 중 ${results.length}개 통과`)
         return results
     } catch (e) {
         console.error('[parseTopics] 파싱 실패:', e, 'Raw:', raw)

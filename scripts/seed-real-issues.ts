@@ -142,7 +142,7 @@ JSON 배열만 출력 (다른 텍스트 없이):
         try {
             const groqClient = new Groq({ apiKey: key })
             const res = await groqClient.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.3,
                 max_tokens: 4000,

@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
-import { fetchPexelsImages } from '@/lib/pexels'
+import { fetchPexelsImages, fetchPexelsByKeyword } from '@/lib/pexels'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +23,8 @@ export async function POST(
 
     try {
         const { id } = await params
+        const body = await request.json().catch(() => ({}))
+        const customKeyword: string | undefined = body.keyword?.trim() || undefined
 
         const { data: issue, error: fetchError } = await supabaseAdmin
             .from('issues')
@@ -32,8 +34,10 @@ export async function POST(
 
         if (fetchError) throw fetchError
 
-        // 재검색마다 다른 후보가 나오도록 시드 사용
-        const thumbnailUrls = await fetchPexelsImages(issue.title, issue.category, Date.now())
+        // 커스텀 키워드가 있으면 직접 Pexels 검색, 없으면 AI가 키워드 생성
+        const thumbnailUrls = customKeyword
+            ? await fetchPexelsByKeyword(customKeyword, issue.category)
+            : await fetchPexelsImages(issue.title, issue.category, Date.now())
 
         if (thumbnailUrls.length === 0) {
             return NextResponse.json(

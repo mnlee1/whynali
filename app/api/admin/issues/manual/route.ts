@@ -26,7 +26,6 @@ import {
     verifyIssueByAI,
     filterAndTitleByAI,
     classifyAndSummarizeTimeline,
-    samplePostTitles,
     cleanupOrphanedRecords,
 } from '@/lib/pipeline/issue-pipeline'
 import type { TimelineStageName } from '@/lib/pipeline/issue-pipeline'
@@ -54,23 +53,28 @@ export async function POST(request: NextRequest) {
 
     console.log(`[수동 등록] 시작: "${keyword}"`)
 
-    // 1. community_data에서 키워드 매칭 게시글 조회 (최근 48시간, DB ilike 직접 필터)
+    // 1. AI 이슈 검증 (isIssue 무시) — searchKeyword를 먼저 생성해야 커뮤니티·뉴스 검색에 사용 가능
+    // 수동 등록이므로 커뮤니티 데이터 없이 제목만으로 키워드 생성
+    const aiResult = await verifyIssueByAI(keyword, 0, [], [keyword])
+    console.log(`  AI 판단: ${aiResult.isIssue ? '이슈' : '이슈 아님'} (신뢰도 ${aiResult.confidence}%) — 수동 등록이므로 계속 진행`)
+    console.log(`  카테고리: ${aiResult.category}, 검색 키워드: "${aiResult.searchKeyword}"`)
+
+    // 2. community_data에서 AI 검색 키워드 기준으로 매칭 (최근 48시간)
     const cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-    const tokens = tokenize(keyword).filter(t => t.length >= 2)
-    const effectiveTokens = tokens.length > 0 ? tokens : [keyword]
+    const searchKey = aiResult.searchKeyword || keyword
+    const tokens = tokenize(searchKey).filter(t => t.length >= 2)
+    const effectiveTokens = tokens.length > 0 ? tokens : [searchKey]
 
     // 3자 이상 토큰만 OR 검색 — 짧은 일반 단어로 인한 AND 과필터 방지
     const significantTokens = effectiveTokens.filter(t => t.length >= 3)
     const orTokens = significantTokens.length > 0 ? significantTokens : effectiveTokens.slice(0, 1)
     const orFilter = orTokens.map(t => `title.ilike.%${t}%`).join(',')
 
-    let communityQuery = supabaseAdmin
+    const { data: communityPostsData } = await supabaseAdmin
         .from('community_data')
         .select('id, title, source_site, created_at')
         .gte('updated_at', cutoff48h)
         .or(orFilter)
-
-    const { data: communityPostsData } = await communityQuery
         .order('updated_at', { ascending: false })
         .limit(200)
 
@@ -81,17 +85,6 @@ export async function POST(request: NextRequest) {
         : undefined
 
     console.log(`  커뮤니티 매칭: ${communityPosts.length}건${communityWarning ? ' (경고)' : ''}`)
-
-    // 2. AI 이슈 검증 (isIssue 무시, 분류/키워드/제목 생성에만 사용)
-    const sourceSites = [...new Set(communityPosts.map(p => p.source_site))]
-    const sampleTitles = communityPosts.length > 0
-        ? samplePostTitles(communityPosts)
-        : [keyword]
-
-    const aiResult = await verifyIssueByAI(keyword, communityPosts.length, sourceSites, sampleTitles)
-    // 수동 등록은 AI가 이슈 아님으로 판단해도 계속 진행
-    console.log(`  AI 판단: ${aiResult.isIssue ? '이슈' : '이슈 아님'} (신뢰도 ${aiResult.confidence}%) — 수동 등록이므로 계속 진행`)
-    console.log(`  카테고리: ${aiResult.category}, 검색 키워드: "${aiResult.searchKeyword}"`)
 
     // 3. 네이버 뉴스 검색
     const newsItems = await searchNaverNewsByKeyword(aiResult.searchKeyword, aiResult.category)
@@ -106,8 +99,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`  뉴스: ${newsItems.length}건`)
 
-    // 4. 중복 체크
-    const duplicateCheck = await checkDuplicateIssue(supabaseAdmin, aiResult.tentativeTitle)
+    // 4. 중복 체크 (관리자 입력 제목 기준)
+    const duplicateCheck = await checkDuplicateIssue(supabaseAdmin, keyword)
     if (duplicateCheck.isDuplicate) {
         return NextResponse.json({
             success: false,
@@ -118,20 +111,25 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. 파생 이벤트 체크 (부모 이슈 탐색)
-    const parentResult = await findParentIssue(supabaseAdmin, aiResult.tentativeTitle, aiResult.category)
+    const parentResult = await findParentIssue(supabaseAdmin, keyword, aiResult.category)
     if (parentResult) {
         console.log(`  부모 이슈 감지: "${parentResult.parentIssueTitle}" — 수동 등록이므로 새 이슈로 생성`)
     }
 
-    // 6. AI 통합 작업: 뉴스/커뮤니티 필터링 + 최종 제목 생성
-    const { finalIssueTitle, relevantNewsIds, relevantCommunityIds } = await filterAndTitleByAI(
-        keyword,
-        aiResult.tentativeTitle,
+    // 6. AI 뉴스/커뮤니티 필터링 (AI 검색 키워드 기준으로 정확하게 필터링, 제목은 덮어쓰지 않음)
+    const { relevantNewsIds, relevantCommunityIds } = await filterAndTitleByAI(
+        searchKey,
+        searchKey, // AI가 생성한 최적화된 검색 키워드를 필터링 기준으로 사용
         newsItems,
         communityPosts,
     )
 
-    if (relevantNewsIds.length === 0) {
+    // 수동 등록: AI 필터링 실패 시 전체 뉴스 폴백 (관리자 판단 존중)
+    const finalNewsIds = relevantNewsIds.length > 0
+        ? relevantNewsIds
+        : newsItems.slice(0, 10).map(n => n.id)
+
+    if (finalNewsIds.length === 0) {
         return NextResponse.json({
             success: false,
             reason: 'no_relevant_news',
@@ -139,7 +137,10 @@ export async function POST(request: NextRequest) {
         })
     }
 
-    console.log(`  최종 제목: "${finalIssueTitle}"`)
+    // 관리자가 입력한 제목을 최종 이슈 제목으로 사용
+    const finalIssueTitle = keyword
+
+    console.log(`  최종 제목: "${finalIssueTitle}"${relevantNewsIds.length === 0 ? ' (AI 필터 실패 → 뉴스 전체 폴백)' : ''}`)
 
     // 7. 이슈 생성
     const issueValidation = validateIssueCreation({
@@ -181,11 +182,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 9. 뉴스 연결
-    const relevantNews = newsItems.filter(n => relevantNewsIds.includes(n.id))
+    const relevantNews = newsItems.filter(n => finalNewsIds.includes(n.id))
     const { data: linkedNews } = await supabaseAdmin
         .from('news_data')
         .update({ issue_id: newIssue.id })
-        .in('id', relevantNewsIds)
+        .in('id', finalNewsIds)
         .is('issue_id', null)
         .select('id')
 

@@ -48,6 +48,7 @@ import {
   generateTimelineSlides,
   generateQASlides,
   generateDebateSlides,
+  generateNumbersSlides,
   generateSlidesForIssue,
 } from '../../lib/card-news/core'
 
@@ -83,8 +84,8 @@ function getContentMode(): ContentMode {
   const modeMap: Record<number, ContentMode> = {
     1: 'weekend-recap',
     2: 'surging',
-    3: 'weekly-top3',
-    4: 'by-category',
+    3: 'by-category',
+    4: 'by-numbers',
     5: 'timeline',
   }
   return modeMap[dayKST] ?? 'weekly-top3'
@@ -111,7 +112,7 @@ async function run() {
   let closedIssue: ClosedIssue | null = null
 
   // 수동 모드: 특정 이슈 ID로 단일 이슈 생성
-  if (issueIdArg && ['surging', 'timeline', 'qa', 'debate'].includes(mode)) {
+  if (issueIdArg && ['surging', 'timeline', 'qa', 'debate', 'by-numbers'].includes(mode)) {
     console.log(`ℹ️  수동 모드 — 이슈 ID: ${issueIdArg}`)
     slideContents = await generateSlidesForIssue(issueIdArg, mode as 'surging' | 'timeline' | 'qa' | 'debate', LOGO_BASE64)
     console.log(`✅ 슬라이드 콘텐츠 ${slideContents.length}개 생성 완료`)
@@ -136,6 +137,15 @@ async function run() {
       }
     } else if (mode === 'weekly-top3') {
       issues = await fetchTopIssues(usedIssueIds)
+    } else if (mode === 'by-numbers') {
+      const topIssues = await fetchTopIssues(usedIssueIds)
+      if (topIssues.length > 0) {
+        issues = [topIssues[0]]
+      } else {
+        issues = await fetchTopIssues()
+        effectiveMode = 'weekly-top3'
+        console.warn('⚠️  숫자형 이슈 없음, weekly-top3로 대체')
+      }
     } else if (mode === 'by-category') {
       issues = await fetchCategoryTopIssues(usedIssueIds)
     } else if (mode === 'timeline') {
@@ -169,6 +179,9 @@ async function run() {
         break
       case 'weekly-top3':
         slideContents = await generateTop3Slides(issues, LOGO_BASE64)
+        break
+      case 'by-numbers':
+        slideContents = await generateNumbersSlides(issues[0], LOGO_BASE64)
         break
       case 'by-category':
         slideContents = await generateCategorySlides(issues, LOGO_BASE64)
@@ -337,6 +350,7 @@ function buildTags(mode: ContentMode, issues: Issue[]): string {
     'surging':       '#실시간이슈',
     'weekly-top3':   '#TOP3',
     'by-category':   '#분야별이슈',
+    'by-numbers':    '#숫자로보는이슈',
     'timeline':      '#이슈타임라인',
     'qa':            '#왜난리야',
     'debate':        '#찬반논란',
@@ -374,6 +388,8 @@ function buildCaption(
     }
     case 'timeline':
       return ['이 이슈, 처음부터 끝까지 정리했습니다 📌', '', `"${closedIssue?.title ?? issue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+    case 'by-numbers':
+      return [`이 이슈, 숫자로 읽으면 다 보여요 🔢`, '', `"${issue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
     case 'qa':
       return [`이게 왜 난리야? Q&A로 정리했습니다 🤔`, '', `"${issue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
     case 'debate':

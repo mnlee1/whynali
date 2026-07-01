@@ -28,7 +28,6 @@ import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
-import { sendDoorayBatchGenerationAlert, sendDoorayShortformBatchAlert } from '@/lib/dooray-notification'
 import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT } from '@/lib/config/shortform-thresholds'
 import type { ShortformSourceCount } from '@/types/shortform'
 
@@ -224,9 +223,6 @@ export async function GET(request: NextRequest) {
     if (targets.length === 0) {
         console.log('[daily-generate] 토론/투표 생성 대상 이슈 없음 — 숏폼 배치는 계속 진행')
         const shortformResult = await generateShortformBatch()
-        if (shortformResult.jobsGenerated > 0) {
-            await sendDoorayShortformBatchAlert(shortformResult)
-        }
         return NextResponse.json({
             success: true,
             deletedStaleVotes: deletedVotes,
@@ -335,18 +331,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`[daily-generate] 완료 — 토론 ${discussionGenerated}건, 투표 ${voteGenerated}건`)
 
-    // 작업 1 알림: 토론/투표 생성 결과
-    await sendDoorayBatchGenerationAlert({
-        discussionGenerated,
-        voteGenerated,
-        issueCount: targets.length,
-    })
-
     // 작업 2: 숏폼 일일 배치
     const shortformResult = await generateShortformBatch()
-    if (shortformResult.jobsGenerated > 0) {
-        await sendDoorayShortformBatchAlert(shortformResult)
-    }
 
     return NextResponse.json({
         success: true,

@@ -159,7 +159,7 @@ ${issueList}
 
     try {
         const content = await getGroq().complete(prompt, {
-            model: 'llama-3.3-70b-versatile',
+            model: 'openai/gpt-oss-120b',
             temperature: 0.2,
             maxTokens: 200,
         })

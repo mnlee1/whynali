@@ -61,7 +61,7 @@ ${listText}
 
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 300 },
+            { model: 'openai/gpt-oss-120b', temperature: 0.1, max_tokens: 300 },
         )
 
         const parsed = parseJsonArray<{ index: number; stage: string }>(content)

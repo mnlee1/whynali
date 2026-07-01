@@ -962,7 +962,7 @@ function CommentItem({
             ) : comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled && isMine ? (
                 /* 금칙어 댓글 + 세이프티봇 ON + 본인 → 본문 표시 + 아래 안내 문구 */
                 <div>
-                    <p className="text-sm text-content-primary leading-relaxed">
+                    <p className="text-sm text-content-primary leading-relaxed whitespace-pre-wrap">
                         {comment.body}
                     </p>
                     <div className="mt-2 flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
@@ -972,7 +972,7 @@ function CommentItem({
                 </div>
             ) : (
                 /* 정상 표시: public, pending_review + safety + 세이프티봇 OFF, pending_review + report */
-                <p className="text-sm text-content-primary leading-relaxed">
+                <p className="text-sm text-content-primary leading-relaxed whitespace-pre-wrap">
                     {comment.body}
                 </p>
             )}

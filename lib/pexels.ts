@@ -8,6 +8,8 @@
  * - API 한도: 200회/시간, 20,000회/월
  */
 
+import { callGroq } from '@/lib/ai/groq-client'
+
 const CATEGORY_FALLBACK: Record<string, string> = {
     '연예': 'stage spotlight neon',
     '스포츠': 'stadium lights aerial',
@@ -21,103 +23,57 @@ const CATEGORY_FALLBACK: Record<string, string> = {
 }
 
 /**
- * Groq API로 한국어 이슈 제목 → 영어 검색 키워드 + 톤(dark/bright) 추출
+ * callGroq로 한국어 이슈 제목 → 영어 검색 키워드 + 톤(dark/bright) 추출
+ * JSON 포맷 사용 → thinking 블록 없음, 다중 키 순환 자동 처리
  */
-async function extractKeywordsAndTone(title: string, category: string): Promise<{ keywords: string; isDark: boolean } | null> {
-    const keys = (process.env.GROQ_API_KEY ?? '')
-        .split(',')
-        .map((k) => k.trim())
-        .filter((k) => k.length > 0)
+export async function extractKeywordsAndTone(title: string, category: string, temperature = 0, exclude = ''): Promise<{ keywords: string; isDark: boolean } | null> {
+    const prompt = `You pick a Pexels background photo for Korean news thumbnails.
+Output JSON with "keywords" (2-3 English words for the SCENE/SETTING/OBJECT, no person/face) and "isDark" (boolean).
 
-    if (keys.length === 0) return null
+Tone rules:
+- isDark: true → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, resignation
+- isDark: false → achievement, award, victory, celebration, launch, record, comeback, positive, romance
 
-    for (const apiKey of keys) {
-        try {
-            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'qwen/qwen3.6-27b',
-                    messages: [
-                        {
-                            role: 'user',
-                            content: `You pick a Pexels background photo for Korean news thumbnails.
-Output 2-3 specific English keywords representing the SCENE, SETTING, or OBJECT. Avoid person/face keywords.
-
-Tone: append ::dark or ::bright based on topic sentiment.
-- ::dark → scandal, accident, crime, conflict, crisis, controversy, protest, disaster, fraud, evasion
-- ::bright → achievement, award, victory, celebration, launch, record, comeback, positive, romance
-
-CRITICAL RULES (override all other logic):
-1. [연예] IGNORE all Korean person names in the headline — they are celebrity names, NOT literal words (e.g. "수영"=celebrity name not swimming, "지수"=celebrity name not index). Focus ONLY on what EVENT occurred. ALWAYS use entertainment/media visual keywords. NEVER map 역사→history/ruins, 왜곡→ruins, 논란→smoke.
-2. For legal/crime topics (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category: choose the most contextually fitting scene below. NEVER use "court" alone (it maps to sports courts on Pexels).
-   - 영장 발부 / 재판 / 기소 → "courthouse exterior dark" or "gavel justice law"
-   - 구속 / 체포 → "prison bars metal dark" or "police badge justice"
-   - 수사 / 혐의 → "law document evidence dark" or "scales justice dark"
-   - 성범죄 / 폭행 → "crime scene barrier dark" or "law enforcement badge"
-   - Vary the keyword — do NOT always pick the same one. Consider which scene best fits the headline.
-3. [스포츠] topic with legal/crime angle: use legal/crime scene keywords (rule 2), NOT sports keywords.
+CRITICAL RULES:
+1. [연예] IGNORE Korean person names — focus ONLY on the EVENT. Always use entertainment/media visual keywords.
+2. Legal/crime topics (구속, 영장, 기소, 재판, 수사, 혐의, 징역, 체포) in ANY category:
+   - 영장/재판/기소 → "courthouse exterior" or "gavel justice law"
+   - 구속/체포 → "prison bars metal" or "police badge justice"
+   - 수사/혐의 → "law document evidence" or "scales justice"
+   - 성범죄/폭행 → "crime scene barrier" or "law enforcement badge"
+3. [스포츠] with legal/crime angle: use legal keywords (rule 2), NOT sports keywords.
 
 Category: ${category}
 Examples:
-- [연예] "BTS 새 앨범 발매" → "concert stage lights::bright"
-- [연예] "아이유 콘서트 매진" → "stage spotlight neon::bright"
-- [연예] "배우 음주운전 적발" → "night road rain::dark"
-- [연예] "아이돌 열애설 인정" → "couple romantic flowers::bright"
-- [연예] "정경호 수영 결별" → "couple heartbreak dark::dark"
-- [연예] "드라마 역사 왜곡 논란" → "drama filming::dark"
-- [연예] "배우 마약 혐의 구속" → "prison bars metal dark::dark"
-- [스포츠] "토트넘 강등 위기" → "empty stadium fog::dark"
-- [스포츠] "손흥민 골든부트 수상" → "soccer stadium trophy::bright"
-- [스포츠] "야구 선수 도핑 적발" → "laboratory syringe medical::dark"
-- [스포츠] "선수 구속영장 발부" → "courthouse exterior dark::dark"
-- [스포츠] "감독 성폭행 혐의 구속" → "law enforcement badge dark::dark"
-- [정치] "국회의원 막말 논란" → "government building interior::dark"
-- [정치] "대통령 취임식" → "flag ceremony podium::bright"
-- [정치] "의원 뇌물 혐의 구속" → "gavel justice law::dark"
-- [사회] "이태원 참사 추모" → "candles memorial night::dark"
-- [사회] "산불 피해 확산" → "forest fire smoke::dark"
-- [사회] "피의자 구속영장 발부" → "scales justice dark::dark"
-- [사회] "살인범 기소" → "courthouse exterior dark::dark"
-- [경제] "삼성전자 노조 파업" → "factory industrial strike::dark"
-- [경제] "코스피 사상 최고치" → "stock market graph city::bright"
-- [기술] "AI 스타트업 투자 열풍" → "circuit board server room::bright"
-- [기술] "개인정보 유출 사고" → "cybersecurity hacker dark::dark"
-- [세계] "이스라엘 공습" → "ruins destruction smoke::dark"
-- [세계] "G7 정상회담" → "conference hall diplomacy::bright"
-- [생활문화] "카페 창업 열풍" → "cafe interior coffee shop::bright"
-- [생활문화] "반려동물 인구 급증" → "pet dog park::bright"
+- [연예] "BTS 새 앨범" → {"keywords":"concert stage lights","isDark":false}
+- [연예] "배우 음주운전" → {"keywords":"night road rain","isDark":true}
+- [스포츠] "손흥민 골든부트" → {"keywords":"soccer stadium trophy","isDark":false}
+- [스포츠] "감독 자진 사퇴/경질/사임" → {"keywords":"football coach sideline bench","isDark":true}
+- [스포츠] "대표팀 감독 교체/선임" → {"keywords":"football coach tactical board","isDark":true}
+- [스포츠] "선수 구속영장" → {"keywords":"courthouse exterior dark","isDark":true}
+- [정치] "대통령 취임식" → {"keywords":"flag ceremony podium","isDark":false}
+- [정치] "의원 뇌물 구속" → {"keywords":"gavel justice law","isDark":true}
+- [사회] "산불 피해" → {"keywords":"forest fire smoke","isDark":true}
+- [경제] "코스피 최고치" → {"keywords":"stock market graph city","isDark":false}
+- [기술] "AI 스타트업 투자" → {"keywords":"circuit board server room","isDark":false}
+- [세계] "이스라엘 공습" → {"keywords":"ruins destruction smoke","isDark":true}
 
 Korean headline: "${title}"
-Reply with ONLY the 2-word keywords::tone format, nothing else.`,
-                        },
-                    ],
-                    max_tokens: 25,
-                    temperature: 0,
-                }),
-            })
+${exclude ? `Do NOT suggest these keywords (already shown): "${exclude}". Pick different words.\n` : ''}Reply with ONLY valid JSON.`
 
-            if (res.status === 401) continue
-            if (!res.ok) continue
-
-            const data = await res.json()
-            const raw: string = data.choices?.[0]?.message?.content?.trim() ?? ''
-            if (!raw) continue
-
-            const [keywords, tone] = raw.split('::')
-            return {
-                keywords: keywords.trim(),
-                isDark: tone?.trim() === 'dark',
-            }
-        } catch {
-            continue
-        }
+    try {
+        const content = await callGroq(
+            [{ role: 'user', content: prompt }],
+            { model: 'openai/gpt-oss-20b', temperature, max_tokens: 300 }
+        )
+        const parsed = JSON.parse(content) as { keywords?: string; keyword?: string; isDark?: boolean }
+        const kw = (parsed.keywords || parsed.keyword || '').trim()
+        if (!kw) return null
+        return { keywords: kw, isDark: parsed.isDark ?? false }
+    } catch (e) {
+        console.error('[extractKeywordsAndTone] 오류:', e)
+        return null
     }
-
-    return null
 }
 
 /**
@@ -166,6 +122,27 @@ async function searchPexels(
         .slice(0, count)
         .filter(p => p.src.large)
         .map(p => ({ large: p.src.large, original: p.src.original }))
+}
+
+/**
+ * 영어 키워드를 직접 받아 Pexels 검색 (관리자 직접 입력용)
+ * @returns URL 배열 — 실패 시 빈 배열
+ */
+export async function fetchPexelsByKeyword(
+    keyword: string,
+    _category: string,
+    seed?: number,
+    count = 3,
+): Promise<string[]> {
+    const apiKey = process.env.PEXELS_API_KEY
+    if (!apiKey) return []
+
+    try {
+        const photos = await searchPexels(keyword, apiKey, seed ?? Date.now(), count)
+        if (photos.length > 0) return photos.map(p => p.large)
+    } catch { /* 폴백 없음 — 키워드를 직접 입력한 경우 */ }
+
+    return []
 }
 
 /**

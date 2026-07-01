@@ -181,7 +181,7 @@ export class GroqProvider implements AIProvider {
     }
 
     async complete(userPrompt: string, options?: AIOptions): Promise<string> {
-        const model = options?.model ?? 'qwen/qwen3.6-27b'
+        const model = options?.model ?? 'openai/gpt-oss-120b'
         const temperature = options?.temperature ?? 0.1
         const maxTokens = options?.maxTokens ?? 500
         const systemPrompt = options?.systemPrompt
@@ -206,25 +206,42 @@ export class GroqProvider implements AIProvider {
             try {
                 const client = new Groq({ apiKey: keyStatus.apiKey })
 
+                // reasoning 모델(openai/gpt-oss-*)은 system 메시지 미지원 → user 메시지에 합침
+                const isReasoningModel = model.startsWith('openai/gpt-oss')
                 const messages: Array<{ role: 'system' | 'user'; content: string }> = []
 
-                if (systemPrompt) {
+                if (systemPrompt && !isReasoningModel) {
                     messages.push({ role: 'system', content: systemPrompt })
                 }
 
-                messages.push({ role: 'user', content: userPrompt })
+                const finalUserPrompt =
+                    systemPrompt && isReasoningModel
+                        ? `${systemPrompt}\n\n${userPrompt}`
+                        : userPrompt
+
+                messages.push({ role: 'user', content: finalUserPrompt })
 
                 const completion = await client.chat.completions.create({
                     model,
                     messages,
                     temperature,
                     max_tokens: maxTokens,
-                    response_format: { type: 'json_object' },
+                    // reasoning 모델은 기본적으로 reasoning 필드를 별도 반환하여 content가 null이 될 수 있음
+                    ...(isReasoningModel ? { include_reasoning: false } : {}),
+                    ...(options?.jsonMode ? { response_format: { type: 'json_object' } } : {}),
                 })
 
                 const content = completion.choices?.[0]?.message?.content
 
                 if (!content) {
+                    // reasoning 모델의 경우 content가 간헐적으로 null 반환 → 재시도
+                    if (attempt < maxRetries - 1) {
+                        console.warn(
+                            `[GroqProvider] content null (시도 ${attempt + 1}/${maxRetries}) - 재시도`
+                        )
+                        await new Promise((resolve) => setTimeout(resolve, 1000))
+                        continue
+                    }
                     throw new Error('Groq API 응답에 content가 없습니다')
                 }
 

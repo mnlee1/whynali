@@ -503,22 +503,22 @@ export default function AdminDashboardPage() {
                                 {showAiFeatures && (
                                     <div className="p-4 grid grid-cols-2 gap-1.5 border-t border-border">
                                         {[
-                                            { label: '이슈 진위 판단', desc: '카테고리·키워드·제목 추출 포함', model: 'Claude', schedule: '10분' },
-                                            { label: '중복 이슈 체크', desc: '기존 이슈와 AI 비교', model: 'Groq', schedule: '10분' },
-                                            { label: '상위 이슈 연결', desc: '후속·파생 이슈 자동 연결', model: 'Groq', schedule: '10분' },
-                                            { label: '뉴스·커뮤니티 필터링', desc: '관련 콘텐츠 선별 + 최종 제목', model: 'Claude', schedule: '10분' },
-                                            { label: '타임라인 분류', desc: '전개·파생 단계 분류', model: 'Groq', schedule: '10분 / 매시 30분' },
-                                            { label: '토론 주제 생성', desc: '승인 이슈 대상', model: 'Groq', schedule: '매일' },
-                                            { label: '투표 생성', desc: '승인 이슈 대상', model: 'Groq', schedule: '매일' },
-                                            { label: '숏폼 해시태그 생성', desc: '업로드 시 자동 생성', model: 'Groq', schedule: '수동' },
-                                            { label: '숏폼 이미지 검증', desc: '생성된 이미지 적합성 판별', model: 'Gemini', schedule: '매일' },
+                                            { label: '이슈 진위 판단', desc: '카테고리·키워드·제목 추출 포함', model: 'claude-sonnet-4-6', schedule: '30분' },
+                                            { label: '중복 이슈 체크', desc: '기존 이슈와 AI 비교', model: 'claude-sonnet-4-6', schedule: '30분' },
+                                            { label: '상위 이슈 연결', desc: '후속·파생 이슈 자동 연결', model: 'gpt-oss-120b', schedule: '30분' },
+                                            { label: '뉴스·커뮤니티 필터링', desc: '관련 콘텐츠 선별 + 최종 제목', model: 'gpt-oss-120b', schedule: '30분' },
+                                            { label: '타임라인 분류', desc: '전개·파생 단계 분류', model: 'gpt-oss-120b', schedule: '매시 30분' },
+                                            { label: '토론 주제 생성', desc: '승인 이슈 대상', model: 'gpt-oss-120b', schedule: '매일 낮 12시' },
+                                            { label: '투표 생성', desc: '승인 이슈 대상', model: 'gpt-oss-120b', schedule: '매일 낮 12시' },
+                                            { label: '카드뉴스 카피 생성', desc: '제목·설명·포인트 텍스트', model: 'gpt-oss-120b', schedule: '월~금 오전 7시' },
+                                            { label: '숏폼 해시태그 생성', desc: '업로드 시 자동 생성', model: 'gpt-oss-120b', schedule: '수동' },
                                         ].map((feature) => (
                                             <div key={feature.label} className="flex items-start text-sm bg-surface rounded px-2.5 py-1.5 border border-border-muted">
                                                 <div className="min-w-0">
                                                     <p className="text-content-primary font-medium">{feature.label}</p>
                                                     <p className="text-content-muted text-xs mt-0.5">{feature.desc}</p>
                                                     <p className="text-xs mt-0.5 text-content-muted">
-                                                        <span className="font-medium text-content-secondary">{feature.model}</span>
+                                                        <span className="font-mono text-[11px] font-medium text-content-secondary">{feature.model}</span>
                                                         <span className="mx-1">·</span>
                                                         {feature.schedule}
                                                     </p>
