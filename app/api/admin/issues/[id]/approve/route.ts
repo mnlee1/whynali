@@ -68,8 +68,22 @@ export async function POST(
         if (categoryPath) revalidatePath(categoryPath)
         revalidatePath('/')
 
-        // 승인 후 투표·토론 주제 자동 생성 (백그라운드)
+        // 승인 후 투표·토론 자동 생성 + 봇 첫 댓글 (백그라운드)
         after(async () => {
+            // 봇 첫 댓글 — 빈 댓글창 방지
+            try {
+                const cronSecret = process.env.CRON_SECRET
+                const baseUrl = process.env.VERCEL_URL
+                    ? `https://${process.env.VERCEL_URL}`
+                    : 'http://localhost:3000'
+                await fetch(
+                    `${baseUrl}/api/cron/auto-bot-comment?issue_id=${data.id}`,
+                    { headers: { Authorization: `Bearer ${cronSecret}` } }
+                )
+            } catch (e) {
+                console.error('[approve] 봇 첫 댓글 실패:', e)
+            }
+
             try {
                 const metadata = {
                     id: data.id,

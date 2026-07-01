@@ -1,0 +1,19 @@
+name: 봇 댓글 자동 생성 Cron
+
+# Vercel Cron으로 운영 (vercel.json 참고 — 매시간 정각)
+# 수동 실행 및 긴급 배치용
+
+on:
+  workflow_dispatch:
+
+jobs:
+  auto-bot-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 봇 댓글 생성 API 호출
+        run: |
+          response=$(curl -fsS -X GET https://whynali.vercel.app/api/cron/auto-bot-comment \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 120)
+          echo "$response"
