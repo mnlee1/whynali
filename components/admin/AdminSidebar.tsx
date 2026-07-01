@@ -12,7 +12,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, ClipboardCheck, Database, MessageCircle, CheckSquare, Video, Shield, FileText, Activity, TrendingUp, Layers } from 'lucide-react'
+import { Home, ClipboardCheck, Database, MessageCircle, CheckSquare, Video, Shield, FileText, Activity, TrendingUp, Layers, Bot } from 'lucide-react'
 
 const NAV_ITEMS = [
     {
@@ -49,6 +49,11 @@ const NAV_ITEMS = [
         label: '카드뉴스',
         href: '/admin/card-news',
         icon: <Layers className="w-4 h-4 shrink-0" strokeWidth={2} />,
+    },
+    {
+        label: '봇 댓글 내역',
+        href: '/admin/bot-comments',
+        icon: <Bot className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
     {
         label: '세이프티',
