@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { sanitizeText, validateContent, loadBannedWords } from '@/lib/safety'
 import { writeAdminLog } from '@/lib/admin-log'
+import { postBotDiscussionComment } from '@/lib/bot/bot-commenter'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,6 +86,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         const fromStatus = action === '진행중' ? '대기' : action === '마감' ? '진행중' : '마감'
         const details = data.body ? data.body.slice(0, 200) : null
         await writeAdminLog(`토론 주제 상태 변경: ${fromStatus} > ${action === '복구' ? '대기' : action}`, 'discussion_topic', id, auth.adminEmail, details)
+
+        if (action === '진행중') {
+            after(async () => {
+                await postBotDiscussionComment(id)
+            })
+        }
+
         revalidatePath('/')
         return NextResponse.json({ data })
     } catch {

@@ -13,6 +13,7 @@ interface BotComment {
     user_id: string
     users: { display_name: string } | null
     issues: { id: string; title: string } | null
+    discussion_topics: { id: string; body: string } | null
 }
 
 interface AutoOpLog {
@@ -41,7 +42,10 @@ const STATUS_LABELS: Record<string, string> = {
     success: '성공', failed: '실패', skipped: '스킵',
 }
 const JOB_LABELS: Record<string, string> = {
-    bot_comment: '봇 댓글', bot_comment_batch: '봇 배치',
+    bot_comment: '봇 댓글',
+    bot_comment_batch: '봇 배치',
+    bot_discussion_comment: '봇 토론의견',
+    bot_discussion_batch: '토론 배치',
 }
 
 // ── 유틸 ────────────────────────────────────────────────────
@@ -80,6 +84,11 @@ function LogDetail({ details }: { details: Record<string, unknown> | null }) {
                     이슈: {String(details.issue_title)}
                 </span>
             )}
+            {Boolean(details.topic_body) && (
+                <span className="block text-xs text-content-muted truncate max-w-xs mt-0.5">
+                    토론: {String(details.topic_body)}
+                </span>
+            )}
             {Boolean(details.comment) && (
                 <span className="block text-xs text-content-secondary truncate max-w-xs mt-0.5 italic">
                     &ldquo;{String(details.comment)}&rdquo;
@@ -104,6 +113,7 @@ export default function BotCommentsPage() {
     const [personaId, setPersonaId] = useState('')
     const [commentsLoading, setCommentsLoading] = useState(true)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [sortType, setSortType] = useState<'all' | 'issue' | 'discussion'>('all')
 
     // ── 실행 로그 상태 ──
     const [logs, setLogs] = useState<AutoOpLog[]>([])
@@ -227,6 +237,23 @@ export default function BotCommentsPage() {
             {/* ── 댓글 내역 탭 ── */}
             {tab === 'comments' && (
                 <>
+                    {/* 타입 필터 */}
+                    <div className="flex gap-2 mb-3">
+                        {([['all','전체'],['issue','이슈'],['discussion','토론']] as const).map(([v, l]) => (
+                            <button
+                                key={v}
+                                onClick={() => setSortType(v)}
+                                className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                                    sortType === v
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface border-border text-content-secondary hover:bg-surface-subtle'
+                                }`}
+                            >
+                                {l}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* 페르소나 필터 */}
                     <div className="flex flex-wrap gap-2 mb-4">
                         {PERSONA_OPTIONS.map((opt) => (
@@ -248,9 +275,10 @@ export default function BotCommentsPage() {
                         <table className="min-w-full divide-y divide-border">
                             <thead className="bg-surface-subtle">
                                 <tr>
+                                    <th className="w-20 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">타입</th>
                                     <th className="w-36 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">페르소나</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">댓글 내용</th>
-                                    <th className="w-56 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">연결 이슈</th>
+                                    <th className="w-56 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">연결 대상</th>
                                     <th className="w-36 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">작성일</th>
                                     <th className="w-20 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">액션</th>
                                 </tr>
@@ -258,17 +286,37 @@ export default function BotCommentsPage() {
                             <tbody className="bg-surface divide-y divide-border">
                                 {commentsLoading ? (
                                     [1,2,3,4,5].map((i) => (
-                                        <tr key={i}><td colSpan={5} className="px-4 py-3">
+                                        <tr key={i}><td colSpan={6} className="px-4 py-3">
                                             <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                         </td></tr>
                                     ))
-                                ) : comments.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-content-muted">봇 댓글이 없습니다.</td></tr>
+                                ) : comments.filter(c =>
+                                        sortType === 'all' ? true :
+                                        sortType === 'issue' ? !!c.issues :
+                                        !!c.discussion_topics
+                                    ).length === 0 ? (
+                                    <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-content-muted">봇 댓글이 없습니다.</td></tr>
                                 ) : (
-                                    comments.map((c) => {
+                                    comments
+                                        .filter(c =>
+                                            sortType === 'all' ? true :
+                                            sortType === 'issue' ? !!c.issues :
+                                            !!c.discussion_topics
+                                        )
+                                        .map((c) => {
                                         const persona = BOT_PERSONAS.find((p) => p.id === c.user_id)
+                                        const isDiscussion = !!c.discussion_topics
                                         return (
                                             <tr key={c.id} className="hover:bg-surface-subtle">
+                                                <td className="px-4 py-3">
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
+                                                        isDiscussion
+                                                            ? 'bg-purple-100 text-purple-700'
+                                                            : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                        {isDiscussion ? '토론' : '이슈'}
+                                                    </span>
+                                                </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     <span className="font-medium text-content-primary">{c.users?.display_name ?? '알 수 없음'}</span>
                                                     {persona && <span className="block text-xs text-content-muted mt-0.5">{persona.type}</span>}
@@ -280,6 +328,10 @@ export default function BotCommentsPage() {
                                                     {c.issues ? (
                                                         <Link href={`/issue/${c.issues.id}`} target="_blank" className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full">
                                                             {c.issues.title}
+                                                        </Link>
+                                                    ) : c.discussion_topics ? (
+                                                        <Link href={`/community/discussion/${c.discussion_topics.id}`} target="_blank" className="text-primary hover:underline line-clamp-2 break-words inline-block max-w-full">
+                                                            {c.discussion_topics.body.slice(0, 60)}
                                                         </Link>
                                                     ) : <span className="text-content-muted">—</span>}
                                                 </td>

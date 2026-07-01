@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('comments')
             .select(
-                'id, body, created_at, visibility, user_id, issue_id, users(display_name), issues(id, title)',
+                'id, body, created_at, visibility, user_id, issue_id, discussion_topic_id, users(display_name), issues(id, title), discussion_topics(id, body)',
                 { count: 'exact' }
             )
             .in('user_id', personaId ? [personaId] : BOT_USER_IDS)
