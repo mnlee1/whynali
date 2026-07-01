@@ -1,13 +1,13 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { sanitizeText } from '@/lib/safety'
 import { BOT_PERSONAS, BOT_USER_IDS } from './personas'
-import { generateBotComment } from './comment-generator'
+import { generateBotComment, generateBotDiscussionComment } from './comment-generator'
 import { writeAutoOpLog } from '@/lib/auto-op-log'
 
-// 이슈 1개당 최대 봇 댓글 수
 const MAX_BOT_COMMENTS_PER_ISSUE = 3
-// 배치 1회당 처리할 최대 이슈 수
 const MAX_ISSUES_PER_BATCH = 5
+const MAX_BOT_COMMENTS_PER_DISCUSSION = 3
+const MAX_DISCUSSIONS_PER_BATCH = 5
 
 // public.users에 봇 계정 rows가 없으면 삽입
 export async function ensureBotUsers(): Promise<void> {
@@ -107,6 +107,126 @@ export async function postBotComment(issueId: string): Promise<boolean> {
     })
     console.log(`[bot-commenter] "${persona.displayName}" → 이슈 ${issueId} 댓글 등록 완료`)
     return true
+}
+
+// ── 토론 의견 봇 ─────────────────────────────────────────────
+
+async function getBotDiscussionCommentInfo(topicId: string): Promise<BotCommentInfo> {
+    const { data } = await supabaseAdmin
+        .from('comments')
+        .select('user_id')
+        .eq('discussion_topic_id', topicId)
+        .in('user_id', BOT_USER_IDS)
+        .in('visibility', ['public', 'pending_review'])
+
+    const rows = data ?? []
+    return {
+        count: rows.length,
+        usedPersonaIds: rows.map((r) => r.user_id as string),
+    }
+}
+
+export async function postBotDiscussionComment(topicId: string): Promise<boolean> {
+    await ensureBotUsers()
+
+    const { count, usedPersonaIds } = await getBotDiscussionCommentInfo(topicId)
+    if (count >= MAX_BOT_COMMENTS_PER_DISCUSSION) return false
+
+    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
+    if (available.length === 0) return false
+
+    const persona = available[Math.floor(Math.random() * available.length)]
+
+    const { data: topic } = await supabaseAdmin
+        .from('discussion_topics')
+        .select('body, issues(title, category)')
+        .eq('id', topicId)
+        .single()
+
+    if (!topic) return false
+
+    const issueData = topic.issues as unknown as { title: string; category: string } | null
+    const body = await generateBotDiscussionComment(persona, {
+        body: topic.body,
+        issue_title: issueData?.title,
+        issue_category: issueData?.category,
+    })
+
+    if (!body) {
+        await writeAutoOpLog({
+            job_type: 'bot_discussion_comment',
+            status: 'failed',
+            target_type: 'discussion_topic',
+            target_id: topicId,
+            details: { persona: persona.displayName, persona_type: persona.type, topic_body: topic.body.slice(0, 80), reason: 'AI 생성 실패' },
+        })
+        return false
+    }
+
+    const sanitized = sanitizeText(body)
+    const { error } = await supabaseAdmin.from('comments').insert({
+        discussion_topic_id: topicId,
+        user_id: persona.id,
+        body: sanitized,
+        visibility: 'public',
+    })
+
+    if (error) {
+        await writeAutoOpLog({
+            job_type: 'bot_discussion_comment',
+            status: 'failed',
+            target_type: 'discussion_topic',
+            target_id: topicId,
+            details: { persona: persona.displayName, persona_type: persona.type, topic_body: topic.body.slice(0, 80), reason: error.message },
+        })
+        return false
+    }
+
+    await writeAutoOpLog({
+        job_type: 'bot_discussion_comment',
+        status: 'success',
+        target_type: 'discussion_topic',
+        target_id: topicId,
+        details: { persona: persona.displayName, persona_type: persona.type, topic_body: topic.body.slice(0, 80), comment: sanitized },
+    })
+    console.log(`[bot-commenter] "${persona.displayName}" → 토론 ${topicId} 의견 등록 완료`)
+    return true
+}
+
+export async function runBotDiscussionCommentBatch(): Promise<{ processed: number; posted: number }> {
+    await ensureBotUsers()
+
+    const { data: topics } = await supabaseAdmin
+        .from('discussion_topics')
+        .select('id')
+        .eq('approval_status', '진행중')
+        .order('created_at', { ascending: false })
+        .limit(30)
+
+    if (!topics || topics.length === 0) return { processed: 0, posted: 0 }
+
+    const candidates: string[] = []
+    for (const topic of topics) {
+        if (candidates.length >= MAX_DISCUSSIONS_PER_BATCH) break
+        const { count } = await getBotDiscussionCommentInfo(topic.id)
+        if (count < MAX_BOT_COMMENTS_PER_DISCUSSION) {
+            candidates.push(topic.id)
+        }
+    }
+
+    let posted = 0
+    for (const topicId of candidates) {
+        const ok = await postBotDiscussionComment(topicId)
+        if (ok) posted++
+    }
+
+    await writeAutoOpLog({
+        job_type: 'bot_discussion_batch',
+        status: posted > 0 ? 'success' : 'skipped',
+        details: { processed: candidates.length, posted, scanned: topics.length },
+    })
+
+    return { processed: candidates.length, posted }
 }
 
 // 배치 실행: 봇 댓글이 적은 활성 이슈에 순차적으로 댓글 달기

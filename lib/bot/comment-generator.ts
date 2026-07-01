@@ -1,5 +1,9 @@
 import { callGroq } from '@/lib/ai/groq-client'
+import { callClaude } from '@/lib/ai/claude-client'
 import type { BotPersona } from './personas'
+
+const BOT_GROQ_MODEL = 'qwen/qwen3.6-27b'
+const BOT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001'
 
 export interface IssueContext {
     title: string
@@ -33,6 +37,59 @@ function sanitizeBotComment(raw: string): string | null {
     return text
 }
 
+export interface DiscussionContext {
+    body: string
+    issue_title?: string | null
+    issue_category?: string | null
+}
+
+// Groq 우선, 실패 시 Claude Haiku 폴백
+async function callWithFallback(persona: BotPersona, prompt: string): Promise<string | null> {
+    const messages = [
+        { role: 'system' as const, content: persona.systemPrompt },
+        { role: 'user' as const, content: prompt },
+    ]
+    const opts = { temperature: 0.85, max_tokens: 150 }
+
+    // 1차: Groq llama (reasoning 모델 제외 — content null 발생 없음)
+    try {
+        const raw = await callGroq(messages, { ...opts, model: BOT_GROQ_MODEL })
+        const cleaned = sanitizeBotComment(raw)
+        if (cleaned) return cleaned
+    } catch {
+        // Groq 실패 → Claude 폴백
+    }
+
+    // 2차: Claude Haiku
+    try {
+        const raw = await callClaude(messages, { ...opts, model: BOT_CLAUDE_MODEL })
+        const cleaned = sanitizeBotComment(raw)
+        if (cleaned) return cleaned
+    } catch {
+        // 둘 다 실패
+    }
+
+    return null
+}
+
+export async function generateBotDiscussionComment(
+    persona: BotPersona,
+    topic: DiscussionContext
+): Promise<string | null> {
+    const prompt = `다음 토론 주제에 대한 의견을 한 개 작성해주세요.
+
+토론 주제: ${topic.body}
+${topic.issue_title ? `관련 이슈: ${topic.issue_title}` : ''}${topic.issue_category ? `\n카테고리: ${topic.issue_category}` : ''}
+
+규칙:
+- 30자 이상 120자 이하의 자연스러운 한국어 의견
+- 토론 주제에 대한 자신의 입장이나 생각을 구어체로
+- 특정인 실명, 혐오 표현, 욕설 절대 금지
+- 마크다운·JSON 없이 의견 텍스트만 반환`
+
+    return callWithFallback(persona, prompt)
+}
+
 export async function generateBotComment(
     persona: BotPersona,
     issue: IssueContext
@@ -50,20 +107,5 @@ export async function generateBotComment(
 - 특정인 실명, 혐오 표현, 욕설 절대 금지
 - 마크다운·JSON 없이 댓글 텍스트만 반환`
 
-    try {
-        const raw = await callGroq(
-            [
-                { role: 'system', content: persona.systemPrompt },
-                { role: 'user', content: prompt },
-            ],
-            { temperature: 0.85, max_tokens: 150 }
-        )
-
-        const cleaned = sanitizeBotComment(raw)
-        if (!cleaned) return null
-
-        return cleaned
-    } catch {
-        return null
-    }
+    return callWithFallback(persona, prompt)
 }

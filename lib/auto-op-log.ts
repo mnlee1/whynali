@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 
-export type AutoOpJobType = 'bot_comment' | 'bot_comment_batch'
+export type AutoOpJobType = 'bot_comment' | 'bot_comment_batch' | 'bot_discussion_comment' | 'bot_discussion_batch'
 export type AutoOpStatus = 'success' | 'failed' | 'skipped'
 
 export async function writeAutoOpLog(params: {

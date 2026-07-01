@@ -1,16 +1,14 @@
 /**
- * scripts/test-bot-comments.ts
+ * scripts/test-bot-discussion.ts
  *
- * 봇 댓글 품질 테스트 (DB 기록 없음, 읽기 전용)
- * 실행: npx tsx scripts/test-bot-comments.ts
- * 옵션: --issue-id=<UUID>  특정 이슈 지정 (없으면 최근 승인 이슈 3개 자동)
+ * 봇 토론 의견 품질 테스트 (DB 기록 없음, 읽기 전용)
+ * 실행: npx tsx scripts/test-bot-discussion.ts
+ * 옵션: --topic-id=<UUID>  특정 토론 지정 (없으면 최근 진행중 토론 3개 자동)
  */
 
-// dotenv는 반드시 다른 import보다 먼저 실행
 import 'dotenv/config'
 import { resolve } from 'path'
 
-// dotenv/config 가 CWD 기준 .env를 읽으므로, 스크립트 디렉토리 기준으로 재설정
 import dotenv from 'dotenv'
 dotenv.config({ path: resolve(__dirname, '../.env.local') })
 
@@ -18,7 +16,7 @@ import { createClient } from '@supabase/supabase-js'
 import Groq from 'groq-sdk'
 import Anthropic from '@anthropic-ai/sdk'
 
-// ── 페르소나 정의 (personas.ts 동일 내용 — import 체인 회피) ──
+// ── 페르소나 정의 ──
 const PERSONAS = [
     {
         displayName: '영리한여우3842',
@@ -92,7 +90,6 @@ const PERSONAS = [
 ]
 
 // ── 후처리 필터 ──
-// 한글(음절·자모) + ASCII 외 문자 포함 시 폐기 (베트남어·태국어·아랍어·한자 등 일괄 차단)
 const FOREIGN_CHAR_RE = /[^가-힣ᄀ-ᇿ㄰-㆏\x00-\x7F]/
 function sanitize(raw: string): string | null {
     let text = raw.split(/<\|start_header_id\|>/)[0].trim()
@@ -100,7 +97,6 @@ function sanitize(raw: string): string | null {
     if (FOREIGN_CHAR_RE.test(text)) return null
     if (/<\|.*?\|>|assistant\s*$/i.test(text)) return null
     if (text.length < 15 || text.length > 200) return null
-    // 한글 음절이 비공백 문자의 40% 미만이면 ASCII 외국어 단어 섞인 것으로 판단, 폐기
     const noSpace = text.replace(/\s/g, '')
     if (noSpace.length > 0) {
         const hangulCount = (noSpace.match(/[가-힣]/g) ?? []).length
@@ -116,36 +112,31 @@ const C = '\x1b[36m'
 const Y = '\x1b[33m'
 const G = '\x1b[32m'
 const D = '\x1b[2m'
+const M = '\x1b[35m'
 
 function header(text: string) {
-    console.log(`\n${B}${C}${'─'.repeat(64)}${R}`)
-    console.log(`${B}${C}  ${text}${R}`)
-    console.log(`${C}${'─'.repeat(64)}${R}`)
+    console.log(`\n${B}${M}${'─'.repeat(64)}${R}`)
+    console.log(`${B}${M}  ${text}${R}`)
+    console.log(`${M}${'─'.repeat(64)}${R}`)
 }
 
-async function generateComment(
+async function generateDiscussionComment(
     groqKeys: string[],
     persona: (typeof PERSONAS)[0],
-    issue: { title: string; category: string; heat_index?: number | null },
+    topic: { body: string; issue_title?: string | null; issue_category?: string | null },
     anthropicKey?: string
 ): Promise<string | null> {
-    const heatDesc =
-        issue.heat_index == null ? '' :
-        issue.heat_index >= 70 ? '매우 화제인' :
-        issue.heat_index >= 30 ? '꽤 활발한' : '조용한'
+    const prompt = `다음 토론 주제에 대한 의견을 한 개 작성해주세요.
 
-    const prompt = `다음 이슈에 대한 댓글 한 개를 작성해주세요.
-
-이슈 제목: ${issue.title}
-카테고리: ${issue.category}${heatDesc ? `\n현재 반응: ${heatDesc} 이슈` : ''}
+토론 주제: ${topic.body}
+${topic.issue_title ? `관련 이슈: ${topic.issue_title}` : ''}${topic.issue_category ? `\n카테고리: ${topic.issue_category}` : ''}
 
 규칙:
-- 30자 이상 120자 이하의 자연스러운 한국어 댓글
-- 실제 커뮤니티 사용자가 쓴 것처럼 구어체로
+- 30자 이상 120자 이하의 자연스러운 한국어 의견
+- 토론 주제에 대한 자신의 입장이나 생각을 구어체로
 - 특정인 실명, 혐오 표현, 욕설 절대 금지
-- 마크다운·JSON 없이 댓글 텍스트만 반환`
+- 마크다운·JSON 없이 의견 텍스트만 반환`
 
-    // Groq 시도: 모델 × 키 순회. 어떤 에러든 다음으로 넘어감.
     const MODELS = ['qwen/qwen3.6-27b', 'openai/gpt-oss-120b']
     for (const model of MODELS) {
         for (const apiKey of groqKeys) {
@@ -167,12 +158,11 @@ async function generateComment(
                     return cleaned
                 }
             } catch {
-                // 한도 초과·키 오류 등 모두 무시하고 다음 키/모델 시도
+                // 다음 키/모델 시도
             }
         }
     }
 
-    // Groq 전부 소진 → Claude 폴백
     if (anthropicKey) {
         try {
             const anthropic = new Anthropic({ apiKey: anthropicKey })
@@ -199,7 +189,7 @@ async function generateComment(
 
 async function main() {
     const args = process.argv.slice(2)
-    const issueIdArg = args.find((a) => a.startsWith('--issue-id='))?.split('=')[1]
+    const topicIdArg = args.find((a) => a.startsWith('--topic-id='))?.split('=')[1]
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -216,44 +206,74 @@ async function main() {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey)
-    // GROQ_API_KEY는 콤마 구분 멀티 키 — 순서대로 시도
     const groqKeys = groqKey ? groqKey.split(',').map((k) => k.trim()).filter(Boolean) : []
 
-    console.log(`\n${B}왜난리 봇 댓글 품질 테스트${R}`)
-    console.log(`${D}페르소나 5개 × 이슈 최대 3개 — DB 기록 없음${R}`)
+    console.log(`\n${B}왜난리 봇 토론 의견 품질 테스트${R}`)
+    console.log(`${D}페르소나 5개 × 토론 최대 3개 — DB 기록 없음${R}`)
 
-    // 테스트 이슈 조회
-    let issues: { id: string; title: string; category: string; heat_index: number | null }[] = []
-    if (issueIdArg) {
+    // 테스트 토론 조회
+    type TopicRow = {
+        id: string
+        body: string
+        issues: { title: string; category: string } | null
+    }
+    let topics: TopicRow[] = []
+
+    if (topicIdArg) {
         const { data } = await supabase
-            .from('issues')
-            .select('id, title, category, heat_index')
-            .eq('id', issueIdArg)
+            .from('discussion_topics')
+            .select('id, body, issues(title, category)')
+            .eq('id', topicIdArg)
             .single()
-        if (data) issues = [data]
+        if (data) topics = [data as unknown as TopicRow]
     } else {
         const { data } = await supabase
-            .from('issues')
-            .select('id, title, category, heat_index')
-            .eq('approval_status', '승인')
-            .in('status', ['점화', '논란중'])
+            .from('discussion_topics')
+            .select('id, body, issues(title, category)')
+            .eq('approval_status', '진행중')
             .order('created_at', { ascending: false })
             .limit(3)
-        issues = data ?? []
+        topics = (data ?? []) as unknown as TopicRow[]
     }
 
-    if (issues.length === 0) {
-        console.error('\n승인된 활성 이슈가 없습니다. 이슈를 먼저 승인하거나 --issue-id=<UUID> 로 지정하세요.')
-        process.exit(1)
+    if (topics.length === 0) {
+        console.log(`\n${Y}진행중 토론이 없습니다. '대기' 상태 토론도 확인합니다...${R}`)
+        const { data } = await supabase
+            .from('discussion_topics')
+            .select('id, body, issues(title, category)')
+            .order('created_at', { ascending: false })
+            .limit(3)
+        topics = (data ?? []) as unknown as TopicRow[]
+
+        if (topics.length === 0) {
+            console.error('토론 주제가 없습니다. --topic-id=<UUID> 로 직접 지정하세요.')
+            process.exit(1)
+        }
+        console.log(`${D}(최근 토론 ${topics.length}개로 테스트)${R}`)
     }
 
-    for (const issue of issues) {
-        header(`${issue.title}`)
-        console.log(`${D}카테고리: ${issue.category}   화력: ${issue.heat_index ?? '?'}${R}\n`)
+    for (const topic of topics) {
+        const issueInfo = topic.issues
+        const label = topic.body.length > 50 ? topic.body.slice(0, 50) + '...' : topic.body
+        header(label)
+        if (issueInfo) {
+            console.log(`${D}관련 이슈: ${issueInfo.title}  [${issueInfo.category}]${R}\n`)
+        } else {
+            console.log(`${D}(관련 이슈 없음)${R}\n`)
+        }
 
         for (const persona of PERSONAS) {
             process.stdout.write(`  ${Y}[${persona.type}] ${B}${persona.displayName}${R}  `)
-            const comment = await generateComment(groqKeys, persona, issue, anthropicKey)
+            const comment = await generateDiscussionComment(
+                groqKeys,
+                persona,
+                {
+                    body: topic.body,
+                    issue_title: issueInfo?.title,
+                    issue_category: issueInfo?.category,
+                },
+                anthropicKey
+            )
             if (comment) {
                 console.log(`${G}${comment}${R}`)
             } else {
