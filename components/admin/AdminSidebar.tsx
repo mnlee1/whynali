@@ -46,12 +46,12 @@ const NAV_ITEMS = [
         icon: <Video className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
     {
-        label: '카드뉴스',
+        label: '카드뉴스 관리',
         href: '/admin/card-news',
         icon: <Layers className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
     {
-        label: '봇 댓글 내역',
+        label: '댓글 Bot 관리',
         href: '/admin/bot-comments',
         icon: <Bot className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },

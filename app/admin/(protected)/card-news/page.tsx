@@ -131,7 +131,7 @@ export default function CardNewsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-bold text-content-primary">카드뉴스 수동 생성</h1>
+        <h1 className="text-xl font-bold text-content-primary">카드뉴스 관리</h1>
         <p className="mt-1 text-sm text-content-muted">승인된 이슈를 선택해 카드뉴스를 수동 생성하고 SNS에 발행합니다.</p>
       </div>
 
