@@ -33,6 +33,8 @@ export interface ShortformTextOutput {
     scene2Desc: string   // 씬2 설명 (35자 이내)
     scene3Title: string  // 씬3 타이틀 (15자 이내)
     scene3Desc: string   // 씬3 설명 (35자 이내)
+    scene2Highlights: string[]  // 씬2 desc 강조 단어
+    scene3Highlights: string[]  // 씬3 desc 강조 단어
 }
 
 /**
@@ -45,6 +47,7 @@ export async function extractYoutubeHashtags(title: string): Promise<string[]> {
     const groq = new Groq({ apiKey })
     const cleanTitle = title.replace(/^\[.*?\]\s*/, '').trim()
 
+    console.log('[태그] 추출 시작 — 입력 제목:', cleanTitle)
     try {
         const completion = await groq.chat.completions.create({
             model: 'openai/gpt-oss-120b',
@@ -72,14 +75,21 @@ JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
         })
 
         const text = completion.choices[0]?.message?.content?.trim() ?? ''
+        console.log('[태그] Groq 응답 원문:', text)
+
         const jsonMatch = text.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) return []
+        if (!jsonMatch) {
+            console.warn('[태그] JSON 매칭 실패 — 빈 배열 반환')
+            return []
+        }
 
         const parsed = JSON.parse(jsonMatch[0])
         const keywords: string[] = parsed.keywords ?? []
-        return keywords.filter((k: unknown) => typeof k === 'string' && k.length > 0).slice(0, 3)
+        const result = keywords.filter((k: unknown) => typeof k === 'string' && k.length > 0).slice(0, 3)
+        console.log('[태그] 추출 키워드:', result)
+        return result
     } catch (e) {
-        console.error('[Groq] YouTube 해시태그 추출 실패:', e)
+        console.error('[태그] Groq 해시태그 추출 실패:', e)
         return []
     }
 }
@@ -191,6 +201,34 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
         scene2Desc: '온라인이 완전히 달아올랐다',
         scene3Title: '지금 여론은',
         scene3Desc: '의견이 완전히 갈렸다',
+        scene2Highlights: [],
+        scene3Highlights: [],
+    }
+
+    // brief 경로에서 desc 확정 후 강조 단어 추출 (qwen3 사용, 순차 호출)
+    const fetchHL = async (desc2: string, desc3: string): Promise<[string[], string[]]> => {
+        const key = groqApiKeys[0]
+        if (!key) return [[], []]
+        const extract = async (desc: string): Promise<string[]> => {
+            try {
+                const groq = new Groq({ apiKey: key })
+                const r = await groq.chat.completions.create({
+                    model: 'qwen/qwen3.6-27b',
+                    messages: [{ role: 'user', content: `"${desc}" 텍스트에서 강조할 핵심 단어 1~3개를 JSON 배열로만 응답하세요. 예: ["단어1","단어2"]` }],
+                    temperature: 0.3, max_tokens: 4096,
+                })
+                const raw = r.choices[0]?.message?.content?.trim() ?? ''
+                const text = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+                const match = text.match(/\[[\s\S]*?\]/)
+                return match ? (JSON.parse(match[0]) as unknown[]).map(String) : []
+            } catch (err) {
+                console.warn('[하이라이트 추출 실패]', { desc: desc.slice(0, 30), err })
+                return []
+            }
+        }
+        const hl2 = await extract(desc2)
+        const hl3 = await extract(desc3)
+        return [hl2, hl3]
     }
 
     // brief_summary 직접 내용 추출
@@ -211,13 +249,15 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
         const d2Code = d2Base.length <= 70 ? processDesc(d2Base) : null
         const d3Code = d3Base.length <= 70 ? processDesc(d3Base) : null
 
-        // 둘 다 35자 이하 → Groq 불필요
+        // 둘 다 35자 이하 → Groq 불필요 (하이라이트만 별도 추출)
         if (d2Code !== null && d3Code !== null) {
             console.log('[brief 코드 처리]', { scene2Desc: d2Code, scene3Desc: d3Code })
+            const [hl2, hl3] = await fetchHL(d2Code, d3Code)
             return {
                 scene1Title: clean(scene1Title), scene1Desc,
                 scene2Title: sceneTitle, scene2Desc: d2Code,
                 scene3Title: sceneTitle, scene3Desc: d3Code,
+                scene2Highlights: hl2, scene3Highlights: hl3,
             }
         }
 
@@ -237,7 +277,8 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
                 const scene2Desc = d2Code ?? safeD(parsed.scene2Desc, fallback.scene2Desc)
                 const scene3Desc = d3Code ?? safeD(parsed.scene3Desc, fallback.scene3Desc)
                 console.log('[brief Claude 압축]', { d2Base, d3Base, scene2Desc, scene3Desc })
-                return { scene1Title: clean(scene1Title), scene1Desc, scene2Title: sceneTitle, scene2Desc, scene3Title: sceneTitle, scene3Desc }
+                const [hl2c, hl3c] = await fetchHL(scene2Desc, scene3Desc)
+                return { scene1Title: clean(scene1Title), scene1Desc, scene2Title: sceneTitle, scene2Desc, scene3Title: sceneTitle, scene3Desc, scene2Highlights: hl2c, scene3Highlights: hl3c }
             } catch { /* JSON 파싱 실패 → Groq 폴백 */ }
         }
 
@@ -254,16 +295,21 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
                 const scene2Desc = d2Code ?? safeD(parsed.scene2Desc, fallback.scene2Desc)
                 const scene3Desc = d3Code ?? safeD(parsed.scene3Desc, fallback.scene3Desc)
                 console.log('[brief Groq 압축 폴백]', { scene2Desc, scene3Desc })
-                return { scene1Title: clean(scene1Title), scene1Desc, scene2Title: sceneTitle, scene2Desc, scene3Title: sceneTitle, scene3Desc }
+                const [hl2g, hl3g] = await fetchHL(scene2Desc, scene3Desc)
+                return { scene1Title: clean(scene1Title), scene1Desc, scene2Title: sceneTitle, scene2Desc, scene3Title: sceneTitle, scene3Desc, scene2Highlights: hl2g, scene3Highlights: hl3g }
             } catch (error) {
                 console.error(`[Groq 압축 폴백 실패] key=...${apiKey.slice(-6)}:`, error)
             }
         }
         // 모든 키 실패 → 코드 truncate 폴백
+        const s2fb = d2Code ?? processDesc(d2Base)
+        const s3fb = d3Code ?? processDesc(d3Base)
+        const [hl2fb, hl3fb] = await fetchHL(s2fb, s3fb)
         return {
             scene1Title: clean(scene1Title), scene1Desc,
-            scene2Title: sceneTitle, scene2Desc: d2Code ?? processDesc(d2Base),
-            scene3Title: sceneTitle, scene3Desc: d3Code ?? processDesc(d3Base),
+            scene2Title: sceneTitle, scene2Desc: s2fb,
+            scene3Title: sceneTitle, scene3Desc: s3fb,
+            scene2Highlights: hl2fb, scene3Highlights: hl3fb,
         }
     }
 
@@ -284,9 +330,10 @@ ${isSensitiveCategory ? sensitiveRules : generalRules}
 
 scene2: scene2Title 15자 이내 / scene2Desc 35자 이내
 scene3: scene3Title 15자 이내 / scene3Desc 35자 이내
+- scene2Highlights, scene3Highlights: 각 Desc에서 강조할 핵심 단어 1~3개 배열
 
 JSON으로만 응답:
-{"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"..."}`
+{"scene2Title":"...","scene2Desc":"...","scene3Title":"...","scene3Desc":"...","scene2Highlights":["단어1"],"scene3Highlights":["단어1"]}`
 
     // Claude 먼저 시도
     const claudeFreeResult = await callClaudeShortform(freeGenPrompt, 300)
@@ -302,6 +349,8 @@ JSON으로만 응답:
                     scene2Desc:  safeD(parsed.scene2Desc,  fallback.scene2Desc),
                     scene3Title: safeT(parsed.scene3Title, fallback.scene3Title),
                     scene3Desc:  safeD(parsed.scene3Desc,  fallback.scene3Desc),
+                    scene2Highlights: Array.isArray(parsed.scene2Highlights) ? parsed.scene2Highlights.map(String) : [],
+                    scene3Highlights: Array.isArray(parsed.scene3Highlights) ? parsed.scene3Highlights.map(String) : [],
                 }
             }
         } catch { /* JSON 파싱 실패 → Groq 폴백 */ }
@@ -327,6 +376,8 @@ JSON으로만 응답:
                 scene2Desc:  safeD(parsed.scene2Desc,  fallback.scene2Desc),
                 scene3Title: safeT(parsed.scene3Title, fallback.scene3Title),
                 scene3Desc:  safeD(parsed.scene3Desc,  fallback.scene3Desc),
+                scene2Highlights: Array.isArray(parsed.scene2Highlights) ? parsed.scene2Highlights.map(String) : [],
+                scene3Highlights: Array.isArray(parsed.scene3Highlights) ? parsed.scene3Highlights.map(String) : [],
             }
         } catch (error) {
             console.error(`[Groq 프리 생성 폴백 실패] key=...${apiKey.slice(-6)}:`, error)

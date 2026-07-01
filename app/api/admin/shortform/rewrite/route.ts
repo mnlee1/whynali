@@ -3,9 +3,9 @@
  *
  * [관리자 - 숏폼 씬 텍스트 AI 재작성 API]
  *
- * 관리자가 씬에 배정한 원본 텍스트를 Claude Sonnet 4.6으로 재작성합니다.
+ * 관리자가 씬에 배정한 원본 텍스트를 Groq(qwen/qwen3.6-27b)으로 재작성합니다.
  * 기승전결 맥락으로 씬별 자막을 생성하며, 중복 내용은 후처리로 제거합니다.
- * Claude 일별 예산($CLAUDE_SHORTFORM_DAILY_BUDGET_USD) 초과 시 Groq으로 자동 폴백합니다.
+ * 하이라이트 추출은 Claude Sonnet 4.6이 담당하며 $CLAUDE_SHORTFORM_DAILY_BUDGET_USD 한도($0.02) 적용.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -14,7 +14,7 @@ import { requireAdmin } from '@/lib/admin'
 import { incrementApiUsage, getTodayUsage, calculateClaudeCost } from '@/lib/api-usage-tracker'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30
+export const maxDuration = 60
 
 interface RewriteScene {
     index: number
@@ -196,95 +196,57 @@ ${contentLines}
 ${sceneCount}줄만 응답 (번호·설명 없이):
 `
 
-    // ── Claude Sonnet 4.6 시도 ──
-    const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim()
-    const dailyBudget = parseFloat(process.env.CLAUDE_SHORTFORM_DAILY_BUDGET_USD ?? '0.02')
-
     let raw = ''
-    let usedClaude = false
 
-    if (anthropicKey) {
-        const todayUsage = await getTodayUsage('claude_shortform')
-        const todayCost = calculateClaudeCost(todayUsage?.input_tokens ?? 0, todayUsage?.output_tokens ?? 0)
-
-        console.log(`[rewrite] Claude 예산 — 오늘 $${todayCost.toFixed(4)} / 한도 $${dailyBudget}`)
-        if (todayCost < dailyBudget) {
-            try {
-                const client = new Anthropic({ apiKey: anthropicKey })
-                const res = await client.messages.create({
-                    model: 'claude-sonnet-4-6',
-                    max_tokens: maxTokens,
-                    temperature: variation ? 0.6 : 0.3,
-                    messages: [{ role: 'user', content: prompt }],
-                })
-                await incrementApiUsage('claude_shortform', {
-                    calls: 1, successes: 1, failures: 0,
-                    inputTokens: res.usage.input_tokens,
-                    outputTokens: res.usage.output_tokens,
-                })
-                raw = res.content[0]?.type === 'text' ? res.content[0].text.trim() : ''
-                usedClaude = true
-                console.log('[rewrite] Claude Sonnet 4.6 사용 ✓, 응답:', raw.slice(0, 100))
-            } catch (e) {
-                console.error('[rewrite] Claude API 오류 — Groq 폴백:', e)
-                await incrementApiUsage('claude_shortform', { calls: 1, successes: 0, failures: 1 })
-            }
-        } else {
-            console.warn(`[rewrite] Claude 숏폼 예산 초과 ($${todayCost.toFixed(4)} / $${dailyBudget}) — Groq 폴백`)
-        }
+    // ── Groq 리라이트 ──
+    const groqKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
+    if (!groqKey) {
+        return NextResponse.json({ texts: scenes.map(s => s.text) })
     }
 
-    // ── Groq 폴백 ──
-    if (!usedClaude) {
-        const groqKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
-        if (!groqKey) {
-            return NextResponse.json({ texts: scenes.map(s => s.text) })
-        }
+    const groqBody = JSON.stringify({
+        model: 'qwen/qwen3.6-27b',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature: variation ? 0.6 : 0.3,
+    })
 
-        const groqBody = JSON.stringify({
-            model: 'openai/gpt-oss-120b',
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: maxTokens,
-            temperature: variation ? 0.6 : 0.3,
-        })
-
-        const callGroq = async (): Promise<Response> => {
-            for (let attempt = 0; attempt < 3; attempt++) {
-                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-                    body: groqBody,
-                })
-                if (res.status !== 429) return res
-                const retryAfter = parseInt(res.headers.get('retry-after') ?? '5')
-                const wait = Math.min(retryAfter, 10) * 1000
-                console.warn(`[rewrite] Groq 429 — ${wait / 1000}초 후 재시도 (${attempt + 1}/3)`)
-                await new Promise(r => setTimeout(r, wait))
-            }
-            return fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const callGroq = async (): Promise<Response> => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
                 body: groqBody,
             })
+            if (res.status !== 429) return res
+            const retryAfter = parseInt(res.headers.get('retry-after') ?? '5')
+            const wait = Math.min(retryAfter, 10) * 1000
+            console.warn(`[rewrite] Groq 429 — ${wait / 1000}초 후 재시도 (${attempt + 1}/3)`)
+            await new Promise(r => setTimeout(r, wait))
         }
+        return fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+            body: groqBody,
+        })
+    }
 
-        try {
-            const groqRes = await callGroq()
-            if (!groqRes.ok) {
-                const errBody = await groqRes.text().catch(() => '')
-                console.error('[rewrite] Groq API 오류:', groqRes.status, errBody.slice(0, 200))
-                return NextResponse.json(
-                    { error: 'GROQ_ERROR', message: `Groq API 오류 (${groqRes.status})` },
-                    { status: 503 }
-                )
-            }
-            const data = await groqRes.json()
-            raw = data.choices?.[0]?.message?.content?.trim() ?? ''
-            console.log('[rewrite] Groq 폴백 응답:', raw.slice(0, 100))
-        } catch (error) {
-            console.error('[rewrite] Groq 예외:', error)
-            return NextResponse.json({ error: 'INTERNAL_ERROR', message: '서버 오류' }, { status: 500 })
+    try {
+        const groqRes = await callGroq()
+        if (!groqRes.ok) {
+            const errBody = await groqRes.text().catch(() => '')
+            console.error('[rewrite] Groq API 오류:', groqRes.status, errBody.slice(0, 200))
+            return NextResponse.json(
+                { error: 'GROQ_ERROR', message: `Groq API 오류 (${groqRes.status})` },
+                { status: 503 }
+            )
         }
+        const data = await groqRes.json()
+        raw = data.choices?.[0]?.message?.content?.trim() ?? ''
+        console.log('[rewrite] Groq 응답:', raw.slice(0, 100))
+    } catch (error) {
+        console.error('[rewrite] Groq 예외:', error)
+        return NextResponse.json({ error: 'INTERNAL_ERROR', message: '서버 오류' }, { status: 500 })
     }
 
     try {
@@ -324,7 +286,41 @@ ${sceneCount}줄만 응답 (번호·설명 없이):
         const texts = deduplicateTexts(trimmed, scenes.map(s => s.text))
             .map(t => t.replace(/\.$/, ''))
 
-        return NextResponse.json({ texts })
+        // ── 씬별 하이라이트 병렬 추출 (Claude Sonnet — $0.02/day 한도) ──
+        const hlAnthropicKey = process.env.ANTHROPIC_API_KEY?.trim()
+        const hlDailyBudget = parseFloat(process.env.CLAUDE_SHORTFORM_DAILY_BUDGET_USD ?? '0.02')
+        const hlTodayUsage = await getTodayUsage('claude_shortform')
+        const hlTodayCost = calculateClaudeCost(hlTodayUsage?.input_tokens ?? 0, hlTodayUsage?.output_tokens ?? 0)
+        const hlBudgetOk = !!hlAnthropicKey && hlTodayCost < hlDailyBudget
+
+        console.log(`[rewrite] 하이라이트 예산 — 오늘 $${hlTodayCost.toFixed(4)} / 한도 $${hlDailyBudget}`)
+
+        const highlights: string[][] = await Promise.all(texts.map(async (text) => {
+            if (!hlBudgetOk) return []
+            try {
+                const hlClient = new Anthropic({ apiKey: hlAnthropicKey! })
+                const hlRes = await hlClient.messages.create({
+                    model: 'claude-sonnet-4-6',
+                    max_tokens: 100,
+                    temperature: 0,
+                    messages: [{ role: 'user', content: `"${text}" 텍스트에서 강조할 핵심 단어 1~3개를 문장에 등장하는 순서대로 JSON 배열로만 응답하세요. 예: ["단어1","단어2"]` }],
+                })
+                await incrementApiUsage('claude_shortform', {
+                    calls: 1, successes: 1, failures: 0,
+                    inputTokens: hlRes.usage.input_tokens,
+                    outputTokens: hlRes.usage.output_tokens,
+                })
+                const hlRaw = hlRes.content[0]?.type === 'text' ? hlRes.content[0].text.trim() : ''
+                const match = hlRaw.match(/\[[\s\S]*?\]/)
+                return match ? (JSON.parse(match[0]) as unknown[]).map(String) : []
+            } catch (err) {
+                console.warn('[rewrite] 하이라이트 추출 실패', { text: text.slice(0, 30), err })
+                await incrementApiUsage('claude_shortform', { calls: 1, successes: 0, failures: 1 })
+                return []
+            }
+        }))
+
+        return NextResponse.json({ texts, highlights })
     } catch (error) {
         console.error('[rewrite] 예외:', error)
         return NextResponse.json(

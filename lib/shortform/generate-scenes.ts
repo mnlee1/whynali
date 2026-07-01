@@ -34,11 +34,11 @@ function easeLinear(t: number): number {
 const LOGO_W = 187
 const LOGO_H = 73
 const LOGO_TOP_Y = 93
-const TITLE_FONTSIZE = 61
-const TITLE_LINE_HEIGHT = 87
+const TITLE_FONTSIZE = 72
+const TITLE_LINE_HEIGHT = 90
 
-const DESC_FONTSIZE = 43
-const DESC_LINE_HEIGHT = 65
+const DESC_FONTSIZE = 48
+const DESC_LINE_HEIGHT = 72
 // ─────────────────────────────────────────────────────────────
 
 interface SceneLayout {
@@ -81,10 +81,10 @@ function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
         }
         if (current) lines.push(current)
 
-        // 마지막 줄이 4자 이하(orphan)이면 앞 줄 마지막 단어를 당겨서 균형 맞춤
+        // 마지막 줄이 단어 1개(orphan)이면 앞 줄 마지막 단어를 당겨서 균형 맞춤
         if (lines.length >= 2) {
             const lastLine = lines[lines.length - 1]
-            if (lastLine.length <= 4) {
+            if (lastLine.split(' ').filter(Boolean).length === 1) {
                 const prevWords = lines[lines.length - 2].split(' ')
                 if (prevWords.length >= 2) {
                     const moved = prevWords[prevWords.length - 1]
@@ -190,7 +190,8 @@ async function renderTypingStatePNG(
     layout: SceneLayout,
     descFinalLines: string[],
     titleFinalLines: string[] = [],
-    titleWordCount = 0
+    titleWordCount = 0,
+    highlights: string[] = []
 ): Promise<Buffer> {
     const font = getOTFont()
     const svgPaths: string[] = []
@@ -230,8 +231,9 @@ async function renderTypingStatePNG(
             if (rendered >= descVisible) break
             const lineWords = descFinalLines[i].split(' ').filter(Boolean)
             const visibleInLine = Math.min(lineWords.length, descVisible - rendered)
-            const text = lineWords.slice(0, visibleInLine).join(' ')
-            if (text.trim()) {
+            const visibleWords = lineWords.slice(0, visibleInLine)
+            if (visibleWords.length > 0) {
+                const text = visibleWords.join(' ')
                 const w = font.getAdvanceWidth(text, DESC_FONTSIZE)
                 const x = Math.floor((WIDTH - w) / 2)
                 const y = layout.descStartY + i * DESC_LINE_HEIGHT + ascD
@@ -241,7 +243,43 @@ async function renderTypingStatePNG(
                     `width="${w + PAD_X * 2}" height="${ascD + descD + PAD_TOP + PAD_BOT - LINE_GAP}" ` +
                     `fill="black" fill-opacity="0.55"/>`
                 )
-                addLinePaths(font, svgPaths, text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
+                if (highlights.length > 0) {
+                    let xPos = x
+                    for (let wi = 0; wi < visibleWords.length; wi++) {
+                        const word = visibleWords[wi]
+                        // 첫 번째로 매칭되는 하이라이트 키워드와 위치를 탐색
+                        let matchedH: string | null = null
+                        let matchIdx = -1
+                        for (const h of highlights) {
+                            if (h.length === 0) continue
+                            const idx = word.indexOf(h)
+                            if (idx !== -1) { matchedH = h; matchIdx = idx; break }
+                        }
+                        if (matchedH !== null) {
+                            // prefix (조사 앞 또는 빈 문자열)
+                            let curX = xPos
+                            if (matchIdx > 0) {
+                                const prefix = word.slice(0, matchIdx)
+                                addLinePaths(font, svgPaths, prefix, curX, y, DESC_FONTSIZE, '#E5E7EB', 5)
+                                curX += font.getAdvanceWidth(prefix, DESC_FONTSIZE)
+                            }
+                            // 매칭 부분 (노란색)
+                            addLinePaths(font, svgPaths, matchedH, curX, y, DESC_FONTSIZE, '#FFFF4D', 5)
+                            curX += font.getAdvanceWidth(matchedH, DESC_FONTSIZE)
+                            // suffix (조사 등 나머지)
+                            const suffix = word.slice(matchIdx + matchedH.length)
+                            if (suffix) {
+                                addLinePaths(font, svgPaths, suffix, curX, y, DESC_FONTSIZE, '#E5E7EB', 5)
+                            }
+                        } else {
+                            addLinePaths(font, svgPaths, word, xPos, y, DESC_FONTSIZE, '#E5E7EB', 5)
+                        }
+                        const spacer = wi < visibleWords.length - 1 ? `${word} ` : word
+                        xPos += font.getAdvanceWidth(spacer, DESC_FONTSIZE)
+                    }
+                } else {
+                    addLinePaths(font, svgPaths, text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
+                }
             }
             rendered += lineWords.length
         }
@@ -265,34 +303,32 @@ export async function createTypingFrames(
     title: string,
     desc: string,
     sceneNumber: number,
-    sceneDuration: number
+    sceneDuration: number,
+    highlights: string[] = []
 ): Promise<{ buffer: Buffer; duration: number }[]> {
     const layout = computeLayout(title, desc, sceneNumber)
 
     // 씬1: 타이틀+설명 모두 애니메이션 / 씬2,3: 설명만 애니메이션 (타이틀은 정적 레이어)
-    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, 13) : []
-    const descFinalLines = desc ? wordWrapLines(desc, 16) : []
+    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, 10) : []
+    const descFinalLines = desc ? wordWrapLines(desc, 13) : []
 
     const titleWords = titleFinalLines.flatMap(l => l.split(' ').filter(Boolean))
     const descWords = descFinalLines.flatMap(l => l.split(' ').filter(Boolean))
     const totalWords = titleWords.length + descWords.length
 
     if (totalWords === 0) {
-        const empty = await renderTypingStatePNG(0, layout, [], titleFinalLines, titleWords.length)
+        const empty = await renderTypingStatePNG(0, layout, [], titleFinalLines, titleWords.length, highlights)
         return [{ buffer: empty, duration: sceneDuration }]
     }
 
-    const TEXT_START_DELAY = 0.15
     const wordDelay = Math.min(0.33, (sceneDuration * 0.85) / totalWords)
     const frames: { buffer: Buffer; duration: number }[] = []
 
-    frames.push({ buffer: await renderTypingStatePNG(0, layout, [], titleFinalLines, titleWords.length), duration: TEXT_START_DELAY })
-
     for (let n = 1; n <= totalWords; n++) {
         const isLast = n === totalWords
-        const buffer = await renderTypingStatePNG(n, layout, descFinalLines, titleFinalLines, titleWords.length)
+        const buffer = await renderTypingStatePNG(n, layout, descFinalLines, titleFinalLines, titleWords.length, highlights)
         const duration = isLast
-            ? Math.max(sceneDuration - TEXT_START_DELAY - (n - 1) * wordDelay, wordDelay)
+            ? Math.max(sceneDuration - (n - 1) * wordDelay, wordDelay)
             : wordDelay
         frames.push({ buffer, duration })
     }
