@@ -506,19 +506,30 @@ export default function AdminShortformPage() {
     }
 
     const handleExtractHighlights = async () => {
-        const texts = imagePreview.rewrittenTexts.filter(t => t.trim().length > 0)
-        if (texts.length === 0) return
+        const allTexts = imagePreview.rewrittenTexts
+        const nonEmptyIndices: number[] = []
+        const filteredTexts: string[] = []
+        allTexts.forEach((t, i) => {
+            if (t.trim().length > 0) { nonEmptyIndices.push(i); filteredTexts.push(t) }
+        })
+        if (filteredTexts.length === 0) return
         setImagePreview(prev => ({ ...prev, highlightsLoading: true, highlightsBudgetExceeded: false }))
         try {
             const res = await fetch('/api/admin/shortform/highlights', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ texts }),
+                body: JSON.stringify({ texts: filteredTexts }),
             })
             const json = await res.json()
+            const apiHighlights: string[][] = json.highlights ?? []
+            // 원본 씬 인덱스에 맞게 재매핑 (빈 텍스트 제거로 인한 인덱스 어긋남 방지)
+            const remapped: string[][] = Array.from({ length: allTexts.length }, () => [])
+            nonEmptyIndices.forEach((origIdx, apiIdx) => {
+                remapped[origIdx] = apiHighlights[apiIdx] ?? []
+            })
             setImagePreview(prev => ({
                 ...prev,
-                rewrittenHighlights: json.highlights ?? [],
+                rewrittenHighlights: remapped,
                 highlightsLoading: false,
                 highlightsBudgetExceeded: !!json.budgetExceeded,
             }))
