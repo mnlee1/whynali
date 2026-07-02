@@ -64,6 +64,9 @@ function getUTMParams(): {
         } else if (referrer.includes('naver.com')) {
             utm.utm_source = 'naver'
             utm.utm_medium = 'organic'
+        } else if (referrer.includes('daum.net') || referrer.includes('search.daum')) {
+            utm.utm_source = 'daum'
+            utm.utm_medium = 'organic'
         } else {
             utm.utm_source = 'referral'
             utm.utm_medium = 'referral'
