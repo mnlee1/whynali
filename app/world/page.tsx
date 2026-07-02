@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     title: '세계 이슈',
     description: '세계의 최신 이슈와 논란을 한눈에. 국제, 해외, 외교, 글로벌 뉴스를 실시간으로 확인하세요.',
     keywords: ['세계', '국제', '해외', '외교', '글로벌', '세계 이슈', '국제 뉴스'],
+    alternates: {
+        canonical: '/world',
+    },
     openGraph: {
         title: '세계 이슈 | 왜난리',
         description: '세계의 최신 이슈와 논란을 한눈에. 국제, 해외, 외교, 글로벌 뉴스를 실시간으로 확인하세요.',

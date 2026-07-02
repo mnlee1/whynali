@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     title: '스포츠 이슈',
     description: '스포츠계의 최신 이슈와 논란을 한눈에. 축구, 야구, 농구, 배구, 올림픽 등 국내외 스포츠 소식과 선수 뉴스를 실시간으로 확인하세요.',
     keywords: ['스포츠', '축구', '야구', '농구', '배구', '올림픽', '선수', '스포츠 이슈', '스포츠 뉴스'],
+    alternates: {
+        canonical: '/sports',
+    },
     openGraph: {
         title: '스포츠 이슈 | 왜난리',
         description: '스포츠계의 최신 이슈와 논란을 한눈에. 축구, 야구, 농구, 배구, 올림픽 등 국내외 스포츠 소식과 선수 뉴스를 실시간으로 확인하세요.',

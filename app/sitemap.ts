@@ -121,7 +121,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         // 이슈 상태에 따라 우선순위 차등 적용
         const isActive = issue.status === '점화' || issue.status === '논란중'
         const priority = isActive ? 0.8 : 0.5
-        const changeFrequency = isActive ? 'hourly' : 'weekly'
+        // revalidate = 3600(1시간)에 맞춰 daily로 선언 — hourly 선언 시 크롤러 헛방문 발생
+        const changeFrequency = isActive ? 'daily' : 'weekly'
 
         return {
             url: `${baseUrl}/issue/${issue.id}`,

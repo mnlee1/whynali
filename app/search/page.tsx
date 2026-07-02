@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import StatusBadge from '@/components/common/StatusBadge'
@@ -11,6 +12,19 @@ import type { Issue } from '@/types/issue'
 
 // ISR: 15분(900초)마다 페이지 재생성
 export const revalidate = 900
+
+export const metadata: Metadata = {
+    title: '검색',
+    description: '왜난리에서 이슈, 토론, 투표를 검색하세요. 연예·정치·사회·스포츠 등 다양한 카테고리의 이슈를 빠르게 찾아보세요.',
+    keywords: ['왜난리 검색', '이슈 검색', '논란 검색', '왜난리'],
+    alternates: {
+        canonical: '/search',
+    },
+    openGraph: {
+        title: '검색 | 왜난리',
+        description: '왜난리에서 이슈, 토론, 투표를 검색하세요.',
+    },
+}
 
 async function SearchResults({ query }: { query: string }) {
     const admin = createSupabaseAdminClient()

@@ -1,27 +1,74 @@
 import Link from 'next/link'
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
 import { Eye, MessageCircleMore } from 'lucide-react'
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase-server'
 import DiscussionComments from '@/components/issue/DiscussionComments'
 import ViewCounter from '@/components/issue/ViewCounter'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatFullDate } from '@/lib/utils/format-date'
+import { SITE_NAME, SITE_URL } from '@/lib/seo/site'
 
 export const dynamic = 'force-dynamic'
+
+// generateMetadata + DiscussionTopicPage 간 DB 쿼리 공유
+const getTopic = cache(async (id: string) => {
+    const admin = createSupabaseAdminClient()
+    const { data, error } = await admin
+        .from('discussion_topics')
+        .select('*, issues(id, title)')
+        .eq('id', id)
+        .in('approval_status', ['진행중', '마감'])
+        .single()
+    if (error) return null
+    return data
+})
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+    const { id } = await params
+    const topic = await getTopic(id)
+
+    if (!topic) {
+        return { title: '토론을 찾을 수 없습니다' }
+    }
+
+    const issueData = topic.issues as { id: string; title: string } | null
+    const title = decodeHtml(topic.body)
+    const description = issueData
+        ? `'${decodeHtml(issueData.title)}' 이슈의 토론 주제입니다. 왜난리 커뮤니티에서 다양한 의견을 나눠보세요.`
+        : `왜난리 커뮤니티 토론 주제입니다. 다양한 관점에서 의견을 나눠보세요.`
+
+    return {
+        title,
+        description,
+        alternates: {
+            canonical: `${SITE_URL}/community/${id}`,
+        },
+        openGraph: {
+            title: `${title} | ${SITE_NAME}`,
+            description,
+            url: `/community/${id}`,
+            siteName: SITE_NAME,
+            locale: 'ko_KR',
+            type: 'article',
+        },
+        twitter: {
+            card: 'summary',
+            title: `${title} | ${SITE_NAME}`,
+            description,
+        },
+    }
+}
 
 export default async function DiscussionTopicPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
     const admin = createSupabaseAdminClient()
 
-    const { data: topic, error } = await admin
-        .from('discussion_topics')
-        .select('*, issues(id, title)')
-        .eq('id', id)
-        .in('approval_status', ['진행중', '마감'])
-        .single()
+    const topic = await getTopic(id)
 
-    if (error || !topic) {
+    if (!topic) {
         notFound()
     }
 

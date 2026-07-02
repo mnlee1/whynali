@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     title: '사회 이슈',
     description: '사회계의 최신 이슈와 논란을 한눈에. 사건, 사고, 범죄, 재판, 사회 현상 등 주요 뉴스를 실시간으로 확인하세요.',
     keywords: ['사회', '사건', '사고', '범죄', '재판', '사회 이슈', '사회 뉴스'],
+    alternates: {
+        canonical: '/society',
+    },
     openGraph: {
         title: '사회 이슈 | 왜난리',
         description: '사회계의 최신 이슈와 논란을 한눈에. 사건, 사고, 범죄, 재판, 사회 현상 등 주요 뉴스를 실시간으로 확인하세요.',
