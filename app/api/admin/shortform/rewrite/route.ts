@@ -258,7 +258,7 @@ ${sceneCount}줄만 응답 (번호·설명 없이):
                 .replace(/^\*+/, '').replace(/\*+$/, '')   // bold markdown
                 .replace(/^씬\s*\d+\s*[:.]\s*/, '')        // 씬1: 씬1.
                 .replace(/^Scene\s*\d+\s*[:.]\s*/i, '')    // Scene 1:
-                .replace(/^\[.*?\]\s*[:.]\s*/, '')          // [전개]: [훅]:
+                .replace(/^\[.*?\][\s:.]+/, '')             // [훅] text / [전개]: / [훅].
                 .replace(/^\d+[\.\)]\s*/, '')               // 1. 1)
                 .trim()
 
@@ -311,8 +311,14 @@ ${sceneCount}줄만 응답 (번호·설명 없이):
                     outputTokens: hlRes.usage.output_tokens,
                 })
                 const hlRaw = hlRes.content[0]?.type === 'text' ? hlRes.content[0].text.trim() : ''
-                const match = hlRaw.match(/\[[\s\S]*?\]/)
-                return match ? (JSON.parse(match[0]) as unknown[]).map(String) : []
+                const hlMatches = [...hlRaw.matchAll(/\[[\s\S]*?\]/g)]
+                for (let mi = hlMatches.length - 1; mi >= 0; mi--) {
+                    try {
+                        const parsed = JSON.parse(hlMatches[mi][0])
+                        if (Array.isArray(parsed)) return (parsed as unknown[]).map(String)
+                    } catch { /* 다음 매칭 시도 */ }
+                }
+                return []
             } catch (err) {
                 console.warn('[rewrite] 하이라이트 추출 실패', { text: text.slice(0, 30), err })
                 await incrementApiUsage('claude_shortform', { calls: 1, successes: 0, failures: 1 })

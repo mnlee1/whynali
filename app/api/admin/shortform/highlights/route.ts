@@ -59,8 +59,14 @@ export async function POST(request: NextRequest) {
                 outputTokens: res.usage.output_tokens,
             })
             const raw = res.content[0]?.type === 'text' ? res.content[0].text.trim() : ''
-            const match = raw.match(/\[[\s\S]*?\]/)
-            return match ? (JSON.parse(match[0]) as unknown[]).map(String) : []
+            const allMatches = [...raw.matchAll(/\[[\s\S]*?\]/g)]
+            for (let mi = allMatches.length - 1; mi >= 0; mi--) {
+                try {
+                    const parsed = JSON.parse(allMatches[mi][0])
+                    if (Array.isArray(parsed)) return (parsed as unknown[]).map(String)
+                } catch { /* 다음 매칭 시도 */ }
+            }
+            return []
         } catch (err) {
             console.warn('[highlights] 추출 실패', { text: text.slice(0, 30), err })
             await incrementApiUsage('claude_shortform', { calls: 1, successes: 0, failures: 1 })
