@@ -575,8 +575,9 @@ export default function AdminShortformPage() {
 
     const [highlightInputs, setHighlightInputs] = useState<Record<number, string>>({})
 
-    const sortHighlightsByPosition = (words: string[], text: string): string[] =>
-        [...words].sort((a, b) => {
+    const sortHighlightsByPosition = (words: string[], text: string): string[] => {
+        const flat = [...new Set(words.flatMap(w => w.split(/\s+/).filter(Boolean)))]
+        return flat.sort((a, b) => {
             const pa = text.indexOf(a)
             const pb = text.indexOf(b)
             if (pa === -1 && pb === -1) return 0
@@ -584,6 +585,7 @@ export default function AdminShortformPage() {
             if (pb === -1) return -1
             return pa - pb
         })
+    }
 
     const handleRemoveHighlight = (sceneIndex: number, wordIndex: number) => {
         setImagePreview(prev => {
