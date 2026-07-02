@@ -625,6 +625,9 @@ export async function createNSceneVideo(
         const textAnimPaths: string[] = []
         for (let i = 0; i < sceneContents.length; i++) {
             const sc = sceneContents[i]
+            if (!sc.isSearchScene) {
+                console.log(`[textanim] scene${i+1} desc="${sc.desc?.slice(0,20)}" highlights=[${(sc.highlights ?? []).join(',')}]`)
+            }
             const frames = sc.isSearchScene
                 ? await createSearchTypingFrames(sceneDurations[i])
                 : await createTypingFrames(sc.title, sc.desc, i + 1, sceneDurations[i], sc.highlights ?? [])
