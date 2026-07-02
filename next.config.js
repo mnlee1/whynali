@@ -8,13 +8,6 @@ const nextConfig = {
             { source: '/threads', destination: '/?utm_source=threads',   permanent: false },
             { source: '/kakao',   destination: '/?utm_source=kakao',     permanent: false },
             { source: '/x',       destination: '/?utm_source=twitter',   permanent: false },
-            // UTM 파라미터가 붙은 홈 URL → 클린 URL로 redirect (구글 중복 페이지 방지)
-            {
-                source: '/',
-                has: [{ type: 'query', key: 'utm_source' }],
-                destination: '/',
-                permanent: true,
-            },
         ]
     },
     images: {

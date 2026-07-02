@@ -60,11 +60,12 @@ export async function postBotComment(issueId: string): Promise<boolean> {
 
     const { data: issue } = await supabaseAdmin
         .from('issues')
-        .select('title, category, heat_index')
+        .select('title, category, heat_index, approval_status, status')
         .eq('id', issueId)
         .single()
 
     if (!issue) return false
+    if (issue.approval_status !== '승인' || !['점화', '논란중'].includes(issue.status)) return false
 
     const body = await generateBotComment(persona, issue)
     if (!body) {
@@ -139,11 +140,12 @@ export async function postBotDiscussionComment(topicId: string): Promise<boolean
 
     const { data: topic } = await supabaseAdmin
         .from('discussion_topics')
-        .select('body, issues(title, category)')
+        .select('body, approval_status, issues(title, category)')
         .eq('id', topicId)
         .single()
 
     if (!topic) return false
+    if (topic.approval_status !== '진행중') return false
 
     const issueData = topic.issues as unknown as { title: string; category: string } | null
     const body = await generateBotDiscussionComment(persona, {
