@@ -112,7 +112,7 @@ function mapUtmToChannelKey(utm: string | null): ChannelKey | null {
     if (utm === 'twitter') return 'x'
     if (utm === 'youtube') return 'youtube'
     if (utm === 'tiktok') return 'tiktok'
-    if (['google', 'naver', 'organic'].includes(utm)) return 'organic'
+    if (['google', 'naver', 'daum', 'organic'].includes(utm)) return 'organic'
     return null
 }
 
@@ -123,7 +123,7 @@ function buildVisitorCounts(data: { utm_source: string | null; session_id: strin
         x:         new Set(data?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
         youtube:   new Set(data?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
         tiktok:    new Set(data?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
-        organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
+        organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'daum', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
     }
 }
 

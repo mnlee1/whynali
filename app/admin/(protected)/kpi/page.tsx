@@ -491,19 +491,24 @@ export default function KPIDashboardPage() {
 
             {data && data.goalInfo && (
                 <>
-                    {/* 목표 메모 표시 */}
-                    {data.goalInfo.notes && (
-                        <div className="card p-4 bg-blue-50 border border-blue-200">
-                            <p className="text-xs font-semibold text-blue-700 mb-2">6월 목표</p>
-                            <div className="flex flex-wrap gap-2">
-                                {data.goalInfo.notes.split('·').map((item, i) => (
-                                    <span key={i} className="text-xs px-2.5 py-1 bg-white border border-blue-200 rounded-full text-blue-900 font-medium">
-                                        {item.trim()}
-                                    </span>
-                                ))}
-                            </div>
+                    {/* 월 목표 기준 */}
+                    <div className="card p-4 bg-blue-50 border border-blue-200">
+                        <p className="text-xs font-semibold text-blue-700 mb-2">{selectedMonth}월 목표</p>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                `신규 가입자 ${metrics.targets.users}명`,
+                                `이슈 승인 일 ${metrics.targets.dailyIssues}개`,
+                                `숏폼 등록 일 ${metrics.targets.dailyShortformsPerPlatform}개`,
+                                `댓글 ${metrics.targets.comments}개 (참여율 ${metrics.targets.commentParticipation}%)`,
+                                `반응 ${metrics.targets.reactions}개 (참여율 ${metrics.targets.reactionParticipation}%)`,
+                                `투표 ${metrics.targets.votes}회 (참여율 ${metrics.targets.voteParticipation}%)`,
+                            ].map((item, i) => (
+                                <span key={i} className="text-xs px-2.5 py-1 bg-white border border-blue-200 rounded-full text-blue-900 font-medium">
+                                    {item}
+                                </span>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
             {/* 가입자 현황 */}
             <div className="card p-5">
