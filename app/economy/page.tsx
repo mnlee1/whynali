@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     title: '경제 이슈',
     description: '경제계의 최신 이슈와 논란을 한눈에. 주식, 부동산, 금융, 기업, 시장의 주요 뉴스를 실시간으로 확인하세요.',
     keywords: ['경제', '주식', '부동산', '금융', '기업', '시장', '경제 이슈', '경제 뉴스'],
+    alternates: {
+        canonical: '/economy',
+    },
     openGraph: {
         title: '경제 이슈 | 왜난리',
         description: '경제계의 최신 이슈와 논란을 한눈에. 주식, 부동산, 금융, 기업, 시장의 주요 뉴스를 실시간으로 확인하세요.',

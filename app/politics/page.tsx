@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     title: '정치 이슈',
     description: '정치계의 최신 이슈와 논란을 한눈에. 국회, 정당, 선거, 정책, 정부의 주요 사건과 뉴스를 실시간으로 확인하세요.',
     keywords: ['정치', '국회', '정당', '선거', '정책', '정부', '정치 이슈', '정치 뉴스'],
+    alternates: {
+        canonical: '/politics',
+    },
     openGraph: {
         title: '정치 이슈 | 왜난리',
         description: '정치계의 최신 이슈와 논란을 한눈에. 국회, 정당, 선거, 정책, 정부의 주요 사건과 뉴스를 실시간으로 확인하세요.',

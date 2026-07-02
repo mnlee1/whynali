@@ -51,7 +51,31 @@
         },
         {
             "path": "/api/cron/auto-bot-comment",
-            "schedule": "0 * * * *"
+            "schedule": "30 1 * * 1"
+        },
+        {
+            "path": "/api/cron/auto-bot-comment",
+            "schedule": "0 5 * * 2"
+        },
+        {
+            "path": "/api/cron/auto-bot-comment",
+            "schedule": "20 0 * * 3"
+        },
+        {
+            "path": "/api/cron/auto-bot-comment",
+            "schedule": "45 7 * * 4"
+        },
+        {
+            "path": "/api/cron/auto-bot-comment",
+            "schedule": "10 2 * * 5"
+        },
+        {
+            "path": "/api/cron/auto-bot-comment",
+            "schedule": "30 4 * * 6"
+        },
+        {
+            "path": "/api/cron/auto-bot-comment",
+            "schedule": "0 11 * * 0"
         }
     ],
     "functions": {

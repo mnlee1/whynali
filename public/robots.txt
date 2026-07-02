@@ -2,19 +2,6 @@
 
 User-agent: *
 Allow: /
-Allow: /issue/*
-Allow: /entertain
-Allow: /sports
-Allow: /politics
-Allow: /society
-Allow: /economy
-Allow: /tech
-Allow: /world
-Allow: /community
-Allow: /search
-Allow: /privacy
-Allow: /terms
-Allow: /feed.xml
 Disallow: /admin/
 Disallow: /api/
 Disallow: /auth/

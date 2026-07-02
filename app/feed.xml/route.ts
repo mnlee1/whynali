@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { SITE_URL } from '@/lib/seo/site'
 
-export const revalidate = 3600
+export const revalidate = 900
 
 export async function GET() {
     const baseUrl = SITE_URL
@@ -46,7 +46,7 @@ export async function GET() {
     return new Response(xml, {
         headers: {
             'Content-Type': 'application/xml; charset=utf-8',
-            'Cache-Control': 'public, max-age=3600, stale-while-revalidate=7200',
+            'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800',
         },
     })
 }

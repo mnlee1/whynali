@@ -40,17 +40,11 @@ export function generateArticleSchema(issue: Issue) {
         dateModified: issue.updated_at,
         author: {
             '@type': 'Organization',
-            name: SITE_NAME,
-            url: BASE_URL,
+            '@id': `${BASE_URL}/#organization`,
         },
         publisher: {
             '@type': 'Organization',
-            name: SITE_NAME,
-            url: BASE_URL,
-            logo: {
-                '@type': 'ImageObject',
-                url: `${BASE_URL}${SITE_LOGO}`,
-            },
+            '@id': `${BASE_URL}/#organization`,
         },
         mainEntityOfPage: {
             '@type': 'WebPage',
@@ -96,10 +90,7 @@ export function generateWebSiteSchema() {
         inLanguage: 'ko-KR',
         publisher: {
             '@type': 'Organization',
-            name: SITE_NAME,
-            url: BASE_URL,
-            logo: `${BASE_URL}${SITE_LOGO}`,
-            sameAs: [...SITE_SOCIAL_LINKS],
+            '@id': `${BASE_URL}/#organization`,
         },
         potentialAction: {
             '@type': 'SearchAction',
