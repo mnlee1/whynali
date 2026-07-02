@@ -1,8 +1,33 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { sanitizeText } from '@/lib/safety'
-import { BOT_PERSONAS, BOT_USER_IDS } from './personas'
+import { BOT_PERSONAS, BOT_USER_IDS, type BotPersona, type PersonaType } from './personas'
 import { generateBotComment, generateBotDiscussionComment } from './comment-generator'
 import { writeAutoOpLog } from '@/lib/auto-op-log'
+
+// 카테고리별 선호 페르소나 타입 (빈 배열이면 전체 균등 선택)
+const CATEGORY_PREFERRED_TYPES: Record<string, PersonaType[]> = {
+    '연예':     ['공감형', '궁금형'],
+    '스포츠':   ['공감형', '분석형'],
+    '정치':     ['분석형', '비판형', '정보형'],
+    '경제':     ['분석형', '정보형', '비판형'],
+    '사회':     ['공감형', '비판형', '정보형'],
+    'IT과학':   ['분석형', '정보형', '궁금형'],
+    '생활문화': ['공감형', '정보형', '궁금형'],
+    '세계':     ['정보형', '분석형', '궁금형'],
+}
+
+// 카테고리에 맞는 페르소나 풀 반환 (해당 타입 없으면 전체 사용)
+function pickPersonaByCategory(available: BotPersona[], category?: string | null): BotPersona {
+    const preferredTypes = category ? CATEGORY_PREFERRED_TYPES[category] : undefined
+    const pool = preferredTypes?.length
+        ? available.filter((p) => preferredTypes.includes(p.type))
+        : []
+    const candidates = pool.length > 0 ? pool : available
+    return candidates[Math.floor(Math.random() * candidates.length)]
+}
+
+// 확률 제한 — 70% 확률로만 댓글 생성
+const BOT_COMMENT_PROBABILITY = 0.7
 
 const MAX_BOT_COMMENTS_PER_ISSUE = 3
 const MAX_ISSUES_PER_BATCH = 5
@@ -49,14 +74,11 @@ async function getBotCommentInfo(issueId: string): Promise<BotCommentInfo> {
 export async function postBotComment(issueId: string): Promise<boolean> {
     await ensureBotUsers()
 
+    // 70% 확률 제한 — 너무 규칙적인 패턴 방지
+    if (Math.random() > BOT_COMMENT_PROBABILITY) return false
+
     const { count, usedPersonaIds } = await getBotCommentInfo(issueId)
     if (count >= MAX_BOT_COMMENTS_PER_ISSUE) return false
-
-    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
-    if (available.length === 0) return false
-
-    // 사용 가능한 페르소나 중 랜덤 선택
-    const persona = available[Math.floor(Math.random() * available.length)]
 
     const { data: issue } = await supabaseAdmin
         .from('issues')
@@ -66,6 +88,12 @@ export async function postBotComment(issueId: string): Promise<boolean> {
 
     if (!issue) return false
     if (issue.approval_status !== '승인' || !['점화', '논란중'].includes(issue.status)) return false
+
+    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
+    if (available.length === 0) return false
+
+    // 카테고리 선호 타입 기반 페르소나 선택
+    const persona = pickPersonaByCategory(available, issue.category)
 
     const body = await generateBotComment(persona, issue)
     if (!body) {
@@ -130,13 +158,11 @@ async function getBotDiscussionCommentInfo(topicId: string): Promise<BotCommentI
 export async function postBotDiscussionComment(topicId: string): Promise<boolean> {
     await ensureBotUsers()
 
+    // 70% 확률 제한
+    if (Math.random() > BOT_COMMENT_PROBABILITY) return false
+
     const { count, usedPersonaIds } = await getBotDiscussionCommentInfo(topicId)
     if (count >= MAX_BOT_COMMENTS_PER_DISCUSSION) return false
-
-    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
-    if (available.length === 0) return false
-
-    const persona = available[Math.floor(Math.random() * available.length)]
 
     const { data: topic } = await supabaseAdmin
         .from('discussion_topics')
@@ -148,6 +174,13 @@ export async function postBotDiscussionComment(topicId: string): Promise<boolean
     if (topic.approval_status !== '진행중') return false
 
     const issueData = topic.issues as unknown as { title: string; category: string } | null
+
+    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
+    if (available.length === 0) return false
+
+    // 카테고리 선호 타입 기반 페르소나 선택
+    const persona = pickPersonaByCategory(available, issueData?.category)
+
     const body = await generateBotDiscussionComment(persona, {
         body: topic.body,
         issue_title: issueData?.title,
@@ -220,6 +253,7 @@ export async function runBotDiscussionCommentBatch(): Promise<{ processed: numbe
     for (const topicId of candidates) {
         const ok = await postBotDiscussionComment(topicId)
         if (ok) posted++
+        await new Promise(r => setTimeout(r, 2000))
     }
 
     await writeAutoOpLog({
@@ -259,6 +293,7 @@ export async function runBotCommentBatch(): Promise<{ processed: number; posted:
     for (const issueId of candidates) {
         const ok = await postBotComment(issueId)
         if (ok) posted++
+        await new Promise(r => setTimeout(r, 2000))
     }
 
     await writeAutoOpLog({

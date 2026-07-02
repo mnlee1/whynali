@@ -17,6 +17,9 @@ export const metadata: Metadata = {
     title: '기술 이슈',
     description: '기술계의 최신 이슈와 논란을 한눈에. IT, 과학, AI, 스타트업, 반도체, 전기차 등 첨단 기술 뉴스를 실시간으로 확인하세요.',
     keywords: ['기술', 'IT', '과학', '스타트업', '테크', '혁신', 'AI', '인공지능', '반도체', '전기차', '기술 이슈', '기술 뉴스'],
+    alternates: {
+        canonical: '/tech',
+    },
     openGraph: {
         title: '기술 이슈 | 왜난리',
         description: '기술계의 최신 이슈와 논란을 한눈에. IT, 과학, AI, 스타트업, 반도체, 전기차 등 첨단 기술 뉴스를 실시간으로 확인하세요.',

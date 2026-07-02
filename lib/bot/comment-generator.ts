@@ -1,9 +1,7 @@
 import { callGroq } from '@/lib/ai/groq-client'
-import { callClaude } from '@/lib/ai/claude-client'
 import type { BotPersona } from './personas'
 
 const BOT_GROQ_MODEL = 'qwen/qwen3.6-27b'
-const BOT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001'
 
 export interface IssueContext {
     title: string
@@ -43,7 +41,6 @@ export interface DiscussionContext {
     issue_category?: string | null
 }
 
-// Groq 우선, 실패 시 Claude Haiku 폴백
 async function callWithFallback(persona: BotPersona, prompt: string): Promise<string | null> {
     const messages = [
         { role: 'system' as const, content: persona.systemPrompt },
@@ -51,22 +48,12 @@ async function callWithFallback(persona: BotPersona, prompt: string): Promise<st
     ]
     const opts = { temperature: 0.85, max_tokens: 150 }
 
-    // 1차: Groq llama (reasoning 모델 제외 — content null 발생 없음)
     try {
         const raw = await callGroq(messages, { ...opts, model: BOT_GROQ_MODEL })
         const cleaned = sanitizeBotComment(raw)
         if (cleaned) return cleaned
     } catch {
-        // Groq 실패 → Claude 폴백
-    }
-
-    // 2차: Claude Haiku
-    try {
-        const raw = await callClaude(messages, { ...opts, model: BOT_CLAUDE_MODEL })
-        const cleaned = sanitizeBotComment(raw)
-        if (cleaned) return cleaned
-    } catch {
-        // 둘 다 실패
+        // Groq 실패 시 댓글 생성 건너뜀
     }
 
     return null

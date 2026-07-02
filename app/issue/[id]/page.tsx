@@ -79,7 +79,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     const baseUrl = SITE_URL
     const title = `${issue.title}`
-    const description = issue.topic_description || `${issue.category} 카테고리의 ${issue.status} 이슈. 왜난리(whynali.com)에서 화력 지수 ${issue.heat_index ?? 0}점, 실시간 반응·타임라인·투표·댓글을 확인하세요.`
+    const statusLabel: Record<string, string> = {
+        '점화': '지금 가장 뜨거운',
+        '논란중': '논란이 되고 있는',
+        '종결': '정리된',
+    }
+    const statusText = statusLabel[issue.status] ?? ''
+    const description = issue.topic_description ||
+        `${issue.title} — ${statusText} ${issue.category} 이슈. 왜난리에서 타임라인·투표·실시간 반응을 한눈에 확인하세요.`
 
     const categoryKeywords: Record<string, string[]> = {
         '연예': ['연예', '연예계', '셀럽', '아이돌', '배우', '가수'],
@@ -110,7 +117,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             tags: keywords,
             images: [
                 {
-                    url: SITE_OG_IMAGE,
+                    url: issue.thumbnail_urls?.length > 0
+                        ? issue.thumbnail_urls[issue.primary_thumbnail_index ?? 0]
+                        : SITE_OG_IMAGE,
                     width: 1200,
                     height: 630,
                     alt: issue.title,
@@ -121,7 +130,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             card: 'summary_large_image',
             title,
             description,
-            images: [SITE_OG_IMAGE],
+            images: [
+                issue.thumbnail_urls?.length > 0
+                    ? issue.thumbnail_urls[issue.primary_thumbnail_index ?? 0]
+                    : SITE_OG_IMAGE,
+            ],
         },
         alternates: {
             canonical: `${baseUrl}/issue/${id}`,

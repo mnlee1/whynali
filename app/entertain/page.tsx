@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     title: '연예 이슈',
     description: '연예계의 최신 이슈와 논란을 한눈에. 아이돌, 배우, 가수, 방송인의 사건과 뉴스를 실시간으로 확인하세요.',
     keywords: ['연예', '연예계', '아이돌', '배우', '가수', '방송인', '셀럽', '연예 이슈', '연예 뉴스'],
+    alternates: {
+        canonical: '/entertain',
+    },
     openGraph: {
         title: '연예 이슈 | 왜난리',
         description: '연예계의 최신 이슈와 논란을 한눈에. 아이돌, 배우, 가수, 방송인의 사건과 뉴스를 실시간으로 확인하세요.',
