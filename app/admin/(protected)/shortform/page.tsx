@@ -481,7 +481,9 @@ export default function AdminShortformPage() {
                 ...prev,
                 rewriteLoading: false,
                 rewrittenTexts: json.texts ?? sceneTexts,
-                rewrittenHighlights: json.highlights ?? [],
+                rewrittenHighlights: (json.highlights ?? []).map((words: string[], i: number) =>
+                    sortHighlightsByPosition(words, (json.texts ?? sceneTexts)[i] ?? '')
+                ),
             }))
         } catch (e) {
             setImagePreview(prev => ({
@@ -525,7 +527,8 @@ export default function AdminShortformPage() {
             // 원본 씬 인덱스에 맞게 재매핑 (빈 텍스트 제거로 인한 인덱스 어긋남 방지)
             const remapped: string[][] = Array.from({ length: allTexts.length }, () => [])
             nonEmptyIndices.forEach((origIdx, apiIdx) => {
-                remapped[origIdx] = apiHighlights[apiIdx] ?? []
+                const words = apiHighlights[apiIdx] ?? []
+                remapped[origIdx] = sortHighlightsByPosition(words, allTexts[origIdx])
             })
             setImagePreview(prev => ({
                 ...prev,
@@ -553,7 +556,10 @@ export default function AdminShortformPage() {
             const newHighlights: string[][] = json.highlights ?? []
             setImagePreview(prev => {
                 const updated = [...prev.rewrittenHighlights]
-                sceneIndices.forEach((si, idx) => { updated[si] = newHighlights[idx] ?? [] })
+                sceneIndices.forEach((si, idx) => {
+                    const words = newHighlights[idx] ?? []
+                    updated[si] = sortHighlightsByPosition(words, prev.rewrittenTexts[si] ?? '')
+                })
                 return {
                     ...prev,
                     rewrittenHighlights: updated,
@@ -639,7 +645,8 @@ export default function AdminShortformPage() {
                 handleUpdateRewrittenText(index, json.texts[0])
                 setImagePreview(prev => {
                     const newHL = [...prev.rewrittenHighlights]
-                    newHL[index] = json.highlights?.[0] ?? []
+                    const words = json.highlights?.[0] ?? []
+                    newHL[index] = sortHighlightsByPosition(words, json.texts[0])
                     return { ...prev, rewrittenHighlights: newHL }
                 })
             }
