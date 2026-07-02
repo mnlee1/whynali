@@ -38,9 +38,9 @@ INSERT INTO kpi_goals (
     3.3,
     10.0,
     16.7,
-    3,
-    3,
-    '7월 목표: 6월 목표와 동일 유지. 시작 23명 → 목표 100명',
+    2,
+    1,
+    '7월 목표: 6월 목표와 동일 유지. 시작 23명 → 목표 100명. 이슈 승인 일 2개, 숏폼 일 1개',
     true
 ) ON CONFLICT (period_year, period_month) DO UPDATE SET
     period_start                         = EXCLUDED.period_start,
