@@ -114,7 +114,7 @@ function deduplicateTexts(texts: string[], originals: string[]): string[] {
 
         if (isTooShort || isIncomplete) {
             const expanded = original.length >= 12
-                ? original.slice(0, 55)
+                ? original.slice(0, 24)
                 : original.length > 0
                     ? `${original} 사태가 주목받고 있다`
                     : `${trimmed} 상황이 주목받고 있다`
@@ -123,7 +123,7 @@ function deduplicateTexts(texts: string[], originals: string[]): string[] {
         }
         const isDuplicate = seen.some(prev => isTooSimilar(prev, trimmed))
         if (isDuplicate) {
-            return original.slice(0, 55) || trimmed
+            return original.slice(0, 24) || trimmed
         }
         seen.push(trimmed)
         return trimmed
@@ -189,7 +189,7 @@ ${contentLines}
 
 규칙:
 - 모든 문장 합쇼체 (~합니다/~됩니다/~입니다/~됐습니다/~될까요?)
-- 한 씬 55자 이내, 핵심 수치·인명·기관명은 그대로 사용
+- 한 씬 24자 이내, 핵심 수치·인명·기관명은 그대로 사용
 - "그런데"/"한편"/"문제는" 등 접속사로 씬 시작 금지
 - 각 씬은 서로 다른 사실을 담을 것${variation ? '\n- 이전과 다른 각도·표현으로 새롭게 작성' : ''}
 
