@@ -37,6 +37,8 @@ export const maxDuration = 60
 const MIN_HEAT = parseInt(process.env.DAILY_GENERATE_MIN_HEAT ?? '15')
 // 한 번에 처리할 최대 이슈 수 (Vercel 타임아웃 방지)
 const MAX_ISSUES_PER_RUN = parseInt(process.env.DAILY_GENERATE_MAX_ISSUES ?? '5')
+// 이슈 생성일 기준 최대 대상 기간 (이 기간을 넘은 이슈는 재생성 제외)
+const MAX_AGE_DAYS = parseInt(process.env.DAILY_GENERATE_MAX_AGE_DAYS ?? '7')
 
 function verifyCronRequest(req: NextRequest): boolean {
     const authHeader = req.headers.get('authorization')
@@ -192,7 +194,9 @@ export async function GET(request: NextRequest) {
     if (staleDiscussionsResult.error) console.error('[daily-generate] 대기 토론 정리 에러:', staleDiscussionsResult.error)
     console.log(`[daily-generate] 대기 콘텐츠 정리 — 투표 ${deletedVotes}개, 토론 ${deletedDiscussions}개 삭제`)
 
-    // 대상 이슈 조회: 승인 + heat ≥ MIN_HEAT + (토론 없음 OR 투표 없음)
+    // 대상 이슈 조회: 승인 + 종결 아님 + heat ≥ MIN_HEAT + 생성일 MAX_AGE_DAYS 이내 + (토론 없음 OR 투표 없음)
+    const ageThreshold = new Date(Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
     const { data: issues, error } = await supabaseAdmin
         .from('issues')
         .select(`
@@ -202,7 +206,9 @@ export async function GET(request: NextRequest) {
         `)
         .eq('approval_status', '승인')
         .eq('visibility_status', 'visible')
+        .neq('status', '종결')
         .gte('heat_index', MIN_HEAT)
+        .gte('created_at', ageThreshold)
         .order('heat_index', { ascending: false })
         .limit(MAX_ISSUES_PER_RUN * 3) // 필터링 여유분
 
