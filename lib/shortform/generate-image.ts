@@ -379,6 +379,8 @@ export async function generateNSceneShortform(
         ? highlights.slice(0, N)
         : Array.from({ length: N }, () => [])
 
+    console.log(`[generateNScene] N=${N}, highlights_in=${highlights?.length ?? 'none'}, active=${sceneHighlights.map(h => h.length > 0 ? h.join(',') : '(empty)').join(' | ')}`)
+
     // 씬 콘텐츠 구성
     const sceneContents: SceneContent[] = [
         ...sceneTexts.map((desc, i) => ({ title: issueTitle, desc, highlights: sceneHighlights[i] ?? [] })),
