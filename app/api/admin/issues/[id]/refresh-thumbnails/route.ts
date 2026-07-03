@@ -46,16 +46,7 @@ export async function POST(
             )
         }
 
-        const { error: updateError } = await supabaseAdmin
-            .from('issues')
-            .update({
-                thumbnail_urls: thumbnailUrls,
-                primary_thumbnail_index: 0,
-            })
-            .eq('id', id)
-
-        if (updateError) throw updateError
-
+        // DB 저장하지 않음 — 후보 이미지만 반환하고 사용자가 선택 후 확정
         return NextResponse.json({
             success: true,
             thumbnail_urls: thumbnailUrls,
