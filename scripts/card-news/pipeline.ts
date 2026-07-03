@@ -115,6 +115,12 @@ async function run() {
   if (issueIdArg && ['surging', 'timeline', 'qa', 'debate', 'by-numbers'].includes(mode)) {
     console.log(`ℹ️  수동 모드 — 이슈 ID: ${issueIdArg}`)
     slideContents = await generateSlidesForIssue(issueIdArg, mode as 'surging' | 'timeline' | 'qa' | 'debate', LOGO_BASE64)
+    const { data: issueData } = await supabase
+      .from('issues')
+      .select('id, title, category, heat_index, topic')
+      .eq('id', issueIdArg)
+      .single()
+    if (issueData) reportIssues = [issueData as Issue]
     console.log(`✅ 슬라이드 콘텐츠 ${slideContents.length}개 생성 완료`)
   } else {
     // 자동 모드: DB에서 이슈 선택
