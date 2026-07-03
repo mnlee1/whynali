@@ -330,7 +330,7 @@ export default function AdminDashboardPage() {
                                     <div className="flex items-center gap-2">
                                         <div>
                                             <p className="text-base font-semibold text-content-primary">Groq AI</p>
-                                <p className="text-sm text-content-secondary mt-0.5">gpt-oss-120b / gpt-oss-20b</p>
+                                <p className="text-sm text-content-secondary mt-0.5">gpt-oss-120b · qwen3.6-27b</p>
                                         </div>
                                     </div>
                                     <span className="px-2.5 py-1 text-xs font-semibold bg-green-500 text-white rounded-full">
@@ -419,7 +419,8 @@ export default function AdminDashboardPage() {
                                             { label: '커뮤니티 버스트 감지', desc: '급상승 커뮤니티 반응 탐지', model: 'gpt-oss-120b', schedule: '30분' },
                                             { label: '원인 기사 검색', desc: '이슈 원인 뉴스 자동 연결', model: 'gpt-oss-120b', schedule: '30분' },
                                             { label: '상위 이슈 연결', desc: '후속·파생 이슈 자동 연결', model: 'gpt-oss-120b', schedule: '30분' },
-                                            { label: '뉴스·커뮤니티 필터링', desc: '관련 콘텐츠 선별 + 최종 제목', model: 'gpt-oss-120b', schedule: '30분' },
+                                            { label: '뉴스·커뮤니티 필터링', desc: '관련 콘텐츠 선별 + 최종 제목', model: 'qwen3.6-27b', schedule: '30분' },
+                                            { label: '타임라인 초기 구성', desc: '이슈 생성 시 타임라인 단계 분류', model: 'qwen3.6-27b', schedule: '30분' },
                                             { label: '타임라인 분류', desc: '전개·파생 단계 분류', model: 'gpt-oss-120b', schedule: '매시 30분' },
                                             { label: '이슈 종합 요약', desc: '이슈 종결 시 자동 생성', model: 'gpt-oss-120b', schedule: '자동' },
                                             { label: '토론 주제 생성', desc: '승인 이슈 대상', model: 'gpt-oss-120b', schedule: '매일 낮 12시' },
@@ -428,6 +429,8 @@ export default function AdminDashboardPage() {
                                             { label: '카드뉴스 카피 생성', desc: '제목·설명·포인트 텍스트', model: 'gpt-oss-120b', schedule: '월~금 오전 7시' },
                                             { label: '이미지 키워드 추출', desc: 'Pixabay · Pexels 검색어 생성', model: 'gpt-oss-120b / gpt-oss-20b', schedule: '자동' },
                                             { label: '숏폼 해시태그 생성', desc: '업로드 시 자동 생성', model: 'gpt-oss-120b', schedule: '수동' },
+                                            { label: '숏폼 하이라이트 추출', desc: '자막 강조 키워드 선별', model: 'qwen3.6-27b', schedule: '자동' },
+                                            { label: '숏폼 씬 AI 편집', desc: '재작성 · 요약 · 중복 제거', model: 'qwen3.6-27b', schedule: '수동' },
                                         ].map((feature) => (
                                             <div key={feature.label} className="flex items-start text-sm bg-surface rounded px-2.5 py-1.5 border border-border-muted">
                                                 <div className="min-w-0">
