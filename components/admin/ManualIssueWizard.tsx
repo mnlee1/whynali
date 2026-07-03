@@ -200,7 +200,7 @@ export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
             })
             setStep('done')
             onSuccess()
-            setTimeout(() => onClose(), 1500)
+            setTimeout(() => onClose(), 2500)
         } catch (err) {
             setError(err instanceof Error ? err.message : '등록 실패')
             setStep('step2')

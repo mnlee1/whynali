@@ -8,7 +8,8 @@
  * - API 한도: 200회/시간, 20,000회/월
  */
 
-import { callGroq } from '@/lib/ai/groq-client'
+import { getAIClient } from '@/lib/ai/ai-client'
+import { parseJsonObject } from '@/lib/ai/parse-json-response'
 
 const CATEGORY_FALLBACK: Record<string, string> = {
     '연예': 'stage spotlight neon',
@@ -62,11 +63,12 @@ Korean headline: "${title}"
 ${exclude ? `Do NOT suggest these keywords (already shown): "${exclude}". Pick different words.\n` : ''}Reply with ONLY valid JSON.`
 
     try {
-        const content = await callGroq(
-            [{ role: 'user', content: prompt }],
-            { model: 'openai/gpt-oss-20b', temperature, max_tokens: 300 }
-        )
-        const parsed = JSON.parse(content) as { keywords?: string; keyword?: string; isDark?: boolean }
+        const content = await getAIClient().complete(prompt, { temperature, maxTokens: 300 })
+        const parsed = parseJsonObject<{ keywords?: string; keyword?: string; isDark?: boolean }>(content)
+        if (!parsed) {
+            console.error('[extractKeywordsAndTone] JSON 파싱 실패:', content?.slice(0, 200))
+            return null
+        }
         const kw = (parsed.keywords || parsed.keyword || '').trim()
         if (!kw) return null
         return { keywords: kw, isDark: parsed.isDark ?? false }
