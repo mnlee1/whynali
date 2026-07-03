@@ -49,14 +49,13 @@ async function fetchPageData() {
             .order('created_at', { ascending: false })
             .limit(10),
 
-        // PopularRanking용: 화력 상위 이슈 (종결 제외)
+        // PopularRanking용: 화력 상위 이슈 (종결 포함 — 진행 중 이슈 부족 시 종결 이슈로 채움)
         supabaseAdmin
             .from('issues')
             .select('*')
             .eq('approval_status', '승인')
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
-            .neq('status', '종결')
             .order('heat_index', { ascending: false, nullsFirst: false })
             .limit(20),
 
@@ -101,7 +100,7 @@ async function fetchPageData() {
     const heroIssues = (hotResult.data ?? []).slice(0, 5) as Issue[]
     const heroIds = new Set(heroIssues.map(i => i.id))
 
-    // 급상승중: 화력 상위 이슈 5개 (슬라이드 이슈 제외)
+    // 급상승중: 화력 상위 이슈 5개 (슬라이드 이슈 제외, 부족 시 종결 이슈로 채움)
     const surgingIssues = (surgingResult.data ?? [])
         .filter(i => !heroIds.has(i.id))
         .slice(0, 5) as Issue[]
