@@ -210,24 +210,44 @@ export function calculateNaverCost(callCount: number): number {
  */
 async function getAiKeyStatus(provider: 'claude' | 'groq') {
     try {
-        const { data, error } = await supabaseAdmin
+        const { data: allKeys, error } = await supabaseAdmin
             .from('ai_key_status')
-            .select('is_blocked, blocked_until, fail_count, block_reason, updated_at')
+            .select('is_blocked, blocked_until, fail_count, block_reason')
             .eq('provider', provider)
-            .eq('is_blocked', true)
-            .limit(1)
-            .maybeSingle()
 
-        if (error || !data) return null
+        if (error || !allKeys || allKeys.length === 0) return null
 
-        // rate_limit: 차단 시간이 지났으면 null 반환
-        if (data.block_reason !== 'credit_depleted' && data.blocked_until && new Date(data.blocked_until) <= new Date()) return null
+        const now = new Date().toISOString()
+
+        // credit_depleted는 단일 키여도 즉시 경보 (계정 레벨 문제)
+        const creditDepleted = allKeys.find(k => k.is_blocked && k.block_reason === 'credit_depleted')
+        if (creditDepleted) {
+            return {
+                isBlocked: true,
+                blockedUntil: creditDepleted.blocked_until as string | null,
+                failCount: creditDepleted.fail_count as number,
+                blockReason: 'credit_depleted' as const,
+            }
+        }
+
+        // rate_limit: 현재 실제로 차단 중인 키만 집계
+        const activelyBlocked = allKeys.filter(k =>
+            k.is_blocked && k.blocked_until && k.blocked_until > now
+        )
+
+        // 일부만 차단 → 나머지 키로 정상 처리 중 → 경보 없음
+        if (activelyBlocked.length < allKeys.length) return null
+
+        // 모든 키가 차단된 경우 → 가장 늦게 해제되는 시각 기준으로 표시
+        const latest = activelyBlocked.reduce((max, k) =>
+            k.blocked_until! > (max.blocked_until ?? '') ? k : max
+        )
 
         return {
             isBlocked: true,
-            blockedUntil: data.blocked_until as string | null,
-            failCount: data.fail_count as number,
-            blockReason: (data.block_reason ?? 'rate_limit') as 'rate_limit' | 'credit_depleted',
+            blockedUntil: latest.blocked_until as string | null,
+            failCount: latest.fail_count as number,
+            blockReason: 'rate_limit' as const,
         }
     } catch {
         return null
