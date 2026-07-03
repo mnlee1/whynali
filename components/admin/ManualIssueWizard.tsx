@@ -200,6 +200,7 @@ export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
             })
             setStep('done')
             onSuccess()
+            setTimeout(() => onClose(), 1500)
         } catch (err) {
             setError(err instanceof Error ? err.message : '등록 실패')
             setStep('step2')
@@ -237,7 +238,6 @@ export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-            onClick={e => { if (e.target === e.currentTarget && !isBusy) onClose() }}
         >
             <div className="w-full max-w-lg bg-surface rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
 
