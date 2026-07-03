@@ -42,6 +42,7 @@ export default function IssuePreviewDrawer({
     const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState<number>(0)
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [localThumbnailUrls, setLocalThumbnailUrls] = useState<string[]>([])
+    const [candidateUrls, setCandidateUrls] = useState<string[]>([])
     const [refreshSuccess, setRefreshSuccess] = useState(false)
     const [showKeywordPanel, setShowKeywordPanel] = useState(false)
     const [keywordInput, setKeywordInput] = useState('')
@@ -56,6 +57,7 @@ export default function IssuePreviewDrawer({
         if (issue) {
             setSelectedThumbnailIndex(issue.primary_thumbnail_index ?? 0)
             setLocalThumbnailUrls(issue.thumbnail_urls ?? [])
+            setCandidateUrls([])
             setTimelineTab('preview')
             setSummaryKey(0)
             setSourcesKey(0)
@@ -200,17 +202,41 @@ export default function IssuePreviewDrawer({
             }
 
             const data = await res.json()
-            setLocalThumbnailUrls(data.thumbnail_urls ?? [])
-            setSelectedThumbnailIndex(0)
-            setRefreshSuccess(true)
+            setCandidateUrls(data.thumbnail_urls ?? [])
             setShowKeywordPanel(false)
-            setTimeout(() => setRefreshSuccess(false), 2000)
-            onIssueUpdate?.()
         } catch (error) {
             console.error('이미지 재검색 에러:', error)
             alert(error instanceof Error ? error.message : '이미지 재검색에 실패했습니다')
         } finally {
             setIsRefreshing(false)
+        }
+    }
+
+    const handleCandidatePick = async (index: number) => {
+        if (!issue || candidateUrls.length === 0) return
+
+        try {
+            const res = await fetch(`/api/admin/issues/${issue.id}/primary-thumbnail`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index, thumbnail_urls: candidateUrls }),
+            })
+
+            if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.message || '대표 이미지 설정 실패')
+            }
+
+            setLocalThumbnailUrls(candidateUrls)
+            setSelectedThumbnailIndex(index)
+            setCandidateUrls([])
+            setShowKeywordPanel(false)
+            setRefreshSuccess(true)
+            setTimeout(() => setRefreshSuccess(false), 2000)
+            onIssueUpdate?.()
+        } catch (error) {
+            console.error('대표 이미지 설정 에러:', error)
+            alert(error instanceof Error ? error.message : '대표 이미지 설정에 실패했습니다')
         }
     }
 
@@ -251,7 +277,7 @@ export default function IssuePreviewDrawer({
             />
 
             {/* 드로어 패널 */}
-            <aside className="fixed top-0 right-0 h-full w-full max-w-2xl bg-surface z-50 flex flex-col shadow-2xl">
+            <aside className="fixed top-0 right-0 h-full w-full max-w-3xl bg-surface z-50 flex flex-col shadow-2xl">
                 {/* 헤더 */}
                 <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border shrink-0">
                     <div className="flex-1 min-w-0">
@@ -288,15 +314,10 @@ export default function IssuePreviewDrawer({
                     {/* 이미지 미리보기 */}
                     <div className="card overflow-hidden">
                         <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-content-primary">
-                                대표 이미지
-                                {localThumbnailUrls.length > 0 && (
-                                    <span className="ml-2 text-xs font-normal text-content-muted">({localThumbnailUrls.length}개)</span>
-                                )}
-                            </h2>
+                            <h2 className="text-sm font-bold text-content-primary">대표 이미지</h2>
                             <div className="flex items-center gap-2 flex-wrap">
                                 {refreshSuccess && (
-                                    <span className="text-xs text-green-600 font-medium">✓ 이미지 검색 완료</span>
+                                    <span className="text-xs text-green-600 font-medium">✓ 교체 완료</span>
                                 )}
                                 <button
                                     onClick={() => handleRefreshThumbnails()}
@@ -380,42 +401,39 @@ export default function IssuePreviewDrawer({
                                 </div>
                             </div>
                         )}
-                        <div className="p-4 space-y-3">
-                            {localThumbnailUrls.length === 0 ? (
+                        <div className="p-4">
+                            {localThumbnailUrls.length === 0 && candidateUrls.length === 0 ? (
                                 <p className="text-xs text-content-muted text-center py-4">
-                                    이미지가 없습니다. &apos;이미지 재검색&apos; 버튼을 눌러 Pexels에서 검색하세요.
+                                    이미지가 없습니다. 이미지 재검색을 눌러 Pexels에서 검색하세요.
                                 </p>
-                            ) : selectedThumbnailIndex < 0 ? (
+                            ) : selectedThumbnailIndex < 0 && candidateUrls.length === 0 ? (
                                 <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-                                    그라데이션 배경 사용 중 — 이미지를 클릭하면 대표로 설정됩니다
+                                    그라데이션 배경 사용 중
                                 </p>
                             ) : (
-                                <p className="text-xs text-content-muted">
-                                    슬라이드에 표시할 대표 이미지를 선택하세요
-                                </p>
-                            )}
-                            {localThumbnailUrls.length > 0 && (
-                                <div className="grid grid-cols-3 gap-3">
-                                    {localThumbnailUrls.map((url, i) => (
-                                        <label key={url} className="block cursor-pointer group">
-                                            <div className={`relative aspect-video rounded-lg overflow-hidden ring-2 transition-all ${selectedThumbnailIndex === i ? 'ring-primary shadow-lg' : 'ring-transparent hover:ring-border'}`}>
-                                                <Image src={url} alt={`이미지 ${i + 1}`} fill sizes="200px" className="object-cover" />
-                                                <input
-                                                    type="radio"
-                                                    name="thumbnail"
-                                                    checked={selectedThumbnailIndex === i}
-                                                    onChange={() => handlePrimaryThumbnailChange(i)}
-                                                    className="absolute top-2 left-2 w-4 h-4 accent-primary"
-                                                />
-                                                {selectedThumbnailIndex === i && (
-                                                    <div className="absolute top-2 right-2">
-                                                        <span className="px-2 py-1 bg-primary text-white text-xs font-bold rounded shadow-md">
-                                                            대표
-                                                        </span>
-                                                    </div>
-                                                )}
+                                <div className="grid grid-cols-4 gap-3">
+                                    {/* 현재 대표 */}
+                                    {localThumbnailUrls.length > 0 && selectedThumbnailIndex >= 0 && (
+                                        <div className="relative aspect-video rounded-lg overflow-hidden ring-2 ring-primary shadow-md">
+                                            <Image
+                                                src={localThumbnailUrls[selectedThumbnailIndex]}
+                                                alt="현재 대표"
+                                                fill
+                                                sizes="180px"
+                                                className="object-cover"
+                                            />
+                                            <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-primary text-white text-[10px] font-bold rounded shadow">
+                                                대표
+                                            </span>
+                                        </div>
+                                    )}
+                                    {/* 재검색 후보 */}
+                                    {candidateUrls.map((url, i) => (
+                                        <button key={url} onClick={() => handleCandidatePick(i)} className="block w-full">
+                                            <div className="relative aspect-video rounded-lg overflow-hidden ring-2 ring-transparent hover:ring-primary transition-all">
+                                                <Image src={url} alt={`후보 ${i + 1}`} fill sizes="180px" className="object-cover" />
                                             </div>
-                                        </label>
+                                        </button>
                                     ))}
                                 </div>
                             )}

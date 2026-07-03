@@ -22,7 +22,7 @@ export async function POST(
     try {
         const { id } = await params
         const body = await request.json()
-        const { index } = body
+        const { index, thumbnail_urls } = body
 
         if (typeof index !== 'number' || index < 0 || index > 2) {
             return NextResponse.json(
@@ -31,9 +31,14 @@ export async function POST(
             )
         }
 
+        const updatePayload: Record<string, unknown> = { primary_thumbnail_index: index }
+        if (Array.isArray(thumbnail_urls) && thumbnail_urls.length > 0) {
+            updatePayload.thumbnail_urls = thumbnail_urls
+        }
+
         const { error } = await supabaseAdmin
             .from('issues')
-            .update({ primary_thumbnail_index: index })
+            .update(updatePayload)
             .eq('id', id)
 
         if (error) throw error
