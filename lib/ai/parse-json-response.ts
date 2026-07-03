@@ -16,7 +16,10 @@
 export function parseJsonObject<T = Record<string, unknown>>(text: string): T | null {
     try {
         let cleaned = text.trim()
-        
+
+        // <think>...</think> 블록 제거 (Qwen3 등 thinking 모델 대응)
+        cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
         // 마크다운 코드펜스 제거
         cleaned = cleaned.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '')
         
@@ -47,7 +50,10 @@ export function parseJsonObject<T = Record<string, unknown>>(text: string): T | 
 export function parseJsonArray<T = unknown>(text: string): T[] | null {
     try {
         let cleaned = text.trim()
-        
+
+        // <think>...</think> 블록 제거 (Qwen3 등 thinking 모델 대응)
+        cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
         // 마크다운 코드펜스 제거
         cleaned = cleaned.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '')
         
