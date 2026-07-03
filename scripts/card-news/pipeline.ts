@@ -369,44 +369,47 @@ function buildCaption(
   const issueUrl = (id: string) => `https://whynali.com/i/${id}?${utm}`
   const tags = platform === 'threads' ? '' : platform === 'twitter' ? '#왜난리 #이슈' : buildTags(mode, issues)
   const issue = issues[0]
+  const engagementCta = platform === 'instagram'
+    ? '🔥이슈에 대해 궁금하시면, 🎈팔로우하고 💬댓글 남겨주세요!'
+    : null
 
   switch (mode) {
     case 'weekend-recap': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
       const cta = `왜난리인지 직접 확인 👉 ${mainUrl}`
-      return ['이번 주 뭐가 터졌나요? 🔥', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return ['이번 주 뭐가 터졌나요? 🔥', '', ...lines, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'surging': {
       const surge = issue?.surgePct ? ` (▲${Math.round(issue.surgePct)}%)` : ''
       const cta = `왜난리인지 직접 확인 👉 ${issueUrl(issue.id)}`
-      return [`지금 이 이슈 모르면 대화 못 낍니다 🚨`, '', `"${issue?.title}"${surge}`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [`지금 이 이슈 모르면 대화 못 낍니다 🚨`, '', `"${issue?.title}"${surge}`, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'weekly-top3': {
       const lines = issues.map((i, idx) => `${idx + 1}위 "${i.title}"`)
       const cta = `왜난리인지 직접 확인 👉 ${mainUrl}`
-      return ['이번 주 TOP 3, 다 알고 계신가요? 🔥', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return ['이번 주 TOP 3, 다 알고 계신가요? 🔥', '', ...lines, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'by-category': {
       const lines = issues.map(i => `[${i.category}] "${i.title}"`)
       const cta = `왜난리인지 직접 확인 👉 ${mainUrl}`
-      return ['오늘 뭐가 터졌나 — 분야별 정리 📋', '', ...lines, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return ['오늘 뭐가 터졌나 — 분야별 정리 📋', '', ...lines, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'timeline': {
       const targetIssue = closedIssue ?? issue
       const cta = `왜난리인지 직접 확인 👉 ${issueUrl(targetIssue.id)}`
-      return ['이 이슈, 처음부터 끝까지 정리했습니다 📌', '', `"${targetIssue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return ['이 이슈, 처음부터 끝까지 정리했습니다 📌', '', `"${targetIssue?.title}"`, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'by-numbers': {
       const cta = `왜난리인지 직접 확인 👉 ${issueUrl(issue.id)}`
-      return [`이 이슈, 숫자로 읽으면 다 보여요 🔢`, '', `"${issue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [`이 이슈, 숫자로 읽으면 다 보여요 🔢`, '', `"${issue?.title}"`, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'qa': {
       const cta = `왜난리인지 직접 확인 👉 ${issueUrl(issue.id)}`
-      return [`이게 왜 난리야? Q&A로 정리했습니다 🤔`, '', `"${issue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [`이게 왜 난리야? Q&A로 정리했습니다 🤔`, '', `"${issue?.title}"`, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
     case 'debate': {
       const cta = `왜난리인지 직접 확인 👉 ${issueUrl(issue.id)}`
-      return [`찬반 논란, 양쪽 다 들어보세요 ⚖️`, '', `"${issue?.title}"`, '', cta, ...(tags ? ['', tags] : [])].join('\n')
+      return [`찬반 논란, 양쪽 다 들어보세요 ⚖️`, '', `"${issue?.title}"`, ...(engagementCta ? ['', engagementCta] : []), '', cta, ...(tags ? ['', tags] : [])].join('\n')
     }
   }
 }
