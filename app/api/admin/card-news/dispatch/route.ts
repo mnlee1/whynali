@@ -13,7 +13,7 @@ import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
-const GITHUB_OWNER = 'whynali'
+const GITHUB_OWNER = 'mnlee1'
 const GITHUB_REPO = 'whynali'
 const WORKFLOW_FILE = 'card-news.yml'
 
