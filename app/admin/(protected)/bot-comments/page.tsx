@@ -20,6 +20,8 @@ interface AutoOpLog {
     id: string
     job_type: string
     status: string
+    target_type: string | null
+    target_id: string | null
     details: Record<string, unknown> | null
     created_at: string
 }
@@ -47,6 +49,7 @@ const JOB_LABELS: Record<string, string> = {
     bot_discussion_comment: '봇 토론의견',
     bot_discussion_batch: '토론 배치',
 }
+const RETRYABLE_JOB_TYPES = new Set(['bot_comment', 'bot_discussion_comment'])
 const FAIL_REASON_LABELS: Record<string, string> = {
     groq_error: 'Groq API 호출 실패',
     filter_foreign_char: '외국어·특수문자 필터 거부',
@@ -122,6 +125,7 @@ export default function BotCommentsPage() {
     const [personaId, setPersonaId] = useState('')
     const [commentsLoading, setCommentsLoading] = useState(true)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
     const [sortType, setSortType] = useState<'all' | 'issue' | 'discussion'>('all')
 
     // ── 실행 로그 상태 ──
@@ -130,6 +134,7 @@ export default function BotCommentsPage() {
     const [logsOffset, setLogsOffset] = useState(0)
     const [logStatus, setLogStatus] = useState('')
     const [logsLoading, setLogsLoading] = useState(false)
+    const [retryingId, setRetryingId] = useState<string | null>(null)
 
     // ── 데이터 로드 ──
 
@@ -184,6 +189,25 @@ export default function BotCommentsPage() {
     const handlePersonaChange = (pid: string) => { setPersonaId(pid); setCommentsOffset(0) }
     const handleLogStatusChange = (st: string) => { setLogStatus(st); setLogsOffset(0) }
 
+    const handleRetry = async (logId: string) => {
+        setRetryingId(logId)
+        try {
+            const res = await fetch('/api/admin/auto-op-logs/retry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ log_id: logId }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            alert(json.posted ? '재시도 성공: 댓글이 등록되었습니다.' : '재시도했지만 댓글이 등록되지 않았습니다. (조건 미충족 또는 AI 생성 실패 — 로그 확인)')
+            loadLogs(logStatus, logsOffset)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : '재시도 실패')
+        } finally {
+            setRetryingId(null)
+        }
+    }
+
     const handleDelete = async (id: string) => {
         if (!window.confirm('이 봇 댓글을 삭제하시겠습니까?')) return
         setDeletingId(id)
@@ -196,6 +220,26 @@ export default function BotCommentsPage() {
             alert(e instanceof Error ? e.message : '삭제 실패')
         } finally {
             setDeletingId(null)
+        }
+    }
+
+    const handleRegenerate = async (id: string) => {
+        if (!window.confirm('이 봇 댓글을 삭제하고 다른 페르소나로 새 댓글을 생성하시겠습니까?')) return
+        setRegeneratingId(id)
+        try {
+            const res = await fetch('/api/admin/bot-comments/regenerate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comment_id: id }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            alert(json.posted ? '재생성 완료: 새 댓글이 등록되었습니다.' : '기존 댓글은 삭제됐지만 새 댓글 생성에 실패했습니다. (AI 생성 실패 또는 조건 미충족)')
+            loadComments(personaId, commentsOffset)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : '재생성 실패')
+        } finally {
+            setRegeneratingId(null)
         }
     }
 
@@ -283,7 +327,7 @@ export default function BotCommentsPage() {
                                     <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">댓글 내용</th>
                                     <th className="w-56 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">연결 대상</th>
                                     <th className="w-36 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">작성일</th>
-                                    <th className="w-20 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">액션</th>
+                                    <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">액션</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-surface divide-y divide-border">
@@ -340,13 +384,22 @@ export default function BotCommentsPage() {
                                                 </td>
                                                 <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">{fmt(c.created_at)}</td>
                                                 <td className="px-4 py-3">
-                                                    <button
-                                                        onClick={() => handleDelete(c.id)}
-                                                        disabled={deletingId === c.id}
-                                                        className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
-                                                    >
-                                                        {deletingId === c.id ? '삭제 중...' : '삭제'}
-                                                    </button>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <button
+                                                            onClick={() => handleRegenerate(c.id)}
+                                                            disabled={regeneratingId === c.id || deletingId === c.id}
+                                                            className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+                                                        >
+                                                            {regeneratingId === c.id ? '재생성 중...' : '재생성'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(c.id)}
+                                                            disabled={deletingId === c.id || regeneratingId === c.id}
+                                                            className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50 whitespace-nowrap"
+                                                        >
+                                                            {deletingId === c.id ? '삭제 중...' : '삭제'}
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )
@@ -399,19 +452,22 @@ export default function BotCommentsPage() {
                                     <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">작업</th>
                                     <th className="w-16 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">상태</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">상세</th>
+                                    <th className="w-20 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">액션</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-surface divide-y divide-border">
                                 {logsLoading ? (
                                     [1,2,3,4,5].map((i) => (
-                                        <tr key={i}><td colSpan={4} className="px-4 py-3">
+                                        <tr key={i}><td colSpan={5} className="px-4 py-3">
                                             <div className="h-3 w-full bg-surface-muted rounded animate-pulse" />
                                         </td></tr>
                                     ))
                                 ) : logs.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-4 py-12 text-center text-sm text-content-muted">실행 로그가 없습니다.</td></tr>
+                                    <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-content-muted">실행 로그가 없습니다.</td></tr>
                                 ) : (
-                                    logs.map((log) => (
+                                    logs.map((log) => {
+                                        const canRetry = log.status === 'failed' && RETRYABLE_JOB_TYPES.has(log.job_type) && !!log.target_id
+                                        return (
                                         <tr key={log.id} className="hover:bg-surface-subtle">
                                             <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap">{fmtSec(log.created_at)}</td>
                                             <td className="px-4 py-3 text-sm font-medium text-content-primary whitespace-nowrap">
@@ -425,8 +481,20 @@ export default function BotCommentsPage() {
                                             <td className="px-4 py-3 max-w-md">
                                                 <LogDetail details={log.details} />
                                             </td>
+                                            <td className="px-4 py-3">
+                                                {canRetry && (
+                                                    <button
+                                                        onClick={() => handleRetry(log.id)}
+                                                        disabled={retryingId === log.id}
+                                                        className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-full hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+                                                    >
+                                                        {retryingId === log.id ? '재시도 중...' : '재시도'}
+                                                    </button>
+                                                )}
+                                            </td>
                                         </tr>
-                                    ))
+                                        )
+                                    })
                                 )}
                             </tbody>
                         </table>
