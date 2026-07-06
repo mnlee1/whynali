@@ -13,6 +13,7 @@
  *   --mode=debate  --issue-id=<uuid>   찬반형
  *   --mode=surging --issue-id=<uuid>   급상승형 (특정 이슈 지정)
  *   --mode=timeline --issue-id=<uuid>  타임라인 (특정 이슈 지정)
+ *   --draft-id=<uuid>                  관리자 페이지에서 수정한 텍스트 draft 사용 (AI 재생성 스킵, --issue-id와 함께 사용)
  *
  * 실행: npx tsx scripts/card-news/pipeline.ts
  * 실제 업로드: npx tsx scripts/card-news/pipeline.ts --publish
@@ -50,6 +51,8 @@ import {
   generateDebateSlides,
   generateNumbersSlides,
   generateSlidesForIssue,
+  fetchCardNewsDraft,
+  markCardNewsDraftUsed,
 } from '../../lib/card-news/core'
 
 // ─── 설정 ──────────────────────────────────────────────
@@ -95,12 +98,17 @@ function getIssueIdArg(): string | null {
   return process.argv.find(a => a.startsWith('--issue-id='))?.split('=')[1] ?? null
 }
 
+function getDraftIdArg(): string | null {
+  return process.argv.find(a => a.startsWith('--draft-id='))?.split('=')[1] ?? null
+}
+
 // ─── 메인 ──────────────────────────────────────────────
 
 async function run() {
   const mode = getContentMode()
   const issueIdArg = getIssueIdArg()
-  console.log(`🚀 카드뉴스 파이프라인 시작 (모드: ${mode}${issueIdArg ? `, 이슈: ${issueIdArg}` : ''})`)
+  const draftIdArg = getDraftIdArg()
+  console.log(`🚀 카드뉴스 파이프라인 시작 (모드: ${mode}${issueIdArg ? `, 이슈: ${issueIdArg}` : ''}${draftIdArg ? `, draft: ${draftIdArg}` : ''})`)
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
 
@@ -114,7 +122,14 @@ async function run() {
   // 수동 모드: 특정 이슈 ID로 단일 이슈 생성
   if (issueIdArg && ['surging', 'timeline', 'qa', 'debate', 'by-numbers'].includes(mode)) {
     console.log(`ℹ️  수동 모드 — 이슈 ID: ${issueIdArg}`)
-    slideContents = await generateSlidesForIssue(issueIdArg, mode as 'surging' | 'timeline' | 'qa' | 'debate', LOGO_BASE64)
+    if (draftIdArg) {
+      const draftSlides = await fetchCardNewsDraft(draftIdArg)
+      if (!draftSlides) throw new Error(`draft를 찾을 수 없습니다: ${draftIdArg}`)
+      slideContents = draftSlides
+      console.log('ℹ️  관리자 수정 draft 사용 — AI 텍스트 재생성 스킵')
+    } else {
+      slideContents = await generateSlidesForIssue(issueIdArg, mode as 'surging' | 'timeline' | 'qa' | 'debate', LOGO_BASE64)
+    }
     const { data: issueData } = await supabase
       .from('issues')
       .select('id, title, category, heat_index, topic')
@@ -206,6 +221,10 @@ async function run() {
   const imagePaths = await renderSlides(slideContents)
   console.log(`✅ 이미지 ${imagePaths.length}장 생성 완료`)
   console.log('   저장 경로:', OUTPUT_DIR)
+
+  if (draftIdArg) {
+    await markCardNewsDraftUsed(draftIdArg)
+  }
 
   // X(Twitter) 캡션 파일 저장 (수동 게시용)
   const xCaption = buildCaption(mode, reportIssues, closedIssue, 'twitter')

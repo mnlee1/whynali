@@ -347,6 +347,7 @@ export async function fetchWeekendTopIssues(excludeIds: Set<string> = new Set())
     .select('id, title, category, thumbnail_urls, primary_thumbnail_index, heat_index, topic, topic_description')
     .eq('approval_status', '승인')
     .eq('visibility_status', 'visible')
+    .neq('status', '종결')
     .is('merged_into_id', null)
     .gte('updated_at', since)
     .order('heat_index', { ascending: false, nullsFirst: false })
@@ -512,6 +513,45 @@ export async function searchIssues(query: string, limit = 10): Promise<Issue[]> 
     .order('heat_index', { ascending: false, nullsFirst: false })
     .limit(limit)
   return (data as Issue[]) ?? []
+}
+
+// ─── 카드뉴스 draft (관리자 텍스트 수정본) ─────────────────
+
+// 관리자가 미리보기에서 수정한 slides를 저장하고 draft id 반환
+export async function saveCardNewsDraft(
+  issueId: string,
+  mode: ContentMode,
+  slides: SlideContent[],
+  createdBy: string | null,
+): Promise<string> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('card_news_drafts')
+    .insert({ issue_id: issueId, mode, slides, created_by: createdBy })
+    .select('id')
+    .single()
+  if (error) throw new Error(`draft 저장 실패: ${error.message}`)
+  return data.id as string
+}
+
+// draft id로 저장된 slides 조회 (pipeline.ts에서 AI 재생성 대신 사용)
+export async function fetchCardNewsDraft(draftId: string): Promise<SlideContent[] | null> {
+  const supabase = getSupabase()
+  const { data } = await supabase
+    .from('card_news_drafts')
+    .select('slides')
+    .eq('id', draftId)
+    .single()
+  return (data?.slides as SlideContent[] | undefined) ?? null
+}
+
+// pipeline.ts가 draft를 소비한 시각 기록 (감사 추적용)
+export async function markCardNewsDraftUsed(draftId: string): Promise<void> {
+  const supabase = getSupabase()
+  await supabase
+    .from('card_news_drafts')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', draftId)
 }
 
 // ─── Groq AI 헬퍼 ────────────────────────────────────────
