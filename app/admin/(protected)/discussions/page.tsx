@@ -10,6 +10,8 @@ import StatusBadge from '@/components/common/StatusBadge'
 interface Issue {
     id: string
     title: string
+    heat_index?: number | null
+    approved_at?: string | null
 }
 
 interface DiscussionTopic {
@@ -124,7 +126,13 @@ export default function AdminDiscussionsPage() {
         try {
             const res = await fetch('/api/admin/issues?approval_status=승인&limit=100')
             const json = await res.json()
-            setApprovedIssues(json.data ?? [])
+            const sorted: Issue[] = (json.data ?? []).sort((a: Issue, b: Issue) => {
+                if (!a.approved_at && !b.approved_at) return 0
+                if (!a.approved_at) return 1
+                if (!b.approved_at) return -1
+                return new Date(b.approved_at).getTime() - new Date(a.approved_at).getTime()
+            })
+            setApprovedIssues(sorted)
         } catch {
             setApprovedIssues([])
         } finally {

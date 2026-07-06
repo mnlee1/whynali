@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 interface Issue {
     id: string
     title: string
+    heat_index?: number | null
 }
 
 interface Props {
@@ -83,9 +84,16 @@ export default function IssueSearchSelect({ issues, value, onChange, loading, pl
                             <li
                                 key={issue.id}
                                 onMouseDown={() => handleSelect(issue)}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-surface-subtle ${value?.id === issue.id ? 'bg-primary-light/30 text-primary-dark font-medium' : 'text-content-primary'}`}
+                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-surface-subtle flex items-center justify-between gap-2 ${value?.id === issue.id ? 'bg-primary-light/30 text-primary-dark font-medium' : 'text-content-primary'}`}
                             >
-                                {issue.title}
+                                <span className="truncate">
+                                    {issue.title}
+                                    {issue.heat_index != null && (
+                                        <span className="text-content-muted tabular-nums">
+                                            {' '}(화력 {issue.heat_index}점)
+                                        </span>
+                                    )}
+                                </span>
                             </li>
                         ))
                     )}
