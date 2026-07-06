@@ -413,8 +413,8 @@ export default function AdminDashboardPage() {
                                 {showAiFeatures && (
                                     <div className="p-4 grid grid-cols-2 gap-1.5 border-t border-border">
                                         {[
-                                            { label: '이슈 진위 판단', desc: '카테고리·키워드·제목 추출 포함', model: 'claude-sonnet-4-6', schedule: '30분' },
-                                            { label: '중복 이슈 체크', desc: '기존 이슈와 AI 비교', model: 'claude-sonnet-4-6', schedule: '30분' },
+                                            { label: '이슈 진위 판단', desc: '카테고리·키워드·제목 추출 포함', model: 'claude-sonnet-4-6 · 폴백: qwen3.6-27b', schedule: '30분' },
+                                            { label: '중복 이슈 체크', desc: '기존 이슈와 AI 비교', model: 'claude-sonnet-4-6 · 폴백: qwen3.6-27b', schedule: '30분' },
                                             { label: '카테고리 자동 분류', desc: '이슈 카테고리 태깅', model: 'gpt-oss-120b', schedule: '30분' },
                                             { label: '커뮤니티 버스트 감지', desc: '급상승 커뮤니티 반응 탐지', model: 'gpt-oss-120b', schedule: '30분' },
                                             { label: '원인 기사 검색', desc: '이슈 원인 뉴스 자동 연결', model: 'gpt-oss-120b', schedule: '30분' },
@@ -427,7 +427,7 @@ export default function AdminDashboardPage() {
                                             { label: '투표 생성', desc: '승인 이슈 대상', model: 'gpt-oss-120b', schedule: '매일 낮 12시' },
                                             { label: '봇 댓글 생성', desc: '15개 페르소나 · 카테고리 가중치', model: 'gpt-oss-120b', schedule: '요일별 변동' },
                                             { label: '카드뉴스 카피 생성', desc: '제목·설명·포인트 텍스트', model: 'gpt-oss-120b', schedule: '월~금 오전 7시' },
-                                            { label: '이미지 키워드 추출', desc: 'Pixabay · Pexels 검색어 생성', model: 'gpt-oss-120b / gpt-oss-20b', schedule: '자동' },
+                                            { label: '이미지 키워드 추출', desc: 'Pixabay · Pexels 검색어 생성', model: 'gpt-oss-120b', schedule: '자동' },
                                             { label: '숏폼 해시태그 생성', desc: '업로드 시 자동 생성', model: 'gpt-oss-120b', schedule: '수동' },
                                             { label: '숏폼 하이라이트 추출', desc: '자막 강조 키워드 선별', model: 'qwen3.6-27b', schedule: '자동' },
                                             { label: '숏폼 씬 AI 편집', desc: '재작성 · 요약 · 중복 제거', model: 'qwen3.6-27b', schedule: '수동' },
