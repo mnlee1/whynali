@@ -1049,7 +1049,7 @@ async function processTrackA(): Promise<{
                 }
 
                 const [topics, votes] = await Promise.all([
-                    generateDiscussionTopics(metadata, 3).catch(() => []),
+                    generateDiscussionTopics(metadata, 1).catch(() => []),
                     generateVoteOptions(metadata, 1).catch(() => []),
                 ])
 

@@ -80,7 +80,7 @@ export async function cleanupUnlinkedData(): Promise<CleanupResult> {
  * - 댓글·반응·투표 등은 ON DELETE CASCADE로 자동 삭제
  *
  * 환경변수:
- * - STALE_PENDING_HOURS: 경과 시간 임계값 (기본 48시간)
+ * - STALE_PENDING_HOURS: 경과 시간 임계값 (기본 168시간 = 7일)
  * - STALE_PENDING_MAX_HEAT: 화력 상한 (기본 15점)
  */
 export async function cleanupStalePendingIssues(): Promise<number> {
