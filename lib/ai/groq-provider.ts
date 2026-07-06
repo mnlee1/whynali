@@ -221,17 +221,24 @@ export class GroqProvider implements AIProvider {
 
                 messages.push({ role: 'user', content: finalUserPrompt })
 
+                // reasoning 모델은 내부 reasoning 토큰도 max_tokens를 소모하므로 여유 확보
+                const effectiveMaxTokens = isReasoningModel
+                    ? Math.max(maxTokens, 4000)
+                    : maxTokens
+
                 const completion = await client.chat.completions.create({
                     model,
                     messages,
-                    temperature,
-                    max_tokens: maxTokens,
-                    // reasoning 모델은 기본적으로 reasoning 필드를 별도 반환하여 content가 null이 될 수 있음
+                    // reasoning 모델은 temperature 파라미터를 지원하지 않음
+                    ...(isReasoningModel ? {} : { temperature }),
+                    max_tokens: effectiveMaxTokens,
                     ...(isReasoningModel ? { include_reasoning: false } : {}),
                     ...(options?.jsonMode ? { response_format: { type: 'json_object' } } : {}),
                 })
 
-                const content = completion.choices?.[0]?.message?.content
+                const message = completion.choices?.[0]?.message
+                // reasoning 모델에서 content가 null인 경우 reasoning 필드로 fallback
+                const content = message?.content || (message as any)?.reasoning || null
 
                 if (!content) {
                     // reasoning 모델의 경우 content가 간헐적으로 null 반환 → 재시도

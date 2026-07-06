@@ -95,19 +95,19 @@ export async function postBotComment(issueId: string): Promise<boolean> {
     // 카테고리 선호 타입 기반 페르소나 선택
     const persona = pickPersonaByCategory(available, issue.category)
 
-    const body = await generateBotComment(persona, issue)
-    if (!body) {
+    const { comment, failReason } = await generateBotComment(persona, issue)
+    if (!comment) {
         await writeAutoOpLog({
             job_type: 'bot_comment',
             status: 'failed',
             target_type: 'issue',
             target_id: issueId,
-            details: { persona: persona.displayName, persona_type: persona.type, issue_title: issue.title, reason: 'AI 생성 실패' },
+            details: { persona: persona.displayName, persona_type: persona.type, issue_title: issue.title, reason: failReason ?? 'unknown' },
         })
         return false
     }
 
-    const sanitized = sanitizeText(body)
+    const sanitized = sanitizeText(comment)
     const { error } = await supabaseAdmin.from('comments').insert({
         issue_id: issueId,
         user_id: persona.id,
@@ -181,24 +181,24 @@ export async function postBotDiscussionComment(topicId: string): Promise<boolean
     // 카테고리 선호 타입 기반 페르소나 선택
     const persona = pickPersonaByCategory(available, issueData?.category)
 
-    const body = await generateBotDiscussionComment(persona, {
+    const { comment, failReason } = await generateBotDiscussionComment(persona, {
         body: topic.body,
         issue_title: issueData?.title,
         issue_category: issueData?.category,
     })
 
-    if (!body) {
+    if (!comment) {
         await writeAutoOpLog({
             job_type: 'bot_discussion_comment',
             status: 'failed',
             target_type: 'discussion_topic',
             target_id: topicId,
-            details: { persona: persona.displayName, persona_type: persona.type, topic_body: topic.body.slice(0, 80), reason: 'AI 생성 실패' },
+            details: { persona: persona.displayName, persona_type: persona.type, topic_body: topic.body.slice(0, 80), reason: failReason ?? 'unknown' },
         })
         return false
     }
 
-    const sanitized = sanitizeText(body)
+    const sanitized = sanitizeText(comment)
     const { error } = await supabaseAdmin.from('comments').insert({
         discussion_topic_id: topicId,
         user_id: persona.id,

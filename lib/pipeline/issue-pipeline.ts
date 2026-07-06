@@ -206,7 +206,8 @@ export async function filterAndTitleByAI(
     keyword: string,
     tentativeTitle: string,
     newsItems: Array<{ id: string; title: string; link: string; source: string; published_at: string }>,
-    communityPosts: Array<{ id: string; title: string; source_site: string; created_at: string }>
+    communityPosts: Array<{ id: string; title: string; source_site: string; created_at: string }>,
+    mode: 'new' | 'followup' = 'new'
 ): Promise<{
     finalIssueTitle: string
     relevantNewsIds: string[]
@@ -219,7 +220,23 @@ export async function filterAndTitleByAI(
     const newsTitlesText = newsItems.slice(0, 20).map((n, i) => `뉴스${i + 1}. ${n.title}`).join('\n')
     const postTitlesText = communityPosts.slice(0, 20).map((p, i) => `커뮤니티${i + 1}. ${p.title}`).join('\n')
 
-    const prompt = `아래 이슈 제목과 직접 관련된 뉴스/커뮤니티 글을 선별하고, 최종 이슈 제목을 생성하세요.
+    const newsFilterGuide = mode === 'followup'
+        ? `## 작업 1: 관련 뉴스 선별 (후속 보도 기준)
+이 뉴스들은 기존 이슈의 후속·진행·결과 보도일 수 있습니다.
+같은 인물·사건의 다음 단계(예고→실행, 표명→제출, 논란→결과) 뉴스는 포함.
+완전히 다른 사건·인물을 다룬 뉴스만 제외.`
+        : `## 작업 1: 관련 뉴스 선별 (엄격하게 판단)
+이슈 제목의 핵심 주제를 직접 다룬 뉴스만 선택.
+같은 카테고리·같은 인물이라도 다른 사건/주제면 반드시 제외.
+불확실하면 반드시 제외.`
+
+    const communityFilterGuide = mode === 'followup'
+        ? `## 작업 3: 관련 커뮤니티 글 선별 (후속 보도 기준)
+같은 인물·사건을 언급하는 글은 포함. 완전히 다른 주제면 제외.`
+        : `## 작업 3: 관련 커뮤니티 글 선별 (엄격하게 판단)
+이슈 제목의 핵심 사건과 직접 관련된 글만 선택. 불확실하면 제외.`
+
+    const prompt = `아래 이슈 제목과 관련된 뉴스/커뮤니티 글을 선별하고, 최종 이슈 제목을 생성하세요.
 
 이슈 제목: "${tentativeTitle}"
 
@@ -229,10 +246,7 @@ ${newsTitlesText}
 [커뮤니티 글 목록] (${communityPosts.length}건):
 ${postTitlesText}
 
-## 작업 1: 관련 뉴스 선별 (엄격하게 판단)
-이슈 제목의 핵심 주제를 직접 다룬 뉴스만 선택.
-같은 카테고리·같은 인물이라도 다른 사건/주제면 반드시 제외.
-불확실하면 반드시 제외.
+${newsFilterGuide}
 
 ## 작업 2: 최종 이슈 제목 생성
 선별된 뉴스 제목들의 공통 핵심 내용으로 이슈 제목 작성
@@ -243,8 +257,7 @@ ${postTitlesText}
 - 주인공(행위자)이 다를 때: 이슈 제목 "호날두 해트트릭 기록", 뉴스 대부분 "메시 해트트릭" → "메시 월드컵 해트트릭"
 - 이벤트 유형이 다를 때: 이슈 제목 "한국 멕시코 친선경기", 뉴스 대부분 "월드컵 한국-멕시코전" → "한국 멕시코 월드컵 경기"
 
-## 작업 3: 관련 커뮤니티 글 선별 (엄격하게 판단)
-이슈 제목의 핵심 사건과 직접 관련된 글만 선택. 불확실하면 제외.
+${communityFilterGuide}
 
 응답 형식 (JSON만):
 {

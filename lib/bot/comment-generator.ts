@@ -20,19 +20,31 @@ const ARTIFACT_RE = /<\|.*?\|>|assistant\s*$/i
 // 한글(음절·자모) + ASCII(숫자·구두점 포함) 외 문자 포함 시 폐기 — 베트남어·태국어·아랍어·한자 등 일괄 차단
 const FOREIGN_CHAR_RE = /[^가-힣ᄀ-ᇿ㄰-㆏\x00-\x7F]/
 
-function sanitizeBotComment(raw: string): string | null {
+export type BotGenFailReason =
+    | 'groq_error'
+    | 'filter_foreign_char'
+    | 'filter_artifact'
+    | 'filter_length'
+    | 'filter_hangul_ratio'
+
+export interface BotGenResult {
+    comment: string | null
+    failReason?: BotGenFailReason
+}
+
+function sanitizeBotComment(raw: string): { text: string | null; reason?: BotGenFailReason } {
     let text = raw.split(/<\|start_header_id\|>/)[0].trim()
     text = text.replace(/^["'`]|["'`]$/g, '').trim()
-    if (FOREIGN_CHAR_RE.test(text)) return null
-    if (ARTIFACT_RE.test(text)) return null
-    if (text.length < 15 || text.length > 200) return null
+    if (FOREIGN_CHAR_RE.test(text)) return { text: null, reason: 'filter_foreign_char' }
+    if (ARTIFACT_RE.test(text)) return { text: null, reason: 'filter_artifact' }
+    if (text.length < 15 || text.length > 200) return { text: null, reason: 'filter_length' }
     // 한글 음절이 비공백 문자의 40% 미만이면 ASCII 외국어 단어 섞인 것으로 판단, 폐기
     const noSpace = text.replace(/\s/g, '')
     if (noSpace.length > 0) {
         const hangulCount = (noSpace.match(/[가-힣]/g) ?? []).length
-        if (hangulCount / noSpace.length < 0.4) return null
+        if (hangulCount / noSpace.length < 0.4) return { text: null, reason: 'filter_hangul_ratio' }
     }
-    return text
+    return { text }
 }
 
 export interface DiscussionContext {
@@ -41,7 +53,7 @@ export interface DiscussionContext {
     issue_category?: string | null
 }
 
-async function callWithFallback(persona: BotPersona, prompt: string): Promise<string | null> {
+async function callWithFallback(persona: BotPersona, prompt: string): Promise<BotGenResult> {
     const messages = [
         { role: 'system' as const, content: persona.systemPrompt },
         { role: 'user' as const, content: prompt },
@@ -50,19 +62,18 @@ async function callWithFallback(persona: BotPersona, prompt: string): Promise<st
 
     try {
         const raw = await callGroq(messages, { ...opts, model: BOT_GROQ_MODEL })
-        const cleaned = sanitizeBotComment(raw)
-        if (cleaned) return cleaned
-    } catch {
-        // Groq 실패 시 댓글 생성 건너뜀
+        const { text, reason } = sanitizeBotComment(raw)
+        return { comment: text, failReason: reason }
+    } catch (error) {
+        console.error('[bot-comment-generator] Groq 호출 실패:', error instanceof Error ? error.message : error)
+        return { comment: null, failReason: 'groq_error' }
     }
-
-    return null
 }
 
 export async function generateBotDiscussionComment(
     persona: BotPersona,
     topic: DiscussionContext
-): Promise<string | null> {
+): Promise<BotGenResult> {
     const prompt = `다음 토론 주제에 대한 의견을 한 개 작성해주세요.
 
 토론 주제: ${topic.body}
@@ -80,7 +91,7 @@ ${topic.issue_title ? `관련 이슈: ${topic.issue_title}` : ''}${topic.issue_c
 export async function generateBotComment(
     persona: BotPersona,
     issue: IssueContext
-): Promise<string | null> {
+): Promise<BotGenResult> {
     const heatDesc = heatDescription(issue.heat_index)
 
     const prompt = `다음 이슈에 대한 댓글 한 개를 작성해주세요.

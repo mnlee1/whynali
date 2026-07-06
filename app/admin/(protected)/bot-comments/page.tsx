@@ -47,6 +47,13 @@ const JOB_LABELS: Record<string, string> = {
     bot_discussion_comment: '봇 토론의견',
     bot_discussion_batch: '토론 배치',
 }
+const FAIL_REASON_LABELS: Record<string, string> = {
+    groq_error: 'Groq API 호출 실패',
+    filter_foreign_char: '외국어·특수문자 필터 거부',
+    filter_artifact: '모델 응답 아티팩트 필터 거부',
+    filter_length: '길이 범위(15~200자) 벗어남',
+    filter_hangul_ratio: '한글 비율 40% 미만',
+}
 
 // ── 유틸 ────────────────────────────────────────────────────
 
@@ -95,7 +102,9 @@ function LogDetail({ details }: { details: Record<string, unknown> | null }) {
                 </span>
             )}
             {Boolean(details.reason) && (
-                <span className="block text-xs text-red-500 mt-0.5">{String(details.reason)}</span>
+                <span className="block text-xs text-red-500 mt-0.5">
+                    {FAIL_REASON_LABELS[String(details.reason)] ?? String(details.reason)}
+                </span>
             )}
         </span>
     )

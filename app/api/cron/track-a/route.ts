@@ -99,8 +99,13 @@ function extractCommunityKeywords(title: string): string[] {
         '그냥', '좀', '걍', '막',
         // 감탄사
         '아니', '아', '오', '우와', '헐', '와', '어', '음',
-        // 지시어
+        // 지시어 (기본형)
         '이거', '저거', '그거', '요거', '여기', '저기', '거기',
+        // 지시대명사 + 조사 결합형 (로그에서 발견된 패턴)
+        '이게', '저게', '그게', '요게',
+        '이건', '저건', '그건', '요건',
+        '이걸', '저걸', '그걸', '요걸',
+        '이것', '저것', '그것',
         // 시간 일반어
         '오늘', '내일', '어제', '지금', '이제', '나중', '다시', '또',
         // 기타 일반어
@@ -119,6 +124,8 @@ function extractCommunityKeywords(title: string): string[] {
         '보고', '보는', '봤는데', '봤어', '보니',
         '좋아하는', '싫어하는', '좋아해', '싫어해',
         '하고', '하면서', '하지만', '하는데',
+        // 부사 활용형 (로그에서 발견된 패턴)
+        '많이', '빨리', '느리게', '크게', '작게', '좋아', '싫어', '높아', '낮아',
         // 시간/빈도 부사 (로그에서 발견된 패턴)
         '요즘', '아직', '아직도', '벌써', '드디어', '이미', '항상', '맨날', '계속',
         // 전치사/후치사류
@@ -142,6 +149,10 @@ function extractCommunityKeywords(title: string): string[] {
             
             // 숫자만 있는 경우 제외
             if (/^\d+$/.test(w)) return false
+
+            // 지시대명사+조사 결합형 패턴 (STOPWORDS 누락 방어)
+            // 예: "이게", "저걸", "그건", "이것도", "그것을" 등
+            if (/^(이|저|그|요)(게|건|걸|거|것|게다|건데|거야|걸로|거랑|거라|것도|것은|것이|것을|것과)$/.test(w)) return false
             
             return true
         })
@@ -603,6 +614,7 @@ async function processTrackA(): Promise<{
                     duplicateCheck.existingIssue!.title,
                     newsItems,
                     burst.posts,
+                    'followup'
                 )
 
                 if (filteredCommunityIds.length > 0) {
@@ -662,6 +674,7 @@ async function processTrackA(): Promise<{
                     parentResult.parentIssueTitle,
                     newsItems,
                     burst.posts,
+                    'followup'
                 )
 
                 if (filteredCommunityIds.length > 0) {
