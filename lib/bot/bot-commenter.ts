@@ -71,11 +71,15 @@ async function getBotCommentInfo(issueId: string): Promise<BotCommentInfo> {
 }
 
 // 단일 이슈에 봇 댓글 1개 달기. 성공 시 true 반환.
-export async function postBotComment(issueId: string): Promise<boolean> {
+// force: true면 70% 확률 게이트를 건너뜀, excludePersonaIds는 선택 후보에서 제외 (관리자 수동 재시도/재생성용)
+export async function postBotComment(
+    issueId: string,
+    opts?: { force?: boolean; excludePersonaIds?: string[] }
+): Promise<boolean> {
     await ensureBotUsers()
 
     // 70% 확률 제한 — 너무 규칙적인 패턴 방지
-    if (Math.random() > BOT_COMMENT_PROBABILITY) return false
+    if (!opts?.force && Math.random() > BOT_COMMENT_PROBABILITY) return false
 
     const { count, usedPersonaIds } = await getBotCommentInfo(issueId)
     if (count >= MAX_BOT_COMMENTS_PER_ISSUE) return false
@@ -89,7 +93,8 @@ export async function postBotComment(issueId: string): Promise<boolean> {
     if (!issue) return false
     if (issue.approval_status !== '승인' || !['점화', '논란중'].includes(issue.status)) return false
 
-    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
+    const excluded = new Set([...usedPersonaIds, ...(opts?.excludePersonaIds ?? [])])
+    const available = BOT_PERSONAS.filter((p) => !excluded.has(p.id))
     if (available.length === 0) return false
 
     // 카테고리 선호 타입 기반 페르소나 선택
@@ -155,11 +160,15 @@ async function getBotDiscussionCommentInfo(topicId: string): Promise<BotCommentI
     }
 }
 
-export async function postBotDiscussionComment(topicId: string): Promise<boolean> {
+// force: true면 70% 확률 게이트를 건너뜀, excludePersonaIds는 선택 후보에서 제외 (관리자 수동 재시도/재생성용)
+export async function postBotDiscussionComment(
+    topicId: string,
+    opts?: { force?: boolean; excludePersonaIds?: string[] }
+): Promise<boolean> {
     await ensureBotUsers()
 
     // 70% 확률 제한
-    if (Math.random() > BOT_COMMENT_PROBABILITY) return false
+    if (!opts?.force && Math.random() > BOT_COMMENT_PROBABILITY) return false
 
     const { count, usedPersonaIds } = await getBotDiscussionCommentInfo(topicId)
     if (count >= MAX_BOT_COMMENTS_PER_DISCUSSION) return false
@@ -175,7 +184,8 @@ export async function postBotDiscussionComment(topicId: string): Promise<boolean
 
     const issueData = topic.issues as unknown as { title: string; category: string } | null
 
-    const available = BOT_PERSONAS.filter((p) => !usedPersonaIds.includes(p.id))
+    const excluded = new Set([...usedPersonaIds, ...(opts?.excludePersonaIds ?? [])])
+    const available = BOT_PERSONAS.filter((p) => !excluded.has(p.id))
     if (available.length === 0) return false
 
     // 카테고리 선호 타입 기반 페르소나 선택

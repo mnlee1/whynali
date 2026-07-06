@@ -703,6 +703,11 @@ export default function AdminDiscussionsPage() {
                                                             📅 {new Date(topic.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료됨
                                                         </span>
                                                     )}
+                                                    {!topic.auto_end_date && topic.approval_status === '진행중' && topic.issues?.status === '종결' && (
+                                                        <span className="text-xs text-yellow-600 block mt-1">
+                                                            ⚠️ 이슈 종결됨, 마감 예약 누락
+                                                        </span>
+                                                    )}
                                                 </>
                                             )}
                                         </td>

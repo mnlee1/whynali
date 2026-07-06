@@ -688,6 +688,11 @@ export default function AdminVotesPage() {
                                                     📅 {new Date(vote.auto_end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 종료됨
                                                 </span>
                                             )}
+                                            {!vote.auto_end_date && vote.phase === '진행중' && vote.issues?.status === '종결' && (
+                                                <span className="text-xs text-yellow-600 block">
+                                                    ⚠️ 이슈 종결됨, 마감 예약 누락
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-content-secondary">
                                             <ul className="space-y-1">
