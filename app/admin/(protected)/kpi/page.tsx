@@ -135,6 +135,11 @@ interface KPIMetrics {
         d7:  { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: number; cardNews: number }
         d30: { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: number; cardNews: number }
     }
+    weeklyBreakdown: {
+        week: number; label: string
+        newUsers: number; comments: number; reactions: number; votes: number
+        issues: number; shortforms: number; cardNews: number; pageViews: number
+    }[] | null
     targets: {
         users: number
         activeIssues: number
@@ -205,6 +210,7 @@ export default function KPIDashboardPage() {
     const [selectedYear, setSelectedYear] = useState(currentYear)
     const [selectedMonth, setSelectedMonth] = useState(initialMonth)
     const [selectedPeriod, setSelectedPeriod] = useState<1 | 7 | 30>(1)
+    const [selectedWeek, setSelectedWeek] = useState<number | 'all'>('all') // 과거 월 전용
     const [selectedTab, setSelectedTab] = useState<'today' | 'plan'>('today')
 
     const fetchData = async (year?: number, month?: number) => {
@@ -278,6 +284,7 @@ export default function KPIDashboardPage() {
     const handleMonthChange = (year: number, month: number) => {
         setSelectedYear(year)
         setSelectedMonth(month)
+        setSelectedWeek('all')
     }
 
     // 이전/다음 월 이동 (2026년 5월은 건너뛰기)
@@ -673,27 +680,51 @@ export default function KPIDashboardPage() {
             {/* 기간 토글 */}
             {(() => {
                 const now = new Date()
+                const kstYear  = now.getFullYear()
+                const kstMonth = now.getMonth() + 1
+                const isPastMonth = !(selectedYear === kstYear && selectedMonth === kstMonth)
+
+                if (isPastMonth) {
+                    // 과거 월: 주차 버튼 + N월 전체
+                    const weeks = data?.metrics.weeklyBreakdown ?? []
+                    const tabs: { key: number | 'all'; label: string }[] = [
+                        ...weeks.map(w => ({ key: w.week as number | 'all', label: w.label })),
+                        { key: 'all', label: `${selectedMonth}월 전체` },
+                    ]
+                    return (
+                        <div className="flex p-1 bg-surface-muted rounded-xl w-fit flex-wrap gap-1">
+                            {tabs.map(t => (
+                                <button
+                                    key={String(t.key)}
+                                    onClick={() => setSelectedWeek(t.key)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                        selectedWeek === t.key
+                                            ? 'bg-white shadow text-content-primary'
+                                            : 'text-content-muted hover:text-content-primary'
+                                    }`}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    )
+                }
+
+                // 현재 월: 기존 오늘/이번주/이번달 토글
                 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
                 const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`
                 const fmtDay = (d: Date) => `${fmt(d)}(${DAY_NAMES[d.getDay()]})`
-
+                const monthStart = new Date(selectedYear, selectedMonth - 1, 1)
+                const monthEnd   = new Date(selectedYear, selectedMonth, 0)
                 const thisWeekStart = new Date(now)
                 thisWeekStart.setDate(now.getDate() - now.getDay())
                 const thisWeekEnd = new Date(thisWeekStart)
                 thisWeekEnd.setDate(thisWeekStart.getDate() + 6)
-
-                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-                const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-
-                // 라벨용: 월 경계로 클리핑
                 const labelWeekStart = thisWeekStart < monthStart ? monthStart : thisWeekStart
                 const labelWeekEnd   = thisWeekEnd   > monthEnd   ? monthEnd   : thisWeekEnd
-
-                // 주차 계산: 이번달 1일 기준 첫 번째 일요일부터 카운트
                 const firstSunday = new Date(monthStart)
                 firstSunday.setDate(monthStart.getDate() - monthStart.getDay())
                 const weekNumber = Math.floor((thisWeekStart.getTime() - firstSunday.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
-
                 const periodLabel = (p: 1 | 7 | 30) => {
                     if (p === 1) return '오늘'
                     if (p === 7) return `이번 주 [${weekNumber}주차 - ${fmtDay(labelWeekStart)} ~ ${fmtDay(labelWeekEnd)}]`
@@ -719,16 +750,41 @@ export default function KPIDashboardPage() {
             })()}
 
             {(() => {
-                const pKey = selectedPeriod === 1 ? 'd1' as const : selectedPeriod === 7 ? 'd7' as const : 'd30' as const
-                const pStat = metrics.periodStats[pKey]
-                const pageViews = selectedPeriod === 1 ? metrics.todayPageViews : selectedPeriod === 7 ? metrics.weeklyPageViews : metrics.monthlyPageViews
+                const now2 = new Date()
+                const isPastMonth2 = !(selectedYear === now2.getFullYear() && selectedMonth === now2.getMonth() + 1)
+
+                // 표시할 통계: 과거 월이면 주차별 / 현재 월이면 기존 d1·d7·d30
+                type StatShape = { newUsers: number; comments: number; reactions: number; votes: number; issues: number; shortforms: number; cardNews: number }
+                let pStat: StatShape
+                let pageViews: number
+                let periodDays: number  // 목표 환산용
+
+                if (isPastMonth2) {
+                    const wb = metrics.weeklyBreakdown ?? []
+                    if (selectedWeek === 'all') {
+                        pStat = metrics.periodStats.d30
+                        pageViews = metrics.monthlyPageViews
+                        periodDays = 30
+                    } else {
+                        const ws = wb.find(w => w.week === selectedWeek) ?? wb[0]
+                        pStat = ws ?? metrics.periodStats.d30
+                        pageViews = ws?.pageViews ?? 0
+                        periodDays = 7
+                    }
+                } else {
+                    const pKey = selectedPeriod === 1 ? 'd1' as const : selectedPeriod === 7 ? 'd7' as const : 'd30' as const
+                    pStat = metrics.periodStats[pKey]
+                    pageViews = selectedPeriod === 1 ? metrics.todayPageViews : selectedPeriod === 7 ? metrics.weeklyPageViews : metrics.monthlyPageViews
+                    periodDays = selectedPeriod
+                }
+
                 const t = metrics.targets
-                const issueTarget    = t.dailyIssues * selectedPeriod
-                const shortformTarget = t.dailyShortformsPerPlatform * selectedPeriod
-                const userTarget     = t.dailyNewUsers * selectedPeriod
-                const pvTarget       = Math.round(t.pageviews / 30 * selectedPeriod)
-                const commentTarget  = t.dailyComments * selectedPeriod
-                const reactionTarget = t.dailyReactions * selectedPeriod
+                const issueTarget    = t.dailyIssues * periodDays
+                const shortformTarget = t.dailyShortformsPerPlatform * periodDays
+                const userTarget     = t.dailyNewUsers * periodDays
+                const pvTarget       = Math.round(t.pageviews / 30 * periodDays)
+                const commentTarget  = t.dailyComments * periodDays
+                const reactionTarget = t.dailyReactions * periodDays
                 const voteTarget     = 0
 
                 const StatCard = ({ label, val, target, unit }: { label: string; val: number; target: number; unit: string }) => (
