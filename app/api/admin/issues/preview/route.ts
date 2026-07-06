@@ -112,17 +112,11 @@ export async function POST(request: NextRequest) {
         console.warn('[preview/step1] AI 검증 실패, 키워드 그대로 사용:', err)
     }
 
-    // 네이버 뉴스 검색 (AI searchKeyword → 0건이면 원래 키워드로 재시도)
+    // 네이버 뉴스 카운트 (AI searchKeyword 사용)
     let newsCount = 0
     let newsItems: Array<{ title: string }> = []
     try {
-        let results = await searchNaverNewsByKeyword(aiResult.searchKeyword, aiResult.category)
-
-        // AI searchKeyword로 0건이면 원래 입력 키워드로 재시도
-        if (results.length === 0 && aiResult.searchKeyword !== keyword) {
-            results = await searchNaverNewsByKeyword(keyword, aiResult.category)
-        }
-
+        const results = await searchNaverNewsByKeyword(aiResult.searchKeyword, aiResult.category)
         newsCount = results.length
         newsItems = results.slice(0, 5).map(n => ({ title: n.title }))
     } catch {

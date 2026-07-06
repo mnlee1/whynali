@@ -20,13 +20,6 @@ import AdminTabFilter from '@/components/admin/AdminTabFilter'
 import ManualIssueWizard from '@/components/admin/ManualIssueWizard'
 import { getCategoryIds } from '@/lib/config/categories'
 
-interface KeywordSuggestion {
-    keyword: string
-    communityCount: number
-    newsCount: number
-    reason: string
-}
-
 type SortField = 'title' | 'status' | 'approval_status' | 'heat_index' | 'created_at'
 type SortOrder = 'asc' | 'desc'
 type FilterValue = '' | '대기' | '승인전체' | '자동승인' | '관리자승인' | '관리자반려'
@@ -68,35 +61,6 @@ export default function AdminIssuesPage() {
 
     // 수동 등록 위저드
     const [manualWizardOpen, setManualWizardOpen] = useState(false)
-    const [wizardInitialKeyword, setWizardInitialKeyword] = useState<string | undefined>()
-
-    // 추천 키워드
-    const [suggestions, setSuggestions] = useState<KeywordSuggestion[] | null>(null)
-    const [suggestionsLoading, setSuggestionsLoading] = useState(false)
-
-    const handleLoadSuggestions = useCallback(async () => {
-        if (suggestionsLoading) return
-        setSuggestionsLoading(true)
-        try {
-            const res = await fetch('/api/admin/issues/suggest-keywords')
-            const data = await res.json()
-            if (res.ok) setSuggestions(data.suggestions ?? [])
-        } catch {
-            // 조용히 실패
-        } finally {
-            setSuggestionsLoading(false)
-        }
-    }, [suggestionsLoading])
-
-    useEffect(() => {
-        handleLoadSuggestions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
-    const openWizardWithKeyword = (keyword: string) => {
-        setWizardInitialKeyword(keyword)
-        setManualWizardOpen(true)
-    }
 
     // 액션 드롭다운
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
@@ -476,48 +440,6 @@ export default function AdminIssuesPage() {
                 >
                     수동 등록
                 </button>
-            </div>
-
-            {/* 이슈 키워드 추천 */}
-            <div className="mb-4 card p-4">
-                <div className="flex items-center justify-between mb-2.5">
-                    <h2 className="text-sm font-semibold text-content-primary">이슈 키워드 추천</h2>
-                    {suggestions !== null && (
-                        <button
-                            onClick={handleLoadSuggestions}
-                            disabled={suggestionsLoading}
-                            className="text-xs text-content-muted hover:text-content-secondary disabled:opacity-50"
-                        >
-                            새로고침
-                        </button>
-                    )}
-                </div>
-
-                {(suggestions === null || suggestionsLoading) ? (
-                    <div className="flex gap-2">
-                        {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className="h-6 w-16 bg-surface-muted rounded-full animate-pulse" />
-                        ))}
-                    </div>
-                ) : suggestions.length === 0 ? (
-                    <p className="text-xs text-content-muted">현재 추천 키워드가 없습니다.</p>
-                ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                        {suggestions.map((s, i) => (
-                            <button
-                                key={i}
-                                onClick={() => openWizardWithKeyword(s.keyword)}
-                                title={s.reason}
-                                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-surface-subtle border-border text-content-secondary hover:bg-surface-muted hover:border-border-strong transition-colors"
-                                            >
-                                                <span>{s.keyword}</span>
-                                                <span className="text-[10px] text-content-muted font-normal">
-                                                    커뮤 {s.communityCount} · 뉴스 {s.newsCount}
-                                                </span>
-                            </button>
-                        ))}
-                    </div>
-                )}
             </div>
 
             {/* 이슈 생성 프로세스 안내 */}
@@ -990,8 +912,7 @@ export default function AdminIssuesPage() {
             {/* 수동 등록 위저드 */}
             {manualWizardOpen && (
                 <ManualIssueWizard
-                    initialKeyword={wizardInitialKeyword}
-                    onClose={() => { setManualWizardOpen(false); setWizardInitialKeyword(undefined) }}
+                    onClose={() => setManualWizardOpen(false)}
                     onSuccess={() => { fetchIssues(); loadTabCounts() }}
                 />
             )}

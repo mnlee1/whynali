@@ -9,7 +9,7 @@
  * Step 3 (commit): 확정 데이터 DB 저장, 결과 표시
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
 
@@ -63,8 +63,6 @@ type WizardStep = 'input' | 's1_loading' | 'step1' | 's2_loading' | 'step2' | 'c
 interface Props {
     onClose: () => void
     onSuccess: () => void
-    /** 대시보드 추천 키워드에서 클릭 시 초기 키워드 자동 입력 */
-    initialKeyword?: string
 }
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -104,20 +102,9 @@ function formatDateRange(dateStart: string, dateEnd: string): string {
 
 // ─── 위저드 컴포넌트 ──────────────────────────────────────────────────────────
 
-// ─── 추천 키워드 타입 ─────────────────────────────────────────────────────────
-
-interface KeywordSuggestion {
-    keyword: string
-    communityCount: number
-    newsCount: number
-    reason: string
-}
-
-// ─── 위저드 컴포넌트 ──────────────────────────────────────────────────────────
-
-export default function ManualIssueWizard({ onClose, onSuccess, initialKeyword }: Props) {
+export default function ManualIssueWizard({ onClose, onSuccess }: Props) {
     const [step, setStep] = useState<WizardStep>('input')
-    const [keyword, setKeyword] = useState(initialKeyword ?? '')
+    const [keyword, setKeyword] = useState('')
     const [step1, setStep1] = useState<Step1Result | null>(null)
     const [editedTitle, setEditedTitle] = useState('')
     const [step2, setStep2] = useState<Step2Result | null>(null)
@@ -125,32 +112,7 @@ export default function ManualIssueWizard({ onClose, onSuccess, initialKeyword }
     const [error, setError] = useState<string | null>(null)
     const [commitResult, setCommitResult] = useState<{ issueId: string; issueTitle: string; heatIndex: number; warning?: string } | null>(null)
 
-    // 추천 키워드 상태
-    const [suggestions, setSuggestions] = useState<KeywordSuggestion[] | null>(null)
-    const [suggestionsLoading, setSuggestionsLoading] = useState(false)
-
     const isBusy = step === 's1_loading' || step === 's2_loading' || step === 'committing'
-
-    // ── 추천 키워드 불러오기 ──────────────────────────────────────────────────
-
-    const handleLoadSuggestions = async () => {
-        if (suggestionsLoading) return
-        setSuggestionsLoading(true)
-        try {
-            const res = await fetch('/api/admin/issues/suggest-keywords')
-            const data = await res.json()
-            if (res.ok) setSuggestions(data.suggestions ?? [])
-        } catch {
-            // 조용히 실패
-        } finally {
-            setSuggestionsLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        handleLoadSuggestions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
 
     // ── Step 1: 기본 정보 조회 ────────────────────────────────────────────────
 
@@ -295,8 +257,8 @@ export default function ManualIssueWizard({ onClose, onSuccess, initialKeyword }
 
                     {/* ── 공통: 키워드 입력 (input, step1) ── */}
                     {(step === 'input' || step === 's1_loading' || step === 'step1' || step === 's2_loading') && (
-                        <div className="space-y-2">
-                            <label className="block text-xs font-medium text-content-secondary">키워드 / 주제</label>
+                        <div>
+                            <label className="block text-xs font-medium text-content-secondary mb-1.5">키워드 / 주제</label>
                             <div className="flex gap-2">
                                 <input
                                     type="text"
@@ -315,49 +277,6 @@ export default function ManualIssueWizard({ onClose, onSuccess, initialKeyword }
                                     {step === 's1_loading' ? '조회 중...' : step === 'step1' ? '조회됨' : '조회'}
                                 </button>
                             </div>
-
-                            {/* 추천 키워드 - 직접 수동 등록 버튼으로 열었을 때만 표시 */}
-                            {step === 'input' && !initialKeyword && (
-                                <div>
-                                    {(suggestions === null || suggestionsLoading) ? (
-                                        <div className="flex gap-1.5">
-                                            {[1, 2, 3, 4].map(i => (
-                                                <div key={i} className="h-5 w-12 bg-surface-muted rounded-full animate-pulse" />
-                                            ))}
-                                        </div>
-                                    ) : suggestions.length === 0 ? (
-                                        <p className="text-xs text-content-muted">추천 키워드가 없습니다</p>
-                                    ) : (
-                                        <div className="space-y-1.5">
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-xs font-medium text-content-secondary">추천 키워드</p>
-                                                <button
-                                                    onClick={handleLoadSuggestions}
-                                                    disabled={suggestionsLoading}
-                                                    className="text-xs text-content-muted hover:text-content-secondary disabled:opacity-50"
-                                                >
-                                                    새로고침
-                                                </button>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {suggestions.map((s, i) => (
-                                                    <button
-                                                        key={i}
-                                                        onClick={() => setKeyword(s.keyword)}
-                                                        title={s.reason}
-                                                        className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-full border bg-surface-subtle border-border text-content-secondary hover:bg-surface-muted hover:border-border-strong transition-colors"
-                                                    >
-                                                        <span className="font-medium">{s.keyword}</span>
-                                                        <span className="text-[10px] text-content-muted font-normal">
-                                                            커뮤 {s.communityCount} · 뉴스 {s.newsCount}
-                                                        </span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     )}
 
