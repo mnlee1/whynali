@@ -2,9 +2,9 @@
  * POST /api/admin/card-news/preview
  *
  * Body: { issueId: string, mode: 'surging' | 'timeline' | 'qa' | 'debate' }
- * Returns: { htmlSlides: string[] }
+ * Returns: { htmlSlides: string[], slides: SlideContent[] }
  *
- * iframe 렌더링용 HTML 슬라이드 배열 반환.
+ * iframe 렌더링용 HTML 슬라이드 배열과 구조화된 slides(텍스트 수정용 원본 데이터) 반환.
  * Playwright 없이 Next.js 서버리스 환경에서 동작.
  */
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       logoBase64
     )
     const htmlSlides = slidesToHtmlArray(slides)
-    return NextResponse.json({ htmlSlides })
+    return NextResponse.json({ htmlSlides, slides })
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류'
     console.error('[card-news/preview] 오류:', message)

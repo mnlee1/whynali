@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import type { SlideContent } from '@/lib/card-news/core'
 
 interface IssueOption {
   id: string
   title: string
   category: string
   heat_index: number | null
+  approved_at: string | null
   approval_status: string
   approval_type: string | null
   status: string
@@ -21,6 +23,26 @@ const MODE_OPTIONS: { value: CardNewsMode; label: string; desc: string }[] = [
   { value: 'debate',   label: '찬반형',   desc: '찬성 vs 반대 논점 정리' },
 ]
 
+type SlideTextField = 'main_title' | 'sub_title' | 'desc' | 'point_text_01' | 'point_text_02'
+
+const EDITABLE_FIELDS: Record<SlideContent['type'], { key: SlideTextField; label: string; multiline: boolean }[]> = {
+  cover:  [{ key: 'main_title', label: '메인 타이틀', multiline: true }, { key: 'sub_title', label: '서브 타이틀', multiline: false }],
+  body:   [{ key: 'sub_title', label: '소제목', multiline: false }, { key: 'desc', label: '본문 텍스트', multiline: true }],
+  badge:  [
+    { key: 'sub_title', label: '소제목', multiline: false },
+    { key: 'desc', label: '본문 텍스트', multiline: true },
+    { key: 'point_text_01', label: '포인트 1', multiline: false },
+    { key: 'point_text_02', label: '포인트 2', multiline: false },
+  ],
+  numbers: [
+    { key: 'sub_title', label: '소제목', multiline: false },
+    { key: 'desc', label: '본문 텍스트', multiline: true },
+    { key: 'point_text_01', label: '포인트 1', multiline: false },
+    { key: 'point_text_02', label: '포인트 2', multiline: false },
+  ],
+  follow: [],
+}
+
 export default function CardNewsPage() {
   const [issues, setIssues] = useState<IssueOption[]>([])
   const [loadingIssues, setLoadingIssues] = useState(true)
@@ -30,9 +52,11 @@ export default function CardNewsPage() {
   const issueDropdownRef = useRef<HTMLDivElement>(null)
 
   const [selectedMode, setSelectedMode] = useState<CardNewsMode>('surging')
+  const [slides, setSlides] = useState<SlideContent[]>([])
   const [htmlSlides, setHtmlSlides] = useState<string[]>([])
   const [previewing, setPreviewing] = useState(false)
   const [previewError, setPreviewError] = useState('')
+  const [rerendering, setRerendering] = useState(false)
   const [dispatching, setDispatching] = useState(false)
   const [dispatchResult, setDispatchResult] = useState<{ ok: boolean; runUrl?: string; error?: string } | null>(null)
 
@@ -43,7 +67,12 @@ export default function CardNewsPage() {
         const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
         const res = await fetch(`/api/admin/issues?approval_status=승인&created_after=${encodeURIComponent(since)}&limit=200`)
         const json = await res.json() as { data?: IssueOption[] }
-        const sorted = (json.data ?? []).sort((a, b) => (b.heat_index ?? 0) - (a.heat_index ?? 0))
+        const sorted = (json.data ?? []).sort((a: IssueOption, b: IssueOption) => {
+          if (!a.approved_at && !b.approved_at) return 0
+          if (!a.approved_at) return 1
+          if (!b.approved_at) return -1
+          return new Date(b.approved_at).getTime() - new Date(a.approved_at).getTime()
+        })
         setIssues(sorted)
       } catch {
         setIssues([])
@@ -74,6 +103,7 @@ export default function CardNewsPage() {
     setSelectedIssueId(issue.id)
     setIssueSearchQuery('')
     setIssueDropdownOpen(false)
+    setSlides([])
     setHtmlSlides([])
     setPreviewError('')
     setDispatchResult(null)
@@ -81,6 +111,7 @@ export default function CardNewsPage() {
 
   function handleModeChange(mode: CardNewsMode) {
     setSelectedMode(mode)
+    setSlides([])
     setHtmlSlides([])
     setDispatchResult(null)
   }
@@ -88,6 +119,7 @@ export default function CardNewsPage() {
   async function handlePreview() {
     if (!selectedIssue) return
     setPreviewing(true)
+    setSlides([])
     setHtmlSlides([])
     setPreviewError('')
     setDispatchResult(null)
@@ -97,9 +129,10 @@ export default function CardNewsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ issueId: selectedIssue.id, mode: selectedMode }),
       })
-      const json = await res.json() as { htmlSlides?: string[]; error?: string }
+      const json = await res.json() as { htmlSlides?: string[]; slides?: SlideContent[]; error?: string }
       if (!res.ok || json.error) { setPreviewError(json.error ?? '미리보기 생성 실패'); return }
       setHtmlSlides(json.htmlSlides ?? [])
+      setSlides(json.slides ?? [])
     } catch (e) {
       setPreviewError((e as Error).message)
     } finally {
@@ -107,15 +140,39 @@ export default function CardNewsPage() {
     }
   }
 
+  function handleFieldChange(index: number, field: SlideTextField, value: string) {
+    setSlides(prev => prev.map((slide, i) => (i === index ? { ...slide, [field]: value } : slide)))
+  }
+
+  async function handleRerender() {
+    if (slides.length === 0) return
+    setRerendering(true)
+    setPreviewError('')
+    try {
+      const res = await fetch('/api/admin/card-news/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slides }),
+      })
+      const json = await res.json() as { htmlSlides?: string[]; error?: string }
+      if (!res.ok || json.error) { setPreviewError(json.error ?? '미리보기 갱신 실패'); return }
+      setHtmlSlides(json.htmlSlides ?? [])
+    } catch (e) {
+      setPreviewError((e as Error).message)
+    } finally {
+      setRerendering(false)
+    }
+  }
+
   async function handleDispatch(publish: boolean) {
-    if (!selectedIssue) return
+    if (!selectedIssue || slides.length === 0) return
     setDispatching(true)
     setDispatchResult(null)
     try {
       const res = await fetch('/api/admin/card-news/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueId: selectedIssue.id, mode: selectedMode, publish }),
+        body: JSON.stringify({ issueId: selectedIssue.id, mode: selectedMode, publish, slides }),
       })
       const json = await res.json() as { ok?: boolean; runUrl?: string; error?: string }
       setDispatchResult({ ok: json.ok ?? false, runUrl: json.runUrl, error: json.error })
@@ -127,6 +184,7 @@ export default function CardNewsPage() {
   }
 
   const canAct = !!selectedIssue && !previewing && !dispatching
+  const canDispatch = canAct && slides.length > 0
 
   return (
     <div className="space-y-8">
@@ -184,7 +242,7 @@ export default function CardNewsPage() {
                       >
                         {issue.title}
                         {issue.heat_index != null && (
-                          <span className="text-content-muted ml-1">(화력 {issue.heat_index})</span>
+                          <span className="text-content-muted ml-1">(화력 {issue.heat_index}점)</span>
                         )}
                       </div>
                     ))
@@ -224,10 +282,9 @@ export default function CardNewsPage() {
         </div>
       </div>
 
-      {/* 미리보기 + 발행 */}
+      {/* 미리보기 생성 */}
       <div className="card p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-content-secondary">3. 미리보기 및 발행</h2>
-
+        <h2 className="text-sm font-semibold text-content-secondary">3. 미리보기 생성</h2>
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
@@ -237,22 +294,6 @@ export default function CardNewsPage() {
           >
             {previewing ? '생성 중...' : 'HTML 미리보기'}
           </button>
-          <button
-            type="button"
-            onClick={() => handleDispatch(false)}
-            disabled={!canAct}
-            className="btn-neutral btn-md disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            테스트 실행 (업로드 없음)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDispatch(true)}
-            disabled={!canAct}
-            className="btn-md rounded-xl bg-green-600 px-5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {dispatching ? '발행 중...' : 'SNS 발행'}
-          </button>
         </div>
 
         {previewError && (
@@ -260,6 +301,101 @@ export default function CardNewsPage() {
             ⚠️ {previewError}
           </div>
         )}
+      </div>
+
+      {/* 텍스트 수정 + 슬라이드 미리보기 */}
+      {slides.length > 0 && (
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-content-secondary">
+              4. 텍스트 수정 및 미리보기 ({slides.length}장)
+            </h2>
+            <span className="text-xs text-content-muted">실제 크기: 1080 × 1350px · 33% 축소 표시</span>
+          </div>
+
+          <div className="flex flex-wrap gap-5">
+            {slides.map((slide, i) => (
+              <div key={i} className="w-[356px] shrink-0 space-y-2">
+                <p className="text-center text-xs text-content-muted">슬라이드 {i + 1}</p>
+                <div className="overflow-hidden rounded-xl border border-border shadow-sm" style={{ width: 356, height: 445 }}>
+                  {htmlSlides[i] && (
+                    <iframe
+                      srcDoc={htmlSlides[i]}
+                      sandbox="allow-scripts"
+                      scrolling="no"
+                      style={{
+                        width: 1080,
+                        height: 1350,
+                        transform: 'scale(0.33)',
+                        transformOrigin: 'top left',
+                        border: 'none',
+                        pointerEvents: 'none',
+                      }}
+                      title={`slide-${i + 1}`}
+                    />
+                  )}
+                </div>
+
+                {EDITABLE_FIELDS[slide.type].map(field => (
+                  <div key={field.key} className="space-y-0.5">
+                    <label className="text-xs font-medium text-content-secondary">{field.label}</label>
+                    {field.multiline ? (
+                      <textarea
+                        value={slide[field.key] ?? ''}
+                        onChange={e => handleFieldChange(i, field.key, e.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-border px-2 py-1 text-xs bg-surface focus:outline-none focus:border-primary"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={slide[field.key] ?? ''}
+                        onChange={e => handleFieldChange(i, field.key, e.target.value)}
+                        className="w-full rounded-lg border border-border px-2 py-1 text-xs bg-surface focus:outline-none focus:border-primary"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRerender}
+            disabled={rerendering}
+            className="btn-neutral btn-md disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {rerendering ? '갱신 중...' : '수정 내용으로 미리보기 새로고침'}
+          </button>
+        </div>
+      )}
+
+      {/* 발행 */}
+      <div className="card p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-content-secondary">5. 발행</h2>
+        <p className="text-xs text-content-muted">
+          위 미리보기(수정한 텍스트 포함)가 그대로 발행됩니다. 먼저 미리보기를 생성해야 발행할 수 있습니다.
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => handleDispatch(false)}
+            disabled={!canDispatch}
+            className="btn-neutral btn-md disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            테스트 실행 (업로드 없음)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDispatch(true)}
+            disabled={!canDispatch}
+            className="btn-md rounded-xl bg-green-600 px-5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {dispatching ? '발행 중...' : 'SNS 발행'}
+          </button>
+        </div>
 
         {dispatchResult && (
           <div className={`rounded-xl border px-4 py-3 text-sm ${dispatchResult.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
@@ -278,41 +414,6 @@ export default function CardNewsPage() {
           </div>
         )}
       </div>
-
-      {/* 슬라이드 미리보기 */}
-      {htmlSlides.length > 0 && (
-        <div className="card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-content-secondary">
-              슬라이드 미리보기 ({htmlSlides.length}장)
-            </h2>
-            <span className="text-xs text-content-muted">실제 크기: 1080 × 1350px · 33% 축소 표시</span>
-          </div>
-          <div className="flex flex-wrap gap-5">
-            {htmlSlides.map((html, i) => (
-              <div key={i} className="shrink-0">
-                <p className="mb-1 text-center text-xs text-content-muted">슬라이드 {i + 1}</p>
-                <div className="overflow-hidden rounded-xl border border-border shadow-sm" style={{ width: 356, height: 445 }}>
-                  <iframe
-                    srcDoc={html}
-                    sandbox="allow-scripts"
-                    scrolling="no"
-                    style={{
-                      width: 1080,
-                      height: 1350,
-                      transform: 'scale(0.33)',
-                      transformOrigin: 'top left',
-                      border: 'none',
-                      pointerEvents: 'none',
-                    }}
-                    title={`slide-${i + 1}`}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
