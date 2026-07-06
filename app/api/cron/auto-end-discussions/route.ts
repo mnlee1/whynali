@@ -4,6 +4,8 @@
  * 토론 주제 자동 마감 크론잡
  * GitHub Actions: .github/workflows/cron-auto-end-discussions.yml (매 시간)
  *
+ * 0. 정합성 보정: 이슈 종결 시 마감 예약(auto_end_date) 훅이 누락된 진행중 토론을 찾아 7일 유예 재부여
+ *
  * 종결 이슈 연결 토론만 처리:
  * - 마감 당일 24시간 내 댓글 발생 시 +1일 연장
  * - 댓글이 없으면 마감
@@ -22,11 +24,37 @@ export async function GET(request: NextRequest) {
     const admin = createSupabaseAdminClient()
     let closedCount = 0
     let extendedCount = 0
+    let reconciledCount = 0
 
     try {
         const now = new Date()
         const nowIso = now.toISOString()
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+
+        /* 0. 정합성 보정: 이슈 종결 + auto_end_date 누락 진행중 토론 → 7일 유예 재부여 */
+        const { data: orphaned, error: orphanedError } = await admin
+            .from('discussion_topics')
+            .select('id, issues(status)')
+            .eq('approval_status', '진행중')
+            .is('auto_end_date', null)
+
+        if (orphanedError) throw orphanedError
+
+        const orphanedIds = (orphaned ?? [])
+            .filter((t) => (t.issues as any)?.status === '종결')
+            .map((t) => t.id)
+
+        if (orphanedIds.length > 0) {
+            const reconcileDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            const { error: reconcileError } = await admin
+                .from('discussion_topics')
+                .update({ auto_end_date: reconcileDate })
+                .in('id', orphanedIds)
+
+            if (reconcileError) throw reconcileError
+            reconciledCount = orphanedIds.length
+            console.log(`[토론 정합성 보정] 마감 예약 누락 ${reconciledCount}개 → 7일 후 마감 재예약`)
+        }
 
         /* 날짜 기준 만료 토론 조회 (이슈 status 포함) */
         const { data: dateExpiredTopics, error: dateError } = await admin
@@ -90,7 +118,8 @@ export async function GET(request: NextRequest) {
             success: true,
             closedCount,
             extendedCount,
-            message: `마감 ${closedCount}개, 연장 ${extendedCount}개 처리 완료`,
+            reconciledCount,
+            message: `마감 ${closedCount}개, 연장 ${extendedCount}개, 보정 ${reconciledCount}개 처리 완료`,
         })
     } catch (e) {
         const message = e instanceof Error ? e.message : '자동 종료 실패'
