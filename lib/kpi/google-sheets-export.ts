@@ -119,6 +119,14 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
         ? `${kpi.goalInfo.periodStart} ~ ${kpi.goalInfo.periodEnd}`
         : `${year}년 ${month}월`
 
+    // 현재 월 여부 (KST 기준)
+    const kstParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Seoul', year: 'numeric', month: 'numeric',
+    }).formatToParts(new Date())
+    const kstYear  = Number(kstParts.find(p => p.type === 'year')?.value)
+    const kstMonth = Number(kstParts.find(p => p.type === 'month')?.value)
+    const pastMonth = !(year === kstYear && month === kstMonth)
+
     const auth   = buildAuth()
     const sheets = google.sheets({ version: 'v4', auth })
 
@@ -172,7 +180,10 @@ export async function exportKPIToGoogleSheets(year: number, month: number, kpi: 
     }
     // 기간별 3컬럼 공통 헤더
     function periodHeader(label0: string) {
-        addRow([hdr(label0), hdr('오늘'), hdr('이번주'), hdr('이번달'), pad(C.hdrBg), pad(C.hdrBg), pad(C.hdrBg)])
+        const d1Lbl  = pastMonth ? '말일'     : '오늘'
+        const d7Lbl  = pastMonth ? '마지막7일' : '이번주'
+        const d30Lbl = pastMonth ? '해당월'   : '이번달'
+        addRow([hdr(label0), hdr(d1Lbl), hdr(d7Lbl), hdr(d30Lbl), pad(C.hdrBg), pad(C.hdrBg), pad(C.hdrBg)])
         merge(4, NCOLS)
     }
     // 기간별 3컬럼 데이터 행
