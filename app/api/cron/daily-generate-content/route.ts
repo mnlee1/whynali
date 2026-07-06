@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
                 if ((existingDiscussionCount ?? 0) > 0) {
                     console.log(`  ↩ [토론 스킵] "${issue.title}" — 이미 존재 (race condition 감지)`)
                 } else {
-                    const topics = await generateDiscussionTopics(metadata, 3)
+                    const topics = await generateDiscussionTopics(metadata, 1)
                     if (topics.length > 0) {
                         const { error: insertErr } = await supabaseAdmin
                             .from('discussion_topics')
