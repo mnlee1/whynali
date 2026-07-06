@@ -66,9 +66,78 @@ async function monitorTrackAHealth() {
         }
     }
 
-    // 2. 7일간 트랙A 이슈 트렌드
+    // 2. 최근 24시간 track_a_logs 실행 분석
     console.log('')
-    console.log('2️⃣  최근 7일간 트랙A 이슈 트렌드')
+    console.log('2️⃣  최근 24시간 트랙A 실행 로그 분석')
+    console.log('─'.repeat(80))
+
+    const { data: recentLogs } = await supabase
+        .from('track_a_logs')
+        .select('keyword, burst_count, result, details, run_at')
+        .gte('run_at', last24Hours.toISOString())
+        .order('run_at', { ascending: false })
+
+    const RESULT_LABELS: Record<string, string> = {
+        issue_created:    '이슈 등록',
+        auto_approved:    '자동 승인',
+        ai_rejected:      'AI 거부',
+        no_news:          '뉴스 없음',
+        no_community:     '커뮤니티 없음',
+        duplicate_linked: '기존 이슈 중복',
+        derivative_linked:'파생 이벤트 연결',
+        heat_too_low:     '화력 부족',
+        no_timeline:      '타임라인 없음',
+        no_news_linked:   '뉴스 연결 실패',
+        validation_failed:'검증 실패',
+        rate_limited:     'Rate Limit',
+        error:            '에러',
+    }
+
+    const SUCCESS_RESULTS = new Set(['issue_created', 'auto_approved', 'derivative_linked'])
+
+    if (!recentLogs || recentLogs.length === 0) {
+        console.log('트랙A 실행 기록 없음 — 크론 미실행 또는 급증 키워드 없음')
+    } else {
+        const lastRun = new Date(recentLogs[0].run_at)
+        const lastRunMinutesAgo = Math.floor((now.getTime() - lastRun.getTime()) / 60000)
+        console.log(`마지막 실행: ${lastRunMinutesAgo}분 전 (${lastRun.toLocaleString('ko-KR')})`)
+
+        if (lastRunMinutesAgo > 60) {
+            console.log('경고: 트랙A 크론이 1시간 이상 실행되지 않았습니다!')
+        }
+
+        const resultCounts: Record<string, number> = {}
+        recentLogs.forEach(log => {
+            resultCounts[log.result] = (resultCounts[log.result] ?? 0) + 1
+        })
+
+        console.log(`\n총 처리: ${recentLogs.length}건`)
+        console.log('결과 분포:')
+        Object.entries(resultCounts)
+            .sort((a, b) => b[1] - a[1])
+            .forEach(([result, count]) => {
+                const label = RESULT_LABELS[result] ?? result
+                const marker = SUCCESS_RESULTS.has(result) ? '[성공]' : '[실패]'
+                console.log(`  ${marker} ${label}: ${count}건`)
+            })
+
+        const failSamples = recentLogs
+            .filter(l => ['ai_rejected', 'error', 'rate_limited', 'no_timeline', 'heat_too_low'].includes(l.result))
+            .slice(0, 5)
+
+        if (failSamples.length > 0) {
+            console.log('\n주요 실패 사례:')
+            failSamples.forEach(log => {
+                const reason = (log.details as any)?.reason ?? (log.details as any)?.error ?? ''
+                const reasonStr = reason ? `: ${String(reason).slice(0, 80)}` : ''
+                console.log(`  - "${log.keyword}" → ${RESULT_LABELS[log.result] ?? log.result}${reasonStr}`)
+            })
+        }
+    }
+
+    // 3. 7일간 트랙A 이슈 트렌드
+    console.log('')
+    console.log('3️⃣  최근 7일간 트랙A 이슈 트렌드')
     console.log('─'.repeat(80))
 
     const { data: weeklyTrackA } = await supabase
@@ -104,9 +173,9 @@ async function monitorTrackAHealth() {
         console.log('⚠️  최근 7일간 트랙A 이슈가 없습니다!')
     }
 
-    // 3. 커뮤니티 데이터 수집 상태
+    // 4. 커뮤니티 데이터 수집 상태
     console.log('')
-    console.log('3️⃣  커뮤니티 데이터 수집 상태')
+    console.log('4️⃣  커뮤니티 데이터 수집 상태')
     console.log('─'.repeat(80))
 
     const { data: recentCommunity } = await supabase
@@ -139,9 +208,9 @@ async function monitorTrackAHealth() {
         console.log('   → 커뮤니티 수집 크론이 중단되었을 가능성이 높습니다.')
     }
 
-    // 4. AI API 상태 (Rate Limit)
+    // 5. AI API 상태 (Rate Limit)
     console.log('')
-    console.log('4️⃣  AI API 상태')
+    console.log('5️⃣  AI API 상태')
     console.log('─'.repeat(80))
 
     const { data: aiStatus } = await supabase
@@ -174,9 +243,9 @@ async function monitorTrackAHealth() {
         console.log('API 키 상태 정보가 없습니다. (첫 실행일 수 있음)')
     }
 
-    // 5. 트랙A 이슈의 커뮤니티/뉴스 연결 품질
+    // 6. 트랙A 이슈의 커뮤니티/뉴스 연결 품질
     console.log('')
-    console.log('5️⃣  트랙A 이슈 품질 검증')
+    console.log('6️⃣  트랙A 이슈 품질 검증')
     console.log('─'.repeat(80))
 
     const { data: allTrackA } = await supabase
@@ -233,9 +302,40 @@ async function monitorTrackAHealth() {
     const recent24Count = recentTrackA?.length ?? 0
     if (recent24Count === 0) {
         issues.push('최근 24시간 동안 트랙A 이슈가 생성되지 않음')
-        recommendations.push('커뮤니티 수집 크론 상태 확인')
-        recommendations.push('GitHub Actions 워크플로우 실행 이력 확인')
-        recommendations.push('트랙A 크론 로그 확인: Vercel 로그 또는 로컬 테스트')
+
+        // track_a_logs 기반 실패 원인 분석
+        if (!recentLogs || recentLogs.length === 0) {
+            recommendations.push('트랙A 크론 자체가 실행되지 않음 — Vercel 크론 스케줄 확인')
+        } else {
+            const resultCounts: Record<string, number> = {}
+            recentLogs.forEach(log => {
+                resultCounts[log.result] = (resultCounts[log.result] ?? 0) + 1
+            })
+            const topFailure = Object.entries(resultCounts)
+                .filter(([r]) => !SUCCESS_RESULTS.has(r))
+                .sort((a, b) => b[1] - a[1])[0]
+
+            if (topFailure) {
+                const [result, count] = topFailure
+                const label = RESULT_LABELS[result] ?? result
+                recommendations.push(`주요 실패 원인: ${label} (${count}건) — 상세 로그 확인`)
+            }
+
+            if ((resultCounts['ai_rejected'] ?? 0) > 0) {
+                recommendations.push('AI 거부 다수 — Claude 예산 소진 여부 및 폴백 모델 동작 확인')
+            }
+            if ((resultCounts['heat_too_low'] ?? 0) > 0) {
+                recommendations.push('화력 부족 다수 — CANDIDATE_MIN_HEAT_TO_REGISTER 임계값 조정 검토')
+            }
+            if ((resultCounts['no_news'] ?? 0) > 0) {
+                recommendations.push('뉴스 없음 다수 — 네이버 뉴스 API 상태 및 검색 키워드 품질 확인')
+            }
+            if ((resultCounts['rate_limited'] ?? 0) > 0) {
+                recommendations.push('Rate Limit 발생 — Groq API 키 추가 또는 호출 간격 조정')
+            }
+        }
+
+        recommendations.push('관리자 대시보드 /admin/collections → 이슈 자동화 로그 탭 확인')
     } else if (recent24Count < 2) {
         issues.push('트랙A 이슈 생성률이 매우 낮음 (24시간 기준 2개 미만)')
         recommendations.push('커뮤니티 급증 감지 임계값 조정 검토')
