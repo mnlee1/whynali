@@ -81,7 +81,7 @@ JSON 응답:
     try {
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'openai/gpt-oss-120b', temperature: 0.1, max_tokens: 400 },
+            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 400 },
         )
 
         const parsed = parseJsonObject<{ stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>(content)
