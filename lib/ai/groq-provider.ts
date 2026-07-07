@@ -207,7 +207,11 @@ export class GroqProvider implements AIProvider {
                 const client = new Groq({ apiKey: keyStatus.apiKey })
 
                 // reasoning 모델(openai/gpt-oss-*)은 system 메시지 미지원 → user 메시지에 합침
+                // + temperature 파라미터 미지원 (harmony 포맷 고유 제약, qwen에는 해당 안 됨)
                 const isReasoningModel = model.startsWith('openai/gpt-oss')
+                // thinking 모델(gpt-oss, qwen3 계열)은 <think> 내부 추론이 max_tokens를 소모함
+                // → 응답이 잘리지 않도록 토큰 여유 확보 + reasoning 필드 분리가 공통으로 필요
+                const isThinkingModel = isReasoningModel || model.startsWith('qwen/')
                 const messages: Array<{ role: 'system' | 'user'; content: string }> = []
 
                 if (systemPrompt && !isReasoningModel) {
@@ -221,8 +225,8 @@ export class GroqProvider implements AIProvider {
 
                 messages.push({ role: 'user', content: finalUserPrompt })
 
-                // reasoning 모델은 내부 reasoning 토큰도 max_tokens를 소모하므로 여유 확보
-                const effectiveMaxTokens = isReasoningModel
+                // thinking 모델은 내부 추론 토큰도 max_tokens를 소모하므로 여유 확보
+                const effectiveMaxTokens = isThinkingModel
                     ? Math.max(maxTokens, 4000)
                     : maxTokens
 
@@ -232,7 +236,7 @@ export class GroqProvider implements AIProvider {
                     // reasoning 모델은 temperature 파라미터를 지원하지 않음
                     ...(isReasoningModel ? {} : { temperature }),
                     max_tokens: effectiveMaxTokens,
-                    ...(isReasoningModel ? { include_reasoning: false } : {}),
+                    ...(isThinkingModel ? { include_reasoning: false } : {}),
                     ...(options?.jsonMode ? { response_format: { type: 'json_object' } } : {}),
                 })
 

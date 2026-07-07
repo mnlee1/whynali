@@ -4,7 +4,7 @@
  * [왜난리 이슈 히어로 캐러셀]
  *
  * 메인화면 최상단에 배치되는 히어로 섹션입니다.
- * 화력 상위 이슈 최대 5개를 Swiper 캐러셀로 보여줍니다.
+ * 최근 승인된 이슈 최대 5개를 Swiper 캐러셀로 보여줍니다.
  * 카테고리별 그라디언트 배경으로 이미지 없이도 시각적으로 강조합니다.
  *
  * initialIssues prop이 제공되면 SSR 데이터를 바로 사용하고,
@@ -88,10 +88,10 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
 
     return (
         <section className="relative h-[300px] lg:h-full lg:min-h-[350px]">
-            {/* 화력 상위 뱃지 */}
+            {/* 최신 이슈 뱃지 */}
             <div className="absolute top-3 right-3 z-10">
                 <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">
-                    실시간 화력 상위 5개
+                    최신 이슈 TOP 5
                 </span>
             </div>
 
