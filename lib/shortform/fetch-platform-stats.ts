@@ -11,6 +11,7 @@
  */
 
 import { google } from 'googleapis'
+import { getInstagramAccessToken } from './instagram-token'
 
 export interface YoutubeStats {
     views: number
@@ -102,8 +103,7 @@ const GRAPH_API = 'https://graph.instagram.com/v21.0'
 const IG_METRICS = 'plays,reach,likes,comments,shares,saved,ig_reels_avg_watch_time'
 
 export async function fetchInstagramStats(mediaId: string): Promise<InstagramStats> {
-    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
-    if (!accessToken) throw new Error('INSTAGRAM_ACCESS_TOKEN 없음')
+    const accessToken = await getInstagramAccessToken()
 
     const url = `${GRAPH_API}/${mediaId}/insights?metric=${IG_METRICS}&period=lifetime&access_token=${accessToken}`
     const res = await fetch(url)
