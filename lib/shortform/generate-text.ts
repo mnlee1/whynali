@@ -71,15 +71,18 @@ export async function extractYoutubeHashtags(title: string): Promise<string[]> {
 JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
             }],
             temperature: 0.2,
-            max_tokens: 100,
+            max_tokens: 200,
         })
 
-        const text = completion.choices[0]?.message?.content?.trim() ?? ''
-        console.log('[태그] Groq 응답 원문:', text)
+        const raw = completion.choices[0]?.message?.content?.trim() ?? ''
+        console.log('[태그] Groq 응답 원문:', raw)
+
+        // Qwen3 thinking 모드 태그 제거 (<think>...</think>)
+        const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
 
         const jsonMatch = text.match(/\{[\s\S]*\}/)
         if (!jsonMatch) {
-            console.warn('[태그] JSON 매칭 실패 — 빈 배열 반환')
+            console.warn('[태그] JSON 매칭 실패 — 원문:', raw)
             return []
         }
 

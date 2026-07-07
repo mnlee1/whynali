@@ -39,6 +39,16 @@ interface IssueOption {
     heat_index: number | null
 }
 
+interface InstagramMedia {
+    id: string
+    caption?: string
+    media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
+    timestamp: string
+    thumbnail_url?: string
+    media_url?: string
+    permalink?: string
+}
+
 interface StageSummary {
     stage: string
     stageTitle: string
@@ -167,7 +177,7 @@ export default function AdminShortformPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [processingId, setProcessingId] = useState<string | null>(null)
-    const [uploadingAction, setUploadingAction] = useState<'youtube' | 'tiktok' | 'instagram' | 'all' | null>(null)
+    const [uploadingAction, setUploadingAction] = useState<'youtube' | 'tiktok' | 'instagram' | 'instagram-media-id' | 'all' | null>(null)
     const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
     const [rewritingIndex, setRewritingIndex] = useState<number | null>(null)
     const [highlightingGroupIndex, setHighlightingGroupIndex] = useState<number | null>(null)
@@ -196,6 +206,15 @@ export default function AdminShortformPage() {
         highlightsLoading: false,
         highlightsBudgetExceeded: false,
     })
+
+    // Instagram 미디어 선택 모달
+    const [igMediaModal, setIgMediaModal] = useState<{
+        open: boolean
+        jobId: string | null
+        media: InstagramMedia[]
+        loading: boolean
+        error: string | null
+    }>({ open: false, jobId: null, media: [], loading: false, error: null })
 
     // 수동 생성 인라인 영역
     const [manualCreateOpen, setManualCreateOpen] = useState(false)
@@ -904,6 +923,54 @@ export default function AdminShortformPage() {
         }
     }
 
+    // Instagram 최근 미디어 모달 열기 → API 조회
+    const handleSetInstagramMediaId = async (id: string) => {
+        setIgMediaModal({ open: true, jobId: id, media: [], loading: true, error: null })
+        try {
+            const res = await fetch('/api/admin/shortform/instagram-recent-media')
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            setIgMediaModal(prev => ({ ...prev, media: json.media, loading: false }))
+        } catch (e) {
+            setIgMediaModal(prev => ({
+                ...prev,
+                loading: false,
+                error: e instanceof Error ? e.message : '미디어 목록 조회 실패',
+            }))
+        }
+    }
+
+    // 모달에서 게시물 선택 → mediaId 등록
+    const handleSelectInstagramMedia = async (mediaId: string) => {
+        const jobId = igMediaModal.jobId
+        if (!jobId) return
+
+        setIgMediaModal(prev => ({ ...prev, open: false }))
+        setProcessingId(jobId)
+        setUploadingAction('instagram-media-id')
+        try {
+            const res = await fetch(`/api/admin/shortform/${jobId}/instagram-media-id`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mediaId }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+
+            alert(
+                json.statsFetched
+                    ? 'Media ID 등록 및 성과 데이터 수집 완료!'
+                    : `Media ID는 등록됐지만 성과 데이터 조회에 실패했습니다.\n(${json.warning})\n성과 조회 버튼으로 다시 시도해주세요.`
+            )
+            await loadJobs(filter, page)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Media ID 등록 실패')
+        } finally {
+            setProcessingId(null)
+            setUploadingAction(null)
+        }
+    }
+
 
     return (
         <div>
@@ -1314,6 +1381,17 @@ export default function AdminShortformPage() {
                                                                 className="text-xs px-2.5 py-1.5 bg-pink-500 text-white rounded-full hover:bg-pink-600 disabled:opacity-50 whitespace-nowrap"
                                                             >
                                                                 {isProcessing && uploadingAction === 'instagram' ? 'Instagram 업로드 중...' : 'Instagram 업로드'}
+                                                            </button>
+                                                        ) : null}
+
+                                                        {job.video_path ? (
+                                                            <button
+                                                                onClick={() => handleSetInstagramMediaId(job.id)}
+                                                                disabled={isProcessing}
+                                                                title="자동등록 삭제 후 인스타그램에 직접 수동으로 올린 게시물의 media ID를 등록해 성과 수집을 재개합니다"
+                                                                className="text-xs px-2.5 py-1.5 border border-border text-content-muted rounded-full hover:bg-surface-hover disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                {isProcessing && uploadingAction === 'instagram-media-id' ? '등록 중...' : 'IG mediaId 수동 등록'}
                                                             </button>
                                                         ) : null}
 
@@ -1918,6 +1996,77 @@ export default function AdminShortformPage() {
                                     className="h-full bg-white rounded-full pointer-events-none"
                                     style={{ width: `${videoDuration > 0 ? (videoCurrentTime / videoDuration) * 100 : 0}%` }}
                                 />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Instagram 미디어 선택 모달 */}
+            {igMediaModal.open && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+                    onClick={() => setIgMediaModal(prev => ({ ...prev, open: false }))}
+                >
+                    <div
+                        className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                            <div>
+                                <h2 className="font-bold text-base">Instagram 최근 게시물</h2>
+                                <p className="text-xs text-content-muted mt-0.5">등록할 게시물을 선택하세요</p>
+                            </div>
+                            <button
+                                onClick={() => setIgMediaModal(prev => ({ ...prev, open: false }))}
+                                className="text-content-muted hover:text-content text-lg leading-none"
+                            >✕</button>
+                        </div>
+
+                        <div className="overflow-y-auto flex-1 p-4">
+                            {igMediaModal.loading && (
+                                <div className="flex items-center justify-center h-32 text-content-muted text-sm">
+                                    불러오는 중...
+                                </div>
+                            )}
+                            {igMediaModal.error && (
+                                <div className="text-sm text-red-500 p-2">{igMediaModal.error}</div>
+                            )}
+                            {!igMediaModal.loading && !igMediaModal.error && igMediaModal.media.length === 0 && (
+                                <div className="text-sm text-content-muted text-center py-8">게시물이 없습니다</div>
+                            )}
+                            <div className="grid grid-cols-3 gap-2">
+                                {igMediaModal.media.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => handleSelectInstagramMedia(item.id)}
+                                        className="relative aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-pink-500 transition-all group text-left"
+                                    >
+                                        {(item.thumbnail_url || item.media_url) ? (
+                                            <img
+                                                src={item.thumbnail_url ?? item.media_url}
+                                                alt=""
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full bg-surface-alt flex items-center justify-center text-xs text-content-muted">
+                                                미리보기 없음
+                                            </div>
+                                        )}
+                                        {item.media_type === 'VIDEO' && (
+                                            <span className="absolute top-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">Reel</span>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <p className="text-white text-[10px] truncate">
+                                                {item.caption?.split('\n')[0]?.slice(0, 28) ?? '캡션 없음'}
+                                            </p>
+                                            <p className="text-white/70 text-[9px] mt-0.5">
+                                                {new Date(item.timestamp).toLocaleDateString('ko-KR')}
+                                            </p>
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     </div>

@@ -115,6 +115,9 @@ export async function POST(
         const caption = [
             job.issue_title,
             '',
+            '🔥이슈에 대해 궁금하시면,',
+            '🎈팔로우하고 💬댓글 남겨주세요!',
+            '',
             `📌 실시간 여론·토론·타임라인 확인하기`,
             publicIssueUrl,
             '',
