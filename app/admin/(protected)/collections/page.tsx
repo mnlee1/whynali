@@ -231,6 +231,7 @@ export default function AdminCollectionsPage() {
                                         <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-36">키워드</th>
                                         <th className="px-4 py-2.5 text-center text-xs font-medium text-content-muted w-16">감지 건수</th>
                                         <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-28">결과</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-36">AI 모델</th>
                                         <th className="px-4 py-2.5 text-left text-xs font-medium text-content-muted w-48">상세</th>
                                     </tr>
                                 </thead>
@@ -300,6 +301,16 @@ export default function AdminCollectionsPage() {
                                                     <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${RESULT_COLOR[log.result] ?? 'bg-surface-muted text-content-secondary'}`}>
                                                         {RESULT_LABEL[log.result] ?? log.result}
                                                     </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-xs text-content-muted w-36">
+                                                    {log.details?.ai_verify_model ? (
+                                                        <div className="space-y-0.5">
+                                                            <div className="font-mono">검증: {String(log.details.ai_verify_model)}</div>
+                                                            <div className="font-mono">필터: {String(log.details.ai_filter_model ?? '')}</div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-content-muted">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm text-content-secondary w-48">
                                                     {log.issues ? (

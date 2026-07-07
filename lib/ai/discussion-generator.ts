@@ -43,7 +43,6 @@ export async function generateDiscussionTopics(
     issue: IssueMetadata,
     count: number = 3
 ): Promise<GeneratedTopic[]> {
-    // reasoning 모델(openai/gpt-oss-120b)은 system 메시지를 지원하지 않으므로 단일 user 메시지로 통합
     const raw = await callGroq(
         [
             {
@@ -51,7 +50,7 @@ export async function generateDiscussionTopics(
                 content: buildPrompt(issue, count),
             },
         ],
-        { model: 'openai/gpt-oss-120b', max_tokens: 2000 }
+        { model: 'qwen/qwen3.6-27b', max_tokens: 2000 }
     )
 
     return parseTopics(raw)

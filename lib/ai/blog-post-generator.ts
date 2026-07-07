@@ -61,7 +61,7 @@ export async function generateNaverBlogPost(
             },
             { role: 'user', content: prompt },
         ],
-        { model: 'openai/gpt-oss-120b', temperature: 0.7, max_tokens: 1500 }
+        { model: 'qwen/qwen3.6-27b', temperature: 0.7, max_tokens: 1500 }
     )
 
     return parsePost(raw, basic.title, issueUrl, categoryLabel)

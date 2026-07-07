@@ -181,7 +181,7 @@ export class GroqProvider implements AIProvider {
     }
 
     async complete(userPrompt: string, options?: AIOptions): Promise<string> {
-        const model = options?.model ?? 'openai/gpt-oss-120b'
+        const model = options?.model ?? 'qwen/qwen3.6-27b'
         const temperature = options?.temperature ?? 0.1
         const maxTokens = options?.maxTokens ?? 500
         const systemPrompt = options?.systemPrompt

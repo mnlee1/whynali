@@ -1,7 +1,7 @@
 import { callGroq } from '@/lib/ai/groq-client'
 import type { BotPersona } from './personas'
 
-const BOT_GROQ_MODEL = 'openai/gpt-oss-120b'
+const BOT_GROQ_MODEL = 'qwen/qwen3.6-27b'
 
 export interface IssueContext {
     title: string
