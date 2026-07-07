@@ -38,7 +38,7 @@ interface VoteWithChoices extends Vote {
 
 async function fetchPageData() {
     const [hotResult, surgingResult, latestResult, votesResult] = await Promise.all([
-        // HotIssueHighlight용: 최신 이슈 (종결 제외)
+        // HotIssueHighlight용: 최근 승인된 이슈 (종결 제외)
         supabaseAdmin
             .from('issues')
             .select('*')
@@ -46,7 +46,7 @@ async function fetchPageData() {
             .eq('visibility_status', 'visible')
             .is('merged_into_id', null)
             .neq('status', '종결')
-            .order('created_at', { ascending: false })
+            .order('approved_at', { ascending: false, nullsFirst: false })
             .limit(10),
 
         // PopularRanking용: 화력 상위 이슈 (종결 포함 — 진행 중 이슈 부족 시 종결 이슈로 채움)

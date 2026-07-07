@@ -157,7 +157,7 @@ ${sampleTitlesText}
 
         const content = await callClaude(
             [{ role: 'user', content: prompt }],
-            { model: 'claude-sonnet-4-6', temperature: 0.2, max_tokens: 500 }
+            { model: 'claude-sonnet-4-6', temperature: 0.2, max_tokens: 500, jsonMode: true }
         )
 
         recordRateLimitSuccess()
@@ -274,7 +274,7 @@ ${communityFilterGuide}
         try {
             const content = await callGroq(
                 [{ role: 'user', content: prompt }],
-                { model: 'qwen/qwen3.6-27b', temperature: 0.2, max_tokens: 500 }
+                { model: 'qwen/qwen3.6-27b', temperature: 0.2, max_tokens: 500, jsonMode: true }
             )
 
             recordRateLimitSuccess()
@@ -374,7 +374,7 @@ stageTitle은 10자 이내, summary는 기사 수에 맞는 분량
     try {
         const content = await callGroq(
             [{ role: 'user', content: prompt }],
-            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 2000 },
+            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 2000, jsonMode: true },
         )
 
         const result = parseJsonObject<{

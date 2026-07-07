@@ -13,6 +13,16 @@
  *   논란중 → 종결: 화력 5점 미만(즉시) OR (화력 10점 미만 AND 최근 48시간 신규 수집 0건)
  *   종결 → 논란중: 재점화 감지 (급증 또는 점진적 화력 상승)
  *
+ * 수동 등록 이슈(source_track='manual') 예외:
+ *   등록 시 커뮤니티 반응 없이 뉴스만으로 생성되는 경우가 많아 화력이 구조적으로
+ *   낮게 산출된다 (커뮤니티 반응 없으면 화력이 뉴스신뢰도×0.3으로 상한). 이 때문에
+ *   저화력 바이패스 규칙을 그대로 적용하면 등록 후 6시간 만에 대부분 종결되는
+ *   문제가 있었다 (2026-07 발견). 그래서 수동 등록 이슈는:
+ *   - 저화력 바이패스 종결(점화→종결, 규칙 3) 미적용
+ *   - 점화 타임아웃을 24시간 → 72시간으로 연장
+ *   대신 refresh-manual-issues Cron이 주기적으로 뉴스·커뮤니티를 재수집해
+ *   화력을 계속 보강하므로, 실제로 반응이 없는 이슈는 72시간 뒤 정상적으로 종결된다.
+ *
  * 연동 기능:
  *   - 이슈가 '종결' 상태로 전환되면 관련 투표 자동 마감
  */
@@ -24,6 +34,8 @@ import { CANDIDATE_MIN_HEAT_TO_REGISTER } from '@/lib/config/candidate-threshold
 const IGNITE_TO_DEBATE_HOURS = parseInt(process.env.STATUS_IGNITE_TO_DEBATE_HOURS ?? '6')
 const IGNITE_MIN_HEAT = parseInt(process.env.STATUS_IGNITE_MIN_HEAT ?? '30')
 const IGNITE_TIMEOUT_HOURS = parseInt(process.env.STATUS_IGNITE_TIMEOUT_HOURS ?? '24')
+// 수동 등록 이슈 전용 타임아웃 (재수집 크론이 데이터를 계속 보강할 시간을 확보)
+const MANUAL_IGNITE_TIMEOUT_HOURS = parseInt(process.env.STATUS_MANUAL_IGNITE_TIMEOUT_HOURS ?? '72')
 const DEBATE_MIN_COMMUNITY = parseInt(process.env.STATUS_DEBATE_MIN_COMMUNITY ?? '1')
 const CLOSED_IDLE_HOURS = parseInt(process.env.STATUS_CLOSED_IDLE_HOURS ?? '48')
 // CLOSED_MAX_HEAT는 반드시 CANDIDATE_MIN_HEAT_TO_REGISTER보다 낮아야 한다.
@@ -46,6 +58,7 @@ export interface IssueForTransition {
     approved_at: string | null
     created_at: string
     heat_index: number | null
+    source_track?: string | null
 }
 
 /**
@@ -191,6 +204,8 @@ export function evaluateTransition(
     const heat = issue.heat_index ?? 0
     const baseTime = issue.approved_at ?? issue.created_at
     const elapsedHours = (Date.now() - new Date(baseTime).getTime()) / (1000 * 60 * 60)
+    const isManual = issue.source_track === 'manual'
+    const igniteTimeoutHours = isManual ? MANUAL_IGNITE_TIMEOUT_HOURS : IGNITE_TIMEOUT_HOURS
 
     if (issue.status === '점화') {
         // 1. 경과 시간 < 6시간: 대기
@@ -208,8 +223,8 @@ export function evaluateTransition(
             }
         }
 
-        // 2. 타임아웃 조건 (24시간 경과 + 화력 < 30점) - 먼저 체크!
-        if (elapsedHours >= IGNITE_TIMEOUT_HOURS && heat < IGNITE_MIN_HEAT) {
+        // 2. 타임아웃 조건 (수동 등록은 72시간, 그 외 24시간 + 화력 < 30점) - 먼저 체크!
+        if (elapsedHours >= igniteTimeoutHours && heat < IGNITE_MIN_HEAT) {
             return {
                 newStatus: '종결',
                 reason: {
@@ -218,14 +233,17 @@ export function evaluateTransition(
                         elapsed: parseFloat(elapsedHours.toFixed(1)),
                         heat,
                         minHeat: IGNITE_MIN_HEAT,
+                        threshold: igniteTimeoutHours,
                     },
                     message: `점화 타임아웃 (${elapsedHours.toFixed(1)}h 경과, 화력 ${heat}점)`,
                 },
             }
         }
 
-        // 3. 화력 < 10점: 바이패스 종결
-        if (heat < CLOSED_MAX_HEAT) {
+        // 3. 화력 < 10점: 바이패스 종결 (수동 등록 이슈는 미적용 — 커뮤니티 반응 없이도
+        // 등록되므로 화력이 구조적으로 낮게 나온다. 재수집 크론이 데이터를 보강할
+        // 시간을 확보하기 위해 위 타임아웃 규칙에만 맡긴다)
+        if (!isManual && heat < CLOSED_MAX_HEAT) {
             return {
                 newStatus: '종결',
                 reason: {

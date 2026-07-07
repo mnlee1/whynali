@@ -38,6 +38,7 @@ export interface ClaudeCallOptions {
     model?: string       // 기본값: 'claude-sonnet-4-6'
     temperature?: number // 기본값: 0.1
     max_tokens?: number  // 기본값: 500
+    jsonMode?: boolean   // Groq 폴백 시 response_format: json_object 강제 (Claude 호출 시엔 무시됨)
 }
 
 /**
@@ -69,5 +70,6 @@ export async function callClaude(
         temperature,
         maxTokens,
         systemPrompt: systemMessage?.content,
+        jsonMode: options?.jsonMode,
     })
 }

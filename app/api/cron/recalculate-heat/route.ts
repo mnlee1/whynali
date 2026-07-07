@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
             // 점화 상태 이슈 (최대 30개)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
                 .eq('status', '점화')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .order('approved_at', { ascending: true, nullsFirst: false })
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
             // 논란중 상태 이슈 (최대 15개)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
                 .eq('status', '논란중')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .order('updated_at', { ascending: true })
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
             // 종결은 아래 closedIssues 쿼리가 전담 — 여기 포함하면 이중 처리로 슬롯 낭비
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .not('status', 'in', '(점화,논란중,종결)')
                 .order('updated_at', { ascending: false })
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
             // 30일 cutoff 제거 → 오래된 종결 이슈도 시간 가중치 0으로 수렴할 때까지 재계산
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
                 .eq('status', '종결')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .or(`heat_updated_at.is.null,heat_updated_at.lt.${staleHeatSince}`)
@@ -229,6 +229,7 @@ export async function GET(request: NextRequest) {
                                 approved_at: issue.approved_at ?? null,
                                 created_at: issue.created_at,
                                 heat_index: recentHeat,  // 상태 전환은 최근 화력 기준
+                                source_track: issue.source_track ?? null,
                             })
 
                             if (transition.newStatus) {
