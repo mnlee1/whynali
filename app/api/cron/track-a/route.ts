@@ -541,7 +541,11 @@ async function processTrackA(): Promise<{
             burst_count: burstCount,
             result,
             issue_id: issueId ?? null,
-            details: details ?? null,
+            details: {
+                ...details ?? {},
+                ai_verify_model: 'claude-sonnet-4-6',
+                ai_filter_model: 'qwen/qwen3.6-27b',
+            },
         }).then(({ error }) => {
             if (error) console.error('[track_a_logs 저장 실패]', error.message)
         })
