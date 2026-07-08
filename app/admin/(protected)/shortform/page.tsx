@@ -213,8 +213,11 @@ export default function AdminShortformPage() {
         jobId: string | null
         media: InstagramMedia[]
         loading: boolean
+        loadingMore: boolean
         error: string | null
-    }>({ open: false, jobId: null, media: [], loading: false, error: null })
+        nextCursor: string | null
+        hasMore: boolean
+    }>({ open: false, jobId: null, media: [], loading: false, loadingMore: false, error: null, nextCursor: null, hasMore: false })
 
     // 수동 생성 인라인 영역
     const [manualCreateOpen, setManualCreateOpen] = useState(false)
@@ -932,9 +935,10 @@ export default function AdminShortformPage() {
             await loadJobs(filter, page)
             const ig = json.platform_stats?.instagram
             const yt = json.platform_stats?.youtube
-            const lines: string[] = ['✅ 성과 데이터 조회 완료']
-            if (ig) lines.push(`IG — 재생 ${ig.plays.toLocaleString()} · 좋아요 ${ig.likes.toLocaleString()} · 평균시청 ${ig.avgWatchTimeMs != null ? `${(ig.avgWatchTimeMs / 1000).toFixed(1)}초` : '—'}`)
-            if (yt) lines.push(`YT — 조회 ${yt.views.toLocaleString()} · 좋아요 ${yt.likes.toLocaleString()}`)
+            const lines: string[] = []
+            if (ig) lines.push(`✅ IG — 재생 ${ig.plays.toLocaleString()} · 좋아요 ${ig.likes.toLocaleString()} · 평균시청 ${ig.avgWatchTimeMs != null ? `${(ig.avgWatchTimeMs / 1000).toFixed(1)}초` : '—'}`)
+            else lines.push('⚠️ IG — mediaId 미등록 (IG mediaId 수동 등록 필요)')
+            if (yt) lines.push(`✅ YT — 조회 ${yt.views.toLocaleString()} · 좋아요 ${yt.likes.toLocaleString()}`)
             alert(lines.join('\n'))
         } catch (e) {
             alert(e instanceof Error ? e.message : '성과 데이터 조회 실패')
@@ -945,18 +949,38 @@ export default function AdminShortformPage() {
 
     // Instagram 최근 미디어 모달 열기 → API 조회
     const handleSetInstagramMediaId = async (id: string) => {
-        setIgMediaModal({ open: true, jobId: id, media: [], loading: true, error: null })
+        setIgMediaModal({ open: true, jobId: id, media: [], loading: true, loadingMore: false, error: null, nextCursor: null, hasMore: false })
         try {
             const res = await fetch('/api/admin/shortform/instagram-recent-media')
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            setIgMediaModal(prev => ({ ...prev, media: json.media, loading: false }))
+            setIgMediaModal(prev => ({ ...prev, media: json.media, loading: false, nextCursor: json.nextCursor, hasMore: json.hasMore }))
         } catch (e) {
             setIgMediaModal(prev => ({
                 ...prev,
                 loading: false,
                 error: e instanceof Error ? e.message : '미디어 목록 조회 실패',
             }))
+        }
+    }
+
+    // 더 불러오기
+    const handleLoadMoreIgMedia = async () => {
+        if (!igMediaModal.nextCursor || igMediaModal.loadingMore) return
+        setIgMediaModal(prev => ({ ...prev, loadingMore: true }))
+        try {
+            const res = await fetch(`/api/admin/shortform/instagram-recent-media?after=${igMediaModal.nextCursor}`)
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            setIgMediaModal(prev => ({
+                ...prev,
+                media: [...prev.media, ...json.media],
+                loadingMore: false,
+                nextCursor: json.nextCursor,
+                hasMore: json.hasMore,
+            }))
+        } catch (e) {
+            setIgMediaModal(prev => ({ ...prev, loadingMore: false }))
         }
     }
 
@@ -1422,7 +1446,7 @@ export default function AdminShortformPage() {
                                                                 disabled={isProcessing}
                                                                 className="text-xs px-2.5 py-1.5 border border-border text-content-muted rounded-full hover:bg-surface-hover disabled:opacity-50 whitespace-nowrap"
                                                             >
-                                                                {isProcessing && processingId === job.id && uploadingAction === null ? '조회 중...' : 'IG 성과 조회'}
+                                                                {isProcessing && processingId === job.id && uploadingAction === null ? '조회 중...' : 'YT/IG 성과 조회'}
                                                             </button>
                                                         )}
 
@@ -2067,7 +2091,7 @@ export default function AdminShortformPage() {
                                 <div className="text-sm text-content-muted text-center py-8">게시물이 없습니다</div>
                             )}
                             <div className="grid grid-cols-3 gap-2">
-                                {igMediaModal.media.map(item => (
+                                {igMediaModal.media.map((item) => (
                                     <button
                                         key={item.id}
                                         onClick={() => handleSelectInstagramMedia(item.id)}
@@ -2099,6 +2123,15 @@ export default function AdminShortformPage() {
                                     </button>
                                 ))}
                             </div>
+                            {igMediaModal.hasMore && (
+                                <button
+                                    onClick={handleLoadMoreIgMedia}
+                                    disabled={igMediaModal.loadingMore}
+                                    className="w-full mt-3 py-2 text-sm text-content-muted border border-border rounded-lg hover:bg-surface-hover disabled:opacity-50"
+                                >
+                                    {igMediaModal.loadingMore ? '불러오는 중...' : '더 불러오기'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
