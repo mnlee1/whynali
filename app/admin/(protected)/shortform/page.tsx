@@ -923,6 +923,20 @@ export default function AdminShortformPage() {
         }
     }
 
+    const handleFetchStats = async (id: string) => {
+        setProcessingId(id)
+        try {
+            const res = await fetch(`/api/admin/shortform/${id}/fetch-stats`, { method: 'POST' })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            await loadJobs(filter, page)
+        } catch (e) {
+            alert(e instanceof Error ? e.message : '성과 데이터 조회 실패')
+        } finally {
+            setProcessingId(null)
+        }
+    }
+
     // Instagram 최근 미디어 모달 열기 → API 조회
     const handleSetInstagramMediaId = async (id: string) => {
         setIgMediaModal({ open: true, jobId: id, media: [], loading: true, error: null })
@@ -1384,16 +1398,24 @@ export default function AdminShortformPage() {
                                                             </button>
                                                         ) : null}
 
-                                                        {job.video_path ? (
+                                                        <button
+                                                            onClick={() => handleSetInstagramMediaId(job.id)}
+                                                            disabled={isProcessing}
+                                                            title="자동등록 삭제 후 인스타그램에 직접 수동으로 올린 게시물의 media ID를 등록해 성과 수집을 재개합니다"
+                                                            className="text-xs px-2.5 py-1.5 border border-border text-content-muted rounded-full hover:bg-surface-hover disabled:opacity-50 whitespace-nowrap"
+                                                        >
+                                                            {isProcessing && uploadingAction === 'instagram-media-id' ? '등록 중...' : 'IG mediaId 수동 등록'}
+                                                        </button>
+
+                                                        {hasAnySuccessfulUpload && (
                                                             <button
-                                                                onClick={() => handleSetInstagramMediaId(job.id)}
+                                                                onClick={() => handleFetchStats(job.id)}
                                                                 disabled={isProcessing}
-                                                                title="자동등록 삭제 후 인스타그램에 직접 수동으로 올린 게시물의 media ID를 등록해 성과 수집을 재개합니다"
                                                                 className="text-xs px-2.5 py-1.5 border border-border text-content-muted rounded-full hover:bg-surface-hover disabled:opacity-50 whitespace-nowrap"
                                                             >
-                                                                {isProcessing && uploadingAction === 'instagram-media-id' ? '등록 중...' : 'IG mediaId 수동 등록'}
+                                                                {isProcessing && processingId === job.id && uploadingAction === null ? '조회 중...' : '성과 조회'}
                                                             </button>
-                                                        ) : null}
+                                                        )}
 
                                                         {hasAnySuccessfulUpload ? (
                                                             <>
