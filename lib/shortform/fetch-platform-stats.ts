@@ -100,7 +100,7 @@ export async function fetchYoutubeStats(videoId: string): Promise<YoutubeStats> 
 
 const GRAPH_API = 'https://graph.instagram.com/v21.0'
 
-const IG_METRICS = 'plays,reach,likes,comments,shares,saved,ig_reels_avg_watch_time'
+const IG_METRICS = 'views,reach,likes,comments,shares,saved,ig_reels_avg_watch_time'
 
 export async function fetchInstagramStats(mediaId: string): Promise<InstagramStats> {
     const accessToken = await getInstagramAccessToken()
@@ -119,7 +119,7 @@ export async function fetchInstagramStats(mediaId: string): Promise<InstagramSta
 
     const rawAvgWatch = data.find(d => d.name === 'ig_reels_avg_watch_time')?.values?.[0]?.value
     return {
-        plays:         pick('plays'),
+        plays:         pick('views'),
         reach:         pick('reach'),
         likes:         pick('likes'),
         comments:      pick('comments'),
