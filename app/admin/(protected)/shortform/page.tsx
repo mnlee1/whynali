@@ -2068,18 +2068,17 @@ export default function AdminShortformPage() {
                         className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                            <div className="min-w-0 flex-1 mr-3">
-                                <h2 className="font-bold text-base">Instagram 릴스 목록</h2>
-                                {igMediaModal.jobTitle && (
-                                    <p className="text-xs font-medium text-primary mt-0.5 truncate">{igMediaModal.jobTitle}</p>
-                                )}
-                                <p className="text-xs text-content-muted mt-0.5">등록할 릴스를 선택하세요</p>
-                            </div>
+                        <div className="relative px-5 py-4 border-b border-border">
                             <button
                                 onClick={() => setIgMediaModal(prev => ({ ...prev, open: false }))}
-                                className="text-content-muted hover:text-content text-lg leading-none"
+                                className="absolute top-3 right-4 w-8 h-8 flex items-center justify-center text-content-muted hover:text-content rounded-full hover:bg-surface-subtle text-lg leading-none"
                             >✕</button>
+                            <div className="pr-8">
+                                <h2 className="font-bold text-base truncate">
+                                    {igMediaModal.jobTitle || 'Instagram 릴스 목록'}
+                                </h2>
+                                <p className="text-xs text-content-muted mt-0.5">Instagram 릴스 · 등록할 게시물을 선택하세요</p>
+                            </div>
                         </div>
 
                         <div className="overflow-y-auto flex-1 p-4">
@@ -2127,7 +2126,7 @@ export default function AdminShortformPage() {
                                                         </div>
                                                     )}
                                                     {isRecommended && (
-                                                        <span className="absolute top-1 left-1 bg-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">추천</span>
+                                                        <span className="absolute top-1 left-1 bg-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">일치</span>
                                                     )}
                                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
                                                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
