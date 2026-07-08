@@ -231,6 +231,8 @@ export default function AdminShortformPage() {
     const [issueDropdownOpen, setIssueDropdownOpen] = useState(false)
     const issueDropdownRef = useRef<HTMLDivElement>(null)
     const videoRef = useRef<HTMLVideoElement>(null)
+    const igScrollContainerRef = useRef<HTMLDivElement>(null)
+    const igSentinelRef = useRef<HTMLDivElement>(null)
     const [videoPlaying, setVideoPlaying] = useState(false)
     const [videoCurrentTime, setVideoCurrentTime] = useState(0)
     const [videoDuration, setVideoDuration] = useState(0)
@@ -984,6 +986,21 @@ export default function AdminShortformPage() {
             setIgMediaModal(prev => ({ ...prev, loadingMore: false }))
         }
     }
+
+    // 무한 스크롤 — sentinel 뷰포트 진입 시 다음 페이지 로드
+    useEffect(() => {
+        if (!igMediaModal.open || !igMediaModal.hasMore || igMediaModal.loadingMore) return
+        const sentinel = igSentinelRef.current
+        const container = igScrollContainerRef.current
+        if (!sentinel || !container) return
+        const observer = new IntersectionObserver(
+            ([entry]) => { if (entry.isIntersecting) handleLoadMoreIgMedia() },
+            { root: container, threshold: 0 },
+        )
+        observer.observe(sentinel)
+        return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [igMediaModal.open, igMediaModal.hasMore, igMediaModal.loadingMore, igMediaModal.nextCursor])
 
     // 모달에서 게시물 선택 → mediaId 등록
     const handleSelectInstagramMedia = async (mediaId: string) => {
@@ -2081,7 +2098,7 @@ export default function AdminShortformPage() {
                             </div>
                         </div>
 
-                        <div className="overflow-y-auto flex-1 p-4">
+                        <div ref={igScrollContainerRef} className="overflow-y-auto flex-1 p-4">
                             {igMediaModal.loading && (
                                 <div className="flex items-center justify-center h-32 text-content-muted text-sm">
                                     불러오는 중...
@@ -2143,14 +2160,13 @@ export default function AdminShortformPage() {
                                     </div>
                                 )
                             })()}
-                            {igMediaModal.hasMore && (
-                                <button
-                                    onClick={handleLoadMoreIgMedia}
-                                    disabled={igMediaModal.loadingMore}
-                                    className="w-full mt-3 py-2 text-sm text-content-muted border border-border rounded-lg hover:bg-surface-hover disabled:opacity-50"
-                                >
-                                    {igMediaModal.loadingMore ? '불러오는 중...' : '더 불러오기'}
-                                </button>
+                            {igMediaModal.loadingMore && (
+                                <div className="flex justify-center py-4">
+                                    <div className="w-5 h-5 border-2 border-border border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            )}
+                            {igMediaModal.hasMore && !igMediaModal.loadingMore && (
+                                <div ref={igSentinelRef} className="h-4" />
                             )}
                         </div>
                     </div>
