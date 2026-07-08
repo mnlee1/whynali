@@ -1413,7 +1413,7 @@ export default function AdminShortformPage() {
                                                                 disabled={isProcessing}
                                                                 className="text-xs px-2.5 py-1.5 border border-border text-content-muted rounded-full hover:bg-surface-hover disabled:opacity-50 whitespace-nowrap"
                                                             >
-                                                                {isProcessing && processingId === job.id && uploadingAction === null ? '조회 중...' : '성과 조회'}
+                                                                {isProcessing && processingId === job.id && uploadingAction === null ? '조회 중...' : 'IG 성과 조회'}
                                                             </button>
                                                         )}
 
