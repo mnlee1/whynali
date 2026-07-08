@@ -211,13 +211,14 @@ export default function AdminShortformPage() {
     const [igMediaModal, setIgMediaModal] = useState<{
         open: boolean
         jobId: string | null
+        jobTitle: string
         media: InstagramMedia[]
         loading: boolean
         loadingMore: boolean
         error: string | null
         nextCursor: string | null
         hasMore: boolean
-    }>({ open: false, jobId: null, media: [], loading: false, loadingMore: false, error: null, nextCursor: null, hasMore: false })
+    }>({ open: false, jobId: null, jobTitle: '', media: [], loading: false, loadingMore: false, error: null, nextCursor: null, hasMore: false })
 
     // 수동 생성 인라인 영역
     const [manualCreateOpen, setManualCreateOpen] = useState(false)
@@ -948,8 +949,8 @@ export default function AdminShortformPage() {
     }
 
     // Instagram 최근 미디어 모달 열기 → API 조회
-    const handleSetInstagramMediaId = async (id: string) => {
-        setIgMediaModal({ open: true, jobId: id, media: [], loading: true, loadingMore: false, error: null, nextCursor: null, hasMore: false })
+    const handleSetInstagramMediaId = async (id: string, jobTitle: string) => {
+        setIgMediaModal({ open: true, jobId: id, jobTitle, media: [], loading: true, loadingMore: false, error: null, nextCursor: null, hasMore: false })
         try {
             const res = await fetch('/api/admin/shortform/instagram-recent-media')
             const json = await res.json()
@@ -1432,7 +1433,7 @@ export default function AdminShortformPage() {
                                                         ) : null}
 
                                                         <button
-                                                            onClick={() => handleSetInstagramMediaId(job.id)}
+                                                            onClick={() => handleSetInstagramMediaId(job.id, job.issue_title)}
                                                             disabled={isProcessing}
                                                             title="자동등록 삭제 후 인스타그램에 직접 수동으로 올린 게시물의 media ID를 등록해 성과 수집을 재개합니다"
                                                             className="text-xs px-2.5 py-1.5 border border-border text-content-muted rounded-full hover:bg-surface-hover disabled:opacity-50 whitespace-nowrap"
@@ -2068,9 +2069,12 @@ export default function AdminShortformPage() {
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                            <div>
-                                <h2 className="font-bold text-base">Instagram 최근 게시물</h2>
-                                <p className="text-xs text-content-muted mt-0.5">등록할 게시물을 선택하세요</p>
+                            <div className="min-w-0 flex-1 mr-3">
+                                <h2 className="font-bold text-base">Instagram 릴스 목록</h2>
+                                {igMediaModal.jobTitle && (
+                                    <p className="text-xs font-medium text-primary mt-0.5 truncate">{igMediaModal.jobTitle}</p>
+                                )}
+                                <p className="text-xs text-content-muted mt-0.5">등록할 릴스를 선택하세요</p>
                             </div>
                             <button
                                 onClick={() => setIgMediaModal(prev => ({ ...prev, open: false }))}
@@ -2090,39 +2094,56 @@ export default function AdminShortformPage() {
                             {!igMediaModal.loading && !igMediaModal.error && igMediaModal.media.length === 0 && (
                                 <div className="text-sm text-content-muted text-center py-8">게시물이 없습니다</div>
                             )}
-                            <div className="grid grid-cols-3 gap-2">
-                                {igMediaModal.media.map((item) => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => handleSelectInstagramMedia(item.id)}
-                                        className="relative aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-pink-500 transition-all group text-left"
-                                    >
-                                        {(item.thumbnail_url || item.media_url) ? (
-                                            <img
-                                                src={item.thumbnail_url ?? item.media_url}
-                                                alt=""
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full bg-surface-alt flex items-center justify-center text-xs text-content-muted">
-                                                미리보기 없음
-                                            </div>
-                                        )}
-                                        {item.media_type === 'VIDEO' && (
-                                            <span className="absolute top-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">Reel</span>
-                                        )}
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
-                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <p className="text-white text-[10px] truncate">
-                                                {item.caption?.split('\n')[0]?.slice(0, 28) ?? '캡션 없음'}
-                                            </p>
-                                            <p className="text-white/70 text-[9px] mt-0.5">
-                                                {new Date(item.timestamp).toLocaleDateString('ko-KR')}
-                                            </p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
+                            {(() => {
+                                const titleWords = igMediaModal.jobTitle
+                                    .replace(/[^가-힣\w\s]/g, ' ')
+                                    .split(/\s+/)
+                                    .filter(w => w.length > 1)
+                                const scored = igMediaModal.media.map(item => ({
+                                    ...item,
+                                    matchScore: titleWords.filter(w => (item.caption ?? '').includes(w)).length,
+                                }))
+                                const sorted = [...scored].sort((a, b) => b.matchScore - a.matchScore)
+                                const bestScore = sorted[0]?.matchScore ?? 0
+                                return (
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {sorted.map((item) => {
+                                            const isRecommended = bestScore > 0 && item.matchScore === bestScore
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => handleSelectInstagramMedia(item.id)}
+                                                    className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all group text-left ${isRecommended ? 'border-pink-500' : 'border-transparent hover:border-pink-400'}`}
+                                                >
+                                                    {(item.thumbnail_url || item.media_url) ? (
+                                                        <img
+                                                            src={item.thumbnail_url ?? item.media_url}
+                                                            alt=""
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-surface-alt flex items-center justify-center text-xs text-content-muted">
+                                                            미리보기 없음
+                                                        </div>
+                                                    )}
+                                                    {isRecommended && (
+                                                        <span className="absolute top-1 left-1 bg-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">추천</span>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
+                                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <p className="text-white text-[10px] truncate">
+                                                            {item.caption?.split('\n')[0]?.slice(0, 28) ?? '캡션 없음'}
+                                                        </p>
+                                                        <p className="text-white/70 text-[9px] mt-0.5">
+                                                            {new Date(item.timestamp).toLocaleDateString('ko-KR')}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                )
+                            })()}
                             {igMediaModal.hasMore && (
                                 <button
                                     onClick={handleLoadMoreIgMedia}

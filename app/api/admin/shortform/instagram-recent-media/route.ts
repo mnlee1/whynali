@@ -24,7 +24,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const after = request.nextUrl.searchParams.get('after') ?? ''
         const fields = 'id,caption,media_type,timestamp,thumbnail_url,media_url,permalink'
         const cursorParam = after ? `&after=${after}` : ''
-        const url = `${GRAPH_API}/me/media?fields=${fields}&limit=18${cursorParam}&access_token=${accessToken}`
+        const url = `${GRAPH_API}/me/media?fields=${fields}&limit=50${cursorParam}&access_token=${accessToken}`
 
         const res = await fetch(url)
         const json = await res.json()
@@ -37,8 +37,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             )
         }
 
+        // 릴스(VIDEO)만 필터링
+        const reels = (json.data ?? []).filter((m: { media_type: string }) => m.media_type === 'VIDEO')
+
         return NextResponse.json({
-            media: json.data ?? [],
+            media: reels,
             nextCursor: json.paging?.cursors?.after ?? null,
             hasMore: !!json.paging?.next,
         })
