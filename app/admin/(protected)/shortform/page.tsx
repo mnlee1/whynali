@@ -930,6 +930,12 @@ export default function AdminShortformPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
             await loadJobs(filter, page)
+            const ig = json.platform_stats?.instagram
+            const yt = json.platform_stats?.youtube
+            const lines: string[] = ['✅ 성과 데이터 조회 완료']
+            if (ig) lines.push(`IG — 재생 ${ig.plays.toLocaleString()} · 좋아요 ${ig.likes.toLocaleString()} · 평균시청 ${ig.avgWatchTimeMs != null ? `${(ig.avgWatchTimeMs / 1000).toFixed(1)}초` : '—'}`)
+            if (yt) lines.push(`YT — 조회 ${yt.views.toLocaleString()} · 좋아요 ${yt.likes.toLocaleString()}`)
+            alert(lines.join('\n'))
         } catch (e) {
             alert(e instanceof Error ? e.message : '성과 데이터 조회 실패')
         } finally {
@@ -1220,6 +1226,9 @@ export default function AdminShortformPage() {
                                                     <p>재생 {job.platform_stats.instagram.plays.toLocaleString()}</p>
                                                     <p>좋아요 {job.platform_stats.instagram.likes.toLocaleString()}</p>
                                                     <p>평균시청 {job.platform_stats.instagram.avgWatchTimeMs != null ? `${(job.platform_stats.instagram.avgWatchTimeMs / 1000).toFixed(1)}초` : '—'}</p>
+                                                    <p className="text-[10px] text-content-muted">
+                                                        {new Date(job.platform_stats.instagram.fetched_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 기준
+                                                    </p>
                                                 </div>
                                             ) : null}
                                             {!job.platform_stats?.youtube && !job.platform_stats?.instagram && (
