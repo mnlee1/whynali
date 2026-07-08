@@ -2065,7 +2065,7 @@ export default function AdminShortformPage() {
                     onClick={() => setIgMediaModal(prev => ({ ...prev, open: false }))}
                 >
                     <div
-                        className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                        className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="relative px-5 py-4 border-b border-border">
