@@ -15,14 +15,16 @@ export const dynamic = 'force-dynamic'
 
 const GRAPH_API = 'https://graph.instagram.com/v21.0'
 
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
     const auth = await requireAdmin()
     if (auth.error) return auth.error
 
     try {
         const accessToken = await getInstagramAccessToken()
+        const after = request.nextUrl.searchParams.get('after') ?? ''
         const fields = 'id,caption,media_type,timestamp,thumbnail_url,media_url,permalink'
-        const url = `${GRAPH_API}/me/media?fields=${fields}&limit=18&access_token=${accessToken}`
+        const cursorParam = after ? `&after=${after}` : ''
+        const url = `${GRAPH_API}/me/media?fields=${fields}&limit=18${cursorParam}&access_token=${accessToken}`
 
         const res = await fetch(url)
         const json = await res.json()
@@ -35,7 +37,11 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
             )
         }
 
-        return NextResponse.json({ media: json.data ?? [] })
+        return NextResponse.json({
+            media: json.data ?? [],
+            nextCursor: json.paging?.cursors?.after ?? null,
+            hasMore: !!json.paging?.next,
+        })
     } catch (error) {
         const msg = error instanceof Error ? error.message : '알 수 없는 오류'
         return NextResponse.json(
