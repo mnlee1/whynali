@@ -969,7 +969,7 @@ export default function AdminShortformPage() {
         if (!igMediaModal.nextCursor || igMediaModal.loadingMore) return
         setIgMediaModal(prev => ({ ...prev, loadingMore: true }))
         try {
-            const res = await fetch(`/api/admin/shortform/instagram-recent-media?after=${igMediaModal.nextCursor}`)
+            const res = await fetch(`/api/admin/shortform/instagram-recent-media?after=${encodeURIComponent(igMediaModal.nextCursor)}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
             setIgMediaModal(prev => ({
