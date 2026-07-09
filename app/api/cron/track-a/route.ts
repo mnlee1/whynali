@@ -1113,7 +1113,13 @@ async function processTrackA(): Promise<{
         }
 
         // 연예/정치 + 화력 30 이상 → 관리자 즉시 Dooray 알림
+        // manual_review_alerted_at 기록: recalculate-heat 크론이 10분 뒤 같은 이슈를
+        // 재계산하면서 중복 알림을 보내지 않도록 함
         if (requiresManualReview && heatIndex >= AUTO_APPROVE_HEAT_THRESHOLD) {
+            await supabaseAdmin
+                .from('issues')
+                .update({ manual_review_alerted_at: now })
+                .eq('id', newIssue.id)
             sendDoorayImmediateAlert({
                 id: newIssue.id,
                 title: finalIssueTitle,
