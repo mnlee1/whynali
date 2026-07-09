@@ -56,7 +56,7 @@ jobs:
                   echo "table_list=$TABLE_LIST" >> $GITHUB_OUTPUT
 
                   # backups/<date> 를 private 백업 저장소로 이동
-                  DATE=$(echo "$OUTPUT" | grep "📅 날짜:" | awk '{print $2}')
+                  DATE=$(echo "$OUTPUT" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
                   mkdir -p backup-repo/backups
                   cp -r "backups/$DATE" "backup-repo/backups/"
                   echo "✅ 백업 완료"
