@@ -711,9 +711,11 @@ const SEARCH_HEADLINE_FONTSIZE = 48
 const SEARCH_SUBTITLE_FONTSIZE = 35
 const SEARCH_SUBTITLE_Y1 = SEARCH_BAR_Y + SEARCH_BAR_H + 47
 const SEARCH_SUBTITLE_Y2 = SEARCH_SUBTITLE_Y1 + 50
-const SEARCH_QUERY = '왜난리'
-const SEARCH_SUBTITLE_LINE1 = "지금 검색창에"
-const SEARCH_SUBTITLE_LINE2 = "'왜난리'를 검색하세요"
+const SEARCH_SUBTITLE_Y3 = SEARCH_SUBTITLE_Y2 + 50
+const SEARCH_QUERY = 'whynali.com'
+const SEARCH_SUBTITLE_LINE1 = "지금 주소창에"
+const SEARCH_SUBTITLE_LINE2 = "왜난리,"
+const SEARCH_SUBTITLE_LINE3 = "whynali.com를 검색하세요"
 // ─────────────────────────────────────────────────────────────
 
 export async function createSearchSceneOverlay(): Promise<Buffer> {
@@ -762,15 +764,16 @@ export async function createSearchTypingFrames(
     const searchChars = SEARCH_QUERY.split('')
     const sub1Words = SEARCH_SUBTITLE_LINE1.split(' ')
     const sub2Words = SEARCH_SUBTITLE_LINE2.split(' ')
+    const sub3Words = SEARCH_SUBTITLE_LINE3.split(' ')
     const CHAR_DELAY = 0.28
     const WORD_DELAY = 0.32
     const TEXT_START_DELAY = 0.20
-    const totalAnimTime = searchChars.length * CHAR_DELAY + (sub1Words.length + sub2Words.length) * WORD_DELAY
+    const totalAnimTime = searchChars.length * CHAR_DELAY + (sub1Words.length + sub2Words.length + sub3Words.length) * WORD_DELAY
     const holdTime = Math.max(sceneDuration - TEXT_START_DELAY - totalAnimTime, 0.5)
 
     const magCY = SEARCH_BAR_Y + Math.floor(SEARCH_BAR_H / 2)
 
-    async function renderFrame(visibleChars: number, visibleSub1: number, visibleSub2: number): Promise<Buffer> {
+    async function renderFrame(visibleChars: number, visibleSub1: number, visibleSub2: number, visibleSub3: number): Promise<Buffer> {
         const svgPaths: string[] = []
         const svgElements: string[] = []
 
@@ -810,6 +813,13 @@ export async function createSearchTypingFrames(
                 const x2 = Math.floor((WIDTH - w2) / 2)
                 addLinePaths(font, svgPaths, subText2, x2, SEARCH_SUBTITLE_Y2 + ascSub, SEARCH_SUBTITLE_FONTSIZE, '#E5E7EB', 5)
             }
+
+            if (visibleSub3 > 0) {
+                const subText3 = sub3Words.slice(0, visibleSub3).join(' ')
+                const w3 = font.getAdvanceWidth(subText3, SEARCH_SUBTITLE_FONTSIZE)
+                const x3 = Math.floor((WIDTH - w3) / 2)
+                addLinePaths(font, svgPaths, subText3, x3, SEARCH_SUBTITLE_Y3 + ascSub, SEARCH_SUBTITLE_FONTSIZE, '#E5E7EB', 5)
+            }
         }
 
         const svg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">${svgPaths.join('')}${svgElements.join('')}</svg>`
@@ -817,16 +827,19 @@ export async function createSearchTypingFrames(
     }
 
     const frames: { buffer: Buffer; duration: number }[] = []
-    frames.push({ buffer: await renderFrame(0, 0, 0), duration: TEXT_START_DELAY })
+    frames.push({ buffer: await renderFrame(0, 0, 0, 0), duration: TEXT_START_DELAY })
     for (let i = 1; i <= searchChars.length; i++) {
-        frames.push({ buffer: await renderFrame(i, 0, 0), duration: CHAR_DELAY })
+        frames.push({ buffer: await renderFrame(i, 0, 0, 0), duration: CHAR_DELAY })
     }
     for (let i = 1; i <= sub1Words.length; i++) {
-        frames.push({ buffer: await renderFrame(searchChars.length, i, 0), duration: WORD_DELAY })
+        frames.push({ buffer: await renderFrame(searchChars.length, i, 0, 0), duration: WORD_DELAY })
     }
     for (let i = 1; i <= sub2Words.length; i++) {
-        const isLast = i === sub2Words.length
-        frames.push({ buffer: await renderFrame(searchChars.length, sub1Words.length, i), duration: isLast ? holdTime : WORD_DELAY })
+        frames.push({ buffer: await renderFrame(searchChars.length, sub1Words.length, i, 0), duration: WORD_DELAY })
+    }
+    for (let i = 1; i <= sub3Words.length; i++) {
+        const isLast = i === sub3Words.length
+        frames.push({ buffer: await renderFrame(searchChars.length, sub1Words.length, sub2Words.length, i), duration: isLast ? holdTime : WORD_DELAY })
     }
 
     return frames
