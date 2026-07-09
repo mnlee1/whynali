@@ -38,7 +38,7 @@ export interface ShortformTextOutput {
 }
 
 /**
- * 이슈 제목에서 YouTube 해시태그용 한국어 키워드 2~3개 추출
+ * 이슈 제목에서 YouTube 해시태그용 한국어 키워드 최대 5개 추출 (고유명사 우선)
  */
 export async function extractYoutubeHashtags(title: string): Promise<string[]> {
     const apiKey = (process.env.GROQ_API_KEY ?? '').split(',')[0].trim()
@@ -50,34 +50,36 @@ export async function extractYoutubeHashtags(title: string): Promise<string[]> {
     console.log('[태그] 추출 시작 — 입력 제목:', cleanTitle)
     try {
         const completion = await groq.chat.completions.create({
-            model: 'qwen/qwen3.6-27b',
+            model: 'openai/gpt-oss-120b',
+            reasoning_effort: 'low',
             messages: [{
                 role: 'user',
-                content: `한국어 뉴스 이슈 제목에서 YouTube 해시태그에 쓸 핵심 키워드 2~3개를 추출하세요.
+                content: `한국어 뉴스 이슈 제목에서 YouTube·인스타그램 해시태그에 쓸 키워드를 최대 5개 추출하세요.
 
 제목: "${cleanTitle}"
 
 규칙:
-- 제목에서 가장 핵심이 되는 명사 위주로 추출
-- 인물명, 브랜드명, 사건명 등 구체적인 단어 우선
-- 너무 일반적인 단어(뉴스, 이슈, 한국 등) 제외
+- 인물명, 기관/단체명, 지명, 사건·제품명 등 구체적인 고유명사를 최우선으로 추출
+- 고유명사가 부족하면 핵심 명사로 보충 (개수는 억지로 채우지 말 것)
+- 논란, 사태, 이슈, 사건, 발표, 소식, 뉴스처럼 지나치게 일반적인 단어는 제외
 - 해시태그 기호(#) 없이 단어만 반환
 
 예시:
 - "삼성 갤럭시 신제품 출시 예고" → ["삼성", "갤럭시", "신제품"]
-- "아이유 콘서트 매진 사태" → ["아이유", "콘서트", "매진"]
-- "여자 배구 국가대표 감독 선임 논란" → ["배구", "국가대표", "감독논란"]
+- "아이유 콘서트 매진 사태" → ["아이유", "콘서트"]
+- "여자 배구 국가대표 감독 선임 논란" → ["배구", "국가대표", "감독선임"]
+- "미국 이란 공습 개시" → ["미국", "이란", "공습"]
 
-JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
+JSON만 반환: {"keywords":["단어1","단어2","단어3","단어4","단어5"]}`,
             }],
             temperature: 0.2,
-            max_tokens: 200,
+            max_tokens: 400,
         })
 
         const raw = completion.choices[0]?.message?.content?.trim() ?? ''
         console.log('[태그] Groq 응답 원문:', raw)
 
-        // Qwen3 thinking 모드 태그 제거 (<think>...</think>)
+        // 일부 reasoning 모델이 <think> 태그를 content에 섞어 보내는 경우 대비 (gpt-oss-120b는 보통 reasoning을 별도 필드로 분리해서 불필요하지만 안전망으로 유지)
         const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
 
         const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -88,7 +90,25 @@ JSON만 반환: {"keywords":["키워드1","키워드2","키워드3"]}`,
 
         const parsed = JSON.parse(jsonMatch[0])
         const keywords: string[] = parsed.keywords ?? []
-        const result = keywords.filter((k: unknown) => typeof k === 'string' && k.length > 0).slice(0, 3)
+        const PLACEHOLDER_PATTERN = /^(keyword|키워드|tag|태그|example|예시|word|label)\s*\d*$/i
+        const GENERIC_WORDS = new Set([
+            '논란', '사태', '이슈', '사건', '발표', '소식', '뉴스', '오늘', '최근', '충격', '화제', '한국',
+        ])
+        const result = keywords
+            .filter((k: unknown): k is string => typeof k === 'string' && k.trim().length > 0)
+            .map((k: string) => k.trim())
+            .filter((k: string) => {
+                if (PLACEHOLDER_PATTERN.test(k)) {
+                    console.warn('[태그] placeholder성 키워드 필터링:', k)
+                    return false
+                }
+                if (GENERIC_WORDS.has(k)) {
+                    console.warn('[태그] 지나치게 일반적인 키워드 필터링:', k)
+                    return false
+                }
+                return true
+            })
+            .slice(0, 5)
         console.log('[태그] 추출 키워드:', result)
         return result
     } catch (e) {
