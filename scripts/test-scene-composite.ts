@@ -44,6 +44,7 @@ const SCENE_DATA = [
 ]
 
 const SCENE_DURATION = 3
+const SEARCH_SCENE_DURATION = 5.5  // 검색바 문구가 길어져 타이핑 애니메이션 시간이 늘어남 (실제 프로덕션은 TTS 길이 기준 자동 산정)
 const FPS = 12
 
 // ── 씬별 모션 정의 ──────────────────────────────────────────────
@@ -245,7 +246,7 @@ async function buildComposite(
             sceneNum,
             sceneData.title, sceneData.desc,
             isSearch,
-            SCENE_DURATION, tmpDir, i, ffmpegPath, startT, endT,
+            isSearch ? SEARCH_SCENE_DURATION : SCENE_DURATION, tmpDir, i, ffmpegPath, startT, endT,
         )
         scenePaths.push(scenePath)
         if (!isSearch) prevBgBuf = bgBuf

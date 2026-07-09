@@ -368,7 +368,7 @@ export async function generateNSceneShortform(
         (async (): Promise<(Buffer | null)[]> => {
             const [audioBuffers, searchAudio] = await Promise.all([
                 generateNSceneAudios(audioTexts),
-                generateGoogleTTS('더 자세히 알고 싶다면? 지금 검색창에 왜난리를 검색하세요'),
+                generateGoogleTTS('더 자세히 알고 싶다면? 지금 주소창에 왜난리를 검색하세요'),
             ])
             return [...audioBuffers, searchAudio]
         })(),

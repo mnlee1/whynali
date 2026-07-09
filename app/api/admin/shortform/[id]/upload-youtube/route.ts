@@ -113,9 +113,9 @@ export async function POST(_request: NextRequest, { params }: Params) {
         console.log('[YouTube 태그] 추출 키워드:', titleKeywords)
         const titleTags = titleKeywords.map((k: string) => `#${k.replace(/\s+/g, '')}`).join(' ')
 
-        const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        const hashtagLine = `#왜난리 #이슈 #뉴스 #한국뉴스 #shorts ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
         console.log('[YouTube 태그] 최종 해시태그:', hashtagLine)
-        console.log('[YouTube 태그] tags 배열:', ['왜난리', '이슈', '뉴스', '한국뉴스', ...titleKeywords])
+        console.log('[YouTube 태그] tags 배열:', ['왜난리', '이슈', '뉴스', '한국뉴스', 'shorts', ...titleKeywords])
 
         const videoId = await uploadToYouTube(videoBuffer, {
             title: job.issue_title,
@@ -123,7 +123,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
                 `📌 왜난리에서 실시간 여론·토론·타임라인 확인하기\n` +
                 `${publicIssueUrl}\n\n` +
                 hashtagLine,
-            tags: ['왜난리', '이슈', '뉴스', '한국뉴스', ...titleKeywords],
+            tags: ['왜난리', '이슈', '뉴스', '한국뉴스', 'shorts', ...titleKeywords],
         })
 
         // 썸네일 적용 (실패해도 업로드 자체는 성공으로 처리)

@@ -109,7 +109,7 @@ export async function POST(
         const issueSlug = shortCode || issueUUID
         const publicIssueUrl = issueSlug ? `https://whynali.com/i/${issueSlug}?utm_source=instagram&utm_medium=reels` : 'https://whynali.com'
 
-        const hashtagLineInsta = `#왜난리 #이슈 #뉴스 #한국뉴스 ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
+        const hashtagLineInsta = `#왜난리 #이슈 #뉴스 #한국뉴스 #reels ${categoryTag} ${titleTags}`.replace(/\s+/g, ' ').trim()
         console.log('[Instagram 태그] 최종 해시태그:', hashtagLineInsta)
 
         const caption = [
