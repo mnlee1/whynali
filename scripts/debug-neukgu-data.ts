@@ -7,7 +7,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const PRODUCTION_URL = 'https://mdxshmfmcdcotteevwgi.supabase.co'
-const PRODUCTION_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1keHNobWZtY2Rjb3R0ZWV2d2dpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTYyNzAyMCwiZXhwIjoyMDkxMjAzMDIwfQ.Eo354xCPQxr2XOdxwvQfu0X-E6d9cdm7lqSJP6DkcRM'
+const PRODUCTION_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 async function main() {
     const supabase = createClient(PRODUCTION_URL, PRODUCTION_KEY)
