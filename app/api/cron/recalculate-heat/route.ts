@@ -32,6 +32,7 @@ import {
 } from '@/lib/config/candidate-thresholds'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
+import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
             // 점화 상태 이슈 (최대 30개)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track, manual_review_alerted_at')
                 .eq('status', '점화')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .order('approved_at', { ascending: true, nullsFirst: false })
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
             // 논란중 상태 이슈 (최대 15개)
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track, manual_review_alerted_at')
                 .eq('status', '논란중')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .order('updated_at', { ascending: true })
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
             // 종결은 아래 closedIssues 쿼리가 전담 — 여기 포함하면 이중 처리로 슬롯 낭비
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track, manual_review_alerted_at')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .not('status', 'in', '(점화,논란중,종결)')
                 .order('updated_at', { ascending: false })
@@ -102,7 +103,7 @@ export async function GET(request: NextRequest) {
             // 30일 cutoff 제거 → 오래된 종결 이슈도 시간 가중치 0으로 수렴할 때까지 재계산
             supabaseAdmin
                 .from('issues')
-                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track')
+                .select('id, title, category, approval_status, status, approved_at, created_at, updated_at, source_track, manual_review_alerted_at')
                 .eq('status', '종결')
                 .in('approval_status', [...HEAT_RECALC_APPROVAL])
                 .or(`heat_updated_at.is.null,heat_updated_at.lt.${staleHeatSince}`)
@@ -206,6 +207,29 @@ export async function GET(request: NextRequest) {
                             // - 화력이 15점 미만으로 떨어져도 자동 반려하지 않음
                             // - 이미 등록된 이슈는 관리자가 직접 판단
                             // - 화력 15-29점 → 대기 유지 (관리자 승인 필요)
+
+                            // 수동승인 카테고리(연예/정치 등) 이슈가 재계산 중 화력 30점을
+                            // 넘긴 경우 즉시 알림 (등록 시점에 이미 30점 이상이었던 경우는
+                            // track-a 크론에서 알림 완료 — 여기서는 그 이후 상승분만 처리).
+                            // manual_review_alerted_at으로 중복 알림 방지 (10분마다 재계산됨).
+                            else if (
+                                !AUTO_APPROVE_CATEGORIES.includes(category)
+                                && heatIndex >= AUTO_APPROVE_THRESHOLD
+                                && !issue.manual_review_alerted_at
+                            ) {
+                                await supabaseAdmin
+                                    .from('issues')
+                                    .update({ manual_review_alerted_at: new Date().toISOString() })
+                                    .eq('id', issue.id)
+                                sendDoorayImmediateAlert({
+                                    id: issue.id,
+                                    title: issue.title,
+                                    category,
+                                    heat_index: heatIndex,
+                                    created_at: issue.created_at,
+                                }).catch(e => console.error('[Dooray 즉시 알림 실패]', e))
+                                result.statusChanged = `수동승인 대기 알림 발송 (화력 ${heatIndex}점, ${category})`
+                            }
                         }
 
                         /*

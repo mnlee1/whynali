@@ -30,7 +30,8 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Backups
+# Backups (whynali-backups private repo로 이전됨)
+backups/
 backups-auth/
 
 # Claude Code

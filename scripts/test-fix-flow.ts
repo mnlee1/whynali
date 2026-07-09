@@ -14,7 +14,10 @@
 import { createClient } from '@supabase/supabase-js'
 
 const DEV_URL = 'https://daiwwuofyqjhknidkois.supabase.co'
-const DEV_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhaXd3dW9meXFqaGtuaWRrb2lzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU4Mjg0MiwiZXhwIjoyMDkxMTU4ODQyfQ.UX4nEogflLOi303Qvr2qImkHfR6-TodB2oMfAByyUZ8'
+const DEV_SERVICE_KEY = process.env.SUPABASE_DEV_SERVICE_ROLE_KEY
+if (!DEV_SERVICE_KEY) {
+    throw new Error('SUPABASE_DEV_SERVICE_ROLE_KEY env var가 필요합니다')
+}
 const LOCAL_URL = 'http://localhost:3000'
 const CRON_SECRET = 'local-test-secret-key'
 
