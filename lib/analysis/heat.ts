@@ -120,7 +120,7 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
     // 현재 화력 값 조회 (히스토리 백업용)
     const { data: currentIssue } = await supabaseAdmin
         .from('issues')
-        .select('heat_index, heat_updated_at')
+        .select('heat_index, heat_updated_at, created_heat_index')
         .eq('id', issueId)
         .single()
 
@@ -137,6 +137,11 @@ export async function calculateHeatIndex(issueId: string): Promise<number> {
 
     if (shouldBackup && currentIssue && currentIssue.heat_index !== null) {
         updateData.heat_index_1h_ago = currentIssue.heat_index
+    }
+
+    // 등록 시점 화력 기록이 누락된 경우 (예: 등록 크론이 두 번째 업데이트 전에 중단됨) 이 시점에 보정
+    if (currentIssue && currentIssue.created_heat_index === null) {
+        updateData.created_heat_index = heatIndex
     }
 
     const { error } = await supabaseAdmin
@@ -262,7 +267,7 @@ export async function calculateBothHeats(issueId: string): Promise<{
     // 현재 화력 값 조회 (히스토리 백업용)
     const { data: currentIssue } = await supabaseAdmin
         .from('issues')
-        .select('heat_index, heat_updated_at')
+        .select('heat_index, heat_updated_at, created_heat_index')
         .eq('id', issueId)
         .single()
 
@@ -280,6 +285,11 @@ export async function calculateBothHeats(issueId: string): Promise<{
 
     if (shouldBackup && currentIssue && currentIssue.heat_index !== null) {
         updateData.heat_index_1h_ago = currentIssue.heat_index
+    }
+
+    // 등록 시점 화력 기록이 누락된 경우 (예: 등록 크론이 두 번째 업데이트 전에 중단됨) 이 시점에 보정
+    if (currentIssue && currentIssue.created_heat_index === null) {
+        updateData.created_heat_index = heatIndex
     }
 
     const { error } = await supabaseAdmin

@@ -42,6 +42,13 @@ export type WeekStat = {
     shortforms: number
     cardNews: number
     pageViews: number
+    uniqueVisitors: number
+    signups: number
+    signupRate: number
+    voteRate: number
+    commentRate: number
+    reactionRate: number
+    channelInbound: ChannelInboundBreakdown
 }
 
 type ConversionRatePeriod = {
@@ -163,23 +170,25 @@ function buildChannelInboundBreakdown(
     return result
 }
 
-async function fetchConversionCounts(sinceIso: string, excludeIds: string[] = []) {
+async function fetchConversionCounts(sinceIso: string, excludeIds: string[] = [], beforeIso?: string) {
     const fi = (q: any) =>
         excludeIds.length > 0 ? q.not('user_id', 'in', `(${excludeIds.join(',')})`) : q
+    const cap = (q: any) =>
+        beforeIso ? q.lt('created_at', beforeIso) : q
     const [
         { count: signups },
         { count: votes },
         { count: comments },
         { count: reactions },
     ] = await Promise.all([
-        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'signup').gte('created_at', sinceIso)),
-        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'vote').gte('created_at', sinceIso)),
-        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'comment').gte('created_at', sinceIso)),
-        fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
-            .eq('event_type', 'reaction').gte('created_at', sinceIso)),
+        cap(fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'signup').gte('created_at', sinceIso))),
+        cap(fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'vote').gte('created_at', sinceIso))),
+        cap(fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'comment').gte('created_at', sinceIso))),
+        cap(fi(supabase.from('conversion_events').select('*', { count: 'exact', head: true })
+            .eq('event_type', 'reaction').gte('created_at', sinceIso))),
     ])
 
     return {
@@ -469,6 +478,10 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     const fi = (q: any): any =>
         internalIds.length > 0 ? q.not('user_id', 'in', `(${internalIds.join(',')})`) : q
 
+    // 봇 트래픽 제외 헬퍼: page_views 쿼리에 적용
+    // is_bot 컬럼 기반 단순 필터 (ILIKE 체인 대비 성능 우수)
+    const nob = (q: any): any => q.eq('is_bot', false)
+
     // 3. 기본 집계 (내부 계정 제외)
     const [
         { count: totalUsers },
@@ -672,37 +685,37 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { count: todayPageViewsCount },
         { data: todayVisitorsData },
     ] = await Promise.all([
-        cap(supabase.from('page_views').select('*', { count: 'exact', head: true })
-            .gte('created_at', todayStart.toISOString())),
-        cap(supabase.from('page_views').select('session_id')
-            .gte('created_at', todayStart.toISOString())),
+        nob(cap(supabase.from('page_views').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()))),
+        nob(cap(supabase.from('page_views').select('session_id')
+            .gte('created_at', todayStart.toISOString()))),
     ])
     const todayPageViews = todayPageViewsCount ?? 0
     const todayUniqueVisitors = new Set(todayVisitorsData?.map((v: { session_id: string }) => v.session_id) || []).size
 
     // 최근 7일 방문자
-    const { count: weeklyPageViews } = await cap(supabase
+    const { count: weeklyPageViews } = await nob(cap(supabase
         .from('page_views')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', sevenDaysAgo.toISOString()))
+        .gte('created_at', sevenDaysAgo.toISOString())))
 
-    const { data: weeklyVisitors } = await cap(supabase
+    const { data: weeklyVisitors } = await nob(cap(supabase
         .from('page_views')
         .select('session_id')
-        .gte('created_at', sevenDaysAgo.toISOString()))
+        .gte('created_at', sevenDaysAgo.toISOString())))
 
     const weeklyUniqueVisitors = new Set(weeklyVisitors?.map((v: { session_id: string }) => v.session_id) || []).size
 
     // 이번달 방문자
-    const { count: monthlyPageViews } = await cap(supabase
+    const { count: monthlyPageViews } = await nob(cap(supabase
         .from('page_views')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', thisMonthStart.toISOString()))
+        .gte('created_at', thisMonthStart.toISOString())))
 
-    const { data: monthlyVisitors } = await cap(supabase
+    const { data: monthlyVisitors } = await nob(cap(supabase
         .from('page_views')
         .select('session_id')
-        .gte('created_at', thisMonthStart.toISOString()))
+        .gte('created_at', thisMonthStart.toISOString())))
 
     const monthlyUniqueVisitors = new Set(monthlyVisitors?.map((v: { session_id: string }) => v.session_id) || []).size
 
@@ -715,9 +728,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         signupEventsD7,
         signupEventsD30,
     ] = await Promise.all([
-        cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', todayStart.toISOString())),
-        cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', sevenDaysAgo.toISOString())),
-        cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', thisMonthStart.toISOString())),
+        nob(cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', todayStart.toISOString()))),
+        nob(cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', sevenDaysAgo.toISOString()))),
+        nob(cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', thisMonthStart.toISOString()))),
         fetchSignupEventsBySource(todayStart.toISOString(), pastMonth ? periodEnd.toISOString() : undefined),
         fetchSignupEventsBySource(sevenDaysAgo.toISOString(), pastMonth ? periodEnd.toISOString() : undefined),
         fetchSignupEventsBySource(thisMonthStart.toISOString(), pastMonth ? periodEnd.toISOString() : undefined),
@@ -740,10 +753,12 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     }
 
     // 전환율 계산 (기간별: 오늘 / 7일 / 30일)
+    // 과거 월은 periodEnd를 상한으로 지정해 해당 월 데이터만 집계
+    const convBefore = pastMonth ? periodEnd.toISOString() : undefined
     const [convD1, convD7, convD30] = await Promise.all([
-        fetchConversionCounts(todayStart.toISOString(), internalIds),
-        fetchConversionCounts(sevenDaysAgo.toISOString(), internalIds),
-        fetchConversionCounts(thisMonthStart.toISOString(), internalIds),
+        fetchConversionCounts(todayStart.toISOString(), internalIds, convBefore),
+        fetchConversionCounts(sevenDaysAgo.toISOString(), internalIds, convBefore),
+        fetchConversionCounts(thisMonthStart.toISOString(), internalIds, convBefore),
     ])
 
     const conversionRatesByPeriod = {
@@ -975,6 +990,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             { data: wShortformRows },
             { data: wCardNewsRows },
             { data: wPVRows },
+            { data: wConvRows },
         ] = await Promise.all([
             supabase.from('users').select('created_at').eq('is_internal', false)
                 .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
@@ -991,8 +1007,10 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
                 .gte('youtube_uploaded_at', periodStart.toISOString()).lt('youtube_uploaded_at', periodEnd.toISOString()),
             supabase.from('card_news_logs').select('published_at')
                 .gte('published_at', periodStart.toISOString()).lt('published_at', periodEnd.toISOString()),
-            supabase.from('page_views').select('created_at')
-                .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+            nob(supabase.from('page_views').select('created_at, session_id, utm_source')
+                .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString())),
+            fi(supabase.from('conversion_events').select('event_type, created_at, first_utm_source')
+                .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString())),
         ])
 
         // KST 기준 일(day) 번호 추출
@@ -1004,18 +1022,43 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         const lastDayNum = kstDayNum(new Date(periodEnd.getTime() - 86400000).toISOString())
         const numWeeks = Math.ceil(lastDayNum / 7)
 
-        weeklyBreakdown = Array.from({ length: numWeeks }, (_, i) => ({
-            week: i + 1,
-            label: `${i + 1}주차`,
-            newUsers:   wUserRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
-            comments:   wCommentRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
-            reactions:  wReactionRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
-            votes:      wVoteRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
-            issues:     wIssueRows?.filter(r => r.approved_at && toWeekIdx(r.approved_at) === i).length || 0,
-            shortforms: wShortformRows?.filter(r => r.youtube_uploaded_at && toWeekIdx(r.youtube_uploaded_at) === i).length || 0,
-            cardNews:   wCardNewsRows?.filter(r => r.published_at && toWeekIdx(r.published_at) === i).length || 0,
-            pageViews:  wPVRows?.filter(r => toWeekIdx(r.created_at) === i).length || 0,
-        }))
+        weeklyBreakdown = Array.from({ length: numWeeks }, (_, i) => {
+            const weekPVRows = wPVRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i) || []
+            const weekUniqueVisitors = new Set(weekPVRows.map((r: { session_id: string }) => r.session_id)).size
+
+            const weekConvRows = wConvRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i) || []
+            const weekSignups    = weekConvRows.filter((r: { event_type: string }) => r.event_type === 'signup').length
+            const weekVotes      = weekConvRows.filter((r: { event_type: string }) => r.event_type === 'vote').length
+            const weekComments   = weekConvRows.filter((r: { event_type: string }) => r.event_type === 'comment').length
+            const weekReactions  = weekConvRows.filter((r: { event_type: string }) => r.event_type === 'reaction').length
+            const convRate = buildConversionRatePeriod(weekUniqueVisitors, weekSignups, weekVotes, weekComments, weekReactions)
+
+            const weekVisitorCounts = buildVisitorCounts(weekPVRows as { utm_source: string | null; session_id: string }[])
+            const weekSignupEvents = weekConvRows
+                .filter((r: { event_type: string }) => r.event_type === 'signup')
+                .map((r: { first_utm_source?: string | null }) => ({ first_utm_source: r.first_utm_source ?? null }))
+            const weekChannelInbound = buildChannelInboundBreakdown(weekVisitorCounts, weekSignupEvents)
+
+            return {
+                week: i + 1,
+                label: `${i + 1}주차`,
+                newUsers:       wUserRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
+                comments:       wCommentRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
+                reactions:      wReactionRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
+                votes:          wVoteRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
+                issues:         wIssueRows?.filter((r: { approved_at: string | null }) => r.approved_at && toWeekIdx(r.approved_at) === i).length || 0,
+                shortforms:     wShortformRows?.filter((r: { youtube_uploaded_at: string | null }) => r.youtube_uploaded_at && toWeekIdx(r.youtube_uploaded_at) === i).length || 0,
+                cardNews:       wCardNewsRows?.filter((r: { published_at: string | null }) => r.published_at && toWeekIdx(r.published_at) === i).length || 0,
+                pageViews:      weekPVRows.length,
+                uniqueVisitors: weekUniqueVisitors,
+                signups:        weekSignups,
+                signupRate:     convRate.signupRate,
+                voteRate:       convRate.voteRate,
+                commentRate:    convRate.commentRate,
+                reactionRate:   convRate.reactionRate,
+                channelInbound: weekChannelInbound,
+            }
+        })
     }
 
     const today = new Date()

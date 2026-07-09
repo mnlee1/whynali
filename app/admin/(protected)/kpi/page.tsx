@@ -139,6 +139,9 @@ interface KPIMetrics {
         week: number; label: string
         newUsers: number; comments: number; reactions: number; votes: number
         issues: number; shortforms: number; cardNews: number; pageViews: number
+        uniqueVisitors: number; signups: number
+        signupRate: number; voteRate: number; commentRate: number; reactionRate: number
+        channelInbound: Record<ChannelKey, ChannelInboundStat>
     }[] | null
     targets: {
         users: number
@@ -829,15 +832,40 @@ export default function KPIDashboardPage() {
 
             {/* 유입 체크 */}
             {(() => {
-                const pKey = selectedPeriod === 1 ? 'd1' as const : selectedPeriod === 7 ? 'd7' as const : 'd30' as const
+                const now3 = new Date()
+                const isPastMonth3 = !(selectedYear === now3.getFullYear() && selectedMonth === now3.getMonth() + 1)
+                // 과거 월: 주차 선택 시 해당 주차 데이터, 전체 선택 시 d30
+                const pKey = isPastMonth3
+                    ? 'd30' as const
+                    : selectedPeriod === 1 ? 'd1' as const : selectedPeriod === 7 ? 'd7' as const : 'd30' as const
                 const src = metrics.visitorsBySource[pKey]
-                const conv = metrics.conversionRatesByPeriod?.[pKey]
-                const periodVisitors =
-                    selectedPeriod === 1
-                        ? metrics.todayUniqueVisitors
-                        : selectedPeriod === 7
-                            ? metrics.weeklyUniqueVisitors
-                            : metrics.monthlyUniqueVisitors
+
+                // 과거 월 주차 선택 시 weeklyBreakdown 항목 기반 전환율 사용
+                const selectedWeekStat = isPastMonth3 && selectedWeek !== 'all'
+                    ? (metrics.weeklyBreakdown ?? []).find(w => w.week === selectedWeek) ?? null
+                    : null
+                const conv = selectedWeekStat
+                    ? {
+                        signupRate:   selectedWeekStat.signupRate,
+                        voteRate:     selectedWeekStat.voteRate,
+                        commentRate:  selectedWeekStat.commentRate,
+                        reactionRate: selectedWeekStat.reactionRate,
+                        uniqueVisitors: selectedWeekStat.uniqueVisitors,
+                        signups:      selectedWeekStat.signups,
+                        votes:        selectedWeekStat.votes,
+                        comments:     selectedWeekStat.comments,
+                        reactions:    selectedWeekStat.reactions,
+                    }
+                    : metrics.conversionRatesByPeriod?.[pKey]
+                const periodVisitors = selectedWeekStat
+                    ? selectedWeekStat.uniqueVisitors
+                    : isPastMonth3
+                        ? metrics.monthlyUniqueVisitors
+                        : selectedPeriod === 1
+                            ? metrics.todayUniqueVisitors
+                            : selectedPeriod === 7
+                                ? metrics.weeklyUniqueVisitors
+                                : metrics.monthlyUniqueVisitors
 
                 const ConversionCard = ({
                     label,
@@ -937,8 +965,10 @@ export default function KPIDashboardPage() {
                                             tiktok: src.tiktok,
                                             organic: src.organic,
                                         }[key]
-                                        const stat = metrics.channelInboundByPeriod?.[pKey]?.[key]
-                                            ?? { visitors: fallbackVisitors, signups: 0, signupRate: 0 }
+                                        const stat = selectedWeekStat
+                                            ? (selectedWeekStat.channelInbound?.[key] ?? { visitors: 0, signups: 0, signupRate: 0 })
+                                            : (metrics.channelInboundByPeriod?.[pKey]?.[key]
+                                                ?? { visitors: fallbackVisitors, signups: 0, signupRate: 0 })
                                         const hasVisitors = stat.visitors > 0
                                         return (
                                             <tr key={key} className="border-b border-border-muted last:border-0">
@@ -974,7 +1004,7 @@ export default function KPIDashboardPage() {
 
 
             {selectedTab === 'plan' && <>
-            {/* 📅 익월 목표 자동계산 (+20%) */}
+            {/* 익월 목표 자동계산 (+20%) */}
             <div className="card p-6 border-l-4 border-l-emerald-500">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">

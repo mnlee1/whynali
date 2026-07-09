@@ -87,7 +87,7 @@ jobs:
                           text: ($text + " — " + $date),
                           attachments: [{
                               title: "🔐 Auth 사용자 백업 실행 필요",
-                              text: ("사용자 변화 감지: " + $change + "\n\nSupabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnpm run backup:auth\n```\n\n완료 후 Google Drive (nhnad.deflow@gmail.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분"),
+                              text: ("사용자 변화 감지: " + $change + "\n\nSupabase Auth 사용자 정보를 백업해주세요.\n\n실행 명령어:\n```\ncd /Users/nhn/Documents/pub/@react/whynali\nnpm run backup:auth\n```\n\n완료 후 Google Drive (mnlee@nhnad.com)에 업로드하세요.\n\n📁 백업 위치: backups-auth/YYYY-MM-DD/\n⏱️  소요 시간: 약 5분"),
                               color: "orange"
                           }]
                       }'

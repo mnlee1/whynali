@@ -95,6 +95,26 @@ function getDeviceType(): string {
     return 'desktop'
 }
 
+// 봇 감지 (User-Agent 기반)
+// 인앱 브라우저(Instagram/TikTok 앱)는 실제 사용자이므로 제외하지 않음
+const BOT_PATTERNS = [
+    'bot', 'crawler', 'spider',
+    'facebookexternalhit',  // Instagram/Facebook 링크 프리뷰
+    'whatsapp',             // WhatsApp 링크 프리뷰
+    'telegram',             // Telegram 링크 프리뷰
+    'headless',             // HeadlessChrome (Puppeteer 등)
+    'python',               // Python 스크립트
+    'curl',                 // curl
+    'wget',                 // wget
+    'scrapy',               // Scrapy
+]
+
+function detectBot(): boolean {
+    if (typeof navigator === 'undefined') return false
+    const ua = navigator.userAgent.toLowerCase()
+    return BOT_PATTERNS.some(pattern => ua.includes(pattern))
+}
+
 // 페이지뷰 추적
 export async function trackPageView(params: {
     pageType: 'home' | 'issue' | 'discussion' | 'vote' | 'profile' | 'other'
@@ -103,6 +123,12 @@ export async function trackPageView(params: {
     discussionId?: string
 }) {
     try {
+        // 봇이면 저장 자체를 건너뜀
+        if (detectBot()) {
+            console.debug('[Analytics] Bot detected - skipping tracking')
+            return
+        }
+
         const sessionId = getSessionId()
         const utm = getUTMParams()
         const deviceType = getDeviceType()
@@ -126,6 +152,7 @@ export async function trackPageView(params: {
             ...utm,
             user_agent: navigator.userAgent,
             device_type: deviceType,
+            is_bot: false,
         })
     } catch (error) {
         // 추적 실패는 조용히 무시 (사용자 경험에 영향 없음)
