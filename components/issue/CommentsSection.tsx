@@ -19,7 +19,10 @@ import type { Comment } from '@/types'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
 import ReportModal from '@/components/issue/ReportModal'
 import NicknameAvatar from '@/components/common/NicknameAvatar'
+import LoginPromptModal from '@/components/common/LoginPromptModal'
 import { trackConversion } from '@/lib/analytics/tracker'
+import { goToLogin, goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { usePendingAction } from '@/hooks/usePendingAction'
 
 interface CommentsSectionProps {
     issueId?: string
@@ -95,6 +98,9 @@ export default function CommentsSection({
     /* 세이프티봇 상태 */
     const [safetyBotEnabled, setSafetyBotEnabled] = useState(true)
     const [safetyModalOpen, setSafetyModalOpen] = useState(false)
+
+    /* 로그인 유도 모달 */
+    const [loginPrompt, setLoginPrompt] = useState<{ description: string; onConfirm: () => void } | null>(null)
 
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
     useEffect(() => {
@@ -246,17 +252,18 @@ export default function CommentsSection({
         return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer) }
     }, [pendingNotice])
 
-    const redirectToLogin = () => {
-        const currentPath = window.location.pathname
-        if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
-            window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
-        }
-    }
-
     /* 댓글 작성 */
-    const handleWrite = async () => {
-        if (!userId) { redirectToLogin(); return }
-        if (!draft.trim() || submittingWrite || rateLimitCountdown > 0) return
+    const handleWrite = async (overrideText?: string) => {
+        const text = (overrideText ?? draft).trim()
+        if (!text) return
+        if (!userId) {
+            setLoginPrompt({
+                description: '댓글을 작성하려면 로그인이 필요해요.',
+                onConfirm: () => goToLoginWithPendingAction({ type: 'comment', issueId, discussionTopicId, parentId: null, text }),
+            })
+            return
+        }
+        if (submittingWrite || rateLimitCountdown > 0) return
         setSubmittingWrite(true)
         setWriteError(null)
         setWriteErrorType(null)
@@ -268,7 +275,7 @@ export default function CommentsSection({
                 body: JSON.stringify({
                     issue_id: issueId ?? null,
                     discussion_topic_id: discussionTopicId ?? null,
-                    content: draft.trim(),
+                    content: text,
                 }),
             })
             const json = await res.json()
@@ -373,7 +380,10 @@ export default function CommentsSection({
 
     /* 좋아요/싫어요 토글 (낙관적 업데이트, 답글도 포함) */
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
-        if (!userId) { redirectToLogin(); return }
+        if (!userId) {
+            setLoginPrompt({ description: '좋아요/싫어요를 남기려면 로그인이 필요해요.', onConfirm: goToLogin })
+            return
+        }
         if (likingId) return
         setLikingId(commentId)
 
@@ -452,8 +462,17 @@ export default function CommentsSection({
     }
 
     /* 답글 제출 */
-    const handleReplySubmit = async (parentId: string) => {
-        if (!replyDraft.trim() || submittingReply) return
+    const handleReplySubmit = async (parentId: string, overrideText?: string) => {
+        const text = (overrideText ?? replyDraft).trim()
+        if (!text) return
+        if (!userId) {
+            setLoginPrompt({
+                description: '답글을 작성하려면 로그인이 필요해요.',
+                onConfirm: () => goToLoginWithPendingAction({ type: 'comment', issueId, discussionTopicId, parentId, text }),
+            })
+            return
+        }
+        if (submittingReply) return
         setSubmittingReply(true)
         setReplyError(null)
         try {
@@ -464,7 +483,7 @@ export default function CommentsSection({
                     issue_id: issueId ?? null,
                     discussion_topic_id: discussionTopicId ?? null,
                     parent_id: parentId,
-                    content: replyDraft.trim(),
+                    content: text,
                 }),
             })
             const json = await res.json()
@@ -492,6 +511,19 @@ export default function CommentsSection({
         }
     }
 
+    usePendingAction(
+        'comment',
+        (action) => issueId ? action.issueId === issueId : action.discussionTopicId === discussionTopicId,
+        (action) => {
+            if (action.parentId) {
+                handleReplySubmit(action.parentId, action.text)
+            } else {
+                handleWrite(action.text)
+            }
+        },
+        !loading && !!userId
+    )
+
     /* 답글 목록 토글 (미로드 시 API 조회) */
     const handleToggleReplies = async (commentId: string) => {
         if (expandedRepliesIds.has(commentId)) {
@@ -510,7 +542,10 @@ export default function CommentsSection({
 
     /* 신고 모달 열기 */
     const handleOpenReportModal = (comment: Comment) => {
-        if (!userId) { redirectToLogin(); return }
+        if (!userId) {
+            setLoginPrompt({ description: '댓글을 신고하려면 로그인이 필요해요.', onConfirm: goToLogin })
+            return
+        }
         setReportTargetComment({
             id: comment.id,
             body: comment.body,
@@ -596,17 +631,7 @@ export default function CommentsSection({
                                         setWriteErrorType(null)
                                     }
                                 }}
-                                onFocus={(e) => { 
-                                    if (!userId) {
-                                        const currentPath = window.location.pathname
-                                        if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
-                                            window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
-                                        } else {
-                                            e.target.blur()
-                                        }
-                                    }
-                                }}
-                                placeholder={userId ? '이 이슈에 대한 생각이나 반응을 자유롭게 남겨주세요.' : '댓글을 작성하려면 로그인 해주세요'}
+                                placeholder="이 이슈에 대한 생각이나 반응을 자유롭게 남겨주세요."
                                 maxLength={500}
                                 rows={3}
                                 className={[
@@ -619,7 +644,7 @@ export default function CommentsSection({
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-content-muted">{draft.length} / 500</span>
                                 <button
-                                    onClick={handleWrite}
+                                    onClick={() => handleWrite()}
                                     disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
                                     className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -772,6 +797,13 @@ export default function CommentsSection({
                     onReport={handleReport}
                 />
             )}
+
+            <LoginPromptModal
+                isOpen={!!loginPrompt}
+                description={loginPrompt?.description ?? ''}
+                onClose={() => setLoginPrompt(null)}
+                onConfirm={() => loginPrompt?.onConfirm()}
+            />
         </>
     )
 }
@@ -1060,16 +1092,6 @@ function CommentItem({
                     <textarea
                         value={replyDraft ?? ''}
                         onChange={(e) => onReplyDraftChange(e.target.value)}
-                        onFocus={(e) => {
-                            if (!userId) {
-                                const currentPath = window.location.pathname
-                                if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
-                                    window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
-                                } else {
-                                    e.target.blur()
-                                }
-                            }
-                        }}
                         placeholder="답글을 입력하세요"
                         rows={2}
                         maxLength={500}

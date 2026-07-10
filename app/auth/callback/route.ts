@@ -87,7 +87,11 @@ export async function GET(request: NextRequest) {
 
     if (needsOnboarding) {
         console.log('[auth/callback] → /onboarding 리다이렉트')
-        const onboardingResponse = NextResponse.redirect(new URL('/onboarding', requestUrl.origin))
+        const onboardingUrl = new URL('/onboarding', requestUrl.origin)
+        if (redirectPath !== '/') {
+            onboardingUrl.searchParams.set('next', redirectPath)
+        }
+        const onboardingResponse = NextResponse.redirect(onboardingUrl)
         // 세션 쿠키를 새 redirect response에 복사
         response.cookies.getAll().forEach((cookie) => {
             onboardingResponse.cookies.set(cookie.name, cookie.value, cookie)

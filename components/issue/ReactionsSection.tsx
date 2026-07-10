@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactionType } from '@/types'
 import { trackConversion } from '@/lib/analytics/tracker'
+import { goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { usePendingAction } from '@/hooks/usePendingAction'
+import LoginPromptModal from '@/components/common/LoginPromptModal'
 
 interface ReactionsSectionProps {
     issueId: string
@@ -29,6 +32,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [loginPrompt, setLoginPrompt] = useState<ReactionType | null>(null)
 
     useEffect(() => {
         // serverUserId가 null이면 서버에서 비로그인 확정 → 재조회 불필요
@@ -71,14 +75,22 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
         return () => window.removeEventListener('reactionUpdated', handleReactionUpdate as EventListener)
     }, [issueId, loadReactions])
 
-    const handleClick = async (type: ReactionType) => {
+    const handleClick = (type: ReactionType) => {
         if (!userId) {
-            const currentPath = window.location.pathname
-            if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
-                window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
-            }
+            setLoginPrompt(type)
             return
         }
+        submitReaction(type)
+    }
+
+    usePendingAction(
+        'reaction',
+        (action) => action.issueId === issueId,
+        (action) => submitReaction(action.reactionType),
+        !loading && !!userId
+    )
+
+    const submitReaction = async (type: ReactionType) => {
         if (submitting) return
 
         // 낙관적 업데이트: API 응답 전에 즉시 UI 반영
@@ -172,6 +184,16 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                     )
                 })}
             </div>
+
+            <LoginPromptModal
+                isOpen={!!loginPrompt}
+                description="반응을 남기려면 로그인이 필요해요."
+                onClose={() => setLoginPrompt(null)}
+                onConfirm={() => {
+                    if (!loginPrompt) return
+                    goToLoginWithPendingAction({ type: 'reaction', issueId, reactionType: loginPrompt })
+                }}
+            />
         </div>
     )
 }
