@@ -1,15 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Swiper, SwiperSlide } from 'swiper/react'
+import type { Swiper as SwiperInstance } from 'swiper/types'
 import { Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
 import type { Vote, VoteChoice } from '@/types/index'
 import Tooltip from '@/components/common/Tooltip'
 import { Check } from 'lucide-react'
+import { goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { usePendingAction } from '@/hooks/usePendingAction'
+import LoginPromptModal from '@/components/common/LoginPromptModal'
 
 interface VoteWithChoices extends Vote {
     vote_choices: VoteChoice[]
@@ -37,7 +40,6 @@ interface Props {
 }
 
 export default function VotePreview({ initialVotes }: Props) {
-    const router = useRouter()
     const [votes, setVotes] = useState<VoteWithChoices[]>(
         initialVotes ? sortVotes(initialVotes) : []
     )
@@ -45,6 +47,16 @@ export default function VotePreview({ initialVotes }: Props) {
     const [userVotes, setUserVotes] = useState<UserVotes>({})
     const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({})
     const [submitting, setSubmitting] = useState<Record<string, boolean>>({})
+    const [loginPrompt, setLoginPrompt] = useState<{ issueId: string; voteId: string; choiceId: string } | null>(null)
+    const [userId, setUserId] = useState<string | null>(null)
+    const swiperRef = useRef<SwiperInstance | null>(null)
+
+    useEffect(() => {
+        fetch('/api/auth/me')
+            .then((r) => r.ok ? r.json() : null)
+            .then((d) => { if (d?.id) setUserId(d.id) })
+            .catch(() => {})
+    }, [])
 
     useEffect(() => {
         async function loadUserVotes() {
@@ -63,7 +75,7 @@ export default function VotePreview({ initialVotes }: Props) {
         loadUserVotes()
     }, [initialVotes])
 
-    const handleVote = async (voteId: string, choiceId: string) => {
+    const submitVote = async (voteId: string, choiceId: string) => {
         setSubmitting(prev => ({ ...prev, [voteId]: true }))
         try {
             const res = await fetch(`/api/votes/${voteId}/vote`, {
@@ -72,7 +84,10 @@ export default function VotePreview({ initialVotes }: Props) {
                 body: JSON.stringify({ vote_choice_id: choiceId }),
             })
             if (res.status === 401) {
-                router.push('/login')
+                const issueId = votes.find(v => v.id === voteId)?.issues?.id
+                if (issueId) {
+                    setLoginPrompt({ issueId, voteId, choiceId })
+                }
                 return
             }
             if (res.ok || res.status === 201) {
@@ -93,6 +108,26 @@ export default function VotePreview({ initialVotes }: Props) {
             setSubmitting(prev => ({ ...prev, [voteId]: false }))
         }
     }
+
+    usePendingAction(
+        'vote',
+        (action) => votes.some(v => v.id === action.voteId),
+        (action) => {
+            // 슬라이드가 2번째 이후에 있으면 새로고침 시 첫 슬라이드로 초기화되어
+            // 자동 투표가 눈에 띄지 않으므로, 해당 슬라이드로 스크롤해 결과를 보여준다
+            const idx = votes.findIndex(v => v.id === action.voteId)
+            if (idx >= 0 && swiperRef.current) {
+                const swiper = swiperRef.current
+                if (typeof swiper.slideToLoop === 'function' && swiper.params.loop) {
+                    swiper.slideToLoop(idx)
+                } else {
+                    swiper.slideTo(idx)
+                }
+            }
+            submitVote(action.voteId, action.choiceId)
+        },
+        !loading && !!userId
+    )
 
     if (loading) {
         return <div className="h-64 bg-neutral-100 rounded-xl animate-pulse" />
@@ -244,7 +279,7 @@ export default function VotePreview({ initialVotes }: Props) {
                             </Link>
                         ) : (
                             <button
-                                onClick={() => selectedChoiceId && handleVote(vote.id, selectedChoiceId)}
+                                onClick={() => selectedChoiceId && submitVote(vote.id, selectedChoiceId)}
                                 disabled={!selectedChoiceId || isSubmitting}
                                 className={`w-full h-9 rounded-lg text-xs font-bold transition-all ${
                                     selectedChoiceId
@@ -269,6 +304,7 @@ export default function VotePreview({ initialVotes }: Props) {
                     <Tooltip label="" align="left" width="w-max max-w-[300px]" text="진행 중인 투표 우선, 참여 수 많은 순으로 정렬됩니다." />
                 </div>
                 <Swiper
+                    onSwiper={(swiper) => { swiperRef.current = swiper }}
                     modules={[Pagination]}
                     spaceBetween={12}
                     slidesPerView={1}
@@ -289,6 +325,16 @@ export default function VotePreview({ initialVotes }: Props) {
                     ))}
                 </Swiper>
             </div>
+
+            <LoginPromptModal
+                isOpen={!!loginPrompt}
+                description="투표하려면 로그인이 필요해요."
+                onClose={() => setLoginPrompt(null)}
+                onConfirm={() => {
+                    if (!loginPrompt) return
+                    goToLoginWithPendingAction({ type: 'vote', issueId: loginPrompt.issueId, voteId: loginPrompt.voteId, choiceId: loginPrompt.choiceId })
+                }}
+            />
         </section>
     )
 }
