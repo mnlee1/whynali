@@ -40,6 +40,7 @@ export interface Issue {
     blog_post_error?: string | null
     blog_post_title?: string | null
     blog_post_content?: string | null
+    blog_post_tags?: string[] | null
 }
 
 export interface TimelinePoint {

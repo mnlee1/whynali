@@ -56,7 +56,7 @@ import {
   resetFallbackTracking,
   getFallbackCount,
 } from '../../lib/card-news/core'
-import { sendDoorayCardNewsQualityGateAlert } from '../../lib/dooray-notification'
+import { sendDoorayCardNewsQualityGateAlert, sendDoorayCardNewsUploadFailureAlert } from '../../lib/dooray-notification'
 
 // ─── 설정 ──────────────────────────────────────────────
 
@@ -268,14 +268,18 @@ async function run() {
   const igCaption = buildCaption(mode, reportIssues, closedIssue, 'instagram')
   const threadsCaption = buildCaption(mode, reportIssues, closedIssue, 'threads')
 
+  const uploadIssueTitle = reportIssues[0]?.title ?? closedIssue?.title ?? '(제목 없음)'
+
   if (IG_USER_ID && IG_ACCESS_TOKEN) {
     try {
       igPostId = await uploadToInstagram(imagePaths, igCaption)
       console.log('✅ Instagram 업로드 완료')
       uploadResults.push('Instagram ✓')
     } catch (err) {
-      console.error('❌ Instagram 업로드 실패:', (err as Error).message)
+      const message = (err as Error).message
+      console.error('❌ Instagram 업로드 실패:', message)
       uploadResults.push('Instagram ✗')
+      await sendDoorayCardNewsUploadFailureAlert({ platform: 'Instagram', mode, issueTitle: uploadIssueTitle, error: message })
     }
   }
 
@@ -285,8 +289,10 @@ async function run() {
       console.log('✅ Threads 업로드 완료')
       uploadResults.push('Threads ✓')
     } catch (err) {
-      console.error('❌ Threads 업로드 실패:', (err as Error).message)
+      const message = (err as Error).message
+      console.error('❌ Threads 업로드 실패:', message)
       uploadResults.push('Threads ✗')
+      await sendDoorayCardNewsUploadFailureAlert({ platform: 'Threads', mode, issueTitle: uploadIssueTitle, error: message })
     }
   }
 
