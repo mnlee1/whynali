@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
+import { filterBannedBullets, containsBannedCommunityMention } from '@/lib/ai/timeline-content-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -128,7 +129,9 @@ JSON 응답:
                 return null
             })
             .filter((b): b is BulletItem => b !== null)
-        
+
+        bullets = filterBannedBullets(bullets, `${issueTitle} - ${stage}`)
+
         if (bullets.length > items.length) {
             console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)
         }
@@ -173,9 +176,13 @@ JSON 응답:
 
     // 브리핑 저장
     if (parsed.brief) {
+        const safeBrief = {
+            ...parsed.brief,
+            bullets: (parsed.brief.bullets ?? []).filter(b => !containsBannedCommunityMention(b)),
+        }
         const { error: briefError } = await supabaseAdmin
             .from('issues')
-            .update({ brief_summary: parsed.brief })
+            .update({ brief_summary: safeBrief })
             .eq('id', issueId)
         if (briefError) {
             console.warn(`  ⚠️ [브리핑 저장 실패] ${issueTitle}: ${briefError.message}`)

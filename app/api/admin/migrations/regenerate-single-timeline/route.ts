@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
+import { filterBannedBullets, containsBannedCommunityMention } from '@/lib/ai/timeline-content-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
             : ''
 
         const communitySection = communityPosts && communityPosts.length > 0
-            ? `\n## 커뮤니티 게시글 (발단 원인 추론 참고용)\n더쿠·네이트판 등 커뮤니티 반응입니다. 미확인 정보가 포함될 수 있으므로 사실로 단정하지 말고 맥락 파악에만 활용하세요:\n${communityPosts.map(p => `- [${p.source_site}] ${p.title}`).join('\n')}`
+            ? `\n## 온라인 참고 자료 (발단 원인 추론용 — 내부 참고만)\n미확인 정보 포함 가능. 사실로 단정하지 말고 맥락 파악에만 활용하세요:\n${communityPosts.map(p => `- ${p.title}`).join('\n')}`
             : ''
 
         const prompt = `이슈: "${issue.title}"
@@ -104,6 +105,12 @@ ${pointsList}
 - 커뮤니티 게시글은 미확인 정보일 수 있으므로 "~했다는 의혹이 제기됐다", "~한 것으로 알려졌다" 같이 헤징 표현을 사용하세요
 - 좋은 예: "강원 현장에서 김진태가 장동혁에게 결자해지를 요구하며 쓴소리를 했다"
 - 나쁜 예: "논란이 시작됐다" (너무 모호)
+
+## 출력 금지 규칙 (반드시 준수)
+- 더쿠·네이트판·뽐뿌·클리앙·보배드림 등 출처 사이트명 절대 언급 금지
+- "온라인 커뮤니티에서 화제가 되고 있다", "글이 급증하고 있다", "논쟁이 이어지고 있다" 등
+  커뮤니티 반응·확산 정황 자체를 bullet으로 쓰지 말 것 — 실제 사건 내용만 서술
+- 참고 자료의 제목·출처 정보를 그대로 복사하지 말 것
 
 ## 브리핑
 - intro: "~가 ~해서 논란이야" 형식으로 논란의 핵심을 한 문장에 담아 서술
@@ -198,6 +205,7 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
                 .filter((b): b is BulletItem => b !== null)
 
             bullets = bullets.filter((b) => b.text.trim().length > 0)
+            bullets = filterBannedBullets(bullets, `${issue.title} - ${stage}`)
 
             const uniqueBullets: BulletItem[] = []
             for (const bullet of bullets) {
@@ -246,9 +254,13 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
 
         // ── 5. 브리핑 저장 ────────────────────────────────────────────
         if (parsed.brief) {
+            const safeBrief = {
+                ...parsed.brief,
+                bullets: (parsed.brief.bullets ?? []).filter(b => !containsBannedCommunityMention(b)),
+            }
             await supabaseAdmin
                 .from('issues')
-                .update({ brief_summary: parsed.brief })
+                .update({ brief_summary: safeBrief })
                 .eq('id', issueId)
         }
 

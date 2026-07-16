@@ -1110,6 +1110,27 @@ export default function AdminIssuesPage() {
                             />
                         </div>
 
+                        {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-medium text-content-muted uppercase">태그 (네이버 에디터 태그란에 입력)</label>
+                                    <button
+                                        onClick={() => handleCopyText(blogDraftIssue.blog_post_tags?.join(', ') ?? '')}
+                                        className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                    >
+                                        복사
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {blogDraftIssue.blog_post_tags.map((tag, i) => (
+                                        <span key={i} className="px-2 py-1 text-xs rounded bg-surface-subtle border border-border">
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="mb-4">
                             <label className="text-xs font-medium text-content-muted uppercase mb-1 block">미리보기</label>
                             <div

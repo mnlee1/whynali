@@ -505,3 +505,59 @@ export async function sendDoorayCardNewsQualityGateAlert(result: CardNewsQuality
     }
 }
 
+interface CardNewsUploadFailure {
+    platform: 'Instagram' | 'Threads'
+    mode: string
+    issueTitle: string
+    error: string
+}
+
+/**
+ * 카드뉴스 SNS 업로드 실패 알림 — Instagram/Threads 업로드가 실패했을 때 즉시 호출.
+ * 액세스 토큰 만료처럼 다음 실행에도 계속 반복될 수 있는 문제를 조용히 넘기지 않고
+ * 실패 첫 회차부터 관리자에게 알려, 예전처럼 여러 날 동안 모르고 지나가는 일을 막는다.
+ */
+export async function sendDoorayCardNewsUploadFailureAlert(failure: CardNewsUploadFailure): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
+        return false
+    }
+
+    try {
+        const message: DoorayMessage = {
+            botName: '왜난리 알림봇',
+            text: `🚨 **카드뉴스 ${failure.platform} 업로드 실패**\n"${failure.issueTitle}" (${failure.mode}) 발행 중 ${failure.platform} 업로드가 실패했습니다. 액세스 토큰 만료 등 계정 연동 문제일 수 있으니 확인해 주세요.`,
+            attachments: [
+                {
+                    title: `${failure.platform} 오류`,
+                    text: failure.error,
+                    color: 'red',
+                },
+            ],
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log(`[Dooray] ✅ 카드뉴스 ${failure.platform} 업로드 실패 알림 전송 완료`)
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 카드뉴스 업로드 실패 알림 전송 실패:', error)
+        return false
+    }
+}
+
