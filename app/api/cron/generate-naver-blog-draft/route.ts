@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
                 blog_post_status: 'ready_to_publish',
                 blog_post_title: post.title,
                 blog_post_content: post.contents,
+                blog_post_tags: post.tags,
                 blog_post_error: null,
             })
             if (finalized) {
