@@ -57,6 +57,9 @@ export default function AdminIssuesPage() {
     const [error, setError] = useState<string | null>(null)
     const [previewIssue, setPreviewIssue] = useState<Issue | null>(null)
     const [mergeSourceIssue, setMergeSourceIssue] = useState<Issue | null>(null)
+    const [blogDraftIssue, setBlogDraftIssue] = useState<Issue | null>(null)
+    const [publishingBlog, setPublishingBlog] = useState(false)
+    const [blogPublishUrl, setBlogPublishUrl] = useState('')
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
     const [editingTitleValue, setEditingTitleValue] = useState('')
     const [savingTitle, setSavingTitle] = useState(false)
@@ -261,6 +264,32 @@ export default function AdminIssuesPage() {
             loadTabCounts()
         } catch (err) {
             alert(err instanceof Error ? err.message : '거부 실패')
+        }
+    }
+
+    const handleCopyText = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text)
+        } catch {
+            alert('복사 실패 — 브라우저 권한을 확인해주세요')
+        }
+    }
+
+    const handlePublishBlogDraft = async (id: string) => {
+        setPublishingBlog(true)
+        try {
+            const response = await fetch(`/api/admin/issues/${id}/blog-post/publish`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: blogPublishUrl.trim() || undefined }),
+            })
+            if (!response.ok) throw new Error('게시완료 처리 실패')
+            setBlogDraftIssue(null)
+            fetchIssues()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '게시완료 처리 실패')
+        } finally {
+            setPublishingBlog(false)
         }
     }
 
@@ -725,6 +754,9 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-24">
+                                블로그
+                            </th>
                             <th className="px-4 py-3 text-left text-sm font-medium text-content-muted uppercase w-32">
                                 <button
                                     onClick={() => handleSort('created_at')}
@@ -886,6 +918,40 @@ export default function AdminIssuesPage() {
                                         )
                                     })()}
                                 </td>
+                                <td className="px-4 py-3 text-sm whitespace-nowrap w-24">
+                                    {(() => {
+                                        if (!issue.blog_post_status) {
+                                            return <span className="text-content-muted">—</span>
+                                        }
+                                        const label = issue.blog_post_status === 'ready_to_publish' ? '초안준비'
+                                            : issue.blog_post_status === 'published' ? '게시완료'
+                                            : issue.blog_post_status === 'failed' ? '생성실패'
+                                            : issue.blog_post_status === 'skipped' ? '건너뜀'
+                                            : issue.blog_post_status === 'generating' ? '생성중'
+                                            : '예약됨'
+                                        const className = issue.blog_post_status === 'ready_to_publish' ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                            : issue.blog_post_status === 'published' ? 'bg-green-100 text-green-700 border-green-200'
+                                            : issue.blog_post_status === 'failed' ? 'bg-red-100 text-red-700 border-red-200'
+                                            : issue.blog_post_status === 'skipped' ? 'bg-surface-subtle text-content-muted border-border'
+                                            : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                        const clickable = issue.blog_post_status === 'ready_to_publish' || issue.blog_post_status === 'published'
+
+                                        return (
+                                            <button
+                                                type="button"
+                                                disabled={!clickable}
+                                                onClick={() => {
+                                                    setBlogPublishUrl(issue.blog_post_url ?? '')
+                                                    setBlogDraftIssue(issue)
+                                                }}
+                                                className={`px-2 py-1 text-xs rounded border font-medium ${className} ${clickable ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                                                title={issue.blog_post_error ?? undefined}
+                                            >
+                                                {label}
+                                            </button>
+                                        )
+                                    })()}
+                                </td>
                                 <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap w-32">
                                     {formatDate(issue.created_at)}
                                 </td>
@@ -994,6 +1060,97 @@ export default function AdminIssuesPage() {
                     onClose={() => { setManualWizardOpen(false); setWizardInitialKeyword(undefined) }}
                     onSuccess={() => { fetchIssues(); loadTabCounts() }}
                 />
+            )}
+
+            {/* 네이버 블로그 초안 — 글쓰기 API가 없어 관리자가 복사해서 직접 게시 */}
+            {blogDraftIssue && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">네이버 블로그 초안 — {blogDraftIssue.title}</h3>
+                            <button onClick={() => setBlogDraftIssue(null)} className="text-content-muted hover:text-content-primary">✕</button>
+                        </div>
+
+                        <p className="text-sm text-content-secondary mb-4">
+                            네이버 블로그 글쓰기 API가 폐지되어 자동 게시가 불가능합니다. 아래 제목·본문을 복사해 blog.naver.com에 직접 붙여넣은 뒤 게시완료를 눌러주세요.
+                        </p>
+
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-xs font-medium text-content-muted uppercase">제목</label>
+                                <button
+                                    onClick={() => handleCopyText(blogDraftIssue.blog_post_title ?? '')}
+                                    className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                >
+                                    복사
+                                </button>
+                            </div>
+                            <input
+                                readOnly
+                                value={blogDraftIssue.blog_post_title ?? ''}
+                                className="w-full border border-border rounded px-3 py-2 text-sm bg-surface-subtle"
+                            />
+                        </div>
+
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-xs font-medium text-content-muted uppercase">본문 (HTML)</label>
+                                <button
+                                    onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
+                                    className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                >
+                                    복사
+                                </button>
+                            </div>
+                            <textarea
+                                readOnly
+                                value={blogDraftIssue.blog_post_content ?? ''}
+                                rows={8}
+                                className="w-full border border-border rounded px-3 py-2 text-sm font-mono bg-surface-subtle"
+                            />
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="text-xs font-medium text-content-muted uppercase mb-1 block">미리보기</label>
+                            <div
+                                className="border border-border rounded px-3 py-2 text-sm prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: blogDraftIssue.blog_post_content ?? '' }}
+                            />
+                        </div>
+
+                        {blogDraftIssue.blog_post_status === 'published' && blogDraftIssue.blog_post_url && (
+                            <a
+                                href={blogDraftIssue.blog_post_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline block mb-2"
+                            >
+                                게시된 글 보러가기 →
+                            </a>
+                        )}
+
+                        {(blogDraftIssue.blog_post_status === 'ready_to_publish' || blogDraftIssue.blog_post_status === 'published') && (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={blogPublishUrl}
+                                    onChange={e => setBlogPublishUrl(e.target.value)}
+                                    placeholder="게시된 글 URL (선택)"
+                                    className="flex-1 border border-border rounded px-3 py-2 text-sm"
+                                />
+                                <button
+                                    disabled={publishingBlog}
+                                    onClick={() => handlePublishBlogDraft(blogDraftIssue.id)}
+                                    className="px-4 py-2 text-sm rounded bg-primary text-white disabled:opacity-50"
+                                >
+                                    {publishingBlog
+                                        ? '처리 중...'
+                                        : blogDraftIssue.blog_post_status === 'published' ? 'URL 저장' : '게시완료로 표시'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     )

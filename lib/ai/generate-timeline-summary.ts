@@ -23,6 +23,15 @@ const AFTERMATH_KEYWORDS = new Set([
     '탈퇴', '은퇴', '복귀', '재개', '재활동', '후속', '추가입장',
 ])
 
+// AI가 "출력 금지 규칙"을 무시하고 커뮤니티 출처/반응을 언급하는 경우를 코드 레벨에서 걸러낸다
+// (프롬프트 지시만으로는 무료 모델이 규칙을 어길 수 있어 후처리 검증이 필요)
+const BANNED_SITE_PATTERN = /더쿠|네이트판|클리앙|보배드림|뽐뿌/
+const BANNED_REACTION_PATTERN = /(온라인|커뮤니티)[^.]{0,20}(화제|확산|공유|여론|토론|논쟁|반응)[^.]{0,20}(되고\s?있|진행되고\s?있|일고\s?있|이어지고\s?있|뜨겁)/
+
+function containsBannedCommunityMention(text: string): boolean {
+    return BANNED_SITE_PATTERN.test(text) || BANNED_REACTION_PATTERN.test(text)
+}
+
 function extractKeywords(title: string): Set<string> {
     return new Set(
         title
@@ -228,6 +237,18 @@ JSON 응답:
                     return null
                 })
                 .filter((b): b is BulletItem => b !== null)
+
+            const filteredCount = bullets.length
+            bullets = bullets.filter(b => {
+                const banned = containsBannedCommunityMention(b.text)
+                if (banned) {
+                    console.warn(`  ⚠️ [금지 표현 차단] ${issueTitle} - ${stage}: "${b.text}"`)
+                }
+                return !banned
+            })
+            if (bullets.length < filteredCount) {
+                console.log(`  ✓ [금지 표현 제거] ${issueTitle} - ${stage}: ${filteredCount}개 → ${bullets.length}개`)
+            }
 
             if (bullets.length > items.length) {
                 console.warn(`  ⚠️ [요약 품질 경고] ${issueTitle} - ${stage}: bullets(${bullets.length}개)가 뉴스(${items.length}개)보다 많음`)

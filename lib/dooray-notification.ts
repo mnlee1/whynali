@@ -8,6 +8,8 @@
  * 2. sendDoorayBatchGenerationAlert — 토론/투표 배치 자동생성 완료 알림 (매일 12시)
  * 3. sendDoorayReportAlert      — 댓글 신고 임계치 도달 알림
  * 4. sendDoorayShortformBatchAlert — 숏폼 배치 자동생성 완료 알림 (매일 12시)
+ * 5. sendDoorayBlogPostFailureAlert — 네이버 블로그 초안 생성 최종 실패 알림
+ * 6. sendDoorayCardNewsQualityGateAlert — 카드뉴스 자동 발행 전 품질 게이트가 막았을 때 알림
  */
 
 interface DoorayAttachment {
@@ -385,3 +387,121 @@ export async function sendDoorayShortformBatchAlert(result: ShortformBatchResult
         return false
     }
 }
+
+interface BlogPostFailure {
+    id: string
+    title: string
+    error: string
+}
+
+/**
+ * 네이버 블로그 초안 생성 최종 실패 알림 — generate-naver-blog-draft 크론에서
+ * 최대 재시도(3회) 소진 후 실패로 확정된 건이 있을 때 호출
+ */
+export async function sendDoorayBlogPostFailureAlert(failures: BlogPostFailure[]): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
+        return false
+    }
+
+    if (failures.length === 0) {
+        console.log('[Dooray] 실패한 블로그 포스팅이 없어 알림을 건너뜁니다.')
+        return false
+    }
+
+    try {
+        const message: DoorayMessage = {
+            botName: '왜난리 알림봇',
+            text: `⚠️ **네이버 블로그 초안 생성 실패 — ${failures.length}건**\n최대 재시도 후에도 실패했습니다. 확인이 필요합니다.`,
+            attachments: failures.map(f => ({
+                title: f.title,
+                text: f.error,
+                color: 'red',
+            })),
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log(`[Dooray] ✅ 블로그 초안 생성 실패 알림 전송 완료 (${failures.length}건)`)
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 블로그 초안 생성 실패 알림 전송 실패:', error)
+        return false
+    }
+}
+
+interface CardNewsQualityGateResult {
+    mode: string
+    issueTitle: string
+    fallbackCount: number
+    outputDir: string
+}
+
+/**
+ * 카드뉴스 자동 발행 전 품질 게이트 알림 — 생성 중 폴백(AI 텍스트 검증 실패)이 발생해
+ * 자동 발행을 건너뛰었을 때 호출. 사람 검수 단계 없이 자동 발행되는 구조는 그대로 두되,
+ * 폴백이 섞인 결과물만 자동으로 발행을 막고 관리자에게 draft 페이지에서 확인하도록 알린다.
+ */
+export async function sendDoorayCardNewsQualityGateAlert(result: CardNewsQualityGateResult): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
+        return false
+    }
+
+    // 이 함수는 Vercel이 아니라 GitHub Actions(카드뉴스 cron)에서 호출돼 NEXT_PUBLIC_SITE_URL이
+    // 없을 수 있음 — pipeline.ts가 이미 쓰는 고정 도메인으로 대체.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whynali.com'
+
+    try {
+        const message: DoorayMessage = {
+            botName: '왜난리 알림봇',
+            text: `⚠️ **카드뉴스 자동 발행 보류 — 품질 게이트 작동**\n"${result.issueTitle}" (${result.mode}) 생성 중 검증 실패로 폴백 텍스트가 ${result.fallbackCount}건 섞여 자동 발행을 건너뛰었습니다. 관리자 페이지에서 draft로 수정 후 수동 발행해 주세요.\n👉 ${siteUrl}/admin/card-news`,
+            attachments: [
+                {
+                    title: `폴백 ${result.fallbackCount}건 발생`,
+                    text: `모드: ${result.mode} | 이슈: ${result.issueTitle} | 이미지: ${result.outputDir} (CI 아티팩트로 업로드됨)`,
+                    color: 'orange',
+                },
+            ],
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log('[Dooray] ✅ 카드뉴스 품질 게이트 알림 전송 완료')
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 카드뉴스 품질 게이트 알림 전송 실패:', error)
+        return false
+    }
+}
+
