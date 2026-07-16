@@ -53,7 +53,10 @@ import {
   generateSlidesForIssue,
   fetchCardNewsDraft,
   markCardNewsDraftUsed,
+  resetFallbackTracking,
+  getFallbackCount,
 } from '../../lib/card-news/core'
+import { sendDoorayCardNewsQualityGateAlert } from '../../lib/dooray-notification'
 
 // ─── 설정 ──────────────────────────────────────────────
 
@@ -111,6 +114,7 @@ async function run() {
   console.log(`🚀 카드뉴스 파이프라인 시작 (모드: ${mode}${issueIdArg ? `, 이슈: ${issueIdArg}` : ''}${draftIdArg ? `, draft: ${draftIdArg}` : ''})`)
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+  resetFallbackTracking()
 
   const LOGO_BASE64 = getLogoBase64()
 
@@ -238,6 +242,22 @@ async function run() {
   if (!PUBLISH) {
     console.log('ℹ️  테스트 모드: --publish 플래그 없음, 업로드 스킵')
     console.log('🎉 완료!')
+    return
+  }
+
+  // 자동 품질 게이트 — 사람 검수 없이 자동 발행되는 구조는 유지하되, 생성 중 폴백(AI 텍스트
+  // 검증 실패)이 하나라도 섞였으면 자동 발행만 건너뛴다. 이미지는 이미 생성돼 CI 아티팩트로
+  // 남으니, draft로 관리자가 고쳐서 수동 발행하면 된다.
+  const fallbackCount = getFallbackCount()
+  if (fallbackCount > 0) {
+    console.error(`🚧 품질 게이트: 생성 중 폴백 ${fallbackCount}건 발생 — 자동 발행을 건너뜁니다.`)
+    await sendDoorayCardNewsQualityGateAlert({
+      mode,
+      issueTitle: reportIssues[0]?.title ?? closedIssue?.title ?? '(제목 없음)',
+      fallbackCount,
+      outputDir: OUTPUT_DIR,
+    })
+    console.log('🎉 완료! (발행은 보류됨)')
     return
   }
 

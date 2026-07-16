@@ -7,6 +7,20 @@ export interface IssueContext {
     title: string
     category: string
     heat_index?: number | null
+    topic_description?: string | null
+    brief_summary?: { intro: string; bullets: string[]; conclusion: string } | null
+}
+
+function buildReferenceLines(issue: IssueContext): string {
+    const lines: string[] = []
+    if (issue.topic_description) lines.push(`배경: ${issue.topic_description}`)
+    if (issue.brief_summary) {
+        lines.push(`핵심 내용: ${issue.brief_summary.intro}`)
+        if (issue.brief_summary.bullets.length > 0) {
+            lines.push(`세부 사실: ${issue.brief_summary.bullets.join(' / ')}`)
+        }
+    }
+    return lines.join('\n')
 }
 
 function heatDescription(heat?: number | null): string {
@@ -93,15 +107,17 @@ export async function generateBotComment(
     issue: IssueContext
 ): Promise<BotGenResult> {
     const heatDesc = heatDescription(issue.heat_index)
+    const referenceLines = buildReferenceLines(issue)
 
     const prompt = `다음 이슈에 대한 댓글 한 개를 작성해주세요.
 
 이슈 제목: ${issue.title}
-카테고리: ${issue.category}${heatDesc ? `\n현재 반응: ${heatDesc} 이슈` : ''}
+카테고리: ${issue.category}${heatDesc ? `\n현재 반응: ${heatDesc} 이슈` : ''}${referenceLines ? `\n\n[참고 정보 — 그대로 인용하지 말고 사실 확인용으로만 참고]\n${referenceLines}` : ''}
 
 규칙:
 - 30자 이상 120자 이하의 자연스러운 한국어 댓글
 - 실제 커뮤니티 사용자가 쓴 것처럼 구어체로
+- 참고 정보를 요약하거나 정리해서 전달하지 말고, 그 중 사실 하나를 골라 자기 생각·반응으로만 표현
 - 특정인 실명, 혐오 표현, 욕설 절대 금지
 - 마크다운·JSON 없이 댓글 텍스트만 반환`
 

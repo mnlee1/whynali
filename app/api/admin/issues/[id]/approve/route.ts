@@ -68,25 +68,10 @@ export async function POST(
         if (categoryPath) revalidatePath(categoryPath)
         revalidatePath('/')
 
-        // 승인 후 투표·토론 자동 생성 + 봇 첫 댓글 + 네이버 블로그 포스팅 (백그라운드)
+        // 승인 후 투표·토론 자동 생성 + 봇 첫 댓글 (백그라운드)
+        // 네이버 블로그 포스팅은 여기서 하지 않음 — 점화→논란중 전환 시점에
+        // recalculate-heat 크론이 scheduleNaverBlogPost로 예약 (lib/naver/blog-schedule.ts)
         after(async () => {
-            // 네이버 블로그 자동 포스팅
-            if (process.env.NAVER_BLOG_REFRESH_TOKEN) {
-                try {
-                    const { generateNaverBlogPost } = await import('@/lib/ai/blog-post-generator')
-                    const { postToNaverBlog } = await import('@/lib/naver/blog-client')
-                    const post = await generateNaverBlogPost(data.id, {
-                        title: data.title,
-                        category: data.category ?? '사회',
-                        status: data.status ?? '점화',
-                        heat_index: data.heat_index,
-                    })
-                    await postToNaverBlog(post.title, post.contents)
-                } catch (e) {
-                    console.error('[approve] 네이버 블로그 포스팅 실패:', e)
-                }
-            }
-
             // 봇 첫 댓글 — 빈 댓글창 방지
             try {
                 const cronSecret = process.env.CRON_SECRET

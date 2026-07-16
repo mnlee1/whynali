@@ -33,6 +33,7 @@ import {
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import { sendDoorayImmediateAlert } from '@/lib/dooray-notification'
+import { scheduleNaverBlogPost } from '@/lib/naver/blog-schedule'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -266,6 +267,30 @@ export async function GET(request: NextRequest) {
                                     })
                                     .eq('id', issue.id)
                                 
+                                // 논란중 전환(재점화 포함) 시 네이버 블로그 초안 생성 예약
+                                if (transition.newStatus === '논란중') {
+                                    // 재점화(종결→논란중)면 이전 사이클의 블로그 상태를 리셋해
+                                    // scheduleNaverBlogPost의 idempotency 가드가 새 초안을 다시 예약하게 함
+                                    if (oldStatus === '종결') {
+                                        await supabaseAdmin
+                                            .from('issues')
+                                            .update({
+                                                blog_post_status: null,
+                                                blog_scheduled_at: null,
+                                                blog_posted_at: null,
+                                                blog_post_url: null,
+                                                blog_post_error: null,
+                                                blog_post_retry_count: 0,
+                                                blog_post_title: null,
+                                                blog_post_content: null,
+                                            })
+                                            .eq('id', issue.id)
+                                    }
+                                    scheduleNaverBlogPost(issue.id).catch(err =>
+                                        console.error(`[블로그예약] 이슈 ${issue.id} 예약 실패:`, err)
+                                    )
+                                }
+
                                 // 이슈가 '종결' 상태로 전환되면 관련 투표/토론 자동 마감 + 종결 요약 생성
                                 if (transition.newStatus === '종결') {
                                     const { count: voteCount } = await closeVotesOnIssueClosed(issue.id)

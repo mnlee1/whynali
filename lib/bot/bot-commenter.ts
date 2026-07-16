@@ -86,7 +86,7 @@ export async function postBotComment(
 
     const { data: issue } = await supabaseAdmin
         .from('issues')
-        .select('title, category, heat_index, approval_status, status')
+        .select('title, category, heat_index, approval_status, status, topic_description, brief_summary')
         .eq('id', issueId)
         .single()
 

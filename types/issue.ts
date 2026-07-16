@@ -33,6 +33,13 @@ export interface Issue {
     topic?: string | null // 이슈 주제 (메인 목록용)
     topic_description?: string | null // 이슈 주제 설명 2~3줄 (메인 목록용)
     brief_summary?: { intro: string; bullets: string[]; conclusion: string } | null
+    blog_post_status?: 'pending' | 'generating' | 'ready_to_publish' | 'published' | 'skipped' | 'failed' | null
+    blog_scheduled_at?: string | null
+    blog_posted_at?: string | null
+    blog_post_url?: string | null
+    blog_post_error?: string | null
+    blog_post_title?: string | null
+    blog_post_content?: string | null
 }
 
 export interface TimelinePoint {

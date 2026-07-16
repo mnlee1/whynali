@@ -8,6 +8,7 @@ import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import Groq from 'groq-sdk'
+import { parseJsonObject } from '../ai/parse-json-response'
 
 // ─── 클라이언트 ─────────────────────────────────────────
 
@@ -171,19 +172,25 @@ export function enforceLineBreaks(text: string, maxLines = 3): string {
   return sentences.slice(0, maxLines).join('\n')
 }
 
-// 각 줄이 maxLen자를 초과하면 마지막 공백 기준 절단, 공백 없으면 hard-cut
-function truncateDescLine(line: string, maxLen = 30): string {
+// 카드 템플릿의 .desc는 white-space: pre-line이라 자연 줄바꿈되므로 maxLen은 "화면에 안 들어가서"가
+// 아니라 모델이 지나치게 긴 텍스트를 낼 때만 걸리는 안전장치. 자를 때도 문장부호(.?!) 기준으로 완결된
+// 부분까지만 남기고, 문장부호가 없으면 마지막 공백에서 자른 뒤 말줄임표를 붙여 — 서술어 없이 끊긴 것처럼
+// 보이지 않게 한다.
+function truncateDescLine(line: string, maxLen = 80): string {
   if (line.length <= maxLen) return line
-  const spaceIdx = line.lastIndexOf(' ', maxLen)
-  if (spaceIdx > maxLen / 2) return line.slice(0, spaceIdx)
-  return line.slice(0, maxLen)
+  const window = line.slice(0, maxLen)
+  const lastPunct = Math.max(window.lastIndexOf('.'), window.lastIndexOf('?'), window.lastIndexOf('!'))
+  if (lastPunct > maxLen / 2) return window.slice(0, lastPunct + 1)
+  const spaceIdx = window.lastIndexOf(' ')
+  const cut = spaceIdx > maxLen / 2 ? window.slice(0, spaceIdx) : window
+  return cut.trimEnd() + '…'
 }
 
 // desc 전체 포맷 정규화: 줄별 절단 + 최대 3줄
-function formatDesc(text: string): string {
+function formatDesc(text: string, maxLen = 80): string {
   return text
     .split('\n')
-    .map(l => truncateDescLine(l.trim()))
+    .map(l => truncateDescLine(l.trim(), maxLen))
     .filter(Boolean)
     .slice(0, 3)
     .join('\n')
@@ -249,6 +256,14 @@ function safeStrip(text: string, fallback: string, minLen = 5): string {
   return stripped.length >= minLen ? stripped : fallback
 }
 
+// AI가 진짜 이모지 대신 "ㅇㅅㅇ" 같은 자모 이모티콘을 낼 때가 있어 — 실제 이모지로 시작하지 않으면 교체
+const EMOJI_START = /^\p{Extended_Pictographic}/u
+function ensureEmojiPrefix(text: string, fallbackEmoji: string): string {
+  if (EMOJI_START.test(text)) return text
+  const withoutLeadingJunk = text.replace(/^[ㄱ-ㅎㅏ-ㅣ\s]+/, '').trim()
+  return `${fallbackEmoji} ${withoutLeadingJunk || text}`
+}
+
 // AI가 잘못 축약한 비표준 한국어 서술어 교정
 function fixKoreanContractions(text: string): string {
   return text
@@ -258,6 +273,155 @@ function fixKoreanContractions(text: string): string {
     .replace(/커질랄([가-힣])/g, '커질$1')    // 커질랄까 → 커질까
     .replace(/갈랄([가-힣])/g, '갈$1')        // 갈랄까 → 갈까
     .replace(/될랄([가-힣])/g, '될$1')        // 될랄까 → 될까
+}
+
+// 종성이 'ㅆ'인 음절(과거 시제 축약형: 했/됐/갔/왔 등) 바로 뒤에 '거야'/'거래'가 붙으면 문법 오류.
+// '거야/거래'는 관형형(-는/-(으)ㄴ/-(으)ㄹ/-던)에만 붙어야 하는데 과거 어간에 직접 결합된 경우를 잡아낸다
+// (단어를 나열하는 게 아니라 받침으로 판별하므로 "검토했거야"뿐 아니라 "됐거야"·"갔거야" 등 어떤 동사든 걸러진다).
+function hasPastStemPlusGeoya(line: string): boolean {
+  const t = line.replace(/[.?!~…]+$/, '')
+  if (!/거(야|래)$/.test(t)) return false
+  const before = t[t.length - 3]
+  if (!before) return false
+  const code = before.charCodeAt(0) - 0xac00
+  return code >= 0 && code <= 11171 && code % 28 === 20 // 종성 'ㅆ'
+}
+
+// 조사·의존명사로 끝나 서술어 없이 끊긴 미완성 문장 감지 (예: "...변화가", "...밝힌 바")
+function hasIncompleteLine(line: unknown): boolean {
+  const t = typeof line === 'string' ? line.trim() : ''
+  if (!t) return true
+  if (hasPastStemPlusGeoya(t)) return true
+  return /[가-힣](가|을|를|은|는|이|의|에|와|과|로|며|고|바|데|건|중)$/.test(t)
+}
+
+function endsWithQuestion(line: unknown): boolean {
+  return typeof line === 'string' && /\?\s*$/.test(line.trim())
+}
+
+// 같은 블록 안에서 한 줄이 다른 줄 단어를 대부분 재사용하는지 감지
+// (예: "폐지면 보호가 약해졌어." → "보호가 약해졌어?" — 물음표만 붙인 사실상 같은 문장).
+function isNearDuplicateLine(a: string, b: string): boolean {
+  const tokenize = (s: string) => new Set(s.replace(/[.?!,~…]/g, '').split(/\s+/).filter(Boolean))
+  const ta = tokenize(a)
+  const tb = tokenize(b)
+  if (ta.size === 0 || tb.size === 0) return false
+  let shared = 0
+  for (const t of ta) if (tb.has(t)) shared++
+  return shared / Math.min(ta.size, tb.size) >= 0.6
+}
+
+// 프롬프트가 명시적으로 금지한 종결 표현 — 문장 자체는 완결돼도 이 어미로 끝나면 규칙 위반
+// '궁금하다' 계열은 활용형(궁금해/궁금했어/궁금하네 등)이 다양해 어간+활용 몇 글자까지 허용해서 매칭.
+// 격식체(-습니다/-ㅂ니다)는 전부 "~니다"로 끝나므로 특정 단어를 나열하지 않고 어미 자체로 판별.
+const BANNED_ENDINGS = /(궁금[가-힣]{0,2}|중인대|같아|니다)[.?!]?$/
+
+// 글자 수를 맞추려고 띄어쓰기를 생략한 것으로 보이는 줄 감지 (예: "수사팀장이장윤기정보유출혐의로체포됐어")
+// — 완벽한 판별은 불가능하니 "공백 없이 너무 길게 이어지는 한글" 정도만 걸러내는 휴리스틱.
+function hasSpacingIssue(line: string): boolean {
+  const t = line.trim()
+  const noSpace = t.replace(/\s/g, '')
+  if (noSpace.length < 12) return false
+  const spaces = t.length - noSpace.length
+  const expectedMin = Math.floor(noSpace.length / 8)
+  return spaces < expectedMin
+}
+
+// '\n'으로 구분된 한 desc/points 블록이 통째로 유효한지 검사
+// (최소 줄 수, 완결 문장, 마지막 줄 물음표 여부, 줄 간 반복 여부, 금지 어미 사용 여부).
+// 이 블록은 "하나의 주체·어미로 이어지는 한 이야기"라 줄 단위로 쪼개서 다른 출처와 섞지 않고 통째로 채택하거나 통째로 폴백한다.
+function isValidLineBlock(text: unknown, minLines: number, requireQuestion = false): boolean {
+  const lines = (typeof text === 'string' ? text : '').split('\n')
+  if (lines.length < minLines) return false
+  const slice = lines.slice(0, minLines)
+  if (slice.some(l => !l.trim() || hasIncompleteLine(l))) return false
+  if (slice.some(l => BANNED_ENDINGS.test(l.trim()))) return false
+  if (slice.some(hasSpacingIssue)) return false
+  if (requireQuestion && !endsWithQuestion(slice[slice.length - 1])) return false
+  for (let i = 0; i < slice.length; i++) {
+    for (let j = i + 1; j < slice.length; j++) {
+      if (isNearDuplicateLine(slice[i], slice[j])) return false
+    }
+  }
+  return true
+}
+
+// 카드뉴스 생성 중 폴백(AI 텍스트 대신 topic_description 등 대체 텍스트)이 몇 번 쓰였는지 추적 —
+// pipeline.ts가 발행 직전 자동 품질 게이트로 사용한다 (사람 검수 없이 자동 발행되는 구조는 유지하되,
+// 폴백이 발생한 결과물은 자동으로 발행을 막고 알림만 보냄).
+let fallbackCount = 0
+export function resetFallbackTracking(): void {
+  fallbackCount = 0
+}
+export function getFallbackCount(): number {
+  return fallbackCount
+}
+
+// 검증 통과한 AI 텍스트를 쓰거나, 실패 시 폴백으로 대체하면서 카운트·로그를 남기는 공통 처리
+function pickSectionDesc(
+  raw: unknown,
+  minLines: number,
+  requireQuestion: boolean,
+  fallback: string,
+  context: string
+): string {
+  if (isValidLineBlock(raw, minLines, requireQuestion)) {
+    return safeStrip(typeof raw === 'string' ? raw : '', fallback)
+  }
+  fallbackCount++
+  console.error(`[${context}] 섹션 검증 실패 — 폴백 사용`)
+  return fallback
+}
+
+// 검증 실패 시 보정 지시를 대화에 덧붙여 재시도 — AI가 자기 규칙(문장 완결·물음표)을 어겼을 때만 1회 재생성.
+// maxAttempts를 다 써도 JSON 자체는 파싱됐다면 마지막 결과를 버리지 않고 반환한다 — 호출부가 묶음/독립
+// 필드별로 다시 한번 유효성을 나눠 판단해서, 일부만 문제여도 멀쩡한 필드까지 통째로 버리지 않게 하기 위함.
+async function groqCreateValidated(
+  groq: Groq,
+  params: Parameters<Groq['chat']['completions']['create']>[0],
+  validate: (parsed: any) => boolean,
+  maxAttempts = 2,
+  describeFailure?: (parsed: any) => string | undefined
+): Promise<{ parsed: any; raw: string }> {
+  let messages = [...params.messages]
+  let raw = ''
+  let lastParsed: any = null
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await groqCreate(groq, { ...params, messages })
+    raw = res.choices[0].message.content || '{}'
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+    const parsed = parseJsonObject<any>(raw)
+    if (parsed === null) {
+      if (attempt < maxAttempts - 1) {
+        console.warn(`[groqCreateValidated] JSON 파싱 실패 — 재시도 ${attempt + 1}/${maxAttempts - 1}`)
+        messages = [
+          ...messages,
+          { role: 'assistant', content: raw },
+          { role: 'user', content: '방금 응답이 유효한 JSON이 아니었어. 순수 JSON만 다시 생성해줘.' },
+        ]
+      }
+      continue
+    }
+    lastParsed = parsed
+    let ok: boolean
+    try {
+      ok = validate(parsed)
+    } catch {
+      ok = false // validate()가 예상과 다른 필드 타입(예: 문자열 대신 배열)에 던진 예외 — JSON 자체는 유효하므로 별개로 처리
+    }
+    if (ok) return { parsed, raw }
+    if (attempt < maxAttempts - 1) {
+      console.warn(`[groqCreateValidated] 검증 실패 — 재시도 ${attempt + 1}/${maxAttempts - 1}`)
+      const detail = describeFailure?.(parsed)
+        ?? '방금 응답이 규칙을 어겼어 — 문장이 조사나 의존명사로 끊겼거나(미완성) 필수 물음표가 빠졌어. 모든 필드를 완성된 문장으로, 규칙 다시 확인해서 새로 생성해줘. 순수 JSON만.'
+      messages = [
+        ...messages,
+        { role: 'assistant', content: raw },
+        { role: 'user', content: detail },
+      ]
+    }
+  }
+  return { parsed: lastParsed, raw }
 }
 
 export function getIssueThumbnail(issue: Issue): string {
@@ -283,11 +447,14 @@ export function getTemplateHtml(type: SlideContent['type']): string {
 }
 
 export function fillTemplate(template: string, slide: SlideContent): string {
+  // badge 템플릿은 배지 칩(point_text)이 본문 근처에 고정 배치돼 있어 desc가 길게 wrap되면
+  // 겹칠 수 있음 — 다른 템플릿보다 더 타이트하게 자른다.
+  const descMaxLen = slide.type === 'badge' ? 50 : 80
   return template
     .replace(/\{\{bg_image_url\}\}/g, slide.bg_image_url || '')
     .replace(/\{\{main_title\}\}/g, escapeHtml(normalizeNewlines(slide.main_title || '')))
     .replace(/\{\{sub_title\}\}/g, escapeHtml(normalizeNewlines(breakCoverTitle(slide.sub_title || ''))))
-    .replace(/\{\{desc\}\}/g, escapeHtml(formatDesc(enforceLineBreaks(normalizeNewlines(slide.desc || '')))))
+    .replace(/\{\{desc\}\}/g, escapeHtml(formatDesc(enforceLineBreaks(normalizeNewlines(slide.desc || '')), descMaxLen)))
     .replace(/\{\{point_text_01\}\}/g, escapeHtml(slide.point_text_01 || ''))
     .replace(/\{\{point_text_02\}\}/g, escapeHtml(slide.point_text_02 || ''))
     .replace(/\{\{logo_image_url\}\}/g, slide.logo_image_url || '')
@@ -747,17 +914,12 @@ Return JSON only: {"keywords": "2-3 specific english words"}`,
     max_tokens: 500,
   })
 
-  try {
-    const raw = res.choices[0].message.content ?? '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const keywords: string = JSON.parse(cleaned).keywords ?? ''
-    if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
-      return getEnglishKeywordFallback(issues[0])
-    }
-    return keywords
-  } catch {
+  const raw = res.choices[0].message.content ?? '{}'
+  const keywords = parseJsonObject<{ keywords?: string }>(raw)?.keywords ?? ''
+  if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
     return getEnglishKeywordFallback(issues[0])
   }
+  return keywords
 }
 
 export async function generateStageKeywords(issue: Issue, stage: string, points: TimelinePoint[]): Promise<string> {
@@ -784,17 +946,12 @@ Return JSON only: {"keywords": "2-3 specific english words"}`,
     temperature: 0.3,
     max_tokens: 500,
   })
-  try {
-    const raw = res.choices[0].message.content ?? '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const keywords: string = JSON.parse(cleaned).keywords ?? ''
-    if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
-      return getEnglishKeywordFallback(issue)
-    }
-    return keywords
-  } catch {
+  const raw = res.choices[0].message.content ?? '{}'
+  const keywords = parseJsonObject<{ keywords?: string }>(raw)?.keywords ?? ''
+  if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
     return getEnglishKeywordFallback(issue)
   }
+  return keywords
 }
 
 export async function fetchPexelsImage(keywords: string): Promise<string | null> {
@@ -828,7 +985,14 @@ export async function generateBadgeContent(
   const groq = getGroq()
   const issueContext = await buildIssueContext(issue)
 
-  const res = await groqCreate(groq,{
+  const badgeDescOf = (p: any) => [
+    p?.desc_1 ?? p?.desc?.split('\n')?.[0] ?? '',
+    p?.desc_2 ?? p?.desc?.split('\n')?.[1] ?? '',
+    p?.desc_3 ?? p?.desc?.split('\n')?.[2] ?? '',
+  ].join('\n')
+  const validateBadge = (p: any) => isValidLineBlock(badgeDescOf(p), 3, true)
+
+  const { parsed } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
@@ -889,7 +1053,7 @@ export async function generateBadgeContent(
           '완화 표현 예시: "~혐의가 나왔대", "~의혹이 있대", "~는 주장이야", "~라는 말이 나와"',
           '',
           '[공통 규칙]',
-          '각 항목 20자 이내. 반드시 완성된 문장으로 끝낼 것 — 20자가 넘으면 줄이되, 문장은 완성해야 함.',
+          '각 항목 26자 이내. 반드시 완성된 문장으로 끝낼 것 — 26자가 넘으면 줄이되, 문장은 완성해야 함. 글자 수를 맞추려고 띄어쓰기를 생략하지 말 것 — 붙여쓰면 가독성이 떨어지므로 절대 금지.',
           'desc_3는 반드시 ? 로 끝날 것 — 이 규칙은 절대 예외 없음.',
           '인물·기업 2개 이상 나열 시 반드시 가운뎃점(·)으로 구분할 것 — 이 규칙은 절대 예외 없음.',
           '  ✅ "삼성전자·SK하이닉스"',
@@ -910,33 +1074,39 @@ export async function generateBadgeContent(
       },
     ],
     temperature: 0.65,
-  })
+  }, validateBadge)
 
   const fallbackDesc = issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? '내용을 불러오는 중 오류가 발생했습니다.'
 
-  try {
-    const raw = res.choices[0].message.content || '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const parsed = JSON.parse(cleaned)
-
-    let d1 = fixKoreanContractions(safeStrip(parsed.desc_1 ?? parsed.desc?.split('\n')[0] ?? '', ''))
-    let d2 = fixKoreanContractions(safeStrip(parsed.desc_2 ?? parsed.desc?.split('\n')[1] ?? '', ''))
-    let d3 = fixKoreanContractions(safeStrip(parsed.desc_3 ?? parsed.desc?.split('\n')[2] ?? '', ''))
-    const desc = [d1, d2, d3].filter(Boolean).join('\n') || fallbackDesc
-
-    return {
-      desc,
-      point_text_01: safeStrip(parsed.point_text_01 ?? '', `📌 ${(issue.topic ?? issue.title).slice(0, 14)}`),
-      point_text_02: safeStrip(parsed.point_text_02 ?? '', `📢 지금 주목`),
-    }
-  } catch (e) {
-    console.error(`[generateBadgeContent] 실패 (${issue.title}):`, e)
-    console.error('[generateBadgeContent] raw:', res.choices[0].message.content?.slice(0, 200))
+  if (!parsed) {
+    fallbackCount++
+    console.error(`[generateBadgeContent] JSON 파싱 실패 (${issue.title})`)
     return {
       desc: fallbackDesc,
       point_text_01: `📌 ${(issue.topic ?? issue.title).slice(0, 14)}`,
       point_text_02: `📢 지금 주목`,
     }
+  }
+
+  // desc_1·2·3는 하나의 이야기 단위 — 전체가 유효할 때만 AI 텍스트를 쓰고, 아니면 통째로 폴백한다
+  // (줄 하나만 골라 다른 출처와 섞으면 주체·어미 일관성이 깨지므로 섞지 않음).
+  let desc: string
+  if (validateBadge(parsed)) {
+    const d1 = fixKoreanContractions(safeStrip(parsed.desc_1 ?? parsed.desc?.split('\n')[0] ?? '', ''))
+    const d2 = fixKoreanContractions(safeStrip(parsed.desc_2 ?? parsed.desc?.split('\n')[1] ?? '', ''))
+    const d3 = fixKoreanContractions(safeStrip(parsed.desc_3 ?? parsed.desc?.split('\n')[2] ?? '', ''))
+    desc = [d1, d2, d3].join('\n')
+  } else {
+    fallbackCount++
+    console.error(`[generateBadgeContent] desc 검증 실패 — 폴백 사용 (${issue.title})`)
+    desc = fallbackDesc
+  }
+
+  // point_text_01/02는 desc와 무관한 독립 필드 — desc 검증 결과와 상관없이 별도로 추출한다
+  return {
+    desc,
+    point_text_01: ensureEmojiPrefix(safeStrip(parsed.point_text_01 ?? '', `📌 ${(issue.topic ?? issue.title).slice(0, 14)}`), '📌'),
+    point_text_02: ensureEmojiPrefix(safeStrip(parsed.point_text_02 ?? '', `📢 지금 주목`), '📢'),
   }
 }
 
@@ -988,8 +1158,13 @@ export async function generateSurgingSlides(issue: Issue, logoBase64: string): P
     generateCoverKeywords([issue], 'surging'),
   ])
 
+  const validateSurging = (d: any) =>
+    isValidLineBlock(d?.badge?.desc, 3) &&
+    isValidLineBlock(d?.background?.desc, 3) &&
+    isValidLineBlock(d?.controversy?.desc, 3, true)
+
   // 콘텐츠 생성
-  const contentRes = await groqCreate(groq,{
+  const { parsed: d } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
@@ -1056,7 +1231,7 @@ JSON (순수 JSON만, 코드블록 없이):
       },
     ],
     temperature: 0.65,
-  })
+  }, validateSurging)
 
   let content: {
     badge: { desc: string; point_text_01: string; point_text_02: string }
@@ -1070,26 +1245,27 @@ JSON (순수 JSON만, 코드블록 없이):
   const bgFallback = topicLines.slice(3, 6).join('\n') || topicLines.slice(0, 2).join('\n') || `${issue.title} 관련 배경`
   const controversyFallback = topicLines.slice(6, 9).join('\n') || topicLines.slice(2, 4).join('\n') || `${issue.title} 관련 쟁점`
 
-  try {
-    const raw = contentRes.choices[0].message.content || '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const d = JSON.parse(cleaned)
+  if (d) {
+    // badge/background/controversy 각각은 3줄이 하나의 이야기 단위 — 섹션별로 독립 판단해서
+    // 한 섹션이 안 좋아도 다른 멀쩡한 섹션·point_text까지 같이 폴백시키지 않는다.
     content = {
       badge: {
-        desc: safeStrip(d.badge?.desc ?? '', badgeFallback),
-        point_text_01: safeStrip(d.badge?.point_text_01 ?? '', `📌 ${issue.title.slice(0, 10)}`),
-        point_text_02: safeStrip(d.badge?.point_text_02 ?? '', '🔥 급상승 중'),
+        desc: pickSectionDesc(d.badge?.desc, 3, false, badgeFallback, `generateSurgingSlides:badge (${issue.title})`),
+        point_text_01: ensureEmojiPrefix(safeStrip(d.badge?.point_text_01 ?? '', `📌 ${issue.title.slice(0, 10)}`), '📌'),
+        point_text_02: ensureEmojiPrefix(safeStrip(d.badge?.point_text_02 ?? '', '🔥 급상승 중'), '🔥'),
       },
       background: {
         sub_title: safeStrip(d.background?.sub_title ?? '', '왜 갑자기 터졌나'),
-        desc: safeStrip(d.background?.desc ?? '', bgFallback),
+        desc: pickSectionDesc(d.background?.desc, 3, false, bgFallback, `generateSurgingSlides:background (${issue.title})`),
       },
       controversy: {
         sub_title: safeStrip(d.controversy?.sub_title ?? '', '뭐가 문제야'),
-        desc: safeStrip(d.controversy?.desc ?? '', controversyFallback),
+        desc: pickSectionDesc(d.controversy?.desc, 3, true, controversyFallback, `generateSurgingSlides:controversy (${issue.title})`),
       },
     }
-  } catch {
+  } else {
+    fallbackCount++
+    console.error(`[generateSurgingSlides] JSON 파싱 실패 (${issue.title})`)
     content = {
       badge: { desc: badgeFallback, point_text_01: `📌 ${issue.title.slice(0, 10)}`, point_text_02: '🔥 급상승 중' },
       background: { sub_title: '왜 갑자기 터졌나', desc: bgFallback },
@@ -1202,10 +1378,20 @@ export async function generateTimelineSlides(issue: ClosedIssue, logoBase64: str
     .filter(Boolean)
     .join('\n\n')
 
+  const validateTimeline = (p: any) => {
+    const slides = p?.slides
+    return Array.isArray(slides) && slides.length >= 3 &&
+      slides.slice(0, 3).every((s: any) => isValidLineBlock(s?.desc, 3))
+  }
+  const describeTimelineFailure = (p: any) =>
+    !Array.isArray(p?.slides) || p.slides.length < 3
+      ? `방금 응답이 slides 배열을 ${Array.isArray(p?.slides) ? p.slides.length : 0}개만 줬어 — 반드시 3개(기·승전·결)를 만들어줘. 순수 JSON만.`
+      : undefined
+
   // 커버 키워드 + 콘텐츠 3장 + 배경 이미지를 병렬로
-  const [coverKeywords, res] = await Promise.all([
+  const [coverKeywords, { parsed: storyParsed }] = await Promise.all([
     generateCoverKeywords([issue], 'timeline'),
-    groqCreate(groq,{
+    groqCreateValidated(groq, {
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
@@ -1266,29 +1452,32 @@ JSON (순수 JSON만, 코드블록 없이):
         },
       ],
       temperature: 0.7,
-    }),
+    }, validateTimeline, 2, describeTimelineFailure),
   ])
 
-  // 파싱
+  // 파싱 — 기승전결 3장은 각자 역할(시작/전개/결말)이 고정돼 있어 슬라이드 수는 항상 3개 유지하되,
+  // 슬라이드별 desc는 독립적으로 검증해서 한 장만 안 좋아도 그 장만 폴백한다.
   type StorySlide = { hook: string; desc: string; pexels_keywords?: string }
-  let storySlides: StorySlide[] = []
-  try {
-    const raw = res.choices[0].message.content || '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const parsed = JSON.parse(cleaned).slides ?? []
   const hookFallbacks = ['이렇게 시작됐어', '이게 커진 이유가', '결국 이렇게 됐어']
-    storySlides = (parsed as StorySlide[]).slice(0, 3).map((s, i) => ({
-      hook: safeStrip(s.hook ?? '', hookFallbacks[i] ?? '이렇게 됐어'),
-      desc: safeStrip(s.desc ?? '', issue.topic ?? issue.title),
-      pexels_keywords: s.pexels_keywords,
-    }))
-  } catch {
-    storySlides = [
-      { hook: '이렇게 시작됐어', desc: issue.topic ?? issue.title },
-      { hook: '이게 커진 이유가', desc: issue.topic ?? issue.title },
-      { hook: '결국 이렇게 됐어', desc: issue.topic ?? issue.title },
-    ]
+  const rawSlides: Partial<StorySlide>[] = Array.isArray(storyParsed?.slides) ? storyParsed.slides.slice(0, 3) : []
+  if (rawSlides.length === 0) {
+    fallbackCount++
+    console.error(`[generateTimelineSlides] JSON 파싱 실패 (${issue.title})`)
   }
+
+  const storySlides: StorySlide[] = Array.from({ length: 3 }, (_, i) => {
+    const s = rawSlides[i]
+    const descOk = isValidLineBlock(s?.desc, 3)
+    if (!descOk && rawSlides.length > 0) {
+      fallbackCount++
+      console.error(`[generateTimelineSlides] ${i + 1}번째 슬라이드 desc 검증 실패 — 해당 슬라이드만 폴백 (${issue.title})`)
+    }
+    return {
+      hook: safeStrip(s?.hook ?? '', hookFallbacks[i] ?? '이렇게 됐어'),
+      desc: descOk ? safeStrip(s!.desc ?? '', issue.topic ?? issue.title) : (issue.topic ?? issue.title),
+      pexels_keywords: s?.pexels_keywords,
+    }
+  })
 
   // 배경 이미지 병렬 조회
   const [coverBg, ...slideBgs] = await Promise.all([
@@ -1329,8 +1518,15 @@ export async function generateQASlides(issue: Issue, logoBase64: string): Promis
     generateCoverKeywords([issue], 'qa'),
   ])
 
-  const [res] = await Promise.all([
-    groqCreate(groq,{
+  const validateQA = (p: any) =>
+    Array.isArray(p?.qa) && p.qa.length >= 3 && p.qa.every((item: any) => isValidLineBlock(item?.answer, 3))
+  const describeQAFailure = (p: any) =>
+    !Array.isArray(p?.qa) || p.qa.length < 3
+      ? `방금 응답이 qa 배열을 ${Array.isArray(p?.qa) ? p.qa.length : 0}개만 줬어 — 반드시 3개를 만들어줘. 순수 JSON만.`
+      : undefined
+
+  const [{ parsed: qaParsed }] = await Promise.all([
+    groqCreateValidated(groq, {
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
@@ -1371,23 +1567,29 @@ JSON (순수 JSON만, 코드블록 없이):
         },
       ],
       temperature: 0.75,
-    }),
+    }, validateQA, 2, describeQAFailure),
   ])
 
   const qaFallback = issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? '정보를 불러오는 중 오류가 발생했습니다.'
 
-  let qa: Array<{ question: string; answer: string; pexels_keywords?: string }> = []
-  try {
-    const raw = res.choices[0].message.content || '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const parsed = JSON.parse(cleaned).qa ?? []
-    qa = parsed.map((item: { question: string; answer: string; pexels_keywords?: string }) => ({
+  // 항목별로 독립 검증 — 3개 중 일부만 통과해도 통과한 만큼만 사용한다 (억지로 채우지 않음).
+  const rawQa: Array<{ question?: string; answer?: string; pexels_keywords?: string }> =
+    Array.isArray(qaParsed?.qa) ? qaParsed.qa : []
+  let qa: Array<{ question: string; answer: string; pexels_keywords?: string }> = rawQa
+    .filter(item => isValidLineBlock(item?.answer, 3))
+    .map(item => ({
       question: safeStrip(item.question ?? '', '무슨 일이야?'),
       answer: safeStrip(item.answer ?? '', qaFallback),
       pexels_keywords: item.pexels_keywords,
     }))
-  } catch {
+
+  if (qa.length === 0) {
+    fallbackCount++
+    console.error(`[generateQASlides] 유효한 Q&A 없음 — 폴백 사용 (${issue.title})`)
     qa = [{ question: '무슨 일이야?', answer: qaFallback }]
+  } else if (qa.length < rawQa.length) {
+    fallbackCount++
+    console.error(`[generateQASlides] ${rawQa.length - qa.length}개 항목 검증 실패 — 제외 (${issue.title})`)
   }
 
   // 커버 + 각 슬라이드 배경 이미지를 병렬로
@@ -1432,8 +1634,13 @@ export async function generateDebateSlides(issue: Issue, logoBase64: string): Pr
     generateCoverKeywords([issue], 'debate'),
   ])
 
-  const [res] = await Promise.all([
-    groqCreate(groq,{
+  const validateDebate = (p: any) =>
+    isValidLineBlock(p?.pro?.points, 3) &&
+    isValidLineBlock(p?.con?.points, 3) &&
+    isValidLineBlock(p?.status?.desc, 3)
+
+  const [{ parsed: d }] = await Promise.all([
+    groqCreateValidated(groq, {
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_BASE },
@@ -1484,7 +1691,7 @@ JSON (순수 JSON만, 코드블록 없이):
         },
       ],
       temperature: 0.75,
-    }),
+    }, validateDebate),
   ])
 
   let debateParsed: {
@@ -1495,22 +1702,32 @@ JSON (순수 JSON만, 코드블록 없이):
 
   const debateFallback = issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? issue.topic ?? issue.title
 
-  try {
-    const raw = res.choices[0].message.content || '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const d = JSON.parse(cleaned)
+  if (d) {
+    // pro.points/con.points/status.desc는 각각 독립된 3줄 단위 — 섹션별로 따로 판단해서
+    // 한 섹션이 안 좋아도 다른 멀쩡한 섹션까지 같이 폴백시키지 않는다.
     debateParsed = {
-      pro: { label: safeStrip(d.pro?.label ?? '', '찬성 측'), points: safeStrip(d.pro?.points ?? '', debateFallback), pexels_keywords: d.pro?.pexels_keywords },
-      con: { label: safeStrip(d.con?.label ?? '', '반대 측'), points: safeStrip(d.con?.points ?? '', debateFallback), pexels_keywords: d.con?.pexels_keywords },
+      pro: {
+        label: safeStrip(d.pro?.label ?? '', '찬성 측'),
+        points: pickSectionDesc(d.pro?.points, 3, false, debateFallback, `generateDebateSlides:pro (${issue.title})`),
+        pexels_keywords: d.pro?.pexels_keywords,
+      },
+      con: {
+        label: safeStrip(d.con?.label ?? '', '반대 측'),
+        points: pickSectionDesc(d.con?.points, 3, false, debateFallback, `generateDebateSlides:con (${issue.title})`),
+        pexels_keywords: d.con?.pexels_keywords,
+      },
       status: { sub_title: safeStrip(d.status?.sub_title ?? '', '현재 상황'), desc: (() => {
-        const lines = safeStrip(d.status?.desc ?? '', debateFallback).split('\n')
+        const base = pickSectionDesc(d.status?.desc, 3, false, debateFallback, `generateDebateSlides:status (${issue.title})`)
+        const lines = base.split('\n')
         if (lines.length > 0 && !lines[lines.length - 1].endsWith('?')) {
           lines[lines.length - 1] = lines[lines.length - 1].replace(/[.…~]*$/, '') + '?'
         }
         return lines.join('\n')
       })(), pexels_keywords: d.status?.pexels_keywords },
     }
-  } catch {
+  } else {
+    fallbackCount++
+    console.error(`[generateDebateSlides] JSON 파싱 실패 (${issue.title})`)
     debateParsed = null
   }
 
@@ -1568,7 +1785,14 @@ export async function generateNumbersSlides(issue: Issue, logoBase64: string): P
     generateCoverKeywords([issue], 'by-numbers'),
   ])
 
-  const res = await groqCreate(groq,{
+  const validateNumbers = (p: any) =>
+    Array.isArray(p?.numbers) && p.numbers.length >= 3 && p.numbers.every((n: any) => isValidLineBlock(n?.desc, 2))
+  const describeNumbersFailure = (p: any) =>
+    !Array.isArray(p?.numbers) || p.numbers.length < 3
+      ? `방금 응답이 numbers 배열을 ${Array.isArray(p?.numbers) ? p.numbers.length : 0}개만 줬어 — 반드시 3개를 만들어줘. 순수 JSON만.`
+      : undefined
+
+  const { parsed } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: SYSTEM_BASE },
@@ -1611,23 +1835,29 @@ JSON (순수 JSON만, 코드블록 없이):
       },
     ],
     temperature: 0.5,
-  })
+  }, validateNumbers, 2, describeNumbersFailure)
 
+  // 항목별로 독립 검증 — 3개 중 일부만 통과해도 통과한 만큼만 사용한다 (억지로 채우지 않음).
   type NumberItem = { number: string; label: string; desc: string; pexels_keywords?: string }
-  let numbers: NumberItem[] = []
-
-  try {
-    const raw = res.choices[0].message.content || '{}'
-    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const parsed = JSON.parse(cleaned).numbers ?? []
-    numbers = (parsed as NumberItem[]).slice(0, 3).map(n => ({
+  const rawNumbers: Array<{ number?: string; label?: string; desc?: string; pexels_keywords?: string }> =
+    Array.isArray(parsed?.numbers) ? parsed.numbers : []
+  let numbers: NumberItem[] = rawNumbers
+    .filter(n => isValidLineBlock(n?.desc, 2))
+    .slice(0, 3)
+    .map(n => ({
       number: safeStrip(n.number ?? '', '?', 1),
       label: safeStrip(n.label ?? '', '핵심 수치'),
       desc: safeStrip(n.desc ?? '', issue.topic ?? issue.title),
       pexels_keywords: n.pexels_keywords,
     }))
-  } catch {
+
+  if (numbers.length === 0) {
+    fallbackCount++
+    console.error(`[generateNumbersSlides] 유효한 수치 없음 — 폴백 사용 (${issue.title})`)
     numbers = [{ number: '?', label: '핵심 수치', desc: issue.topic ?? issue.title }]
+  } else if (numbers.length < rawNumbers.length) {
+    fallbackCount++
+    console.error(`[generateNumbersSlides] ${rawNumbers.length - numbers.length}개 항목 검증 실패 — 제외 (${issue.title})`)
   }
 
   const [coverBg, ...slideBgs] = await Promise.all([
