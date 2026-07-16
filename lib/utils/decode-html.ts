@@ -32,3 +32,20 @@ export function decodeHtml(str: string | null | undefined): string {
             return entity
         })
 }
+
+/**
+ * 외부 출처(뉴스·커뮤니티 제목 등) 텍스트를 HTML에 안전하게 끼워넣기 위한 이스케이프.
+ * 반드시 &부터 먼저 치환해야 다른 엔티티가 다시 이스케이프되는 걸 방지한다.
+ *
+ * 예시:
+ *   escapeHtml('<script>alert(1)</script>') // → '&lt;script&gt;alert(1)&lt;/script&gt;'
+ */
+export function escapeHtml(str: string | null | undefined): string {
+    if (!str) return ''
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+}

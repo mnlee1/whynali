@@ -8,7 +8,8 @@
  *
  * 특징:
  * - 키 차단 상태를 Supabase에 저장하여 서버리스 인스턴스 간 공유
- * - 429 에러 발생 시 자동으로 다음 키로 전환
+ * - 차단되지 않은 키 중 무작위로 선택해 호출 — 항상 같은 키(1번)만 몰빵되는 걸 방지
+ * - 429 에러 발생 시 해당 키만 차단, 나머지 키로 계속 진행
  * - blocked_until 지난 키는 자동 복구
  */
 
@@ -55,7 +56,7 @@ export class GroqProvider implements AIProvider {
         return apiKey.slice(-8)
     }
 
-    private async getAvailableKey(): Promise<KeyStatus | null> {
+    private async getAvailableKey(): Promise<{ key: KeyStatus | null; waitMs: number | null }> {
         const now = new Date().toISOString()
 
         const keyStatuses: KeyStatus[] = []
@@ -110,10 +111,16 @@ export class GroqProvider implements AIProvider {
             })
         }
 
-        const available = keyStatuses.find((k) => !k.isBlocked)
+        // 차단 안 된 키 중 무작위 선택 — 고정 순서로 첫 키만 몰빵되는 걸 방지해 부하를 분산시킨다
+        const availableKeys = keyStatuses.filter((k) => !k.isBlocked)
+        const available = availableKeys.length > 0
+            ? availableKeys[Math.floor(Math.random() * availableKeys.length)]
+            : undefined
 
         if (!available) {
             const blockedKeys = keyStatuses.filter((k) => k.blockedUntil)
+            let waitMs: number | null = null
+
             if (blockedKeys.length > 0) {
                 const minBlockedUntil = blockedKeys.reduce((min, k) => {
                     if (!k.blockedUntil) return min
@@ -121,24 +128,25 @@ export class GroqProvider implements AIProvider {
                 }, null as string | null)
 
                 if (minBlockedUntil) {
-                    const waitMs = new Date(minBlockedUntil).getTime() - Date.now()
-                    const waitSeconds = Math.ceil(waitMs / 1000)
+                    waitMs = new Date(minBlockedUntil).getTime() - Date.now()
                     console.error(
-                        `[GroqProvider] 모든 키 차단됨. ${waitSeconds}초 후 재시도 가능`
+                        `[GroqProvider] 모든 키 차단됨. ${Math.ceil(waitMs / 1000)}초 후 재시도 가능`
                     )
                 }
             }
-            return null
+            return { key: null, waitMs }
         }
 
-        return available
+        return { key: available, waitMs: null }
     }
 
     private async markKeyAsBlocked(
         keyHash: string,
         retryAfterSeconds?: number
     ): Promise<void> {
-        const blockDuration = retryAfterSeconds ? retryAfterSeconds * 1000 : 5 * 60 * 1000
+        // retry-after 헤더가 없으면 60초로 차단 — Groq RPM 윈도우는 60초면 풀리므로
+        // 기존 5분 고정 차단은 필요 이상으로 키를 오래 묶어두는 문제가 있었음
+        const blockDuration = retryAfterSeconds ? retryAfterSeconds * 1000 : 60 * 1000
 
         const blockedUntil = new Date(Date.now() + blockDuration).toISOString()
         const now = new Date().toISOString()
@@ -187,11 +195,19 @@ export class GroqProvider implements AIProvider {
         const systemPrompt = options?.systemPrompt
 
         const maxRetries = 3
+        const WAIT_CAP_MS = 10000
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
-            const keyStatus = await this.getAvailableKey()
+            const { key: keyStatus, waitMs } = await this.getAvailableKey()
 
             if (!keyStatus) {
+                if (waitMs !== null && waitMs > 0 && waitMs <= WAIT_CAP_MS && attempt < maxRetries - 1) {
+                    console.log(
+                        `[GroqProvider] 모든 키 차단 - ${Math.ceil(waitMs / 1000)}초 대기 후 재시도`
+                    )
+                    await new Promise((resolve) => setTimeout(resolve, waitMs + 500))
+                    continue
+                }
                 throw new Error(
                     '모든 Groq API 키가 Rate Limit 상태입니다. 잠시 후 다시 시도해주세요.'
                 )

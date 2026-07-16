@@ -25,17 +25,27 @@ import { parseJsonArray } from '@/lib/ai/parse-json-response'
 import { generateCloseSummary } from '@/lib/ai/generate-close-summary'
 import { generateAndCacheSummaries } from '@/lib/ai/generate-timeline-summary'
 
-/** Groq 키 차단 여부를 DB에서 확인 — 차단 중이면 루프를 조기 종료하기 위해 사용 */
+/**
+ * Groq 키 "전부" 차단 여부를 DB에서 확인 — 모든 키가 차단 중일 때만 루프를 조기 종료하기 위해 사용.
+ * 키가 여러 개인데 그중 하나만 차단됐다고 멈추면 나머지 키를 활용하지 못하므로,
+ * 차단된 키 수를 전체 키 수와 비교해 실제로 전부 막혔는지 확인한다.
+ */
 async function isGroqBlocked(): Promise<boolean> {
+    const totalKeys = (process.env.GROQ_API_KEY ?? '')
+        .split(',')
+        .map(k => k.trim())
+        .filter(Boolean).length
+    if (totalKeys === 0) return false
+
     const now = new Date().toISOString()
     const { data } = await supabaseAdmin
         .from('ai_key_status')
-        .select('blocked_until')
+        .select('key_hash')
         .eq('provider', 'groq')
         .eq('is_blocked', true)
-        .maybeSingle()
-    if (!data?.blocked_until) return false
-    return data.blocked_until > now
+        .gt('blocked_until', now)
+
+    return (data?.length ?? 0) >= totalKeys
 }
 
 export const dynamic = 'force-dynamic'
