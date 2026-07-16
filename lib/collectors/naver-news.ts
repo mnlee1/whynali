@@ -23,6 +23,33 @@ function extractSource(url: string): string {
     }
 }
 
+/**
+ * fetchNaverApi - 네이버 API 호출 (네트워크 레벨 실패 시 1회 재시도)
+ *
+ * DNS 실패, 연결 타임아웃 등 fetch 자체가 던지는 TypeError는
+ * 응답 상태코드(response.ok)로 걸러지지 않으므로 여기서 재시도 후 흡수한다.
+ */
+async function fetchNaverApi(url: string, clientId: string, clientSecret: string): Promise<Response | null> {
+    const MAX_ATTEMPTS = 2
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            return await fetch(url, {
+                headers: {
+                    'X-Naver-Client-Id': clientId,
+                    'X-Naver-Client-Secret': clientSecret,
+                },
+            })
+        } catch (error) {
+            console.error(`네이버 API 네트워크 에러 (시도 ${attempt}/${MAX_ATTEMPTS}):`, error)
+            if (attempt >= MAX_ATTEMPTS) return null
+            await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+    }
+
+    return null
+}
+
 export async function collectNaverNews(category: string): Promise<number> {
     const clientId = process.env.NAVER_CLIENT_ID
     const clientSecret = process.env.NAVER_CLIENT_SECRET
@@ -50,12 +77,12 @@ export async function collectNaverNews(category: string): Promise<number> {
      */
     const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=100&sort=sim`
 
-    const response = await fetch(url, {
-        headers: {
-            'X-Naver-Client-Id': clientId,
-            'X-Naver-Client-Secret': clientSecret,
-        },
-    })
+    const response = await fetchNaverApi(url, clientId, clientSecret)
+
+    if (!response) {
+        console.error(`네이버 API 연결 실패 (카테고리: ${category})`)
+        return 0
+    }
 
     if (!response.ok) {
         console.error(`네이버 API 에러 (카테고리: ${category}):`, response.status)
@@ -119,12 +146,12 @@ export async function searchNaverNewsByKeyword(keyword: string, category: string
     // sort=sim (관련도순)으로 해당 키워드의 핵심 뉴스를 타겟팅
     const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(keyword)}&display=20&sort=sim`
 
-    const response = await fetch(url, {
-        headers: {
-            'X-Naver-Client-Id': clientId,
-            'X-Naver-Client-Secret': clientSecret,
-        },
-    })
+    const response = await fetchNaverApi(url, clientId, clientSecret)
+
+    if (!response) {
+        console.error(`네이버 API 연결 실패 (키워드: ${keyword})`)
+        return []
+    }
 
     if (!response.ok) {
         console.error(`네이버 API 에러 (키워드: ${keyword}):`, response.status)
