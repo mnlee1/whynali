@@ -37,3 +37,4 @@ backups-auth/
 # Claude Code
 CLAUDE.md
 .claude/
+.env*.local

@@ -3,8 +3,10 @@
  *
  * [관리자 - 네이버 블로그 초안 생성 수동 재시도]
  *
- * blog_post_status='failed'(3회 재시도 소진)로 멈춘 이슈를 관리자가 수동으로
- * 다시 pending 상태로 되돌려 다음 generate-naver-blog-draft 크론 주기에 재시도되게 한다.
+ * blog_post_status가 'failed'(3회 재시도 소진) 또는 'skipped'(brief_summary 없어서 건너뜀)로
+ * 멈춘 이슈를 관리자가 수동으로 다시 pending 상태로 되돌려 다음 generate-naver-blog-draft
+ * 크론 주기에 재시도되게 한다. skipped 재시도는 brief_summary가 여전히 없으면 다시 skipped로
+ * 돌아갈 뿐이라, 관리자가 먼저 이슈 미리보기에서 타임라인을 재생성해두는 게 성공률이 높다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -32,7 +34,7 @@ export async function POST(
                 blog_post_retry_count: 0,
             })
             .eq('id', id)
-            .eq('blog_post_status', 'failed')
+            .in('blog_post_status', ['failed', 'skipped'])
             .select('id, blog_post_status')
             .single()
 

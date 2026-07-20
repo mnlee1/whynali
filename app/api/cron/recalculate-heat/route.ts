@@ -268,7 +268,9 @@ export async function GET(request: NextRequest) {
                                     .eq('id', issue.id)
                                 
                                 // 논란중 전환(재점화 포함) 시 네이버 블로그 초안 생성 예약
-                                if (transition.newStatus === '논란중') {
+                                // — 아직 승인 안 된 이슈(대기)는 제외. 대기 상태로 논란중까지 전환됐다가
+                                // 나중에 승인되는 경우는 approve/route.ts에서 별도로 예약함.
+                                if (transition.newStatus === '논란중' && issue.approval_status === '승인') {
                                     // 재점화(종결→논란중)면 이전 사이클의 블로그 상태를 리셋해
                                     // scheduleNaverBlogPost의 idempotency 가드가 새 초안을 다시 예약하게 함
                                     if (oldStatus === '종결') {

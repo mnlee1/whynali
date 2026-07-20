@@ -12,6 +12,7 @@ import { writeAdminLog } from '@/lib/admin-log'
 import { fetchPexelsImages } from '@/lib/pexels'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
+import { scheduleNaverBlogPost } from '@/lib/naver/blog-schedule'
 
 const CATEGORY_PATH_MAP: Record<string, string> = {
     '사회': '/society',
@@ -69,9 +70,16 @@ export async function POST(
         revalidatePath('/')
 
         // 승인 후 투표·토론 자동 생성 + 봇 첫 댓글 (백그라운드)
-        // 네이버 블로그 포스팅은 여기서 하지 않음 — 점화→논란중 전환 시점에
-        // recalculate-heat 크론이 scheduleNaverBlogPost로 예약 (lib/naver/blog-schedule.ts)
+        // 네이버 블로그 포스팅은 기본적으로 점화→논란중 전환 시점에 recalculate-heat
+        // 크론이 예약하지만(lib/naver/blog-schedule.ts), 그 크론은 승인된 이슈만 예약하므로
+        // 대기 상태로 이미 논란중까지 전환된 이슈가 뒤늦게 승인되는 경우는 여기서 예약한다.
         after(async () => {
+            if (data.status === '논란중') {
+                scheduleNaverBlogPost(data.id).catch(err =>
+                    console.error(`[approve] 블로그 예약 실패:`, err)
+                )
+            }
+
             // 봇 첫 댓글 — 빈 댓글창 방지
             try {
                 const cronSecret = process.env.CRON_SECRET
