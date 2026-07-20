@@ -765,11 +765,22 @@ export async function createSearchTypingFrames(
     const sub1Words = SEARCH_SUBTITLE_LINE1.split(' ')
     const sub2Words = SEARCH_SUBTITLE_LINE2.split(' ')
     const sub3Words = SEARCH_SUBTITLE_LINE3.split(' ')
-    const CHAR_DELAY = 0.28
-    const WORD_DELAY = 0.32
+    const BASE_CHAR_DELAY = 0.10
+    const BASE_WORD_DELAY = 0.17
     const TEXT_START_DELAY = 0.20
-    const totalAnimTime = searchChars.length * CHAR_DELAY + (sub1Words.length + sub2Words.length + sub3Words.length) * WORD_DELAY
-    const holdTime = Math.max(sceneDuration - TEXT_START_DELAY - totalAnimTime, 0.5)
+    const MIN_HOLD = 0.5
+
+    // 씬 길이(나레이션 오디오 기준)가 원래 속도로 다 보여주기엔 부족할 경우,
+    // 타이핑/단어 등장 속도를 비례 축소해 마지막 줄까지 항상 화면에 나오도록 보정
+    const totalWordCount = sub1Words.length + sub2Words.length + sub3Words.length
+    const baseAnimTime = searchChars.length * BASE_CHAR_DELAY + totalWordCount * BASE_WORD_DELAY
+    const availableForAnim = Math.max(sceneDuration - TEXT_START_DELAY - MIN_HOLD, 0.1)
+    const speedScale = baseAnimTime > availableForAnim ? availableForAnim / baseAnimTime : 1
+    const CHAR_DELAY = BASE_CHAR_DELAY * speedScale
+    const WORD_DELAY = BASE_WORD_DELAY * speedScale
+
+    const totalAnimTime = searchChars.length * CHAR_DELAY + totalWordCount * WORD_DELAY
+    const holdTime = Math.max(sceneDuration - TEXT_START_DELAY - totalAnimTime, MIN_HOLD)
 
     const magCY = SEARCH_BAR_Y + Math.floor(SEARCH_BAR_H / 2)
 
