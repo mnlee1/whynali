@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { generateNaverBlogPost } from '@/lib/ai/blog-post-generator'
-import { sendDoorayBlogPostFailureAlert } from '@/lib/dooray-notification'
+import { sendDoorayBlogPostFailureAlert, sendDoorayBlogDraftReadyAlert } from '@/lib/dooray-notification'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
     let skipped = 0
     let failed = 0
     const finalFailures: Array<{ id: string; title: string; error: string }> = []
+    const readyDrafts: Array<{ id: string; title: string }> = []
 
     for (const issue of pendingIssues) {
         // 동시 실행 방지: pending → generating 전환을 원자적으로 선점
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest) {
             })
             if (finalized) {
                 ready++
+                readyDrafts.push({ id: issue.id, title: post.title })
                 console.log(`[generate-naver-blog-draft] 이슈 ${issue.id} 초안 생성 완료: ${post.title}`)
             }
         } catch (err) {
@@ -137,6 +139,12 @@ export async function GET(request: NextRequest) {
     if (finalFailures.length > 0) {
         sendDoorayBlogPostFailureAlert(finalFailures).catch(err =>
             console.error('[generate-naver-blog-draft] 실패 알림 전송 오류:', err)
+        )
+    }
+
+    if (readyDrafts.length > 0) {
+        sendDoorayBlogDraftReadyAlert(readyDrafts).catch(err =>
+            console.error('[generate-naver-blog-draft] 초안준비 알림 전송 오류:', err)
         )
     }
 

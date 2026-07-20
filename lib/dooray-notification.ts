@@ -9,7 +9,8 @@
  * 3. sendDoorayReportAlert      — 댓글 신고 임계치 도달 알림
  * 4. sendDoorayShortformBatchAlert — 숏폼 배치 자동생성 완료 알림 (매일 12시)
  * 5. sendDoorayBlogPostFailureAlert — 네이버 블로그 초안 생성 최종 실패 알림
- * 6. sendDoorayCardNewsQualityGateAlert — 카드뉴스 자동 발행 전 품질 게이트가 막았을 때 알림
+ * 6. sendDoorayBlogDraftReadyAlert  — 네이버 블로그 초안 준비 완료 알림 (관리자 직접 게시 필요)
+ * 7. sendDoorayCardNewsQualityGateAlert — 카드뉴스 자동 발행 전 품질 게이트가 막았을 때 알림
  */
 
 interface DoorayAttachment {
@@ -441,6 +442,64 @@ export async function sendDoorayBlogPostFailureAlert(failures: BlogPostFailure[]
         return true
     } catch (error) {
         console.error('[Dooray] ❌ 블로그 초안 생성 실패 알림 전송 실패:', error)
+        return false
+    }
+}
+
+interface BlogDraftReady {
+    id: string
+    title: string
+}
+
+/**
+ * 네이버 블로그 초안 준비 완료 알림 — generate-naver-blog-draft 크론에서
+ * 초안이 1건 이상 생성됐을 때 호출. 관리자가 직접 복사해 게시해야 함을 안내.
+ */
+export async function sendDoorayBlogDraftReadyAlert(drafts: BlogDraftReady[]): Promise<boolean> {
+    const webhookUrl = process.env.DOORAY_WEBHOOK_URL
+
+    if (!webhookUrl) {
+        console.log('[Dooray] DOORAY_WEBHOOK_URL 환경변수가 설정되지 않아 알림을 건너뜁니다.')
+        return false
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[Dooray] 개발 환경에서는 알림을 전송하지 않습니다.')
+        return false
+    }
+
+    if (drafts.length === 0) {
+        console.log('[Dooray] 준비된 블로그 초안이 없어 알림을 건너뜁니다.')
+        return false
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+
+    try {
+        const message: DoorayMessage = {
+            botName: '왜난리 알림봇',
+            text: `📝 **네이버 블로그 초안 ${drafts.length}건 준비됨 — 직접 게시 필요**\n네이버 블로그 글쓰기 API가 없어 자동 발행이 안 됩니다. 이슈 목록에서 초안을 복사해 직접 게시해주세요.\n👉 ${siteUrl}/admin/issues`,
+            attachments: drafts.map(d => ({
+                title: d.title,
+                text: '초안준비 — 복사해서 게시 필요',
+                color: 'yellow',
+            })),
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+        })
+
+        if (!response.ok) {
+            throw new Error(`Dooray API 오류: ${response.status} ${response.statusText}`)
+        }
+
+        console.log(`[Dooray] ✅ 블로그 초안 준비 알림 전송 완료 (${drafts.length}건)`)
+        return true
+    } catch (error) {
+        console.error('[Dooray] ❌ 블로그 초안 준비 알림 전송 실패:', error)
         return false
     }
 }
