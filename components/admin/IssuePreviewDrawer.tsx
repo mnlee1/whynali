@@ -89,23 +89,43 @@ export default function IssuePreviewDrawer({
     const handleRegenerateSummary = async () => {
         if (!issue || isRegenerating) return
         setIsRegenerating(true)
+
+        const MAX_ATTEMPTS = 3
+        const RETRY_DELAY_MS = 5000
+
         try {
-            const res = await fetch(
-                `/api/admin/migrations/regenerate-single-timeline?issueId=${issue.id}`,
-                { method: 'POST' }
-            )
-            if (!res.ok) {
+            let lastMessage = ''
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                const res = await fetch(
+                    `/api/admin/migrations/regenerate-single-timeline?issueId=${issue.id}`,
+                    { method: 'POST' }
+                )
+
+                if (res.ok) {
+                    setSummaryKey(k => k + 1)
+                    setTimelineTab('preview')
+                    return
+                }
+
                 let msg = `HTTP ${res.status}`
                 try {
                     const body = await res.json()
-                    msg += `: ${body.error ?? body.message ?? JSON.stringify(body)}`
+                    // details에 실제 원인(예: Groq Rate Limit)이 담겨있어 error보다 우선 표시
+                    msg += `: ${body.details ?? body.error ?? body.message ?? JSON.stringify(body)}`
                 } catch {
                     msg += ` (응답 파싱 실패)`
                 }
-                throw new Error(msg)
+                lastMessage = msg
+
+                const isRateLimit = /rate limit/i.test(msg)
+                if (isRateLimit && attempt < MAX_ATTEMPTS) {
+                    console.warn(`[요약 재생성] Rate Limit — ${attempt}/${MAX_ATTEMPTS}회, ${RETRY_DELAY_MS / 1000}초 후 재시도`)
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
+                    continue
+                }
+
+                throw new Error(lastMessage)
             }
-            setSummaryKey(k => k + 1)
-            setTimelineTab('preview')
         } catch (e) {
             alert(`요약 재생성 실패\n${e instanceof Error ? e.message : String(e)}`)
         } finally {

@@ -950,7 +950,7 @@ export default function AdminIssuesPage() {
                                             : issue.blog_post_status === 'failed' ? 'bg-red-100 text-red-700 border-red-200'
                                             : issue.blog_post_status === 'skipped' ? 'bg-surface-subtle text-content-muted border-border'
                                             : 'bg-yellow-100 text-yellow-700 border-yellow-200'
-                                        const clickable = issue.blog_post_status === 'ready_to_publish' || issue.blog_post_status === 'published' || issue.blog_post_status === 'failed'
+                                        const clickable = issue.blog_post_status === 'ready_to_publish' || issue.blog_post_status === 'published' || issue.blog_post_status === 'failed' || issue.blog_post_status === 'skipped'
 
                                         return (
                                             <button
@@ -1087,12 +1087,19 @@ export default function AdminIssuesPage() {
                             <button onClick={() => setBlogDraftIssue(null)} className="text-content-muted hover:text-content-primary">✕</button>
                         </div>
 
-                        {blogDraftIssue.blog_post_status === 'failed' ? (
+                        {(blogDraftIssue.blog_post_status === 'failed' || blogDraftIssue.blog_post_status === 'skipped') ? (
                             <div className="mb-4">
-                                <p className="text-sm text-content-secondary mb-3">
-                                    초안 생성이 최대 재시도 횟수까지 실패했습니다. 대부분 Groq API 사용량 한도(다른 AI 기능과 공유) 문제라 시간이 지나면 풀리는 경우가 많습니다.
-                                </p>
-                                <div className="border border-red-200 bg-red-50 rounded px-3 py-2 text-sm text-red-700 mb-3">
+                                {blogDraftIssue.blog_post_status === 'failed' ? (
+                                    <p className="text-sm text-content-secondary mb-3">
+                                        초안 생성이 최대 재시도 횟수까지 실패했습니다. 대부분 Groq API 사용량 한도(다른 AI 기능과 공유) 문제라 시간이 지나면 풀리는 경우가 많습니다.
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-content-secondary mb-3">
+                                        타임라인 요약(brief_summary)이 없어서 초안 생성을 건너뛰었습니다. 보통 이슈 생성 시점에 연결된 뉴스가 1건뿐이었을 때 발생합니다.
+                                        지금은 뉴스가 더 쌓였을 수 있으니, <strong>이슈 미리보기(행 클릭)에서 "요약 재생성"을 먼저 누른 뒤</strong> 아래 재시도를 눌러주세요.
+                                    </p>
+                                )}
+                                <div className={`border rounded px-3 py-2 text-sm mb-3 ${blogDraftIssue.blog_post_status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' : 'border-border bg-surface-subtle text-content-secondary'}`}>
                                     {blogDraftIssue.blog_post_error ?? '알 수 없는 오류'}
                                 </div>
                                 <button
