@@ -293,6 +293,22 @@ export default function AdminIssuesPage() {
         }
     }
 
+    const handleRetryBlogDraft = async (id: string) => {
+        setPublishingBlog(true)
+        try {
+            const response = await fetch(`/api/admin/issues/${id}/blog-post/retry`, {
+                method: 'POST',
+            })
+            if (!response.ok) throw new Error('재시도 처리 실패')
+            setBlogDraftIssue(null)
+            fetchIssues()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '재시도 처리 실패')
+        } finally {
+            setPublishingBlog(false)
+        }
+    }
+
     const handleRestore = async (id: string) => {
         if (!confirm('이 이슈를 대기 상태로 복구하시겠습니까?')) return
 
@@ -934,7 +950,7 @@ export default function AdminIssuesPage() {
                                             : issue.blog_post_status === 'failed' ? 'bg-red-100 text-red-700 border-red-200'
                                             : issue.blog_post_status === 'skipped' ? 'bg-surface-subtle text-content-muted border-border'
                                             : 'bg-yellow-100 text-yellow-700 border-yellow-200'
-                                        const clickable = issue.blog_post_status === 'ready_to_publish' || issue.blog_post_status === 'published'
+                                        const clickable = issue.blog_post_status === 'ready_to_publish' || issue.blog_post_status === 'published' || issue.blog_post_status === 'failed'
 
                                         return (
                                             <button
@@ -1071,73 +1087,93 @@ export default function AdminIssuesPage() {
                             <button onClick={() => setBlogDraftIssue(null)} className="text-content-muted hover:text-content-primary">✕</button>
                         </div>
 
-                        <p className="text-sm text-content-secondary mb-4">
-                            네이버 블로그 글쓰기 API가 폐지되어 자동 게시가 불가능합니다. 아래 제목·본문을 복사해 blog.naver.com에 직접 붙여넣은 뒤 게시완료를 눌러주세요.
-                        </p>
-
-                        <div className="mb-4">
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="text-xs font-medium text-content-muted uppercase">제목</label>
-                                <button
-                                    onClick={() => handleCopyText(blogDraftIssue.blog_post_title ?? '')}
-                                    className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
-                                >
-                                    복사
-                                </button>
-                            </div>
-                            <input
-                                readOnly
-                                value={blogDraftIssue.blog_post_title ?? ''}
-                                className="w-full border border-border rounded px-3 py-2 text-sm bg-surface-subtle"
-                            />
-                        </div>
-
-                        <div className="mb-4">
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="text-xs font-medium text-content-muted uppercase">본문 (HTML)</label>
-                                <button
-                                    onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
-                                    className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
-                                >
-                                    복사
-                                </button>
-                            </div>
-                            <textarea
-                                readOnly
-                                value={blogDraftIssue.blog_post_content ?? ''}
-                                rows={8}
-                                className="w-full border border-border rounded px-3 py-2 text-sm font-mono bg-surface-subtle"
-                            />
-                        </div>
-
-                        {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
+                        {blogDraftIssue.blog_post_status === 'failed' ? (
                             <div className="mb-4">
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-medium text-content-muted uppercase">태그 (네이버 에디터 태그란에 입력)</label>
-                                    <button
-                                        onClick={() => handleCopyText(blogDraftIssue.blog_post_tags?.join(', ') ?? '')}
-                                        className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
-                                    >
-                                        복사
-                                    </button>
+                                <p className="text-sm text-content-secondary mb-3">
+                                    초안 생성이 최대 재시도 횟수까지 실패했습니다. 대부분 Groq API 사용량 한도(다른 AI 기능과 공유) 문제라 시간이 지나면 풀리는 경우가 많습니다.
+                                </p>
+                                <div className="border border-red-200 bg-red-50 rounded px-3 py-2 text-sm text-red-700 mb-3">
+                                    {blogDraftIssue.blog_post_error ?? '알 수 없는 오류'}
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {blogDraftIssue.blog_post_tags.map((tag, i) => (
-                                        <span key={i} className="px-2 py-1 text-xs rounded bg-surface-subtle border border-border">
-                                            #{tag}
-                                        </span>
-                                    ))}
-                                </div>
+                                <button
+                                    disabled={publishingBlog}
+                                    onClick={() => handleRetryBlogDraft(blogDraftIssue.id)}
+                                    className="px-4 py-2 text-sm rounded bg-primary text-white disabled:opacity-50"
+                                >
+                                    {publishingBlog ? '처리 중...' : '재시도'}
+                                </button>
                             </div>
-                        )}
+                        ) : (
+                            <>
+                                <p className="text-sm text-content-secondary mb-4">
+                                    네이버 블로그 글쓰기 API가 폐지되어 자동 게시가 불가능합니다. 아래 제목·본문을 복사해 blog.naver.com에 직접 붙여넣은 뒤 게시완료를 눌러주세요.
+                                </p>
 
-                        <div className="mb-4">
-                            <label className="text-xs font-medium text-content-muted uppercase mb-1 block">미리보기</label>
-                            <div
-                                className="border border-border rounded px-3 py-2 text-sm prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: blogDraftIssue.blog_post_content ?? '' }}
-                            />
-                        </div>
+                                <div className="mb-4">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-medium text-content-muted uppercase">제목</label>
+                                        <button
+                                            onClick={() => handleCopyText(blogDraftIssue.blog_post_title ?? '')}
+                                            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                        >
+                                            복사
+                                        </button>
+                                    </div>
+                                    <input
+                                        readOnly
+                                        value={blogDraftIssue.blog_post_title ?? ''}
+                                        className="w-full border border-border rounded px-3 py-2 text-sm bg-surface-subtle"
+                                    />
+                                </div>
+
+                                <div className="mb-4">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-medium text-content-muted uppercase">본문 (HTML)</label>
+                                        <button
+                                            onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
+                                            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                        >
+                                            복사
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        readOnly
+                                        value={blogDraftIssue.blog_post_content ?? ''}
+                                        rows={8}
+                                        className="w-full border border-border rounded px-3 py-2 text-sm font-mono bg-surface-subtle"
+                                    />
+                                </div>
+
+                                {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
+                                    <div className="mb-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="text-xs font-medium text-content-muted uppercase">태그 (네이버 에디터 태그란에 입력)</label>
+                                            <button
+                                                onClick={() => handleCopyText(blogDraftIssue.blog_post_tags?.join(', ') ?? '')}
+                                                className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                            >
+                                                복사
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {blogDraftIssue.blog_post_tags.map((tag, i) => (
+                                                <span key={i} className="px-2 py-1 text-xs rounded bg-surface-subtle border border-border">
+                                                    #{tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mb-4">
+                                    <label className="text-xs font-medium text-content-muted uppercase mb-1 block">미리보기</label>
+                                    <div
+                                        className="border border-border rounded px-3 py-2 text-sm prose prose-sm max-w-none"
+                                        dangerouslySetInnerHTML={{ __html: blogDraftIssue.blog_post_content ?? '' }}
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         {blogDraftIssue.blog_post_status === 'published' && blogDraftIssue.blog_post_url && (
                             <a
