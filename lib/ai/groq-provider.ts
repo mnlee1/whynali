@@ -25,6 +25,20 @@ interface KeyStatus {
     blockedUntil: string | null
 }
 
+// 모듈 스코프 공유 상태 — 같은 서버리스 실행 내에서 생성된 모든 GroqProvider 인스턴스가
+// 이 타임스탬프를 공유한다 (callGroq 직접 호출 경로 + callClaude의 Groq 폴백 경로 모두 포함).
+// 계정당 무료 티어 한도가 30 RPM이므로, 한 번의 크론 실행이 혼자서 그 한도를 넘기지 못하도록
+// 호출 간 최소 2초 간격을 강제한다 (60s / 2s = 30회 = 정확히 한도선).
+let lastGroqCallAt = 0
+const MIN_CALL_INTERVAL_MS = 2000
+
+async function waitForPacing(): Promise<void> {
+    const elapsed = Date.now() - lastGroqCallAt
+    if (lastGroqCallAt > 0 && elapsed < MIN_CALL_INTERVAL_MS) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_CALL_INTERVAL_MS - elapsed))
+    }
+}
+
 export class GroqProvider implements AIProvider {
     readonly providerName = 'groq'
     private keys: string[] = []
@@ -246,6 +260,7 @@ export class GroqProvider implements AIProvider {
                     ? Math.max(maxTokens, 4000)
                     : maxTokens
 
+                await waitForPacing()
                 const completion = await client.chat.completions.create({
                     model,
                     messages,
@@ -255,6 +270,7 @@ export class GroqProvider implements AIProvider {
                     ...(isThinkingModel ? { include_reasoning: false } : {}),
                     ...(options?.jsonMode ? { response_format: { type: 'json_object' } } : {}),
                 })
+                lastGroqCallAt = Date.now()
 
                 const message = completion.choices?.[0]?.message
                 // reasoning 모델에서 content가 null인 경우 reasoning 필드로 fallback
@@ -280,6 +296,8 @@ export class GroqProvider implements AIProvider {
 
                 return content.trim()
             } catch (error: any) {
+                lastGroqCallAt = Date.now()
+
                 const isRateLimit =
                     error.status === 429 ||
                     error.code === 'rate_limit_exceeded' ||
