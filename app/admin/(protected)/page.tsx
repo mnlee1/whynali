@@ -429,8 +429,8 @@ export default function AdminDashboardPage() {
                                             { label: '카드뉴스 카피 생성', desc: '제목·설명·포인트 텍스트', model: 'gpt-oss-120b', schedule: '월~금 오전 7시' },
                                             { label: '이미지 키워드 추출', desc: 'Pixabay · Pexels 검색어 생성', model: 'qwen3.6-27b', schedule: '자동' },
                                             { label: '숏폼 해시태그 생성', desc: '업로드 시 자동 생성', model: 'gpt-oss-120b', schedule: '수동' },
-                                            { label: '숏폼 하이라이트 추출', desc: '자막 강조 키워드 선별', model: 'qwen3.6-27b', schedule: '자동' },
-                                            { label: '숏폼 씬 AI 편집', desc: '재작성 · 요약 · 중복 제거', model: 'qwen3.6-27b', schedule: '수동' },
+                                            { label: '숏폼 하이라이트 추출', desc: '자막 강조 키워드 선별', model: 'qwen3.6-27b (자동) · claude-sonnet-4-6 (수동)', schedule: '자동/수동' },
+                                            { label: '숏폼 씬 AI 편집', desc: '재작성 · 요약 · 중복 제거', model: 'qwen3.6-27b · 하이라이트 재추출: claude-sonnet-4-6', schedule: '수동' },
                                         ].map((feature) => (
                                             <div key={feature.label} className="flex items-start text-sm bg-surface rounded px-2.5 py-1.5 border border-border-muted">
                                                 <div className="min-w-0">
