@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin'
 import { writeAdminLog } from '@/lib/admin-log'
+import { generateAndCacheSummaries } from '@/lib/ai/generate-timeline-summary'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: issue } = await supabaseAdmin
         .from('issues')
-        .select('status')
+        .select('title, status, topic_description')
         .eq('id', prev.issue_id)
         .single()
 
@@ -77,6 +78,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     await writeAdminLog(`투표 상태 변경: ${prev.approval_status} > 진행중`, 'vote', id, auth.adminEmail, `"${data.title ?? '제목없음'}"`)
+
+    // 투표가 진행중으로 바뀐 시점에 타임라인 재생성 — 크론(최대 1시간) 기다리지 않고 즉시 매칭
+    if (issue?.title) {
+        await generateAndCacheSummaries(prev.issue_id, issue.title, issue.topic_description)
+            .catch(err => console.warn(`  ⚠️ [투표 승인 후 타임라인 재생성 실패] ${issue.title}:`, err))
+    }
+
     revalidatePath('/')
     return NextResponse.json({ data }, { status: 200 })
 }

@@ -25,6 +25,8 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import TimelineSection from '@/components/issue/TimelineSection'
+import IssueBrief from '@/components/issue/IssueBrief'
+import { estimateReadingMinutes } from '@/lib/utils/reading-time'
 import SourcesSection from '@/components/issue/SourcesSection'
 import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
@@ -73,7 +75,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     if (!issue) {
         return {
-            title: '이슈를 찾을 수 없습니다',
+            title: '이슈를 찾을 수 없어요',
         }
     }
 
@@ -193,6 +195,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             dateEnd: row.date_end,
         }))
 
+    const timelineCharCount = timelineSummaries.reduce((sum, s) => {
+        const text = (s.bullets ?? [])
+            .map((b: string | { text?: string }) => typeof b === 'string' ? b : (b?.text ?? ''))
+            .join('')
+        return sum + text.length
+    }, 0)
+    const timelineReadingMinutes = estimateReadingMinutes(timelineCharCount)
+
     /* 토론 주제별 의견(댓글) 수 집계 */
     const topicIds = (discussionTopics ?? []).map((t) => t.id)
     const opinionCountMap: Record<string, number> = {}
@@ -238,7 +248,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         return (
             <div className="container mx-auto px-4 py-6 md:py-8">
                 <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-                    이슈를 불러올 수 없습니다.
+                    이슈를 불러올 수 없어요.
                 </div>
             </div>
         )
@@ -322,16 +332,20 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 />
             </div>
 
-            {/* 타임라인 */}
+            {/* 핵심만 콕 (3줄 요약) - 타임라인과 별도 카드 */}
+            {issue.brief_summary?.threeLine?.length ? (
+                <IssueBrief brief={issue.brief_summary} />
+            ) : null}
+
+            {/* 타임라인 (헤더/정렬 토글은 TimelineSection 내부에서 렌더) */}
             <div className="card overflow-hidden mb-6">
-                <div className="px-4 py-3 border-b border-border-muted">
-                    <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
-                </div>
                 <div className="p-4">
                     <TimelineSection
                         issueId={id}
                         issueStatus={issue.status}
                         initialSummaries={timelineSummaries.length > 0 ? timelineSummaries : undefined}
+                        timelineReadingMinutes={timelineReadingMinutes}
+                        userId={userId}
                     />
                 </div>
             </div>

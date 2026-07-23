@@ -20,12 +20,18 @@
  *   - 승인된 이슈 중 heat_index ≥ 30인 전체 대상
  *   - 쿨다운(20시간) 체크하여 중복 생성 방지
  *   - 완료 후 Dooray 알림
+ *
+ * 작업 4: brief_summary(3줄 요약) 백필
+ *   - 승인된 이슈 중 timeline_points는 있는데 brief_summary가 없는 이슈 대상
+ *     (뉴스 1건이라 생성 시점에 건너뛰었거나 AI 호출 실패로 비어 있는 경우)
+ *   - 저장된 timeline_points만으로 재생성 시도
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { generateDiscussionTopics } from '@/lib/ai/discussion-generator'
 import { generateVoteOptions } from '@/lib/ai/vote-generator'
+import { generateSummariesForIssue } from '@/lib/pipeline/backfill-brief-summary'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
 import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT } from '@/lib/config/shortform-thresholds'
@@ -39,6 +45,8 @@ const MIN_HEAT = parseInt(process.env.DAILY_GENERATE_MIN_HEAT ?? '15')
 const MAX_ISSUES_PER_RUN = parseInt(process.env.DAILY_GENERATE_MAX_ISSUES ?? '5')
 // 이슈 생성일 기준 최대 대상 기간 (이 기간을 넘은 이슈는 재생성 제외)
 const MAX_AGE_DAYS = parseInt(process.env.DAILY_GENERATE_MAX_AGE_DAYS ?? '7')
+// brief_summary(3줄 요약) 백필 배치 크기
+const BRIEF_BACKFILL_BATCH_SIZE = parseInt(process.env.BRIEF_BACKFILL_BATCH_SIZE ?? '5')
 
 function verifyCronRequest(req: NextRequest): boolean {
     const authHeader = req.headers.get('authorization')
@@ -150,6 +158,53 @@ async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueC
 
     console.log(`[숏폼 배치] 완료 — ${jobsGenerated}개 job 생성 (대상 이슈: ${issues.length}개)`)
     return { jobsGenerated, issueCount: issues.length }
+}
+
+/**
+ * brief_summary(3줄 요약) 백필 배치
+ *
+ * 뉴스 1건뿐이라 생성 시점에 건너뛰었거나 AI 호출 실패로 비어 있는 이슈,
+ * 그리고 brief_summary는 있지만 threeLine(핵심만 콕 표시용)이 없는 구버전 이슈를
+ * 이미 저장된 timeline_points만으로 자동 재생성한다.
+ */
+async function generateBriefSummaryBackfillBatch(): Promise<{ backfilled: number; issueCount: number }> {
+    const { data: candidates, error } = await supabaseAdmin
+        .from('issues')
+        .select('id, title, brief_summary, timeline_points!left(id)')
+        .eq('approval_status', '승인')
+        .or('brief_summary.is.null,brief_summary->threeLine.is.null')
+        .order('created_at', { ascending: false })
+        .limit(BRIEF_BACKFILL_BATCH_SIZE * 3)
+
+    if (error) {
+        console.error('[brief_summary 백필] 이슈 조회 실패:', error)
+        return { backfilled: 0, issueCount: 0 }
+    }
+
+    const targets = (candidates ?? [])
+        .filter(issue => Array.isArray(issue.timeline_points) && issue.timeline_points.length > 0)
+        .filter(issue => {
+            const threeLine = issue.brief_summary?.threeLine
+            return !Array.isArray(threeLine) || threeLine.length === 0
+        })
+        .slice(0, BRIEF_BACKFILL_BATCH_SIZE)
+
+    let backfilled = 0
+
+    for (const issue of targets) {
+        try {
+            const count = await generateSummariesForIssue(issue.id, issue.title)
+            if (count > 0) {
+                backfilled++
+                console.log(`  ✓ [brief_summary 백필] "${issue.title}"`)
+            }
+        } catch (e) {
+            console.error(`  ✗ [brief_summary 백필 실패] "${issue.title}":`, e)
+        }
+    }
+
+    console.log(`[brief_summary 백필] 완료 — ${backfilled}개 백필 (대상: ${targets.length}개)`)
+    return { backfilled, issueCount: targets.length }
 }
 
 export async function GET(request: NextRequest) {
@@ -340,6 +395,9 @@ export async function GET(request: NextRequest) {
     // 작업 2: 숏폼 일일 배치
     const shortformResult = await generateShortformBatch()
 
+    // 작업 3: brief_summary(3줄 요약) 백필 배치
+    const briefBackfillResult = await generateBriefSummaryBackfillBatch()
+
     return NextResponse.json({
         success: true,
         deletedStaleVotes: deletedVotes,
@@ -349,6 +407,8 @@ export async function GET(request: NextRequest) {
         issueCount: targets.length,
         shortformGenerated: shortformResult.jobsGenerated,
         shortformIssueCount: shortformResult.issueCount,
+        briefSummaryBackfilled: briefBackfillResult.backfilled,
+        briefSummaryBackfillCandidates: briefBackfillResult.issueCount,
     })
 }
 

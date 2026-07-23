@@ -256,8 +256,10 @@ export class GroqProvider implements AIProvider {
                 messages.push({ role: 'user', content: finalUserPrompt })
 
                 // thinking 모델은 내부 추론 토큰도 max_tokens를 소모하므로 여유 확보
+                // (정치 등 민감한 주제는 추론이 길어져 4000 전부를 추론에만 쓰고 답변을
+                // 못 내놓는 경우가 실제로 발생 — 2026-07-21 "이 대통령 분당 아파트 매각" 사례)
                 const effectiveMaxTokens = isThinkingModel
-                    ? Math.max(maxTokens, 4000)
+                    ? Math.max(maxTokens, 6000)
                     : maxTokens
 
                 await waitForPacing()

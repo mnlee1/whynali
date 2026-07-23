@@ -9,6 +9,7 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
+import { formatKstDateHeader, formatKstTime } from '@/lib/utils/format-date'
 
 export async function generateCloseSummary(issueId: string, issueTitle: string, force = false): Promise<void> {
     // force=false일 때만 기존 요약 스킵 (force=true이면 날짜 없는 요약도 재생성)
@@ -46,7 +47,7 @@ export async function generateCloseSummary(issueId: string, issueTitle: string, 
             const lines = items.map(item => {
                 const dt = new Date(item.occurred_at ?? '')
                 const dateStr = !isNaN(dt.getTime())
-                    ? `${dt.getMonth() + 1}월 ${dt.getDate()}일`
+                    ? `${formatKstDateHeader(item.occurred_at ?? '')} ${formatKstTime(item.occurred_at ?? '')}`
                     : ''
                 return dateStr ? `- [${dateStr}] ${item.title}` : `- ${item.title}`
             }).join('\n')
@@ -72,11 +73,14 @@ ${stagesText}
 - 기사 제목에 나온 사실만 사용하세요 (추측 금지)
 - stageTitle: 이 이슈의 마무리를 한 구절로 (예: "공식 사과로 일단락", "결론 없이 자연 소멸")
 - bullets: 마무리 과정의 핵심 포인트 2~3개 (한 문장씩)
-- 각 bullet의 date는 해당 뉴스의 [날짜]를 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
+- 각 bullet의 date는 해당 뉴스의 [날짜 시:분]을 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
 - 기사가 적거나 결론이 불분명하면 솔직하게 "관심 감소로 자연 소멸" 등으로 표현
+- 각 bullet의 text에서 문장의 핵심 절(주어+행동 어간)을 마크다운 \`**\`로 볼드 표시하고, "했"/"하고 있" 같은 시제 표현과 "~어요"/"~습니다" 같은 종결어미는 반드시 볼드 밖에 일반체로 남기세요. 예: "**타 제작사들이 자발적으로 안전점검을 실시**했어요." (볼드는 "실시"에서 끝나고, "했어요"는 전부 일반체 — "실시했**어요"처럼 "했"까지 볼드에 포함하면 안 됨)
+- 모든 문장은 해요체(예: "~했어요", "~하고 있어요")로 작성하고, "~습니다" 같은 하십시오체는 쓰지 마세요
+- bullet들끼리 종결 표현이 반복되지 않게 다양하게 쓰세요 (예: "~했어요", "~됐어요", "~하고 있어요", "~라고 밝혔어요" 등을 섞어서 사용)
 
 JSON 응답:
-{"stageTitle":"마무리 제목","bullets":[{"date":"4월 26일","text":"포인트1"},{"date":"4월 27일","text":"포인트2"}]}`
+{"stageTitle":"마무리 제목","bullets":[{"date":"4월 26일 09:00","text":"**주어1**이 ~했어요"},{"date":"4월 27일 15:30","text":"**주어2**가 ~했어요"}]}`
 
     try {
         const content = await callGroq(
@@ -89,8 +93,9 @@ JSON 응답:
 
         type BulletItem = { date: string; text: string }
         const lastDate = allDates.length > 0 ? (() => {
-            const dt = new Date(allDates[allDates.length - 1])
-            return !isNaN(dt.getTime()) ? `${dt.getMonth() + 1}월 ${dt.getDate()}일` : ''
+            const last = allDates[allDates.length - 1]
+            const dt = new Date(last as string)
+            return !isNaN(dt.getTime()) ? `${formatKstDateHeader(last as string)} ${formatKstTime(last as string)}` : ''
         })() : ''
 
         const bullets: BulletItem[] = (parsed.bullets ?? [])

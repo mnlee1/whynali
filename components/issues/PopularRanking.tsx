@@ -83,8 +83,8 @@ export default function PopularRanking({ initialIssues, isSurging = false }: Pro
                         align="left"
                         width="w-max max-w-[300px]"
                         text={isSurging
-                            ? "화력(조회·반응·댓글) 기준 상위 이슈를 보여줍니다."
-                            : "최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬합니다."
+                            ? "화력(조회·반응·댓글) 기준 상위 이슈를 보여줘요."
+                            : "최근 7일 내 등록된 이슈를 화력(조회·반응·댓글) 기준으로 정렬해요."
                         }
                     />
                 </div>

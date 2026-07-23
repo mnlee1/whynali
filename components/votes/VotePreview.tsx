@@ -139,7 +139,7 @@ export default function VotePreview({ initialVotes }: Props) {
                 <div className="container mx-auto">
                     <h2 className="text-[17px] font-bold text-content-primary mb-4">지금 뜨는 투표</h2>
                     <div className="h-40 bg-border-muted rounded-xl flex items-center justify-center">
-                        <p className="text-content-muted text-sm">진행 중인 투표가 없습니다.</p>
+                        <p className="text-content-muted text-sm">진행 중인 투표가 없어요.</p>
                     </div>
                 </div>
             </section>
@@ -177,9 +177,11 @@ export default function VotePreview({ initialVotes }: Props) {
                                 투표 마감
                             </span>
                         )}
-                        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
-                            <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
-                        </span>
+                        {showResults && (
+                            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
+                                <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
+                            </span>
+                        )}
                     </div>
 
                     {/* 이슈 제목 + 투표 주제 그룹 */}

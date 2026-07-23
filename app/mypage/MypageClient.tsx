@@ -193,13 +193,13 @@ export default function MypageClient({
             })
             const data = await res.json()
             if (!res.ok) {
-                setNicknameError(data.error ?? '닉네임 변경에 실패했습니다.')
+                setNicknameError(data.error ?? '닉네임 변경에 실패했어요.')
             } else {
                 setNickname(nicknameInput)
                 setNicknameSuccess(true)
             }
         } catch {
-            setNicknameError('서버 오류가 발생했습니다.')
+            setNicknameError('서버 오류가 발생했어요.')
         } finally {
             setIsSavingNickname(false)
         }
@@ -228,10 +228,10 @@ export default function MypageClient({
                 setIsEditingContactEmail(false)
                 setContactEmailSuccess(true)
             } else {
-                setContactEmailError('저장에 실패했습니다.')
+                setContactEmailError('저장에 실패했어요.')
             }
         } catch {
-            setContactEmailError('서버 오류가 발생했습니다.')
+            setContactEmailError('서버 오류가 발생했어요.')
         } finally {
             setIsSavingContactEmail(false)
         }
@@ -250,10 +250,10 @@ export default function MypageClient({
             if (res.ok) {
                 setMarketing(next)
             } else {
-                setMarketingError('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
+                setMarketingError('저장에 실패했어요. 잠시 후 다시 시도해주세요.')
             }
         } catch {
-            setMarketingError('서버 오류가 발생했습니다.')
+            setMarketingError('서버 오류가 발생했어요.')
         } finally {
             setIsSavingMarketing(false)
         }
@@ -272,14 +272,14 @@ export default function MypageClient({
             const res = await fetch('/api/users/me', { method: 'DELETE' })
             if (!res.ok) {
                 const data = await res.json()
-                setWithdrawError(data.error ?? '탈퇴 처리에 실패했습니다.')
+                setWithdrawError(data.error ?? '탈퇴 처리에 실패했어요.')
                 setIsWithdrawing(false)
                 return
             }
             await sb.auth.signOut()
             window.location.replace('/')
         } catch {
-            setWithdrawError('서버 오류가 발생했습니다.')
+            setWithdrawError('서버 오류가 발생했어요.')
             setIsWithdrawing(false)
         }
     }
@@ -384,7 +384,7 @@ export default function MypageClient({
                                 </div>
                                 <p className="text-xs text-content-muted">한글·영문·숫자·_ 사용 가능, 2~16자</p>
                                 {nicknameError && <p className="mt-1.5 text-xs text-red-600">{nicknameError}</p>}
-                                {nicknameSuccess && <p className="mt-1.5 text-xs text-green-600">닉네임이 변경되었습니다.</p>}
+                                {nicknameSuccess && <p className="mt-1.5 text-xs text-green-600">닉네임을 바꿨어요.</p>}
                                 {!nicknameError && !nicknameSuccess && nicknameInput !== nickname && nicknameInputValid && (
                                     isCheckingDuplicate ? (
                                         <p className="mt-1.5 text-xs text-content-muted">중복 확인 중...</p>
@@ -464,7 +464,7 @@ export default function MypageClient({
                             </div>
                         )}
                         {contactEmailSuccess && !isEditingContactEmail && (
-                            <p className="mt-2 text-xs text-green-600">저장되었습니다.</p>
+                            <p className="mt-2 text-xs text-green-600">저장했어요.</p>
                         )}
                     </section>
 
@@ -750,11 +750,11 @@ export default function MypageClient({
             {showWithdrawModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
                     <div className="bg-surface rounded-2xl p-6 w-full max-w-sm shadow-xl">
-                        <h3 className="text-lg font-bold text-content-primary mb-2">정말 탈퇴하시겠습니까?</h3>
+                        <h3 className="text-lg font-bold text-content-primary mb-2">정말 탈퇴할까요?</h3>
                         <p className="text-sm text-content-secondary mb-4">
-                            탈퇴 시 모든 댓글, 반응, 투표 기록이 삭제되며 복구할 수 없습니다.
+                            탈퇴하면 모든 댓글, 반응, 투표 기록이 삭제되고 복구할 수 없어요.
                             <br />
-                            확인하려면 아래에 <strong>탈퇴합니다</strong>를 입력하세요.
+                            확인하려면 아래에 <strong>탈퇴합니다</strong>를 입력해주세요.
                         </p>
                         <input
                             type="text"

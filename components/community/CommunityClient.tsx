@@ -306,7 +306,7 @@ function CommunityContent() {
 
             {searchQuery && !loading && (
                 <p className="text-xl text-content-primary mb-6">
-                    &lsquo;{searchQuery}&rsquo;에 대한 <span className="font-medium text-primary">{total.toLocaleString()}</span>건의 검색결과가 있습니다.
+                    &lsquo;{searchQuery}&rsquo;에 대한 <span className="font-medium text-primary">{total.toLocaleString()}</span>건의 검색결과가 있어요.
                 </p>
             )}
 
@@ -370,7 +370,7 @@ function CommunityContent() {
                 </Masonry>
             ) : topics.length === 0 ? (
                 <p className="text-sm text-content-muted text-center py-12">
-                    {searchQuery ? `"${searchQuery}"에 대한 토론 주제가 없습니다.` : '등록된 토론 주제가 없습니다.'}
+                    {searchQuery ? `"${searchQuery}"에 대한 토론 주제가 없어요.` : '등록된 토론 주제가 없어요.'}
                 </p>
             ) : (
                 <>

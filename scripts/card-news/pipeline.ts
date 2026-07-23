@@ -279,7 +279,7 @@ async function run() {
       const message = (err as Error).message
       console.error('❌ Instagram 업로드 실패:', message)
       uploadResults.push('Instagram ✗')
-      await sendDoorayCardNewsUploadFailureAlert({ platform: 'Instagram', mode, issueTitle: uploadIssueTitle, error: message })
+      await sendDoorayCardNewsUploadFailureAlert({ platform: 'Instagram', mode, issueTitle: uploadIssueTitle, error: message, isTokenError: isTokenError(err) })
     }
   }
 
@@ -292,7 +292,7 @@ async function run() {
       const message = (err as Error).message
       console.error('❌ Threads 업로드 실패:', message)
       uploadResults.push('Threads ✗')
-      await sendDoorayCardNewsUploadFailureAlert({ platform: 'Threads', mode, issueTitle: uploadIssueTitle, error: message })
+      await sendDoorayCardNewsUploadFailureAlert({ platform: 'Threads', mode, issueTitle: uploadIssueTitle, error: message, isTokenError: isTokenError(err) })
     }
   }
 
@@ -465,6 +465,37 @@ function buildCaption(
   }
 }
 
+// ─── Graph API 공통: 에러 분류 + 재시도 ───────────────────
+
+class GraphApiError extends Error {
+  code?: number
+  type?: string
+  constructor(message: string, code?: number, type?: string) {
+    super(message)
+    this.code = code
+    this.type = type
+  }
+}
+
+// 코드 190 / OAuthException = 토큰 무효·만료. 재시도로 해결되지 않으므로 즉시 실패 처리.
+function isTokenError(err: unknown): boolean {
+  return err instanceof GraphApiError && (err.code === 190 || err.type === 'OAuthException')
+}
+
+// 컨테이너 생성·캐러셀 생성·발행처럼 "즉시 id를 반환해야 하는" POST 호출 공용 래퍼.
+// 토큰 오류는 재시도해도 소용없으니 바로 던지고, 그 외(일시적 오류)만 짧은 backoff로 재시도.
+async function postGraphApi(url: string, body: URLSearchParams, label: string, maxRetries = 2): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { method: 'POST', body })
+    const json = (await res.json()) as { id?: string; error?: { message: string; code?: number; type?: string } }
+    if (json.id) return json.id
+
+    const err = new GraphApiError(`${label}: ${json.error?.message ?? JSON.stringify(json)}`, json.error?.code, json.error?.type)
+    if (isTokenError(err) || attempt >= maxRetries) throw err
+    await new Promise(r => setTimeout(r, 3000 * (attempt + 1)))
+  }
+}
+
 // ─── Instagram 업로드 ────────────────────────────────────
 
 async function uploadToInstagram(imagePaths: string[], caption: string): Promise<string> {
@@ -473,13 +504,12 @@ async function uploadToInstagram(imagePaths: string[], caption: string): Promise
   try {
     const mediaIds: string[] = []
     for (const imageUrl of imageUrls) {
-      const res = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
-        method: 'POST',
-        body: new URLSearchParams({ image_url: imageUrl, is_carousel_item: 'true', access_token: IG_ACCESS_TOKEN! }),
-      })
-      const json = (await res.json()) as { id?: string; error?: { message: string } }
-      if (!json.id) throw new Error(`미디어 컨테이너 생성 실패: ${JSON.stringify(json.error)}`)
-      mediaIds.push(json.id)
+      const id = await postGraphApi(
+        `https://graph.instagram.com/v21.0/${IG_USER_ID}/media`,
+        new URLSearchParams({ image_url: imageUrl, is_carousel_item: 'true', access_token: IG_ACCESS_TOKEN! }),
+        '미디어 컨테이너 생성 실패'
+      )
+      mediaIds.push(id)
     }
 
     for (const mediaId of mediaIds) {
@@ -494,29 +524,27 @@ async function uploadToInstagram(imagePaths: string[], caption: string): Promise
       if (attempts >= 15) throw new Error(`미디어 처리 타임아웃: ${mediaId}`)
     }
 
-    const carouselRes = await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media`, {
-      method: 'POST',
-      body: new URLSearchParams({ media_type: 'CAROUSEL', children: mediaIds.join(','), caption, access_token: IG_ACCESS_TOKEN! }),
-    })
-    const carousel = (await carouselRes.json()) as { id?: string; error?: { message: string } }
-    if (!carousel.id) throw new Error(`캐러셀 생성 실패: ${carousel.error?.message}`)
+    const carouselId = await postGraphApi(
+      `https://graph.instagram.com/v21.0/${IG_USER_ID}/media`,
+      new URLSearchParams({ media_type: 'CAROUSEL', children: mediaIds.join(','), caption, access_token: IG_ACCESS_TOKEN! }),
+      '캐러셀 생성 실패'
+    )
 
     let ca = 0
     while (ca < 15) {
       await new Promise(r => setTimeout(r, 4000))
-      const s = (await (await fetch(`https://graph.instagram.com/v21.0/${carousel.id}?fields=status_code&access_token=${IG_ACCESS_TOKEN}`)).json()) as { status_code?: string }
+      const s = (await (await fetch(`https://graph.instagram.com/v21.0/${carouselId}?fields=status_code&access_token=${IG_ACCESS_TOKEN}`)).json()) as { status_code?: string }
       if (s.status_code === 'FINISHED') break
       if (s.status_code === 'ERROR') throw new Error('캐러셀 처리 오류')
       ca++
     }
     if (ca >= 15) throw new Error('캐러셀 처리 타임아웃')
 
-    const pub = (await (await fetch(`https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`, {
-      method: 'POST',
-      body: new URLSearchParams({ creation_id: carousel.id, access_token: IG_ACCESS_TOKEN! }),
-    })).json()) as { id?: string; error?: { message: string } }
-    if (!pub.id) throw new Error(`발행 실패: ${pub.error?.message}`)
-    return pub.id
+    return await postGraphApi(
+      `https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`,
+      new URLSearchParams({ creation_id: carouselId, access_token: IG_ACCESS_TOKEN! }),
+      '발행 실패'
+    )
   } finally {
     await deleteFromStorage(fileNames)
   }
@@ -524,38 +552,53 @@ async function uploadToInstagram(imagePaths: string[], caption: string): Promise
 
 // ─── Threads 업로드 ──────────────────────────────────────
 
+// Threads 컨테이너 상태 확인은 Meta 권장사항상 "1분에 한 번, 5분 이상 하지 말 것".
+// 이미지는 보통 수 초 내 처리가 끝나므로 첫 확인은 짧게 두고, 이후 점점 간격을 늘려 총 대기가 5분을 넘지 않게 한다.
+const THREADS_POLL_INTERVALS_MS = [5000, 15000, 30000, 60000, 60000]
+
+async function waitForThreadsContainer(containerId: string, label: string): Promise<void> {
+  for (const interval of THREADS_POLL_INTERVALS_MS) {
+    await new Promise(r => setTimeout(r, interval))
+    const s = (await (await fetch(`https://graph.threads.net/v1.0/${containerId}?fields=status,error_message&access_token=${THREADS_ACCESS_TOKEN}`)).json()) as {
+      status?: string
+      error_message?: string
+    }
+    if (s.status === 'FINISHED' || s.status === 'PUBLISHED') return
+    if (s.status === 'ERROR') throw new Error(`${label} 처리 오류: ${s.error_message ?? containerId}`)
+    if (s.status === 'EXPIRED') throw new Error(`${label} 만료 (24시간 내 미발행): ${containerId}`)
+  }
+  throw new Error(`${label} 처리 타임아웃: ${containerId}`)
+}
+
 async function uploadToThreads(imagePaths: string[], caption: string): Promise<string> {
   const { urls: imageUrls, fileNames } = await uploadImagesToStorage(imagePaths)
 
   try {
     const itemIds: string[] = []
     for (const imageUrl of imageUrls) {
-      const res = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
-        method: 'POST',
-        body: new URLSearchParams({ media_type: 'IMAGE', image_url: imageUrl, is_carousel_item: 'true', access_token: THREADS_ACCESS_TOKEN! }),
-      })
-      const json = (await res.json()) as { id?: string; error?: { message: string } }
-      if (!json.id) throw new Error(`Threads 아이템 컨테이너 생성 실패: ${json.error?.message}`)
-      itemIds.push(json.id)
+      const id = await postGraphApi(
+        `https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`,
+        new URLSearchParams({ media_type: 'IMAGE', image_url: imageUrl, is_carousel_item: 'true', access_token: THREADS_ACCESS_TOKEN! }),
+        'Threads 아이템 컨테이너 생성 실패'
+      )
+      itemIds.push(id)
     }
 
-    await new Promise(r => setTimeout(r, 10000))
+    await Promise.all(itemIds.map(itemId => waitForThreadsContainer(itemId, 'Threads 아이템')))
 
-    const carouselRes = await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`, {
-      method: 'POST',
-      body: new URLSearchParams({ media_type: 'CAROUSEL', children: itemIds.join(','), text: caption, access_token: THREADS_ACCESS_TOKEN! }),
-    })
-    const carousel = (await carouselRes.json()) as { id?: string; error?: { message: string } }
-    if (!carousel.id) throw new Error(`Threads 캐러셀 생성 실패: ${JSON.stringify(carousel)}`)
+    const carouselId = await postGraphApi(
+      `https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads`,
+      new URLSearchParams({ media_type: 'CAROUSEL', children: itemIds.join(','), text: caption, access_token: THREADS_ACCESS_TOKEN! }),
+      'Threads 캐러셀 생성 실패'
+    )
 
-    await new Promise(r => setTimeout(r, 30000))
+    await waitForThreadsContainer(carouselId, 'Threads 캐러셀')
 
-    const pub = (await (await fetch(`https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads_publish`, {
-      method: 'POST',
-      body: new URLSearchParams({ creation_id: carousel.id, access_token: THREADS_ACCESS_TOKEN! }),
-    })).json()) as { id?: string; error?: { message: string } }
-    if (!pub.id) throw new Error(`Threads 발행 실패: ${pub.error?.message}`)
-    return pub.id
+    return await postGraphApi(
+      `https://graph.threads.net/v1.0/${THREADS_USER_ID}/threads_publish`,
+      new URLSearchParams({ creation_id: carouselId, access_token: THREADS_ACCESS_TOKEN! }),
+      'Threads 발행 실패'
+    )
   } finally {
     await deleteFromStorage(fileNames)
   }
