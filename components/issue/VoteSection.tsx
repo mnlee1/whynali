@@ -131,7 +131,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 setUserVotes(json.userVotes ?? {})
             }
         } catch (e) {
-            alert(e instanceof Error ? e.message : '투표 처리 실패')
+            alert(e instanceof Error ? e.message : '투표 처리에 실패했어요. 잠시 후 다시 시도해주세요.')
         } finally {
             setSubmitting(null)
         }
@@ -164,7 +164,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 </div>
                 <div className="px-4 py-8 flex flex-col items-center justify-center text-center gap-2">
                     <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
-                    <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
+                    <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없어요</p>
                     <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
                 </div>
             </div>
@@ -206,7 +206,7 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 ) : pastVotes.length > 0 ? (
                     <div className="flex flex-col items-center justify-center text-center gap-2">
                         <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
-                        <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없습니다</p>
+                        <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없어요</p>
                         <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
                     </div>
                 ) : null}
@@ -272,6 +272,8 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
     const choices = vote.vote_choices ?? []
     const totalCount = choices.reduce((sum, c) => sum + (c.count ?? 0), 0)
     const isClosed = vote.phase === '마감'
+    // 마감된 투표는 참여 여부 상관없이 결과 공개, 진행중인 투표는 내가 투표해야만 결과 공개
+    const canSeeResults = isClosed || !!myChoiceId
 
     // 진행중인 투표는 항상 펼쳐진 상태로 유지
     useEffect(() => {
@@ -311,9 +313,11 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                             )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
-                                <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
-                            </span>
+                            {canSeeResults && (
+                                <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
+                                    <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
+                                </span>
+                            )}
                             {isClosed && (
                                 <ChevronDown
                                     className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -335,7 +339,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                     {/* 선택지 */}
                     <div className="space-y-2">
                     {choices.map((choice) => {
-                        const pct = totalCount > 0
+                        const pct = canSeeResults && totalCount > 0
                             ? Math.round((choice.count / totalCount) * 100)
                             : 0
                         const isSelected = myChoiceId === choice.id
@@ -370,7 +374,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                         {isSelected && <Check className="w-4 h-4" strokeWidth={2.5} />}
                                         <span>{choice.label}</span>
                                     </span>
-                                    {totalCount > 0 && (
+                                    {canSeeResults && totalCount > 0 && (
                                         <span className={`text-xs ml-2 shrink-0 ${isSelected ? 'text-purple-800 font-medium' : 'text-content-secondary'}`}>
                                             {pct}%
                                         </span>

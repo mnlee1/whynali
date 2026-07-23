@@ -33,7 +33,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                         서비스를 불러올 수 없어요
                     </h1>
                     <p className="mt-2 text-sm text-content-secondary max-w-xs">
-                        일시적인 서비스 장애입니다. 잠시 후 다시 시도해 주세요.
+                        일시적인 서비스 장애예요. 잠시 후 다시 시도해주세요.
                     </p>
                     {error.digest && (
                         <p className="mt-1 text-xs text-content-muted font-mono">

@@ -133,7 +133,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                     }, 1500)
                 } catch (err) {
                     console.error('[ShareButton] 링크 복사 실패:', err)
-                    alert('링크 복사에 실패했습니다')
+                    alert('링크 복사에 실패했어요')
                     setShowMenu(false)
                 }
                 return
@@ -189,7 +189,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                     }, 1500)
                 } catch (copyErr) {
                     console.error('[ShareButton] 폴백 복사도 실패:', copyErr)
-                    alert('공유에 실패했습니다')
+                    alert('공유에 실패했어요')
                     setShowMenu(false)
                 }
             }

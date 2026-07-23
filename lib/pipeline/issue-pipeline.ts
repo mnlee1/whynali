@@ -332,11 +332,7 @@ export async function classifyAndSummarizeTimeline(
 
     if (news.length === 0) return { stageMap, pointSummaries, summaryRows: [], briefSummary: null }
 
-    if (news.length === 1) {
-        stageMap.set(news[0].id, '발단')
-        return { stageMap, pointSummaries, summaryRows: [], briefSummary: null }
-    }
-
+    // 뉴스 1건이어도 brief_summary(3줄 요약)는 항상 생성 시도 — AI가 '발단'으로만 분류하고 브리핑을 만든다
     const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
     const newsListText = news.map((n, i) =>
         `${i + 1}. [${n.published_at.slice(0, 10)}] ${n.title}`
@@ -362,13 +358,14 @@ stageTitle은 10자 이내, summary는 기사 수에 맞는 분량
 - intro: 이슈 현황 한 문장
 - bullets: 핵심 팩트 3~5개
 - conclusion: 한 줄 결론 (👉 로 시작)
+- threeLine: intro·bullets·conclusion 전체 내용을 종합해서 "상황 → 전개 → 현재 상태" 3줄로 다시 압축. 세 줄이 서로 겹치는 내용을 반복하지 않도록 각 줄에 다른 정보를 담을 것 (예: 첫 줄에 쓴 내용을 둘째 줄에서 다시 말하지 않기). 각 줄은 "~했어요", "~하고 있어요"처럼 친근한 해요체로 작성하고, "~습니다" 같은 하십시오체나 "~야", "~해" 같은 반말은 쓰지 말 것
 
 반드시 아래 JSON 형식으로만 답하세요:
 {
   "classifications": [{"index":1,"stage":"발단"},{"index":2,"stage":"전개"}],
   "pointSummaries": [{"index":1,"pointSummary":"타이틀: 설명"}],
   "summaries": [{"stage":"발단","stageTitle":"제목","summary":"요약문"}],
-  "brief": {"intro":"한 문장 현황","bullets":["팩트1","팩트2"],"conclusion":"👉 한 줄 결론"}
+  "brief": {"intro":"한 문장 현황","bullets":["팩트1","팩트2"],"conclusion":"👉 한 줄 결론","threeLine":["상황 압축 1줄이에요","전개 압축 1줄이에요","현재상태 압축 1줄이에요"]}
 }`
 
     try {
@@ -381,7 +378,7 @@ stageTitle은 10자 이내, summary는 기사 수에 맞는 분량
             classifications: Array<{ index: number; stage: string }>
             pointSummaries: Array<{ index: number; pointSummary: string }>
             summaries: Array<{ stage: string; stageTitle: string; summary: string }>
-            brief: { intro: string; bullets: string[]; conclusion: string }
+            brief: { intro: string; bullets: string[]; conclusion: string; threeLine?: string[] }
         }>(content)
 
         if (!result) throw new Error('JSON 파싱 실패')

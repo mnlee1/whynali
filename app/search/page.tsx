@@ -142,7 +142,7 @@ async function SearchResults({ query }: { query: string }) {
         return (
             <div className="space-y-8">
                 <p className="text-sm text-content-muted text-center py-6">
-                    &ldquo;{query}&rdquo;에 대한 검색 결과가 없습니다.
+                    &ldquo;{query}&rdquo;에 대한 검색 결과가 없어요.
                 </p>
                 <SuggestedIssues issues={suggestedIssues} />
             </div>
@@ -154,7 +154,7 @@ async function SearchResults({ query }: { query: string }) {
             {/* 검색 결과 헤더 */}
             <div className="mb-16">
                 <p className="text-xl text-content-primary">
-                    &lsquo;{query}&rsquo;에 대한 <span className="font-medium text-primary">{totalCount.toLocaleString()}</span>건의 검색결과가 있습니다.
+                    &lsquo;{query}&rsquo;에 대한 <span className="font-medium text-primary">{totalCount.toLocaleString()}</span>건의 검색결과가 있어요.
                 </p>
             </div>
 

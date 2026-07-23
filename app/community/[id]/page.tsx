@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const topic = await getTopic(id)
 
     if (!topic) {
-        return { title: '토론을 찾을 수 없습니다' }
+        return { title: '토론을 찾을 수 없어요' }
     }
 
     const issueData = topic.issues as { id: string; title: string } | null

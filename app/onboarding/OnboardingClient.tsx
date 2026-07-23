@@ -36,7 +36,7 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
         if (nickname.length === 0) return null
         if (nickname.length < 2) return '2자 이상 입력해주세요.'
         if (nickname.length > 16) return '16자 이하로 입력해주세요.'
-        if (!NICKNAME_REGEX.test(nickname)) return '한글, 영문, 숫자, _만 사용할 수 있습니다.'
+        if (!NICKNAME_REGEX.test(nickname)) return '한글, 영문, 숫자, _만 사용할 수 있어요.'
         return null
     })()
 
@@ -140,13 +140,13 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
 
             if (res.status === 409 && data.suggestion) {
                 setNickname(data.suggestion)
-                setError('닉네임이 중복되어 새로운 닉네임을 추천했습니다.')
+                setError('닉네임이 중복돼서 새로운 닉네임을 추천했어요.')
                 setIsSubmitting(false)
                 return
             }
 
             if (!res.ok) {
-                setError(data.error || '온보딩에 실패했습니다.')
+                setError(data.error || '온보딩에 실패했어요.')
                 setIsSubmitting(false)
                 return
             }
@@ -157,7 +157,7 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
             window.location.replace(safeNext)
         } catch (err) {
             console.error('온보딩 제출 오류:', err)
-            setError('서버 오류가 발생했습니다.')
+            setError('서버 오류가 발생했어요.')
             setIsSubmitting(false)
         }
     }

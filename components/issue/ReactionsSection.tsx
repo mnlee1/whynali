@@ -57,7 +57,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             setCounts(json.counts ?? {})
             setUserReaction(json.userReaction ?? null)
         } catch (e) {
-            setError(e instanceof Error ? e.message : '감정 조회 실패')
+            setError(e instanceof Error ? e.message : '감정 조회에 실패했어요. 잠시 후 다시 시도해주세요.')
         } finally {
             setLoading(false)
         }
@@ -126,7 +126,7 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             // 실패 시 롤백
             setCounts(prevCounts)
             setUserReaction(prevUserReaction)
-            setError(e instanceof Error ? e.message : '처리 실패')
+            setError(e instanceof Error ? e.message : '처리에 실패했어요. 잠시 후 다시 시도해주세요.')
         } finally {
             setSubmitting(false)
         }
