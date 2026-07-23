@@ -73,7 +73,7 @@ export default function IssueFAQ({
                             이 이슈는 무엇인가요?
                         </dt>
                         <dd className="text-content-secondary leading-relaxed">
-                            {issue.topic_description || `${categoryDescriptions[issue.category] || ''} 이슈입니다.`}
+                            {issue.topic_description || `${categoryDescriptions[issue.category] || ''} 이슈예요.`}
                         </dd>
                     </div>
 
@@ -82,7 +82,7 @@ export default function IssueFAQ({
                             현재 상황은 어떤가요?
                         </dt>
                         <dd className="text-content-secondary leading-relaxed">
-                            현재 <strong className="text-content-primary">{issue.status}</strong> 상태입니다. {statusDescriptions[issue.status]}
+                            현재 <strong className="text-content-primary">{issue.status}</strong> 상태예요. {statusDescriptions[issue.status]}
                         </dd>
                     </div>
 
@@ -91,7 +91,7 @@ export default function IssueFAQ({
                             언제 시작되었나요?
                         </dt>
                         <dd className="text-content-secondary leading-relaxed">
-                            {relativeTime(issue.created_at)} ({new Date(issue.created_at).toLocaleDateString('ko-KR')})에 이슈가 시작되었습니다.
+                            {relativeTime(issue.created_at)} ({new Date(issue.created_at).toLocaleDateString('ko-KR')})에 이슈가 시작됐어요.
                         </dd>
                     </div>
 
@@ -101,11 +101,11 @@ export default function IssueFAQ({
                         </dt>
                         <dd className="text-content-secondary leading-relaxed">
                             화력 지수 <strong className="text-content-primary">{issue.heat_index ?? 0}점</strong>으로 
-                            {(issue.heat_index ?? 0) >= 50 ? ' 매우 높은' : (issue.heat_index ?? 0) >= 30 ? ' 높은' : ' 보통'} 관심을 받고 있습니다.
+                            {(issue.heat_index ?? 0) >= 50 ? ' 매우 높은' : (issue.heat_index ?? 0) >= 30 ? ' 높은' : ' 보통'} 관심을 받고 있어요.
                             {newsCount > 0 && ` 관련 뉴스 ${newsCount}건,`}
                             {communityCount > 0 && ` 커뮤니티 글 ${communityCount}건,`}
                             {reactionCount > 0 && ` 반응 ${reactionCount}개,`}
-                            {commentCount > 0 && ` 댓글 ${commentCount}개가 등록되어 있습니다.`}
+                            {commentCount > 0 && ` 댓글 ${commentCount}개가 등록돼 있어요.`}
                         </dd>
                     </div>
 

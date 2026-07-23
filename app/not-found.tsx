@@ -19,7 +19,7 @@ export default function NotFound() {
                 페이지를 찾을 수 없어요
             </h1>
             <p className="mt-2 text-sm text-content-secondary max-w-xs">
-                주소가 잘못됐거나 삭제된 페이지입니다.
+                주소가 잘못됐거나 삭제된 페이지예요.
             </p>
             <Link href="/" className="btn btn-md btn-primary mt-8">
                 홈으로 돌아가기

@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { filterBannedBullets } from '@/lib/ai/timeline-content-guard'
+import { formatKstDateHeader, formatKstTime } from '@/lib/utils/format-date'
 
 const STOPWORDS = new Set([
     '이', '가', '은', '는', '을', '를', '의', '에', '로', '으로', '와', '과', '이나', '나',
@@ -99,6 +100,19 @@ export async function generateAndCacheSummaries(
 
     if (!points || points.length === 0) return
 
+    // 진행 중인 투표 조회 — bullet과 주제가 겹치면 linkedVoteId로 연결
+    const { data: activeVotes } = await supabaseAdmin
+        .from('votes')
+        .select('id, title, vote_choices(label)')
+        .eq('issue_id', issueId)
+        .eq('phase', '진행중')
+        .eq('approval_status', '승인')
+    const voteCandidates = (activeVotes ?? []).filter(v => v.title)
+    const voteIdSet = new Set(voteCandidates.map(v => v.id))
+    const voteLine = voteCandidates.length > 0
+        ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
+        : ''
+
     const STAGE_ORDER_MAP: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
 
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
@@ -116,7 +130,7 @@ export async function generateAndCacheSummaries(
         const lines = items.map(i => {
             const dt = new Date(i.occurred_at)
             const dateStr = !isNaN(dt.getTime())
-                ? `${dt.getMonth() + 1}월 ${dt.getDate()}일`
+                ? `${formatKstDateHeader(i.occurred_at)} ${formatKstTime(i.occurred_at)}`
                 : ''
             return dateStr ? `- [${dateStr}] ${i.title}` : `- ${i.title}`
         }).join('\n')
@@ -147,7 +161,7 @@ export async function generateAndCacheSummaries(
         : ''
 
     const prompt = `이슈: "${issueTitle}"
-${backgroundLine}${recentNewsLine}${communityLine}
+${backgroundLine}${recentNewsLine}${communityLine}${voteLine}
 ## 타임라인 기사
 각 단계는 [발단], [전개], [파생], [진정]으로 구분되어 있습니다.
 
@@ -179,13 +193,21 @@ ${stagesText}
 2. 핵심 사건들을 bullet points로 (1~5개, 해당 단계 뉴스 개수 이하)
 3. 각 bullet은 한 문장으로 간결하게
 4. stageTitle에는 단계명 없이 내용만 작성 (예: "녹대 탈출" O, "[발단] 녹대 탈출" X)
-5. 각 bullet의 date는 해당 뉴스의 [날짜]를 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
+5. 각 bullet의 date는 해당 뉴스의 [날짜 시:분]을 그대로 사용 (날짜 정보가 없으면 빈 문자열 "")
+6. 각 bullet의 text에서 문장의 핵심 절(주어+행동 어간)을 마크다운 \`**\`로 볼드 표시하고, "했"/"하고 있" 같은 시제 표현과 "~어요"/"~습니다" 같은 종결어미는 반드시 볼드 밖에 일반체로 남기세요
+   - 좋은 예: "**타 제작사들이 자발적으로 안전점검을 실시**했어요." (볼드는 "실시"에서 끝나고, "했어요"는 전부 일반체)
+   - 나쁜 예: "**타 제작사들**이 자발적으로 안전점검을 실시했어요." (주어만 볼드 — 너무 좁음)
+   - 나쁜 예: "**타 제작사들이 자발적으로 안전점검을 실시했**어요." ("했"까지 볼드에 포함 — 시제 표현은 볼드 밖으로 빼야 함)
+   - 나쁜 예: "**타 제작사들이 자발적으로 안전점검을 실시했어요.**" (종결어미까지 볼드)
+7. 모든 문장은 해요체(예: "~했어요", "~하고 있어요")로 작성하고, "~습니다" 같은 하십시오체는 쓰지 마세요
+8. 같은 단계의 bullet들끼리 종결 표현이 반복되지 않게 다양하게 쓰세요 (예: "~했어요", "~됐어요", "~하고 있어요", "~라고 밝혔어요" 등을 섞어서 사용)
+   - 나쁜 예: 모든 bullet이 "~했어요"로 끝남 (반복돼서 단조로움)${voteCandidates.length > 0 ? '\n9. 위 "진행 중인 투표" 목록과 같은 사건·조치를 다루는 bullet이 있으면 그 bullet에 "linkedVoteId"를 투표 id 그대로 표시하세요 (관련 없으면 생략)' : ''}
 
 JSON 응답:
 {
   "summaries": [
-    {"stage":"발단","stageTitle":"제목","bullets":[{"date":"4월 25일","text":"사건1"},{"date":"4월 26일","text":"사건2"}]},
-    {"stage":"전개","stageTitle":"제목","bullets":[{"date":"4월 26일","text":"후속1"},{"date":"4월 27일","text":"후속2"}]}
+    {"stage":"발단","stageTitle":"제목","bullets":[{"date":"4월 25일 09:00","text":"**사건1 주어**가 ~했어요"},{"date":"4월 26일 14:30","text":"**사건2 주어**가 ~했어요"}]},
+    {"stage":"전개","stageTitle":"제목","bullets":[{"date":"4월 26일 18:00","text":"**후속1 주어**가 ~했어요"},{"date":"4월 27일 10:15","text":"**후속2 주어**가 ~했어요","linkedVoteId":"진행 중인 투표 목록의 id (관련될 때만)"}]}
   ]
 }`
 
@@ -196,7 +218,7 @@ JSON 응답:
         )
 
         const parsed = parseJsonObject<{
-            summaries: Array<{ stage: string; stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>
+            summaries: Array<{ stage: string; stageTitle: string; bullets: Array<{ date: string; text: string; linkedVoteId?: string } | string> }>
         }>(content)
         if (!parsed) return
 
@@ -206,7 +228,7 @@ JSON 응답:
             const ai = parsed.summaries?.find((p: { stage: string }) => p.stage === stage)
 
             // string | {date, text} 양쪽 모두 처리 (backward compat + 새 형식)
-            type BulletItem = { date: string; text: string }
+            type BulletItem = { date: string; text: string; linkedVoteId?: string }
             const rawBullets: Array<string | BulletItem> = ai?.bullets ?? []
 
             // date가 비어있을 때 사용할 fallback: 단계 내 첫 번째 유효 날짜
@@ -214,7 +236,7 @@ JSON 응답:
                 const first = dates.find(d => d)
                 if (!first) return ''
                 const dt = new Date(first)
-                return !isNaN(dt.getTime()) ? `${dt.getMonth() + 1}월 ${dt.getDate()}일` : ''
+                return !isNaN(dt.getTime()) ? `${formatKstDateHeader(first)} ${formatKstTime(first)}` : ''
             })()
 
             let bullets: BulletItem[] = rawBullets
@@ -224,7 +246,8 @@ JSON 응답:
                         return text ? { date: fallbackDate, text } : null
                     }
                     if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
-                        return { date: (b.date ?? '').trim() || fallbackDate, text: b.text.trim() }
+                        const linkedVoteId = typeof b.linkedVoteId === 'string' && voteIdSet.has(b.linkedVoteId) ? b.linkedVoteId : undefined
+                        return { date: (b.date ?? '').trim() || fallbackDate, text: b.text.trim(), ...(linkedVoteId ? { linkedVoteId } : {}) }
                     }
                     return null
                 })

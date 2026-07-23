@@ -33,8 +33,8 @@ export default function CommunityError({ error, reset }: ErrorProps) {
                 토론을 불러오지 못했어요
             </h1>
             <p className="mt-2 text-sm text-content-secondary max-w-xs">
-                토론 데이터를 가져오는 중 문제가 발생했습니다.
-                잠시 후 다시 시도해 주세요.
+                토론 데이터를 가져오는 중 문제가 발생했어요.
+                잠시 후 다시 시도해주세요.
             </p>
             {error.digest && (
                 <p className="mt-1 text-xs text-content-muted font-mono">

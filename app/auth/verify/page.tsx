@@ -93,7 +93,7 @@ function AuthVerifyContent() {
     if (status === 'error') {
         return (
             <div className="container mx-auto px-4 py-12 max-w-sm text-center">
-                <p className="text-gray-600 mb-4">로그인 처리에 실패했습니다.</p>
+                <p className="text-gray-600 mb-4">로그인 처리에 실패했어요.</p>
                 <a href="/login" className="text-sm underline">
                     로그인 페이지로
                 </a>

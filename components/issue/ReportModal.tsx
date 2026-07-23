@@ -28,13 +28,13 @@ type ReportOption = {
 }
 
 const REPORT_OPTIONS: ReportOption[] = [
-    { id: 'hate', label: '혐오/차별적/생명경시/욕설 표현입니다.', dbValue: '욕설/혐오' },
-    { id: 'spam', label: '스팸홍보/도배글입니다', dbValue: '스팸/광고' },
-    { id: 'obscene', label: '음란물입니다.', dbValue: '기타' },
-    { id: 'illegal', label: '불법정보를 포함하고 있습니다.', dbValue: '허위정보' },
-    { id: 'youth', label: '청소년에게 유해한 내용입니다.', dbValue: '기타' },
-    { id: 'privacy', label: '개인정보 노출 게시물입니다.', dbValue: '기타' },
-    { id: 'offensive', label: '불쾌한 표현이 있습니다.', dbValue: '기타' },
+    { id: 'hate', label: '혐오/차별적/생명경시/욕설 표현이에요.', dbValue: '욕설/혐오' },
+    { id: 'spam', label: '스팸홍보/도배글이에요', dbValue: '스팸/광고' },
+    { id: 'obscene', label: '음란물이에요.', dbValue: '기타' },
+    { id: 'illegal', label: '불법정보를 포함하고 있어요.', dbValue: '허위정보' },
+    { id: 'youth', label: '청소년에게 유해한 내용이에요.', dbValue: '기타' },
+    { id: 'privacy', label: '개인정보 노출 게시물이에요.', dbValue: '기타' },
+    { id: 'offensive', label: '불쾌한 표현이 있어요.', dbValue: '기타' },
 ]
 
 function maskNickname(nickname: string): string {

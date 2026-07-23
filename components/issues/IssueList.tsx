@@ -212,7 +212,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             {/* 검색 결과 수 */}
             {searchQuery && !loading && (
                 <p className="text-xl text-content-primary">
-                    &lsquo;{searchQuery}&rsquo;에 대한 <span className="font-medium text-primary">{total.toLocaleString()}</span>건의 검색결과가 있습니다.
+                    &lsquo;{searchQuery}&rsquo;에 대한 <span className="font-medium text-primary">{total.toLocaleString()}</span>건의 검색결과가 있어요.
                 </p>
             )}
 
@@ -298,11 +298,11 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             {!loading && issues.length === 0 && (
                 searchQuery ? (
                     <p className="text-sm text-content-muted text-center py-6">
-                        &lsquo;{searchQuery}&rsquo;에 대한 결과가 없습니다.
+                        &lsquo;{searchQuery}&rsquo;에 대한 결과가 없어요.
                     </p>
                 ) : (
                     <div className="text-center py-12 text-content-secondary text-sm">
-                        이슈가 없습니다.
+                        이슈가 없어요.
                     </div>
                 )
             )}

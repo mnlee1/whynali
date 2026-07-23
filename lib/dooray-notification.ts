@@ -569,6 +569,7 @@ interface CardNewsUploadFailure {
     mode: string
     issueTitle: string
     error: string
+    isTokenError?: boolean
 }
 
 /**
@@ -590,9 +591,12 @@ export async function sendDoorayCardNewsUploadFailureAlert(failure: CardNewsUplo
     }
 
     try {
+        const reason = failure.isTokenError
+            ? '액세스 토큰 만료 등 계정 연동 문제로 보입니다. 확인해 주세요.'
+            : '재시도 후에도 실패했습니다. 일시적인 API 오류일 수 있습니다.'
         const message: DoorayMessage = {
             botName: '왜난리 알림봇',
-            text: `🚨 **카드뉴스 ${failure.platform} 업로드 실패**\n"${failure.issueTitle}" (${failure.mode}) 발행 중 ${failure.platform} 업로드가 실패했습니다. 액세스 토큰 만료 등 계정 연동 문제일 수 있으니 확인해 주세요.`,
+            text: `🚨 **카드뉴스 ${failure.platform} 업로드 실패**\n"${failure.issueTitle}" (${failure.mode}) 발행 중 ${failure.platform} 업로드가 실패했습니다. ${reason}`,
             attachments: [
                 {
                     title: `${failure.platform} 오류`,

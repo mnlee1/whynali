@@ -68,7 +68,7 @@ export default function SafetyBotSettingModal({ onClose, onConfirm }: SafetyBotS
                     {/* 설명 */}
                     <p className="text-sm text-gray-500 leading-relaxed">
                         {enabled ? (
-                            <>악성 댓글을 자동으로 필터링하여<br />안전한 환경을 제공합니다.</>
+                            <>악성 댓글을 자동으로 필터링하여<br />안전한 환경을 제공해요.</>
                         ) : (
                             <>세이프티봇이 꺼져 있어요.<br />모든 댓글이 표시되니 주의해 주세요.</>
                         )}

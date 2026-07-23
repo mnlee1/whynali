@@ -267,7 +267,7 @@ export default function DiscussionComments({
                 setWriteError(json.error ?? '입력 내용을 확인해 주세요.')
                 return
             }
-            if (!res.ok) { setWriteError(json.error ?? '오류가 발생했습니다.'); return }
+            if (!res.ok) { setWriteError(json.error ?? '오류가 발생했어요.'); return }
             setDraft('')
             if (json.pending) {
                 /* 금칙어 포함 댓글: 알럿 없이 state에만 추가 */
@@ -281,7 +281,7 @@ export default function DiscussionComments({
             loadBest()
             await loadComments(0, false, sort)
         } catch {
-            setWriteError('네트워크 오류가 발생했습니다. 다시 시도해 주세요.')
+            setWriteError('네트워크 오류가 발생했어요. 다시 시도해주세요.')
         } finally {
             setSubmittingWrite(false)
         }
@@ -318,7 +318,7 @@ export default function DiscussionComments({
     }
 
     const handleDelete = async (commentId: string) => {
-        if (!window.confirm('의견을 삭제하시겠습니까?')) return
+        if (!window.confirm('의견을 삭제할까요?')) return
         setDeletingId(commentId)
         try {
             const res = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' })
@@ -554,7 +554,7 @@ export default function DiscussionComments({
                 <div className="pb-4 border-b border-border-muted mb-4">
                     {isClosed ? (
                         <p className="text-sm text-content-muted text-center py-3">
-                            종료된 토론입니다. 의견을 작성할 수 없습니다.
+                            종료된 토론이에요. 의견을 작성할 수 없어요.
                         </p>
                     ) : (
                         <div className="space-y-2">
@@ -622,9 +622,9 @@ export default function DiscussionComments({
                     <p className="text-xs text-content-secondary flex items-center gap-1.5">
                         <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" strokeWidth={1.8} />
                         {safetyBotEnabled ? (
-                            <span><span className="text-green-500 font-medium">세이프티봇</span>이 악성 의견으로부터 보호합니다.</span>
+                            <span><span className="text-green-500 font-medium">세이프티봇</span>이 악성 의견으로부터 보호해요.</span>
                         ) : (
-                            <span><span className="text-green-500 font-medium">세이프티봇</span>이 꺼져 있어요. 모든 의견이 표시됩니다.</span>
+                            <span><span className="text-green-500 font-medium">세이프티봇</span>이 꺼져 있어요. 모든 의견이 표시돼요.</span>
                         )}
                     </p>
                     <button
