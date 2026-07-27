@@ -275,6 +275,20 @@ export default function AdminIssuesPage() {
         }
     }
 
+    // HTML 태그를 그대로 복사하면 네이버 에디터에 <h2> 같은 태그가 글자 그대로 붙여넣어지므로,
+    // 렌더링된 화면(미리보기)과 동일한 일반 텍스트로 변환해서 복사한다.
+    // innerText는 실제 레이아웃을 반영하므로 DOM에 임시로 붙였다가 뗀다.
+    const getPlainTextFromHtml = (html: string) => {
+        const container = document.createElement('div')
+        container.style.position = 'absolute'
+        container.style.left = '-9999px'
+        container.innerHTML = html
+        document.body.appendChild(container)
+        const text = container.innerText || container.textContent || ''
+        document.body.removeChild(container)
+        return text.trim()
+    }
+
     const handlePublishBlogDraft = async (id: string) => {
         setPublishingBlog(true)
         try {
@@ -1133,24 +1147,6 @@ export default function AdminIssuesPage() {
                                     />
                                 </div>
 
-                                <div className="mb-4">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <label className="text-xs font-medium text-content-muted uppercase">본문 (HTML)</label>
-                                        <button
-                                            onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
-                                            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
-                                        >
-                                            복사
-                                        </button>
-                                    </div>
-                                    <textarea
-                                        readOnly
-                                        value={blogDraftIssue.blog_post_content ?? ''}
-                                        rows={8}
-                                        className="w-full border border-border rounded px-3 py-2 text-sm font-mono bg-surface-subtle"
-                                    />
-                                </div>
-
                                 {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
                                     <div className="mb-4">
                                         <div className="flex items-center justify-between mb-1">
@@ -1173,7 +1169,15 @@ export default function AdminIssuesPage() {
                                 )}
 
                                 <div className="mb-4">
-                                    <label className="text-xs font-medium text-content-muted uppercase mb-1 block">미리보기</label>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-medium text-content-muted uppercase">미리보기 (복사해서 붙여넣으세요)</label>
+                                        <button
+                                            onClick={() => handleCopyText(getPlainTextFromHtml(blogDraftIssue.blog_post_content ?? ''))}
+                                            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                        >
+                                            복사
+                                        </button>
+                                    </div>
                                     <div
                                         className="border border-border rounded px-3 py-2 text-sm prose prose-sm max-w-none"
                                         dangerouslySetInnerHTML={{ __html: blogDraftIssue.blog_post_content ?? '' }}

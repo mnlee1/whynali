@@ -5,11 +5,12 @@
  *
  * [이슈 타임라인 컴포넌트]
  *
- * 정렬 모드 2종 (세그먼트 컨트롤로 전환):
- * - latest(최신순): 최근 것부터 실제 시간 역순
- * - oldest(시간순): 실제 발생 순서 그대로
+ * 정렬 모드 2종 (세그먼트 컨트롤로 전환, 로그인 사용자만 노출):
+ * - latest(최신순): 최근 3건 기본 노출, 펼치면 더 과거 기록이 아래로 이어짐
+ * - oldest(시간순): 발단(가장 오래된) 3건 기본 노출, 펼치면 더 최근 기록이 아래로 이어짐
  *
- * 두 모드 모두 최근 3건만 기본 노출, 나머지는 리스트 맨 끝 토글로 펼침/접힘.
+ * 비로그인 사용자는 정렬 토글이 보이지 않고 항상 latest(최근 3건) 고정 — 모드를 오가며
+ * 서로 다른 3건씩(최근+발단)을 조합해 로그인 없이 우회 열람하는 것을 막기 위함.
  *
  * 우선순위: initialSummaries(AI 요약 bullets) > timeline_points(원본, fallback)
  */
@@ -271,23 +272,18 @@ export default function TimelineSection({
         )
     }
 
-    // 현재 모드 기준 전체 표시 순서 (위→아래)
+    // 현재 모드 기준 전체 표시 순서 (위→아래) — latest는 최근부터 역순, oldest는 발단부터 정순
     const orderedForMode: FlatItem[] = sortMode === 'latest'
         ? [...chronologicalAsc].reverse()
         : chronologicalAsc
 
-    // "최신순"은 중요한(최근) 항목이 배열 앞쪽에, "시간순"은 뒤쪽(끝)에 온다
+    // 두 모드 모두 "표시 순서상 맨 앞 N건"이 기본 노출, 나머지는 같은 방향으로 이어서 펼쳐짐
     const visibleCount = Math.min(VISIBLE_COUNT, orderedForMode.length)
-    const alwaysVisible = sortMode === 'latest'
-        ? orderedForMode.slice(0, visibleCount)
-        : orderedForMode.slice(orderedForMode.length - visibleCount)
-    const collapsible = sortMode === 'latest'
-        ? orderedForMode.slice(visibleCount)
-        : orderedForMode.slice(0, orderedForMode.length - visibleCount)
+    const alwaysVisible = orderedForMode.slice(0, visibleCount)
+    const collapsible = orderedForMode.slice(visibleCount)
 
-    const displayList = sortMode === 'latest'
-        ? [...alwaysVisible, ...(showAll ? collapsible : [])]
-        : [...(showAll ? collapsible : []), ...alwaysVisible]
+    const displayList = [...alwaysVisible, ...(showAll ? collapsible : [])]
+    const collapsedLabel = sortMode === 'latest' ? '이전' : '이후'
 
     let lastDateKey: string | null = null
 
@@ -376,23 +372,25 @@ export default function TimelineSection({
             {/* 헤더: 한 줄 - 타임라인 제목 / 정렬 세그먼트 컨트롤 / 구분선 / 읽기시간 */}
             <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-sm font-bold text-content-primary">타임라인</h2>
-                <div className="order-3 sm:order-2 ml-auto flex items-center rounded-full border border-border p-0.5">
-                    {SORT_MODES.map(mode => (
-                        <button
-                            key={mode}
-                            onClick={() => { setSortMode(mode); setShowAll(false) }}
-                            className={`px-3 py-1 rounded-full text-xs transition-colors ${
-                                sortMode === mode
-                                    ? 'bg-[#7b3aed] text-white font-bold'
-                                    : 'text-content-muted hover:text-content-secondary'
-                            }`}
-                        >
-                            {SORT_LABEL[mode]}
-                        </button>
-                    ))}
-                </div>
+                {userId && (
+                    <div className="order-3 sm:order-2 ml-auto flex items-center rounded-full border border-border p-0.5">
+                        {SORT_MODES.map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => { setSortMode(mode); setShowAll(false) }}
+                                className={`px-3 py-1 rounded-full text-xs transition-colors ${
+                                    sortMode === mode
+                                        ? 'bg-[#7b3aed] text-white font-bold'
+                                        : 'text-content-muted hover:text-content-secondary'
+                                }`}
+                            >
+                                {SORT_LABEL[mode]}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 {typeof timelineReadingMinutes === 'number' && (
-                    <span className="order-2 sm:order-3 flex items-center gap-1 text-xs text-content-secondary shrink-0 sm:pl-2 sm:border-l sm:border-border-muted">
+                    <span className={`order-2 sm:order-3 flex items-center gap-1 text-xs text-content-secondary shrink-0 ${userId ? 'sm:pl-2 sm:border-l sm:border-border-muted' : 'ml-auto'}`}>
                         <Clock className="w-3 h-3" />
                         {timelineReadingMinutes}분이면 다 읽어요
                     </span>
@@ -433,7 +431,7 @@ export default function TimelineSection({
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                             <p className="text-sm font-bold text-content-primary">
-                                이전 기록 {collapsible.length}건이 더 있어요
+                                {collapsedLabel} 기록 {collapsible.length}건이 더 있어요
                             </p>
                             <p className="text-xs text-content-secondary mt-0.5">
                                 로그인하면 이 이슈의 전체 흐름을 볼 수 있어요
@@ -457,7 +455,7 @@ export default function TimelineSection({
                     {showAll ? (
                         <>접기 <ChevronUp className="w-3 h-3" /></>
                     ) : (
-                        <>이전 기록 {collapsible.length}건 보기 <ChevronDown className="w-3 h-3" /></>
+                        <>{collapsedLabel} 기록 {collapsible.length}건 보기 <ChevronDown className="w-3 h-3" /></>
                     )}
                 </button>
             )}
