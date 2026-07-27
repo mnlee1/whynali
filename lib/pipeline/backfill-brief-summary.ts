@@ -39,8 +39,10 @@ export async function generateSummariesForIssue(
         ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
         : ''
 
-    // timeline_points가 너무 많으면 최근 50개만 사용 (토큰 제한 방지)
-    const limitedPoints = points.length > 50 ? points.slice(-50) : points
+    // timeline_points가 너무 많으면 최근 20개만 사용
+    // (Groq openai/gpt-oss-120b는 org당 8000 TPM 한도 + thinking 모델 강제 6000토큰 플로어 때문에,
+    //  프롬프트가 조금만 커져도 요청 1건 자체가 한도를 넘어 재시도로도 해결 불가 — 실측으로 20개가 안전선)
+    const limitedPoints = points.length > 20 ? points.slice(-20) : points
 
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
     for (const p of limitedPoints) {
