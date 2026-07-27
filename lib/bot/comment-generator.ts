@@ -51,7 +51,7 @@ function sanitizeBotComment(raw: string): { text: string | null; reason?: BotGen
     text = text.replace(/^["'`]|["'`]$/g, '').trim()
     if (FOREIGN_CHAR_RE.test(text)) return { text: null, reason: 'filter_foreign_char' }
     if (ARTIFACT_RE.test(text)) return { text: null, reason: 'filter_artifact' }
-    if (text.length < 15 || text.length > 200) return { text: null, reason: 'filter_length' }
+    if (text.length < 8 || text.length > 200) return { text: null, reason: 'filter_length' }
     // 한글 음절이 비공백 문자의 40% 미만이면 ASCII 외국어 단어 섞인 것으로 판단, 폐기
     const noSpace = text.replace(/\s/g, '')
     if (noSpace.length > 0) {
@@ -94,7 +94,7 @@ export async function generateBotDiscussionComment(
 ${topic.issue_title ? `관련 이슈: ${topic.issue_title}` : ''}${topic.issue_category ? `\n카테고리: ${topic.issue_category}` : ''}
 
 규칙:
-- 30자 이상 120자 이하의 자연스러운 한국어 의견
+- 8자 이상 120자 이하의 자연스러운 한국어 의견 (짧은 한마디도 좋음, 길게 늘리지 말 것)
 - 토론 주제에 대한 자신의 입장이나 생각을 구어체로
 - 특정인 실명, 혐오 표현, 욕설 절대 금지
 - 마크다운·JSON 없이 의견 텍스트만 반환`
@@ -115,7 +115,7 @@ export async function generateBotComment(
 카테고리: ${issue.category}${heatDesc ? `\n현재 반응: ${heatDesc} 이슈` : ''}${referenceLines ? `\n\n[참고 정보 — 그대로 인용하지 말고 사실 확인용으로만 참고]\n${referenceLines}` : ''}
 
 규칙:
-- 30자 이상 120자 이하의 자연스러운 한국어 댓글
+- 8자 이상 120자 이하의 자연스러운 한국어 댓글 (짧은 한마디도 좋음, 길게 늘리지 말 것)
 - 실제 커뮤니티 사용자가 쓴 것처럼 구어체로
 - 참고 정보를 요약하거나 정리해서 전달하지 말고, 그 중 사실 하나를 골라 자기 생각·반응으로만 표현
 - 특정인 실명, 혐오 표현, 욕설 절대 금지

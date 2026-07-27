@@ -53,14 +53,24 @@ interface HeadingVariant {
     ctaLead: string
 }
 
+// 왜난리 UX 라이팅 가이드(docs/60_UX라이팅_가이드.md) 기준 해요체로 통일
 const HEADING_VARIANTS: HeadingVariant[] = [
-    { intro: '지금 왜 난리인가?', points: '주요 포인트', outro: '더 알아보기', ctaLead: '왜난리에서 실시간 반응과 토론을 확인해보세요.' },
-    { intro: '무슨 일이 있었나?', points: '핵심만 정리하면', outro: '실시간 반응 보러가기', ctaLead: '지금 사람들이 어떻게 반응하고 있는지 왜난리에서 확인해보세요.' },
-    { intro: '이슈 요약', points: '이렇게 흘러갔다', outro: '지금 어떻게 되고 있나', ctaLead: '왜난리에서 최신 타임라인과 커뮤니티 반응을 더 볼 수 있어요.' },
+    { intro: '지금 왜 난리인가요?', points: '주요 포인트', outro: '더 알아보기', ctaLead: '왜난리에서 실시간 반응과 토론을 확인해보세요.' },
+    { intro: '무슨 일이 있었나요?', points: '핵심만 정리하면', outro: '실시간 반응 보러가기', ctaLead: '지금 사람들이 어떻게 반응하고 있는지 왜난리에서 확인해보세요.' },
+    { intro: '이슈 요약', points: '이렇게 흘러갔어요', outro: '지금 어떻게 되고 있나요', ctaLead: '왜난리에서 최신 타임라인과 커뮤니티 반응을 더 볼 수 있어요.' },
 ]
+
+// 카테고리·개별 이슈 태그와 별개로 항상 붙는 브랜드 고정 태그
+const FIXED_TAGS = ['왜난리', '이슈']
 
 function pickHeadingVariant(): HeadingVariant {
     return HEADING_VARIANTS[Math.floor(Math.random() * HEADING_VARIANTS.length)]
+}
+
+/** AI/폴백이 만든 태그에 고정 태그를 더하고 중복을 제거한다. */
+function withFixedTags(tags: string[]): string[] {
+    const merged = [...tags, ...FIXED_TAGS]
+    return [...new Set(merged)]
 }
 
 /**
@@ -135,14 +145,19 @@ ${topicLine}
 ${summaryLines}
 
 작성 규칙:
-1. 블로그 제목: "[왜난리] " 접두사 + 사람들이 실제로 검색할 만한 핵심 키워드(사건·행사명 등)를 자연스럽게 포함한 20자 이내 제목
+1. 블로그 제목: "[왜난리 이슈]" 접두사 + 사람들이 실제로 검색할 만한 핵심 키워드(사건·행사명 등)를 자연스럽게 포함한 20자 이내 제목
 2. intro: 이슈 핵심 설명 5~7문장 (일반 텍스트, 마크업 금지) — 검색 노출을 고려해 핵심 키워드를 본문에도 1~2회 자연스럽게 반복
 3. bullets: 핵심 포인트 4~5가지 (각각 한 문장, 일반 텍스트, 구체적으로)
 4. conclusion: 마무리 2~3문장 (일반 텍스트)
 5. tags: 검색에 도움될 키워드 태그 5~8개 (예: 이슈 관련 사건명·분야명·유행어 등, 각 태그는 공백 없이 간결하게)
 6. 특정인 실명 직접 언급 자제
-7. 쉽고 구어체에 가까운 문체, 전체 분량은 800~1200자 목표로 충분히 상세하게
-8. HTML 태그나 마크업은 절대 포함하지 말 것 — 순수 텍스트로만 작성
+7. 문체는 왜난리 서비스 톤을 따를 것:
+   - 모든 문장을 해요체로 쓸 것 (합니다체·하십시오체·평서체 "-다/-나" 금지 — 예: "일어났다"(X) → "일어났어요"(O), "논란인가"(X) → "논란인가요"(O))
+   - 능동형으로 쓸 것 (예: "발표되었다"(X) → "발표했어요"(O))
+   - 긍정적으로 표현할 것 (부정형·비난조 대신 사실 위주로 서술)
+   - "~시겠어요?", "~께" 같은 과도한 경어는 쓰지 말 것 — 캐주얼하고 친근하게
+8. 전체 분량은 800~1200자 목표로 충분히 상세하게
+9. HTML 태그나 마크업은 절대 포함하지 말 것 — 순수 텍스트로만 작성
 
 JSON 형식으로만 응답:
 {
@@ -181,7 +196,7 @@ function buildContents(
         `<h2>${variant.intro}</h2><p>${escapeHtml(intro)}</p>`,
         pointsHtml ? `<h2>${variant.points}</h2>${pointsHtml}` : '',
         conclusion ? `<p>${escapeHtml(conclusion)}</p>` : '',
-        `<h2>${variant.outro}</h2><p>${variant.ctaLead}<br><a href="${issueUrl}">[왜난리] ${escapeHtml(issueTitle)} 이슈 바로가기 →</a></p>`,
+        `<h2>${variant.outro}</h2><p>${variant.ctaLead}<br><a href="${issueUrl}">[왜난리 이슈] ${escapeHtml(issueTitle)} 바로가기 →</a></p>`,
     ].filter(Boolean).join('')
 }
 
@@ -216,7 +231,7 @@ function parsePost(
         return {
             title,
             contents: buildContents(basic.title, issueUrl, variant, intro, bullets, (parsed.conclusion ?? '').trim(), thumbnailUrl),
-            tags: tags.length ? tags : [categoryLabel],
+            tags: withFixedTags(tags.length ? tags : [categoryLabel]),
         }
     } catch {
         // AI 실패 시 brief_summary를 그대로 활용한 폴백 포스트 (정보가 있으니 성의 있게 구성)
@@ -226,9 +241,9 @@ function parsePost(
         const conclusion = summary?.conclusion ?? ''
 
         return {
-            title: `[왜난리] ${basic.title}`,
+            title: `[왜난리 이슈] ${basic.title}`,
             contents: buildContents(basic.title, issueUrl, variant, intro, bullets, conclusion, thumbnailUrl),
-            tags: [categoryLabel, '왜난리'],
+            tags: withFixedTags([categoryLabel]),
         }
     }
 }
