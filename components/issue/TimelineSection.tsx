@@ -95,6 +95,31 @@ function renderBulletText(text: string): ReactNode {
     })
 }
 
+function VoteNudge({ vote, className = '' }: { vote: { title: string; totalCount: number }; className?: string }) {
+    return (
+        <button
+            onClick={() => {
+                const el = document.getElementById('section-vote')
+                if (!el) return
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                el.classList.add('ring-2', 'ring-[#7b3aed]', 'ring-offset-4', 'rounded-2xl', 'transition-shadow')
+                setTimeout(() => {
+                    el.classList.remove('ring-2', 'ring-[#7b3aed]', 'ring-offset-4')
+                }, 1500)
+            }}
+            className={`flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity ${className}`}
+        >
+            <BarChart3 className="w-4 h-4 shrink-0 text-[#16a34a]" />
+            <span className="truncate text-content-secondary">
+                &quot;{vote.title}&quot; 지금{' '}
+                <span className="text-[#16a34a] font-bold">{vote.totalCount}명</span>이{' '}
+                <span className="text-[#16a34a]">투표하고 있어요</span>
+            </span>
+            <ChevronRight className="w-4 h-4 shrink-0 text-[#16a34a]" />
+        </button>
+    )
+}
+
 function buildFlatItems(summaries: StageSummary[]): FlatItem[] {
     const items: FlatItem[] = []
     let idx = 0
@@ -321,43 +346,38 @@ export default function TimelineSection({
                         {showItemLine && <div className="absolute left-[3px] w-0.5 bg-border-muted" style={itemLineStyle} />}
                         <div className={`absolute top-2 left-0 w-2 h-2 rounded-full ${dotColor}`} />
                     </div>
-                    <div className="flex-1 min-w-0 pb-3">
-                        <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-1 gap-y-1">
-                            <div className="flex items-center gap-2 sm:contents">
-                                <span className="w-11 shrink-0 text-[13px] font-medium text-content-muted">
+                    <div className="flex-1 min-w-0 pb-5">
+                        {isSideIssue ? (
+                            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 sm:items-start">
+                                <span className="sm:w-11 sm:shrink-0 sm:pt-0.5 text-[13px] font-medium text-content-muted">
                                     {item.timeLabel ?? '–'}
                                 </span>
-                                {isSideIssue && (
-                                    <span className="self-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#fef1e6] text-[#f97317] whitespace-nowrap">
+                                <div className="flex-1 min-w-0">
+                                    <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#fef1e6] text-[#f97317] whitespace-nowrap">
                                         ⚡ 파생 이슈
                                     </span>
-                                )}
+                                    <p className="mt-1 text-sm text-content-primary leading-relaxed">
+                                        {renderBulletText(item.text)}
+                                    </p>
+                                    {linkedVote && (
+                                        <VoteNudge vote={linkedVote} className="mt-1.5" />
+                                    )}
+                                </div>
                             </div>
-                            <p className="w-full sm:w-auto sm:flex-1 min-w-0 text-sm text-content-primary leading-relaxed">
-                                {renderBulletText(item.text)}
-                            </p>
-                        </div>
-                        {linkedVote && (
-                            <button
-                                onClick={() => {
-                                    const el = document.getElementById('section-vote')
-                                    if (!el) return
-                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                    el.classList.add('ring-2', 'ring-[#7b3aed]', 'ring-offset-4', 'rounded-2xl', 'transition-shadow')
-                                    setTimeout(() => {
-                                        el.classList.remove('ring-2', 'ring-[#7b3aed]', 'ring-offset-4')
-                                    }, 1500)
-                                }}
-                                className="mt-1.5 flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity"
-                            >
-                                <BarChart3 className="w-4 h-4 shrink-0 text-[#16a34a]" />
-                                <span className="truncate text-content-secondary">
-                                    &quot;{linkedVote.title}&quot; 지금{' '}
-                                    <span className="text-[#16a34a] font-bold">{linkedVote.totalCount}명</span>이{' '}
-                                    <span className="text-[#16a34a]">투표하고 있어요</span>
-                                </span>
-                                <ChevronRight className="w-4 h-4 shrink-0 text-[#16a34a]" />
-                            </button>
+                        ) : (
+                            <>
+                                <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-1 gap-y-1">
+                                    <span className="w-11 shrink-0 text-[13px] font-medium text-content-muted">
+                                        {item.timeLabel ?? '–'}
+                                    </span>
+                                    <p className="w-full sm:w-auto sm:flex-1 min-w-0 text-sm text-content-primary leading-relaxed">
+                                        {renderBulletText(item.text)}
+                                    </p>
+                                </div>
+                                {linkedVote && (
+                                    <VoteNudge vote={linkedVote} className="mt-1.5 sm:pl-12" />
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
