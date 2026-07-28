@@ -10,7 +10,17 @@ if echo "$VERCEL_GIT_COMMIT_MESSAGE" | grep -qE '\[vercel skip\]|\[skip ci\]|\[s
     exit 0
 fi
 
-CHANGED=$(git diff --name-only HEAD^ HEAD 2>/dev/null)
+if [ -z "$VERCEL_GIT_PREVIOUS_SHA" ]; then
+    # 직전 배포 커밋을 알 수 없으면(최초 배포 등) 변경 여부를 판단할 수 없으므로 안전하게 빌드 진행
+    exit 1
+fi
+
+CHANGED=$(git diff --name-only "$VERCEL_GIT_PREVIOUS_SHA" HEAD 2>/dev/null)
+if [ $? -ne 0 ]; then
+    # diff 계산 자체가 실패하면(얕은 클론 등으로 커밋을 못 찾는 경우) 변경사항을 못 미더워하지 말고 빌드 진행
+    exit 1
+fi
+
 if [ -z "$CHANGED" ]; then
     exit 0
 fi
