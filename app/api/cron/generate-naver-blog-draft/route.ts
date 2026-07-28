@@ -9,7 +9,7 @@
  * 실제 게시는 관리자가 이슈 목록에서 초안을 복사해 네이버 블로그에 직접 붙여넣는다.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { verifyCronRequest } from '@/lib/cron-auth'
 import { generateNaverBlogPost } from '@/lib/ai/blog-post-generator'
@@ -136,16 +136,26 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    // 응답 반환 후 실행 환경이 바로 정리돼도 두레이 전송이 끝까지 완료되도록 after()로 감쌈
+    // (fire-and-forget으로 두면 응답 직후 함수가 얼어붙어 웹훅 호출이 중간에 끊길 수 있음 — 실제 발생 확인됨)
     if (finalFailures.length > 0) {
-        sendDoorayBlogPostFailureAlert(finalFailures).catch(err =>
-            console.error('[generate-naver-blog-draft] 실패 알림 전송 오류:', err)
-        )
+        after(async () => {
+            try {
+                await sendDoorayBlogPostFailureAlert(finalFailures)
+            } catch (err) {
+                console.error('[generate-naver-blog-draft] 실패 알림 전송 오류:', err)
+            }
+        })
     }
 
     if (readyDrafts.length > 0) {
-        sendDoorayBlogDraftReadyAlert(readyDrafts).catch(err =>
-            console.error('[generate-naver-blog-draft] 초안준비 알림 전송 오류:', err)
-        )
+        after(async () => {
+            try {
+                await sendDoorayBlogDraftReadyAlert(readyDrafts)
+            } catch (err) {
+                console.error('[generate-naver-blog-draft] 초안준비 알림 전송 오류:', err)
+            }
+        })
     }
 
     console.log(`[generate-naver-blog-draft] 처리 완료 — 초안생성 ${ready}, 스킵 ${skipped}, 실패 ${failed}`)

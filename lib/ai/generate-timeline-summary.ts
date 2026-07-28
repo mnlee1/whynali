@@ -110,7 +110,7 @@ export async function generateAndCacheSummaries(
     const voteCandidates = (activeVotes ?? []).filter(v => v.title)
     const voteIdSet = new Set(voteCandidates.map(v => v.id))
     const voteLine = voteCandidates.length > 0
-        ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
+        ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요. 같은 투표를 여러 bullet에 동시에 연결하지 말고, 전체 타임라인에서 가장 관련성 높은 bullet 딱 1개에만 연결하세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
         : ''
 
     const STAGE_ORDER_MAP: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
@@ -199,9 +199,9 @@ ${stagesText}
    - 나쁜 예: "**타 제작사들**이 자발적으로 안전점검을 실시했어요." (주어만 볼드 — 너무 좁음)
    - 나쁜 예: "**타 제작사들이 자발적으로 안전점검을 실시했**어요." ("했"까지 볼드에 포함 — 시제 표현은 볼드 밖으로 빼야 함)
    - 나쁜 예: "**타 제작사들이 자발적으로 안전점검을 실시했어요.**" (종결어미까지 볼드)
-7. 모든 문장은 해요체(예: "~했어요", "~하고 있어요")로 작성하고, "~습니다" 같은 하십시오체는 쓰지 마세요
+7. 모든 문장은 해요체(예: "~했어요", "~하고 있어요", "~됐어요")로 작성하세요. "~했다", "~였다", "~한다"로 끝나는 신문체나 "~습니다", "~입니다", "~합니다"로 끝나는 하십시오체는 절대 쓰지 마세요
 8. 같은 단계의 bullet들끼리 종결 표현이 반복되지 않게 다양하게 쓰세요 (예: "~했어요", "~됐어요", "~하고 있어요", "~라고 밝혔어요" 등을 섞어서 사용)
-   - 나쁜 예: 모든 bullet이 "~했어요"로 끝남 (반복돼서 단조로움)${voteCandidates.length > 0 ? '\n9. 위 "진행 중인 투표" 목록과 같은 사건·조치를 다루는 bullet이 있으면 그 bullet에 "linkedVoteId"를 투표 id 그대로 표시하세요 (관련 없으면 생략)' : ''}
+   - 나쁜 예: 모든 bullet이 "~했어요"로 끝남 (반복돼서 단조로움)${voteCandidates.length > 0 ? '\n9. 위 "진행 중인 투표" 목록과 같은 사건·조치를 다루는 bullet이 있으면 그 bullet에 "linkedVoteId"를 투표 id 그대로 표시하세요 (관련 없으면 생략). 투표 하나당 bullet 1개에만 연결하고, 여러 bullet에 중복 연결하지 마세요' : ''}
 
 JSON 응답:
 {
@@ -222,13 +222,14 @@ JSON 응답:
         }>(content)
         if (!parsed) return
 
+        // string | {date, text} 양쪽 모두 처리 (backward compat + 새 형식)
+        type BulletItem = { date: string; text: string; linkedVoteId?: string }
+
         const rows = stages.map(stage => {
             const items = grouped.get(stage)!
             const dates = items.map(i => i.occurred_at).sort()
             const ai = parsed.summaries?.find((p: { stage: string }) => p.stage === stage)
 
-            // string | {date, text} 양쪽 모두 처리 (backward compat + 새 형식)
-            type BulletItem = { date: string; text: string; linkedVoteId?: string }
             const rawBullets: Array<string | BulletItem> = ai?.bullets ?? []
 
             // date가 비어있을 때 사용할 fallback: 단계 내 첫 번째 유효 날짜
@@ -287,6 +288,18 @@ JSON 응답:
                 generated_at: new Date().toISOString(),
             }
         })
+
+        // 같은 투표가 여러 bullet에 중복 연결되지 않도록, 가장 나중(최신) bullet 하나만 남기고 나머지는 제거
+        // (stages가 발단→진정 순으로 정렬돼 있고 각 stage 내부도 시간순이라, 순서대로 덮어쓰면 최신 것만 남음)
+        const seenVoteBullets = new Map<string, BulletItem>()
+        for (const row of rows) {
+            for (const bullet of row.bullets) {
+                if (!bullet.linkedVoteId) continue
+                const prev = seenVoteBullets.get(bullet.linkedVoteId)
+                if (prev) delete prev.linkedVoteId
+                seenVoteBullets.set(bullet.linkedVoteId, bullet)
+            }
+        }
 
         const { error: summaryError } = await supabaseAdmin
             .from('timeline_summaries')
