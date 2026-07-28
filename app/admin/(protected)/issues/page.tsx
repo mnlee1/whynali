@@ -275,20 +275,6 @@ export default function AdminIssuesPage() {
         }
     }
 
-    // HTML 태그를 그대로 복사하면 네이버 에디터에 <h2> 같은 태그가 글자 그대로 붙여넣어지므로,
-    // 렌더링된 화면(미리보기)과 동일한 일반 텍스트로 변환해서 복사한다.
-    // innerText는 실제 레이아웃을 반영하므로 DOM에 임시로 붙였다가 뗀다.
-    const getPlainTextFromHtml = (html: string) => {
-        const container = document.createElement('div')
-        container.style.position = 'absolute'
-        container.style.left = '-9999px'
-        container.innerHTML = html
-        document.body.appendChild(container)
-        const text = container.innerText || container.textContent || ''
-        document.body.removeChild(container)
-        return text.trim()
-    }
-
     const handlePublishBlogDraft = async (id: string) => {
         setPublishingBlog(true)
         try {
@@ -1168,20 +1154,32 @@ export default function AdminIssuesPage() {
                                     </div>
                                 )}
 
+                                {(() => {
+                                    const thumbnailUrl = blogDraftIssue.thumbnail_urls?.[blogDraftIssue.primary_thumbnail_index ?? 0]
+                                    return thumbnailUrl ? (
+                                        <div className="mb-4">
+                                            <label className="text-xs font-medium text-content-muted uppercase block mb-1">
+                                                대표 이미지 (직접 다운로드해 네이버 에디터에 첨부하세요)
+                                            </label>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={thumbnailUrl} alt="" className="w-full max-w-xs rounded border border-border" />
+                                        </div>
+                                    ) : null
+                                })()}
+
                                 <div className="mb-4">
                                     <div className="flex items-center justify-between mb-1">
-                                        <label className="text-xs font-medium text-content-muted uppercase">미리보기 (복사해서 붙여넣으세요)</label>
+                                        <label className="text-xs font-medium text-content-muted uppercase">본문 (그대로 복사해서 붙여넣으세요)</label>
                                         <button
-                                            onClick={() => handleCopyText(getPlainTextFromHtml(blogDraftIssue.blog_post_content ?? ''))}
+                                            onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
                                             className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
                                         >
                                             복사
                                         </button>
                                     </div>
-                                    <div
-                                        className="border border-border rounded px-3 py-2 text-sm prose prose-sm max-w-none"
-                                        dangerouslySetInnerHTML={{ __html: blogDraftIssue.blog_post_content ?? '' }}
-                                    />
+                                    <pre className="border border-border rounded px-3 py-2 text-sm whitespace-pre-wrap break-words font-sans">
+                                        {blogDraftIssue.blog_post_content ?? ''}
+                                    </pre>
                                 </div>
                             </>
                         )}

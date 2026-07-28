@@ -111,9 +111,16 @@ function VoteNudge({ vote, className = '' }: { vote: { title: string; totalCount
         >
             <BarChart3 className="w-4 h-4 shrink-0 text-[#16a34a]" />
             <span className="truncate text-content-secondary">
-                &quot;{vote.title}&quot; 지금{' '}
-                <span className="text-[#16a34a] font-bold">{vote.totalCount}명</span>이{' '}
-                <span className="text-[#16a34a]">투표하고 있어요</span>
+                &quot;{vote.title}&quot;{' '}
+                {vote.totalCount > 0 ? (
+                    <>
+                        지금{' '}
+                        <span className="text-[#16a34a] font-bold">{vote.totalCount}명</span>이{' '}
+                        <span className="text-[#16a34a]">투표하고 있어요</span>
+                    </>
+                ) : (
+                    <span className="text-[#16a34a] font-bold">가장 먼저 투표해보세요</span>
+                )}
             </span>
             <ChevronRight className="w-4 h-4 shrink-0 text-[#16a34a]" />
         </button>
