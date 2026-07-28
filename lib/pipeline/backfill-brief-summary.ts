@@ -42,7 +42,14 @@ export async function generateSummariesForIssue(
     // timeline_points가 너무 많으면 최근 15개만 사용
     // (Groq openai/gpt-oss-120b는 org당 8000 TPM 한도 + thinking 모델 강제 6000토큰 플로어 때문에,
     //  프롬프트가 조금만 커져도 요청 1건 자체가 한도를 넘어 재시도로도 해결 불가 — 실측으로 15개가 안전선)
-    const limitedPoints = points.length > 15 ? points.slice(-15) : points
+    // 단, 시간순으로 그냥 "최근 N개"만 자르면 가장 오래된 발단(이슈의 시작) 포인트가 통째로
+    // 잘려나가는 문제가 있어 — 발단은 무조건 전부 포함하고, 캡은 나머지 단계에만 적용한다
+    const POINT_CAP = 15
+    const baldanPoints = points.filter(p => p.stage === '발단')
+    const otherPoints = points.filter(p => p.stage !== '발단')
+    const remainingCap = Math.max(0, POINT_CAP - baldanPoints.length)
+    const limitedOtherPoints = otherPoints.length > remainingCap ? otherPoints.slice(-remainingCap) : otherPoints
+    const limitedPoints = [...baldanPoints, ...limitedOtherPoints]
 
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
     for (const p of limitedPoints) {
