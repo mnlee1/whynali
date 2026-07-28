@@ -36,6 +36,7 @@ export interface TimelineSummaryRow {
     stage: string
     stage_title: string
     summary: string
+    bullets: Array<{ date: string; text: string }>
     date_start: string
     date_end: string
     generated_at: string
@@ -335,7 +336,7 @@ export async function classifyAndSummarizeTimeline(
     // 뉴스 1건이어도 brief_summary(3줄 요약)는 항상 생성 시도 — AI가 '발단'으로만 분류하고 브리핑을 만든다
     const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3 }
     const newsListText = news.map((n, i) =>
-        `${i + 1}. [${n.published_at.slice(0, 10)}] ${n.title}`
+        `${i + 1}. [${n.published_at}] ${n.title}`
     ).join('\n')
 
     const prompt = `다음은 한국 이슈 "${issueTitle}"와 관련된 뉴스 목록입니다 (시간순).
@@ -351,8 +352,13 @@ ${newsListText}
 ## 작업 2: 각 뉴스를 "타이틀: 설명" 형식으로 요약
 - 타이틀은 3~5단어, 설명은 2~3문장
 
-## 작업 3: 단계별 요약 생성
-stageTitle은 10자 이내, summary는 기사 수에 맞는 분량
+## 작업 3: 단계별 요약 생성 (bullets)
+- stageTitle은 10자 이내
+- 각 단계의 핵심 사건들을 bullet point로 정리 (1~5개, 해당 단계 뉴스 개수 이하)
+- 각 bullet의 date는 해당 뉴스의 [날짜] 대괄호 안 값을 그대로 복사
+- 각 bullet의 text에서 문장의 핵심 절(주어+행동 어간)을 마크다운 \`**\`로 볼드 표시하고, "했"/"하고 있" 같은 시제 표현과 종결어미는 반드시 볼드 밖에 일반체로 남기세요
+  - 좋은 예: "**타 제작사들이 자발적으로 안전점검을 실시**했어요." (볼드는 "실시"에서 끝남)
+  - 나쁜 예: "**타 제작사들이 자발적으로 안전점검을 실시했**어요." ("했"까지 볼드에 포함됨 — 잘못된 예)
 
 ## 작업 4: 브리핑 요약
 - intro: 이슈 현황 한 문장
@@ -367,7 +373,7 @@ pointSummary, 단계별 summary, brief(intro/bullets/conclusion/threeLine) 전�
 {
   "classifications": [{"index":1,"stage":"발단"},{"index":2,"stage":"전개"}],
   "pointSummaries": [{"index":1,"pointSummary":"타이틀: 설명"}],
-  "summaries": [{"stage":"발단","stageTitle":"제목","summary":"요약문"}],
+  "summaries": [{"stage":"발단","stageTitle":"제목","bullets":[{"date":"뉴스 목록의 [날짜] 값 그대로","text":"**주어**가 ~했어요"}]}],
   "brief": {"intro":"한 문장 현황","bullets":["팩트1","팩트2"],"conclusion":"👉 한 줄 결론","threeLine":["상황 압축 1줄이에요","전개 압축 1줄이에요","현재상태 압축 1줄이에요"]}
 }`
 
@@ -380,7 +386,7 @@ pointSummary, 단계별 summary, brief(intro/bullets/conclusion/threeLine) 전�
         const result = parseJsonObject<{
             classifications: Array<{ index: number; stage: string }>
             pointSummaries: Array<{ index: number; pointSummary: string }>
-            summaries: Array<{ stage: string; stageTitle: string; summary: string }>
+            summaries: Array<{ stage: string; stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>
             brief: { intro: string; bullets: string[]; conclusion: string; threeLine?: string[] }
         }>(content)
 
@@ -416,10 +422,25 @@ pointSummary, 단계별 summary, brief(intro/bullets/conclusion/threeLine) 전�
             .sort((a, b) => (STAGE_ORDER[a.stage] ?? 9) - (STAGE_ORDER[b.stage] ?? 9))
             .map(s => {
                 const dates = grouped.get(s.stage)!.sort()
+
+                const bullets = (s.bullets ?? [])
+                    .map((b): { date: string; text: string } | null => {
+                        if (typeof b === 'string') {
+                            const text = b.trim()
+                            return text ? { date: '', text } : null
+                        }
+                        if (b && typeof b === 'object' && typeof b.text === 'string' && b.text.trim()) {
+                            return { date: (b.date ?? '').trim(), text: b.text.trim() }
+                        }
+                        return null
+                    })
+                    .filter((b): b is { date: string; text: string } => b !== null)
+
                 return {
                     stage: s.stage,
                     stage_title: s.stageTitle ?? s.stage,
-                    summary: s.summary ?? '',
+                    summary: bullets.map(b => b.text).join(' '),
+                    bullets,
                     date_start: dates[0],
                     date_end: dates[dates.length - 1],
                     generated_at: now,

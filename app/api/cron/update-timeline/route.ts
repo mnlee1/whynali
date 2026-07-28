@@ -275,11 +275,16 @@ export async function GET(request: NextRequest) {
         const MAX_GROQ_CALLS_PER_RUN = 5  // 런당 Groq 호출 상한 (TPM 한도 보호)
 
         // summaries 보유 현황 배치 조회 (backfill 판단용)
+        // row만 있고 bullets가 빈 배열인 경우(예: 구버전 생성 로직의 잔재)는 "요약 없음"으로 취급해 재생성 대상에 포함
         const { data: summaryCheck } = await supabaseAdmin
             .from('timeline_summaries')
-            .select('issue_id')
+            .select('issue_id, bullets')
             .in('issue_id', issues.map(i => i.id))
-        const issuesWithSummaries = new Set((summaryCheck ?? []).map(s => s.issue_id))
+        const issuesWithSummaries = new Set(
+            (summaryCheck ?? [])
+                .filter(s => Array.isArray(s.bullets) && s.bullets.length > 0)
+                .map(s => s.issue_id)
+        )
 
         for (const issue of issues) {
             if (Date.now() - startTime > MAX_EXECUTION_TIME) {
