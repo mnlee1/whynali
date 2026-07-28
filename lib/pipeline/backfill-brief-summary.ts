@@ -36,13 +36,13 @@ export async function generateSummariesForIssue(
     const voteCandidates = (activeVotes ?? []).filter(v => v.title)
     const voteIdSet = new Set(voteCandidates.map(v => v.id))
     const voteLine = voteCandidates.length > 0
-        ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
+        ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요. 같은 투표를 여러 bullet에 동시에 연결하지 말고, 전체 타임라인에서 가장 관련성 높은 bullet 딱 1개에만 연결하세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
         : ''
 
-    // timeline_points가 너무 많으면 최근 20개만 사용
+    // timeline_points가 너무 많으면 최근 15개만 사용
     // (Groq openai/gpt-oss-120b는 org당 8000 TPM 한도 + thinking 모델 강제 6000토큰 플로어 때문에,
-    //  프롬프트가 조금만 커져도 요청 1건 자체가 한도를 넘어 재시도로도 해결 불가 — 실측으로 20개가 안전선)
-    const limitedPoints = points.length > 20 ? points.slice(-20) : points
+    //  프롬프트가 조금만 커져도 요청 1건 자체가 한도를 넘어 재시도로도 해결 불가 — 실측으로 15개가 안전선)
+    const limitedPoints = points.length > 15 ? points.slice(-15) : points
 
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
     for (const p of limitedPoints) {
@@ -96,8 +96,8 @@ ${stagesText}
 7. 각 bullet의 text에서 문장의 핵심 절(주어+행동 어간)을 마크다운 \`**\`로 볼드 표시하고, "했"/"하고 있" 같은 시제 표현과 "~어요"/"~습니다" 같은 종결어미는 반드시 볼드 밖에 일반체로 남기세요.
    - 좋은 예: "**타 제작사들이 자발적으로 안전점검을 실시**했어요." (볼드는 "실시"에서 끝나고, "했어요"는 전부 일반체)
    - 나쁜 예: "**타 제작사들이 자발적으로 안전점검을 실시했**어요." ("했"까지 볼드에 포함 — 시제 표현은 볼드 밖으로 빼야 함)
-8. 모든 문장은 해요체(예: "~했어요", "~하고 있어요")로 작성하고, "~습니다" 같은 하십시오체는 쓰지 마세요
-9. 같은 단계의 bullet들끼리 종결 표현이 반복되지 않게 다양하게 쓰세요 (예: "~했어요", "~됐어요", "~하고 있어요", "~라고 밝혔어요" 등을 섞어서 사용). 모든 bullet이 "~했어요"로만 끝나면 안 됩니다.${voteCandidates.length > 0 ? '\n10. 위 "진행 중인 투표" 목록과 같은 사건·조치를 다루는 bullet이 있으면 그 bullet에 "linkedVoteId"를 투표 id 그대로 표시하세요 (관련 없으면 생략)' : ''}
+8. 모든 문장은 해요체(예: "~했어요", "~하고 있어요", "~됐어요")로 작성하세요. "~했다", "~였다", "~한다"로 끝나는 신문체나 "~습니다", "~입니다", "~합니다"로 끝나는 하십시오체는 절대 쓰지 마세요 (threeLine 포함 브리핑 전체에도 동일하게 적용)
+9. 같은 단계의 bullet들끼리 종결 표현이 반복되지 않게 다양하게 쓰세요 (예: "~했어요", "~됐어요", "~하고 있어요", "~라고 밝혔어요" 등을 섞어서 사용). 모든 bullet이 "~했어요"로만 끝나면 안 됩니다.${voteCandidates.length > 0 ? '\n10. 위 "진행 중인 투표" 목록과 같은 사건·조치를 다루는 bullet이 있으면 그 bullet에 "linkedVoteId"를 투표 id 그대로 표시하세요 (관련 없으면 생략). 투표 하나당 bullet 1개에만 연결하고, 여러 bullet에 중복 연결하지 마세요' : ''}
 
 **브리핑:** (intro/bullets/conclusion/threeLine 전부 마크다운 볼드(**) 없이 일반 텍스트로만 작성 — 위 타임라인 bullet의 볼드 규칙은 여기 적용하지 마세요)
 - intro: 이슈를 한 문장으로 (예: "~가 ~해서 논란이야")
@@ -182,6 +182,18 @@ JSON 응답:
             generated_at: now,
         }
     })
+
+    // 같은 투표가 여러 bullet에 중복 연결되지 않도록, 가장 나중(최신) bullet 하나만 남기고 나머지는 제거
+    // (stages가 발단→진정 순으로 정렬돼 있고 각 stage 내부도 시간순이라, 순서대로 덮어쓰면 최신 것만 남음)
+    const seenVoteBullets = new Map<string, BulletItem>()
+    for (const row of rows) {
+        for (const bullet of row.bullets) {
+            if (!bullet.linkedVoteId) continue
+            const prev = seenVoteBullets.get(bullet.linkedVoteId)
+            if (prev) delete prev.linkedVoteId
+            seenVoteBullets.set(bullet.linkedVoteId, bullet)
+        }
+    }
 
     const { error } = await supabaseAdmin
         .from('timeline_summaries')
