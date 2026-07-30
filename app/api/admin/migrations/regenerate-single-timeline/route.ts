@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { callGroq } from '@/lib/ai/groq-client'
+import { callGemini } from '@/lib/ai/gemini-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { filterBannedBullets, containsBannedCommunityMention } from '@/lib/ai/timeline-content-guard'
 
@@ -53,18 +53,39 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: true, title: issue.title, stages: 0, bullets: 0 })
         }
 
+        // timeline_points가 너무 많으면 최근 5개만 사용
+        // (Groq openai/gpt-oss-120b는 org당 8000 TPM 한도 + thinking 모델 강제 6000토큰 플로어 때문에,
+        //  프롬프트가 조금만 커져도 요청 1건 자체가 한도를 넘어 재시도로도 해결 불가.
+        //  이 라우트는 지침 텍스트(발단 특별 지침·출력 금지 규칙·커뮤니티 섹션 등)만으로 이미
+        //  ~1459토큰을 차지해서(실측), 포인트 목록에 쓸 수 있는 여유가 다른 곳보다 훨씬 적다.
+        //  8개(실측 1809토큰, 여유 191토큰)로도 다른 이슈에서 커뮤니티 데이터양 차이로 실패 사례
+        //  발생해 여유를 더 크게 잡음 — 포인트 1개당 약 49토큰씩 늘어남)
+        // 단, 시간순 "최근 N개"만 자르면 가장 오래된 발단(이슈의 시작) 포인트가 통째로 잘려나가므로
+        // 발단은 무조건 전부 포함하고, 캡은 나머지 단계에만 적용한다
+        const POINT_CAP = 5
+        const baldanPoints = points.filter(p => p.stage === '발단')
+        const otherPoints = points.filter(p => p.stage !== '발단')
+        const remainingCap = Math.max(0, POINT_CAP - baldanPoints.length)
+        // remainingCap이 0이면 slice(-0)이 배열 전체를 반환해버리는 JS 함정이 있어 별도 분기 처리
+        const limitedOtherPoints = remainingCap === 0
+            ? []
+            : (otherPoints.length > remainingCap ? otherPoints.slice(otherPoints.length - remainingCap) : otherPoints)
+        const limitedPoints = [...baldanPoints, ...limitedOtherPoints].sort(
+            (a, b) => (a.occurred_at ?? '').localeCompare(b.occurred_at ?? '')
+        )
+
         // 인덱스 기반 포인트 목록
-        const pointsList = points
-            .map((p, i) => `[${i}] ${p.occurred_at?.slice(0, 10)} | ${p.title ?? '(제목 없음)'}`)
+        const pointsList = limitedPoints
+            .map((p, i) => `[${i}] ${p.occurred_at} | ${p.title ?? '(제목 없음)'}`)
             .join('\n')
 
-        // 커뮤니티 게시글 — 발단 원인 추론용
+        // 커뮤니티 게시글 — 발단 원인 추론용 (토큰 여유 확보를 위해 8개로 제한)
         const { data: communityPosts } = await supabaseAdmin
             .from('community_data')
             .select('title, source_site')
             .eq('issue_id', issueId)
             .order('written_at', { ascending: true })
-            .limit(15)
+            .limit(8)
 
         const backgroundLine = issue.topic_description
             ? `이슈 배경: "${issue.topic_description}"\n`
@@ -96,15 +117,18 @@ ${pointsList}
 - bullets 개수: 해당 단계 포인트 수 이하, 최대 5개
 - stageTitle: 단계명 없이 이 단계의 핵심을 담은 짧은 제목 (예: "결자해지 압박" O, "[발단] 결자해지 압박" X)
 - 각 bullet은 완결된 한 문장으로, 주어·서술어를 갖춰 구체적으로 작성하세요
-- 각 bullet의 date는 해당 포인트의 날짜(YYYY-MM-DD 앞 부분 기준 "N월 N일" 형식)를 사용하세요 (날짜 정보가 없으면 빈 문자열 "")
+- 각 bullet의 text에서 문장의 핵심 절(주어+행동 어간)을 마크다운 \`**\`로 볼드 표시하고, "했"/"하고 있" 같은 시제 표현과 종결어미는 반드시 볼드 밖에 일반체로 남기세요
+  - 좋은 예: "**KOSPI가 8% 가까이 하락하며 서킷브레이커가 작동**했어요." (볼드는 "작동"에서 끝나고, "했어요"는 전부 일반체)
+  - 나쁜 예: "**KOSPI가 8% 가까이 하락하며 서킷브레이커가 작동했**어요." ("했"까지 볼드에 포함 — 시제 표현은 볼드 밖으로 빼야 함)
+- 각 bullet의 date는 해당 포인트 목록의 날짜값을 그대로 복사하세요 (시간 정보까지 그대로, 날짜 정보가 없으면 빈 문자열 "")
 
 ## [발단] 작성 특별 지침
 - 발단 포인트와 커뮤니티 게시글을 함께 참고해 논란의 실제 원인을 추론하세요
 - 사과문·해명·활동중단 같은 결과/후속 내용은 발단 bullets에서 제외하세요
 - 누가, 어디서(플랫폼/장소), 어떤 발언이나 행동이 문제가 됐는지 구체적으로 서술하세요
-- 커뮤니티 게시글은 미확인 정보일 수 있으므로 "~했다는 의혹이 제기됐다", "~한 것으로 알려졌다" 같이 헤징 표현을 사용하세요
-- 좋은 예: "강원 현장에서 김진태가 장동혁에게 결자해지를 요구하며 쓴소리를 했다"
-- 나쁜 예: "논란이 시작됐다" (너무 모호)
+- 커뮤니티 게시글은 미확인 정보일 수 있으므로 "~했다는 의혹이 제기됐어요", "~한 것으로 알려졌어요" 같이 헤징 표현을 사용하세요
+- 좋은 예: "강원 현장에서 김진태가 장동혁에게 결자해지를 요구하며 쓴소리를 했어요"
+- 나쁜 예: "논란이 시작됐어요" (너무 모호)
 
 ## 출력 금지 규칙 (반드시 준수)
 - 더쿠·네이트판·뽐뿌·클리앙·보배드림 등 출처 사이트명 절대 언급 금지
@@ -112,8 +136,11 @@ ${pointsList}
   커뮤니티 반응·확산 정황 자체를 bullet으로 쓰지 말 것 — 실제 사건 내용만 서술
 - 참고 자료의 제목·출처 정보를 그대로 복사하지 말 것
 
+## 문체
+모든 bullet과 브리핑(intro/bullets/conclusion)은 예외 없이 "~했어요", "~하고 있어요"처럼 친근한 해요체로 작성하세요. "~했다", "~였다"로 끝나는 신문체나 "~습니다"로 끝나는 하십시오체, "~야", "~해" 같은 반말은 쓰지 마세요.
+
 ## 브리핑
-- intro: "~가 ~해서 논란이야" 형식으로 논란의 핵심을 한 문장에 담아 서술
+- intro: "~가 ~해서 논란이에요" 형식으로 논란의 핵심을 한 문장에 담아 서술
 - bullets: 전체 타임라인을 이해하는 데 필수적인 팩트 3~5개 (포인트 제목 그대로 복사 금지)
 - conclusion: 현재 상황이나 최종 결과를 담은 한 줄 결론
 
@@ -121,15 +148,15 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
 {
   "reclassify": {"0":"발단","1":"전개"},
   "summaries": [
-    {"stage":"발단","stageTitle":"핵심 사건 제목","bullets":[{"date":"4월 25일","text":"누가 어디서 무엇을 해서 논란이 됐는지 구체적 서술"}]},
-    {"stage":"전개","stageTitle":"핵심 전개 제목","bullets":[{"date":"4월 26일","text":"후속 사건 상세 서술1"},{"date":"4월 27일","text":"후속 사건 상세 서술2"}]}
+    {"stage":"발단","stageTitle":"핵심 사건 제목","bullets":[{"date":"4월 25일","text":"**누가 어디서 무엇을 해서** 논란이 됐는지 구체적 서술이에요"}]},
+    {"stage":"전개","stageTitle":"핵심 전개 제목","bullets":[{"date":"4월 26일","text":"**후속 사건 상세**를 서술했어요"},{"date":"4월 27일","text":"**후속 사건 상세**를 서술했어요"}]}
   ],
-  "brief": {"intro":"~가 ~해서 논란이야","bullets":["팩트1","팩트2","팩트3"],"conclusion":"결론"}
+  "brief": {"intro":"~가 ~해서 논란이에요","bullets":["팩트1","팩트2","팩트3"],"conclusion":"결론이에요"}
 }`
 
-        const content = await callGroq(
+        const content = await callGemini(
             [{ role: 'user', content: prompt }],
-            { model: 'openai/gpt-oss-120b', temperature: 0.15, max_tokens: 4000 },
+            { model: 'gemini-3.6-flash', temperature: 0.15, max_tokens: 4000, jsonMode: true },
         )
 
         const parsed = parseJsonObject<{
@@ -151,7 +178,7 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
             const stageGroups: Record<string, string[]> = {}
             for (const [idxStr, stage] of Object.entries(parsed.reclassify)) {
                 const idx = parseInt(idxStr, 10)
-                const point = points[idx]
+                const point = limitedPoints[idx]
                 if (!point || !VALID_STAGES.has(stage)) continue
                 if (!stageGroups[stage]) stageGroups[stage] = []
                 stageGroups[stage].push(point.id)
@@ -166,15 +193,15 @@ JSON 응답 (reclassify 키에 모든 인덱스→stage 매핑 필수):
             // 재분류 후 points 배열 갱신 (summaries 생성에 반영)
             for (const [idxStr, stage] of Object.entries(parsed.reclassify)) {
                 const idx = parseInt(idxStr, 10)
-                if (points[idx] && VALID_STAGES.has(stage)) {
-                    points[idx] = { ...points[idx], stage }
+                if (limitedPoints[idx] && VALID_STAGES.has(stage)) {
+                    limitedPoints[idx] = { ...limitedPoints[idx], stage }
                 }
             }
         }
 
         // ── 2. 재분류된 stage 기준으로 그룹핑 ───────────────────────
         const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
-        for (const p of points) {
+        for (const p of limitedPoints) {
             if (!grouped.has(p.stage)) grouped.set(p.stage, [])
             grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
         }

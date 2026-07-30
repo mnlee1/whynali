@@ -7,7 +7,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { callGroq } from '@/lib/ai/groq-client'
+import { callGemini } from '@/lib/ai/gemini-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { formatKstDateHeader, formatKstTime } from '@/lib/utils/format-date'
 
@@ -84,9 +84,9 @@ JSON 응답:
 {"stageTitle":"마무리 제목","bullets":[{"date":"4월 26일 09:00","text":"**주어1**이 ~했어요"},{"date":"4월 27일 15:30","text":"**주어2**가 ~했어요"}]}`
 
     try {
-        const content = await callGroq(
+        const content = await callGemini(
             [{ role: 'user', content: prompt }],
-            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 400 },
+            { model: 'gemini-3.6-flash', temperature: 0.1, max_tokens: 400, jsonMode: true },
         )
 
         const parsed = parseJsonObject<{ stageTitle: string; bullets: Array<{ date: string; text: string } | string> }>(content)
