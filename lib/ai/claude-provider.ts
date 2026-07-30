@@ -265,9 +265,11 @@ export class ClaudeProvider implements AIProvider {
             const keyStatus = await this.getAvailableKey()
 
             if (!keyStatus) {
-                throw new Error(
+                const err: any = new Error(
                     '모든 Claude API 키가 Rate Limit 상태입니다. 잠시 후 다시 시도해주세요.'
                 )
+                err.code = 'all_keys_rate_limited'
+                throw err
             }
 
             if (attempt > 0) {
