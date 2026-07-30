@@ -36,7 +36,7 @@ export async function callGemini(
     messages: GeminiMessage[],
     options?: GeminiCallOptions
 ): Promise<string> {
-    const model = options?.model ?? 'gemini-3.6-flash'
+    const model = options?.model ?? 'gemini-3.5-flash-lite'
     const temperature = options?.temperature ?? 0.1
     const maxTokens = options?.max_tokens ?? 2000
 
