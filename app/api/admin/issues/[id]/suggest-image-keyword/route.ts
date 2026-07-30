@@ -36,8 +36,15 @@ export async function GET(
 
     const result = await extractKeywordsAndTone(issue.title, issue.category, isRetry ? 0.8 : 0, exclude)
 
+    if (!result) {
+        return NextResponse.json(
+            { error: 'AI 키워드 추천에 실패했습니다. 잠시 후 다시 시도해주세요.' },
+            { status: 502 }
+        )
+    }
+
     return NextResponse.json({
-        keyword: result?.keywords ?? '',
-        isDark: result?.isDark ?? false,
+        keyword: result.keywords,
+        isDark: result.isDark,
     })
 }

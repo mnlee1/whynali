@@ -48,6 +48,7 @@ export default function IssuePreviewDrawer({
     const [keywordInput, setKeywordInput] = useState('')
     const [suggestedKeyword, setSuggestedKeyword] = useState('')
     const [isSuggesting, setIsSuggesting] = useState(false)
+    const [suggestError, setSuggestError] = useState('')
     const [timelineTab, setTimelineTab] = useState<'preview' | 'manage'>('preview')
     const [summaryKey, setSummaryKey] = useState(0)
     const [sourcesKey, setSourcesKey] = useState(0)
@@ -181,6 +182,7 @@ export default function IssuePreviewDrawer({
     const fetchSuggestedKeyword = async (retry = false) => {
         if (!issue) return
         setIsSuggesting(true)
+        setSuggestError('')
         try {
             const params = new URLSearchParams()
             if (retry) {
@@ -193,8 +195,13 @@ export default function IssuePreviewDrawer({
             const data = await res.json()
             if (res.ok && data.keyword) {
                 setSuggestedKeyword(data.keyword)
+            } else {
+                console.error('키워드 추천 실패:', data.error ?? res.status)
+                setSuggestError(data.error || '추천에 실패했습니다')
             }
-        } catch {
+        } catch (error) {
+            console.error('키워드 추천 요청 에러:', error)
+            setSuggestError('추천에 실패했습니다')
         } finally {
             setIsSuggesting(false)
         }
@@ -409,6 +416,8 @@ export default function IssuePreviewDrawer({
                                                 {word}
                                             </button>
                                         ))
+                                    ) : suggestError ? (
+                                        <span className="text-xs text-red-500">{suggestError} — 재추천을 눌러주세요</span>
                                     ) : null}
                                     <button
                                         onClick={() => fetchSuggestedKeyword(true)}
