@@ -22,6 +22,7 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { callGroq } from '@/lib/ai/groq-client'
 import { parseJsonArray } from '@/lib/ai/parse-json-response'
+import { decodeHtml } from '@/lib/utils/decode-html'
 
 const NAVER_NEWS_API = 'https://openapi.naver.com/v1/search/news.json'
 
@@ -121,7 +122,7 @@ async function fetchNaverNews(keyword: string): Promise<Array<{
         if (!res.ok) return []
         const data = await res.json()
         return (data.items ?? []).map((item: { title: string; link: string; originallink?: string; pubDate: string }) => ({
-            title: item.title.replace(/<[^>]*>/g, '').trim(),
+            title: decodeHtml(item.title.replace(/<[^>]*>/g, '').trim()),
             link: item.link,
             originallink: item.originallink ?? item.link,
             pubDate: item.pubDate,

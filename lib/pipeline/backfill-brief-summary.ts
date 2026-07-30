@@ -7,7 +7,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { callGroq } from '@/lib/ai/groq-client'
+import { callGemini } from '@/lib/ai/gemini-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { filterBannedBullets, containsBannedCommunityMention } from '@/lib/ai/timeline-content-guard'
 import { formatKstDateHeader, formatKstTime } from '@/lib/utils/format-date'
@@ -48,7 +48,10 @@ export async function generateSummariesForIssue(
     const baldanPoints = points.filter(p => p.stage === '발단')
     const otherPoints = points.filter(p => p.stage !== '발단')
     const remainingCap = Math.max(0, POINT_CAP - baldanPoints.length)
-    const limitedOtherPoints = otherPoints.length > remainingCap ? otherPoints.slice(-remainingCap) : otherPoints
+    // remainingCap이 0이면 slice(-0)이 배열 전체를 반환해버리는 JS 함정이 있어 별도 분기 처리
+    const limitedOtherPoints = remainingCap === 0
+        ? []
+        : (otherPoints.length > remainingCap ? otherPoints.slice(otherPoints.length - remainingCap) : otherPoints)
     const limitedPoints = [...baldanPoints, ...limitedOtherPoints]
 
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
@@ -121,9 +124,9 @@ JSON 응답:
   "brief": {"intro":"한 문장","bullets":["팩트1","팩트2"],"conclusion":"결론","threeLine":["상황 압축 1줄이에요","전개 압축 1줄이에요","현재상태 압축 1줄이에요"]}
 }`
 
-    const content = await callGroq(
+    const content = await callGemini(
         [{ role: 'user', content: prompt }],
-        { model: 'openai/gpt-oss-120b', temperature: 0.1, max_tokens: 2000 },
+        { model: 'gemini-3.6-flash', temperature: 0.1, max_tokens: 2000, jsonMode: true },
     )
 
     const parsed = parseJsonObject<{

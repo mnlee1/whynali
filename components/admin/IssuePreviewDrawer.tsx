@@ -508,6 +508,7 @@ export default function IssuePreviewDrawer({
                                     key={summaryKey}
                                     issueId={issue.id}
                                     issueStatus={issue.status}
+                                    userId="admin-preview"
                                 />
                             ) : (
                                 <TimelineEditor
