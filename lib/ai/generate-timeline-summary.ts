@@ -5,7 +5,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { callGroq } from '@/lib/ai/groq-client'
+import { callGemini } from '@/lib/ai/gemini-client'
 import { parseJsonObject } from '@/lib/ai/parse-json-response'
 import { filterBannedBullets } from '@/lib/ai/timeline-content-guard'
 import { formatKstDateHeader, formatKstTime } from '@/lib/utils/format-date'
@@ -212,9 +212,9 @@ JSON 응답:
 }`
 
     try {
-        const content = await callGroq(
+        const content = await callGemini(
             [{ role: 'user', content: prompt }],
-            { model: 'qwen/qwen3.6-27b', temperature: 0.1, max_tokens: 2000 },
+            { model: 'gemini-3.6-flash', temperature: 0.1, max_tokens: 2000, jsonMode: true },
         )
 
         const parsed = parseJsonObject<{
