@@ -6,8 +6,9 @@
  * Google Gemini API를 통한 AI 호출을 담당합니다.
  * Groq/Claude와 동일한 AIProvider 인터페이스를 구현합니다.
  *
- * 무료 티어 사용 전제 (whynali timeline AI 프로젝트, 결제 계정 미연결):
- * - Gemini 2.0 Flash 기준 분당 100만 토큰(TPM) — Groq 키 1개(8000 TPM)의 125배 수준
+ * 무료 티어 사용 전제 (whynali timeline AI 프로젝트, 결제 계정 미연결, GEMINI_API_KEY_MNLEE 사용):
+ * - gemini-2.0-flash는 이 프로젝트에서 무료 할당량이 0이라 사용 불가 (실측 확인) — 대신
+ *   gemini-3.6-flash(별칭 gemini-flash-latest가 가리키는 실제 버전)로 고정 사용
  * - 절대 이 프로젝트에 결제 계정을 연결하지 말 것 — 연결 순간 무료 티어가 사라지고
  *   모든 호출이 첫 토큰부터 과금 대상으로 전환됨 (Google 공식 문서 확인 사항)
  *
@@ -49,10 +50,10 @@ export class GeminiProvider implements AIProvider {
     }
 
     private loadKeys() {
-        const apiKey = process.env.GEMINI_API_KEY
+        const apiKey = process.env.GEMINI_API_KEY_MNLEE
 
         if (!apiKey) {
-            throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다')
+            throw new Error('GEMINI_API_KEY_MNLEE 환경변수가 설정되지 않았습니다')
         }
 
         this.keys = apiKey
@@ -61,7 +62,7 @@ export class GeminiProvider implements AIProvider {
             .filter((k) => k.length > 0)
 
         if (this.keys.length === 0) {
-            throw new Error('유효한 GEMINI_API_KEY가 없습니다')
+            throw new Error('유효한 GEMINI_API_KEY_MNLEE가 없습니다')
         }
 
         console.log(`[GeminiProvider] ${this.keys.length}개 API 키 로드 완료`)
