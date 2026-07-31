@@ -39,25 +39,22 @@ export async function generateSummariesForIssue(
         ? `\n## 진행 중인 투표 (관련 있으면 bullet에 연결)\n아래는 이 이슈에서 진행 중인 투표입니다. bullet 중 이 투표와 같은 사건·조치를 다루는 게 있으면, 그 bullet에 "linkedVoteId"로 투표 id를 표시하세요. 관련 bullet이 없으면 생략하세요. 목록에 없는 id는 절대 만들어내지 마세요. 같은 투표를 여러 bullet에 동시에 연결하지 말고, 전체 타임라인에서 가장 관련성 높은 bullet 딱 1개에만 연결하세요.\n${voteCandidates.map(v => `- id: "${v.id}", 제목: "${v.title}", 선택지: ${(v.vote_choices ?? []).map((c: { label: string }) => c.label).join(', ')}`).join('\n')}\n`
         : ''
 
-    // timeline_points가 너무 많으면 최근 15개만 사용
-    // (Groq openai/gpt-oss-120b는 org당 8000 TPM 한도 + thinking 모델 강제 6000토큰 플로어 때문에,
-    //  프롬프트가 조금만 커져도 요청 1건 자체가 한도를 넘어 재시도로도 해결 불가 — 실측으로 15개가 안전선)
-    // 단, 시간순으로 그냥 "최근 N개"만 자르면 가장 오래된 발단(이슈의 시작) 포인트가 통째로
-    // 잘려나가는 문제가 있어 — 발단은 무조건 전부 포함하고, 캡은 나머지 단계에만 적용한다
-    const POINT_CAP = 15
-    const baldanPoints = points.filter(p => p.stage === '발단')
-    const otherPoints = points.filter(p => p.stage !== '발단')
-    const remainingCap = Math.max(0, POINT_CAP - baldanPoints.length)
-    // remainingCap이 0이면 slice(-0)이 배열 전체를 반환해버리는 JS 함정이 있어 별도 분기 처리
-    const limitedOtherPoints = remainingCap === 0
-        ? []
-        : (otherPoints.length > remainingCap ? otherPoints.slice(otherPoints.length - remainingCap) : otherPoints)
-    const limitedPoints = [...baldanPoints, ...limitedOtherPoints]
-
     const grouped = new Map<string, Array<{ title: string; occurred_at: string }>>()
-    for (const p of limitedPoints) {
+    for (const p of points) {
         if (!grouped.has(p.stage)) grouped.set(p.stage, [])
         grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
+    }
+
+    // 병합 등으로 한 단계에 포인트가 과도하게 쌓이면 프롬프트가 지나치게 커져 AI가
+    // 과도하게 압축하거나 단계 자체를 스킵하는 문제가 있어(실측: "레버리지 ETF" 이슈
+    // 전개 94건→bullet 2개, 진정 4건→통째로 스킵) 단계별로 최근 N개까지만 사용한다.
+    // 발단은 이슈의 시작이라 캡 없이 항상 전부 포함한다.
+    const POINT_CAP_PER_STAGE = 15
+    for (const [stage, items] of grouped) {
+        if (stage === '발단') continue
+        if (items.length > POINT_CAP_PER_STAGE) {
+            grouped.set(stage, items.slice(items.length - POINT_CAP_PER_STAGE))
+        }
     }
 
     const stages = [...grouped.keys()].sort(

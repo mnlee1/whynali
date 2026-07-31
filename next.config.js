@@ -29,6 +29,12 @@ const nextConfig = {
             './public/fonts/Pretendard-Bold.ttf',
             './public/whynali-logo.png',
         ],
+        '/api/admin/card-news/preview': [
+            './lib/card-news/templates/*.html',
+        ],
+        '/api/admin/card-news/render': [
+            './lib/card-news/templates/*.html',
+        ],
     },
     webpack: (config, { isServer }) => {
         if (!isServer) {
