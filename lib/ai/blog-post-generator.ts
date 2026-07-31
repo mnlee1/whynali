@@ -71,9 +71,9 @@ const HEADING_VARIANTS: HeadingVariant[] = [
 ]
 
 // 네이버 에디터 태그란은 붙여넣기로 한 번에 등록이 안 되고 하나씩 입력해야 해서,
-// 관리자가 매번 손으로 채우는 태그 수를 줄이기 위해 항상 붙는 고정 태그 세트를 넉넉히 둔다.
-// 이슈별 AI 생성 태그(개별 사건명 등)는 이 위에 추가로 덧붙는다.
-const FIXED_TAGS = ['왜난리', '이슈', '논란', '한국이슈', '연예', '스포츠', '정치', '사회', '경제', '기술', 'AI', '세계']
+// 관리자가 매번 손으로 채우는 태그 수를 최소화한다 — 브랜드 고정 태그 3개 + 카테고리 1개 +
+// 이슈별 AI 생성 태그만 붙인다.
+const FIXED_TAGS = ['왜난리', '이슈', '논란']
 
 // 순수 텍스트 조립용 구분선·번호 이모지
 const DIVIDER = '─'.repeat(20)
@@ -128,7 +128,7 @@ export async function generateNaverBlogPost(
     }
 
     // 네이버 블로그발 유입을 검색 유입과 구분해서 집계하기 위한 UTM 파라미터 (lib/kpi/calculator.ts 참고)
-    const issueUrl = `${SITE_URL}/issue/${issueId}?utm_source=naver_blog&utm_medium=blog`
+    const issueUrl = `${SITE_URL}/issue/${issueId}?utm_source=naver_blog`
     const categoryLabel = CATEGORY_LABEL[basic.category] ?? basic.category
     const variant = pickHeadingVariant()
 
@@ -293,7 +293,7 @@ function parsePost(
         return {
             title: `[왜난리 이슈] ${title}`,
             contents: buildContents(emoji, title, variant, introLines, bullets, closingLines, basic.title, issueUrl),
-            tags: withFixedTags(tags.length ? tags : [categoryLabel]),
+            tags: withFixedTags([categoryLabel, ...tags]),
         }
     } catch {
         // AI 실패 시 brief_summary를 그대로 활용한 폴백 포스트 (정보가 있으니 성의 있게 구성)
