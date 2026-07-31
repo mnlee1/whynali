@@ -276,26 +276,72 @@ export default function AdminIssuesPage() {
         }
     }
 
-    // 본문 마지막 줄("[왜난리 이슈] {제목} 바로가기 → {URL}") 전체를 실제 링크로 바꾼 HTML을 만든다.
-    // 리치 텍스트 붙여넣기를 지원하는 에디터(네이버 등)에 붙여넣으면 URL은 안 보이고
-    // 줄 전체가 클릭 가능한 링크로 표시된다.
-    const buildContentHtmlForClipboard = (content: string) => {
-        const escaped = content
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-        const withLink = escaped.replace(
-            /(\[왜난리 이슈\].*?바로가기 → )(https?:\/\/\S+)/,
-            (_match, prefix: string, url: string) => `<a href="${url}">${prefix.trim()}</a>`
-        )
-        return withLink.replace(/\n/g, '<br>')
+    // 본문의 소제목(맨 위 이모지+제목, 구분선마다 나오는 섹션 제목)과 마지막 링크 줄을
+    // 굵게 + 링크로 바꾼 HTML을 만든다. 구분선(─로만 이루어진 줄)을 기준으로 섹션을 나누고,
+    // 첫 섹션은 앞의 두 줄(제목+첫 소제목)을, 나머지 섹션은 첫 줄(소제목)을 굵게 표시한다.
+    // 마지막 섹션의 마지막 줄("[왜난리 이슈] ... 바로가기 → URL")은 굵게 + 실제 링크로 바꾼다.
+    const buildContentHtmlForClipboard = (content: string, thumbnailUrl?: string | null) => {
+        const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const rawLines = content.split('\n')
+        const isDivider = (line: string) => /^─+$/.test(line.trim())
+
+        const dividerIndices = rawLines.reduce<number[]>((acc, line, i) => {
+            if (isDivider(line)) acc.push(i)
+            return acc
+        }, [])
+
+        const sectionRanges: [number, number][] = []
+        let start = 0
+        for (const di of dividerIndices) {
+            sectionRanges.push([start, di])
+            start = di + 1
+        }
+        sectionRanges.push([start, rawLines.length])
+
+        const boldLineIndices = new Set<number>()
+        sectionRanges.forEach(([from, to], sectionIdx) => {
+            const maxBold = sectionIdx === 0 ? 2 : 1
+            let bolded = 0
+            for (let i = from; i < to && bolded < maxBold; i++) {
+                if (rawLines[i].trim() === '') continue
+                boldLineIndices.add(i)
+                bolded++
+            }
+        })
+
+        const [lastFrom, lastTo] = sectionRanges[sectionRanges.length - 1]
+        let linkLineIndex = -1
+        for (let i = lastTo - 1; i >= lastFrom; i--) {
+            if (rawLines[i].trim() !== '') {
+                linkLineIndex = i
+                break
+            }
+        }
+
+        const htmlLines = rawLines.map((line, i) => {
+            if (i === linkLineIndex) {
+                const withLink = escapeHtml(line).replace(
+                    /(\[왜난리 이슈\].*?바로가기 → )(https?:\/\/\S+)/,
+                    (_match, prefix: string, url: string) => `<a href="${url}" style="color:#2563eb;text-decoration:underline">${prefix.trim()}</a>`
+                )
+                return `<strong>${withLink}</strong>`
+            }
+            if (boldLineIndices.has(i)) {
+                return `<strong>${escapeHtml(line)}</strong>`
+            }
+            return escapeHtml(line)
+        })
+
+        const imageHtml = thumbnailUrl ? `<img src="${thumbnailUrl}" alt="" style="max-width:100%"><br><br>` : ''
+        return imageHtml + htmlLines.join('<br>')
     }
 
-    // 본문 복사 전용 — 일반 텍스트와 링크 포함 HTML을 함께 클립보드에 담아서,
-    // 리치 텍스트 붙여넣기를 지원하는 곳엔 링크로, 아니면 원문 텍스트 그대로 붙여넣어지게 한다.
-    const handleCopyContent = async (content: string) => {
+    // 본문 복사 전용 — 일반 텍스트와 (대표 이미지 + 링크 포함) HTML을 함께 클립보드에 담아서,
+    // 리치 텍스트 붙여넣기를 지원하는 곳엔 이미지·링크 포함 서식으로, 아니면 원문 텍스트 그대로
+    // 붙여넣어지게 한다.
+    const handleCopyContent = async (content: string, thumbnailUrl?: string | null) => {
         try {
-            const html = buildContentHtmlForClipboard(content)
+            const html = buildContentHtmlForClipboard(content, thumbnailUrl)
             await navigator.clipboard.write([
                 new ClipboardItem({
                     'text/plain': new Blob([content], { type: 'text/plain' }),
@@ -844,14 +890,14 @@ export default function AdminIssuesPage() {
                                     )}
                                 </button>
                             </th>
-                            <th className="px-2 py-3 text-left text-sm font-medium text-content-muted uppercase w-28">
+                            <th className="sticky right-0 z-20 px-2 py-3 text-left text-sm font-medium text-content-muted uppercase w-28 bg-surface-subtle shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.15)]">
                                 액션
                             </th>
                         </tr>
                     </thead>
                     <tbody className="bg-surface divide-y divide-border">
                         {issues.map((issue) => (
-                            <tr key={issue.id} className="hover:bg-surface-subtle">
+                            <tr key={issue.id} className="group hover:bg-surface-subtle">
                                 <td className="px-4 py-3 w-24 whitespace-nowrap">
                                     <div className="flex flex-col gap-1">
                                         {issue.source_track === 'manual' && (
@@ -1031,7 +1077,7 @@ export default function AdminIssuesPage() {
                                 <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap w-32">
                                     {formatDate(issue.created_at)}
                                 </td>
-                                <td className="px-2 py-3 text-sm w-28">
+                                <td className="sticky right-0 z-10 px-2 py-3 text-sm w-28 bg-surface group-hover:bg-surface-subtle shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.15)]">
                                     <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={() => setPreviewIssue(issue)}
@@ -1141,15 +1187,15 @@ export default function AdminIssuesPage() {
             {/* 네이버 블로그 초안 — 글쓰기 API가 없어 관리자가 복사해서 직접 게시 */}
             {blogDraftIssue && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6">
-                        <div className="flex items-center justify-between gap-3 mb-1">
+                    <div className="bg-surface rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6">
+                        <div className="flex items-center justify-between gap-3 mb-4">
                             <h3 className="text-lg font-semibold truncate">네이버 블로그 초안 — {blogDraftIssue.title}</h3>
                             <div className="flex items-center gap-2 shrink-0">
                                 {blogDraftIssue.blog_post_status === 'ready_to_publish' && (
                                     <button
                                         disabled={publishingBlog}
                                         onClick={() => handleRetryBlogDraft(blogDraftIssue.id)}
-                                        className="px-3 py-1.5 text-xs rounded border border-border hover:bg-surface-subtle disabled:opacity-50"
+                                        className="px-3 py-1.5 text-xs rounded-full border border-border hover:bg-surface-subtle disabled:opacity-50"
                                     >
                                         {publishingBlog ? '처리 중...' : '재생성'}
                                     </button>
@@ -1157,9 +1203,6 @@ export default function AdminIssuesPage() {
                                 <button onClick={() => setBlogDraftIssue(null)} className="text-content-muted hover:text-content-primary">✕</button>
                             </div>
                         </div>
-                        <p className="text-xs text-content-muted mb-4">
-                            자동 게시가 불가능해 수동 게시가 필요해요 — 아래 순서대로 복사해 blog.naver.com에 붙여넣으세요.
-                        </p>
 
                         {(blogDraftIssue.blog_post_status === 'failed' || blogDraftIssue.blog_post_status === 'skipped') ? (
                             <div className="mb-4">
@@ -1179,22 +1222,22 @@ export default function AdminIssuesPage() {
                                 <button
                                     disabled={publishingBlog}
                                     onClick={() => handleRetryBlogDraft(blogDraftIssue.id)}
-                                    className="px-4 py-2 text-sm rounded bg-primary text-white disabled:opacity-50"
+                                    className="px-4 py-2 text-sm rounded-full bg-primary text-white disabled:opacity-50"
                                 >
                                     {publishingBlog ? '처리 중...' : '재시도'}
                                 </button>
                             </div>
                         ) : (
                             <>
-                                <div className="mb-4">
-                                    <div className="flex items-center justify-between mb-1">
+                                <div className="rounded-xl border border-border shadow-card bg-surface-subtle p-4 mb-3">
+                                    <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-1.5">
                                             <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">1</span>
-                                            <label className="text-xs font-medium text-content-muted uppercase">제목</label>
+                                            <label className="text-sm font-bold text-content-primary uppercase">제목</label>
                                         </div>
                                         <button
                                             onClick={() => handleCopyText(blogDraftIssue.blog_post_title ?? '')}
-                                            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
+                                            className="text-xs px-2 py-1 rounded-full bg-surface border border-border hover:bg-surface-muted"
                                         >
                                             복사
                                         </button>
@@ -1202,24 +1245,22 @@ export default function AdminIssuesPage() {
                                     <input
                                         readOnly
                                         value={blogDraftIssue.blog_post_title ?? ''}
-                                        className="w-full border border-border rounded px-3 py-2 text-sm bg-surface-subtle"
+                                        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface-subtle"
                                     />
                                 </div>
 
                                 {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
-                                    <div className="mb-4">
-                                        <div className="flex items-center gap-1.5 mb-1">
+                                    <div className="rounded-xl border border-border shadow-card bg-surface-subtle p-4 mb-3">
+                                        <div className="flex items-center gap-1.5 mb-2">
                                             <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">2</span>
-                                            <label className="text-xs font-medium text-content-muted uppercase">
-                                                태그 (네이버는 여러 개 한번에 붙여넣기가 안 돼요 — 아래 태그를 하나씩 눌러 복사한 뒤, 네이버 태그란에 붙여넣고 엔터를 누르고 다음 태그를 눌러주세요)
-                                            </label>
+                                            <label className="text-sm font-bold text-content-primary uppercase">태그</label>
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {blogDraftIssue.blog_post_tags.map((tag, i) => (
                                                 <button
                                                     key={i}
                                                     onClick={() => handleCopyText(tag)}
-                                                    className="px-2 py-1 text-xs rounded bg-surface-subtle border border-border hover:bg-primary/10 hover:border-primary"
+                                                    className="px-2 py-1 text-xs rounded-full bg-surface border border-border hover:bg-primary/10 hover:border-primary"
                                                     title="클릭해서 이 태그만 복사"
                                                 >
                                                     #{tag}
@@ -1231,67 +1272,64 @@ export default function AdminIssuesPage() {
 
                                 {(() => {
                                     const thumbnailUrl = blogDraftIssue.thumbnail_urls?.[blogDraftIssue.primary_thumbnail_index ?? 0]
-                                    return thumbnailUrl ? (
-                                        <div className="mb-4">
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">3</span>
-                                                <label className="text-xs font-medium text-content-muted uppercase">대표 이미지 (이미지 복사해 네이버 에디터에 첨부하세요)</label>
+                                    return (
+                                        <div className="rounded-xl border border-border shadow-card bg-surface-subtle p-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">3</span>
+                                                    <label className="text-sm font-bold text-content-primary uppercase">
+                                                        본문{thumbnailUrl ? ' (대표 이미지 포함)' : ''}
+                                                    </label>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleCopyContent(blogDraftIssue.blog_post_content ?? '', thumbnailUrl)}
+                                                    className="text-xs px-2 py-1 rounded-full bg-surface border border-border hover:bg-surface-muted"
+                                                >
+                                                    복사
+                                                </button>
                                             </div>
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={thumbnailUrl} alt="" className="w-full max-w-xs rounded border border-border" />
+                                            <div
+                                                className="border border-border rounded-lg px-3 py-2 text-sm break-words font-sans bg-surface"
+                                                dangerouslySetInnerHTML={{
+                                                    __html: buildContentHtmlForClipboard(blogDraftIssue.blog_post_content ?? '', thumbnailUrl),
+                                                }}
+                                            />
                                         </div>
-                                    ) : null
+                                    )
                                 })()}
-
-                                <div className="mb-4">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">4</span>
-                                            <label className="text-xs font-medium text-content-muted uppercase">본문 (그대로 복사해서 붙여넣으세요)</label>
-                                        </div>
-                                        <button
-                                            onClick={() => handleCopyContent(blogDraftIssue.blog_post_content ?? '')}
-                                            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
-                                        >
-                                            복사
-                                        </button>
-                                    </div>
-                                    <pre className="border border-border rounded px-3 py-2 text-sm whitespace-pre-wrap break-words font-sans">
-                                        {blogDraftIssue.blog_post_content ?? ''}
-                                    </pre>
-                                </div>
                             </>
                         )}
 
-                        {blogDraftIssue.blog_post_status === 'published' && blogDraftIssue.blog_post_url && (
-                            <a
-                                href={blogDraftIssue.blog_post_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-primary hover:underline block mb-2"
-                            >
-                                게시된 글 보러가기 →
-                            </a>
-                        )}
-
                         {(blogDraftIssue.blog_post_status === 'ready_to_publish' || blogDraftIssue.blog_post_status === 'published') && (
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="text"
-                                    value={blogPublishUrl}
-                                    onChange={e => setBlogPublishUrl(e.target.value)}
-                                    placeholder="게시된 글 URL (선택)"
-                                    className="flex-1 border border-border rounded px-3 py-2 text-sm"
-                                />
-                                <button
-                                    disabled={publishingBlog}
-                                    onClick={() => handlePublishBlogDraft(blogDraftIssue.id)}
-                                    className="px-4 py-2 text-sm rounded bg-primary text-white disabled:opacity-50"
-                                >
-                                    {publishingBlog
-                                        ? '처리 중...'
-                                        : blogDraftIssue.blog_post_status === 'published' ? 'URL 저장' : '게시완료로 표시'}
-                                </button>
+                            <div className="rounded-xl border border-border shadow-card bg-surface-subtle p-4 mt-3">
+                                {blogDraftIssue.blog_post_status === 'published' && blogDraftIssue.blog_post_url && (
+                                    <a
+                                        href={blogDraftIssue.blog_post_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm text-primary hover:underline block mb-2"
+                                    >
+                                        게시된 글 보러가기 →
+                                    </a>
+                                )}
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={blogPublishUrl}
+                                        onChange={e => setBlogPublishUrl(e.target.value)}
+                                        placeholder="게시된 글 URL (선택)"
+                                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm"
+                                    />
+                                    <button
+                                        disabled={publishingBlog}
+                                        onClick={() => handlePublishBlogDraft(blogDraftIssue.id)}
+                                        className="px-4 py-2 text-sm rounded-full bg-primary text-white disabled:opacity-50"
+                                    >
+                                        {publishingBlog
+                                            ? '처리 중...'
+                                            : blogDraftIssue.blog_post_status === 'published' ? 'URL 저장' : '게시완료로 표시'}
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
