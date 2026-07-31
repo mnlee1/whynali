@@ -20,7 +20,7 @@ export default function PageTracker() {
         // 페이지 변경 시 자동 추적
         if (pathname === '/') {
             trackPageView({ pageType: 'home', pagePath: pathname })
-        } else if (pathname.startsWith('/issues/')) {
+        } else if (pathname.startsWith('/issue/')) {
             const issueId = pathname.split('/')[2]
             trackPageView({ pageType: 'issue', pagePath: pathname, issueId })
         } else if (pathname.startsWith('/discussions/')) {
