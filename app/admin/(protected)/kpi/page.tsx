@@ -32,7 +32,7 @@ interface ChannelInboundStat {
     signupRate: number
 }
 
-type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'organic'
+type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'naverBlog' | 'organic'
 
 interface KPIMetrics {
     currentUsers: number
@@ -53,9 +53,9 @@ interface KPIMetrics {
     monthlyPageViews: number
     monthlyUniqueVisitors: number
     visitorsBySource: {
-        d1:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
-        d7:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
-        d30: { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
+        d1:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; naverBlog: number; organic: number }
+        d7:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; naverBlog: number; organic: number }
+        d30: { threads: number; instagram: number; x: number; youtube: number; tiktok: number; naverBlog: number; organic: number }
     }
     channelInboundByPeriod: {
         d1:  Record<ChannelKey, ChannelInboundStat>
@@ -955,6 +955,7 @@ export default function KPIDashboardPage() {
                                         { label: 'X',      key: 'x' as ChannelKey },
                                         { label: '유튜브', key: 'youtube' as ChannelKey },
                                         { label: '틱톡',   key: 'tiktok' as ChannelKey },
+                                        { label: '네이버블로그', key: 'naverBlog' as ChannelKey },
                                         { label: '검색',   key: 'organic' as ChannelKey },
                                     ]).map(({ label, key }) => {
                                         const fallbackVisitors = {
@@ -963,6 +964,7 @@ export default function KPIDashboardPage() {
                                             x: src.x,
                                             youtube: src.youtube,
                                             tiktok: src.tiktok,
+                                            naverBlog: src.naverBlog,
                                             organic: src.organic,
                                         }[key]
                                         const stat = selectedWeekStat

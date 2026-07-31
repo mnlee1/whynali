@@ -6,7 +6,7 @@
  * Google Gemini API를 통한 AI 호출을 담당합니다.
  * Groq/Claude와 동일한 AIProvider 인터페이스를 구현합니다.
  *
- * 무료 티어 사용 전제 (whynali timeline AI 프로젝트, 결제 계정 미연결, GEMINI_API_KEY_MNLEE 사용):
+ * 무료 티어 사용 전제 (whynali timeline AI 프로젝트, 결제 계정 미연결, GEMINI_API_KEY_TIMELINE 사용):
  * - gemini-2.0-flash는 이 프로젝트에서 무료 할당량이 0이라 사용 불가 (실측 확인)
  * - gemini-3.6-flash(별칭 gemini-flash-latest)는 프리뷰 성격이라 일일 요청 한도가 20회로
  *   극히 낮음 (실측: 20번째 호출에서 429, quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier,
@@ -47,16 +47,20 @@ const SAFETY_SETTINGS = [
 export class GeminiProvider implements AIProvider {
     readonly providerName = 'gemini'
     private keys: string[] = []
+    private apiKeyEnvVar: string
 
-    constructor() {
+    // apiKeyEnvVar로 서로 다른 구글 프로젝트(무료 할당량 별도)를 쓰는 여러 인스턴스를 만들 수 있다
+    // — 기본값은 기존 타임라인 요약용 프로젝트, 다른 기능은 전용 env var를 넘겨 격리한다.
+    constructor(apiKeyEnvVar: string = 'GEMINI_API_KEY_TIMELINE') {
+        this.apiKeyEnvVar = apiKeyEnvVar
         this.loadKeys()
     }
 
     private loadKeys() {
-        const apiKey = process.env.GEMINI_API_KEY_MNLEE
+        const apiKey = process.env[this.apiKeyEnvVar]
 
         if (!apiKey) {
-            throw new Error('GEMINI_API_KEY_MNLEE 환경변수가 설정되지 않았습니다')
+            throw new Error(`${this.apiKeyEnvVar} 환경변수가 설정되지 않았습니다`)
         }
 
         this.keys = apiKey
@@ -65,10 +69,10 @@ export class GeminiProvider implements AIProvider {
             .filter((k) => k.length > 0)
 
         if (this.keys.length === 0) {
-            throw new Error('유효한 GEMINI_API_KEY_MNLEE가 없습니다')
+            throw new Error(`유효한 ${this.apiKeyEnvVar}가 없습니다`)
         }
 
-        console.log(`[GeminiProvider] ${this.keys.length}개 API 키 로드 완료`)
+        console.log(`[GeminiProvider:${this.apiKeyEnvVar}] ${this.keys.length}개 API 키 로드 완료`)
     }
 
     private getKeyHash(apiKey: string): string {
@@ -90,7 +94,7 @@ export class GeminiProvider implements AIProvider {
                 .maybeSingle()
 
             if (error) {
-                console.error(`[GeminiProvider] 키 상태 조회 에러:`, error)
+                console.error(`[GeminiProvider:${this.apiKeyEnvVar}] 키 상태 조회 에러:`, error)
                 continue
             }
 
@@ -108,7 +112,7 @@ export class GeminiProvider implements AIProvider {
                     .eq('provider', 'gemini')
                     .eq('key_hash', keyHash)
 
-                console.log(`[GeminiProvider] 키 복구: ...${keyHash}`)
+                console.log(`[GeminiProvider:${this.apiKeyEnvVar}] 키 복구: ...${keyHash}`)
             }
 
             keyStatuses.push({ keyHash, apiKey, isBlocked, blockedUntil: data.blocked_until })
@@ -128,7 +132,7 @@ export class GeminiProvider implements AIProvider {
                 }, null as string | null)
                 if (minBlockedUntil) {
                     const waitSeconds = Math.ceil((new Date(minBlockedUntil).getTime() - Date.now()) / 1000)
-                    console.error(`[GeminiProvider] 모든 키 차단됨. ${waitSeconds}초 후 재시도 가능`)
+                    console.error(`[GeminiProvider:${this.apiKeyEnvVar}] 모든 키 차단됨. ${waitSeconds}초 후 재시도 가능`)
                 }
             }
             return null
@@ -166,11 +170,11 @@ export class GeminiProvider implements AIProvider {
             )
 
         if (error) {
-            console.error(`[GeminiProvider] 키 차단 상태 저장 에러:`, error)
+            console.error(`[GeminiProvider:${this.apiKeyEnvVar}] 키 차단 상태 저장 에러:`, error)
             return
         }
 
-        console.warn(`[GeminiProvider] Rate Limit - 키 차단: ...${keyHash} (${Math.floor(blockDuration / 1000)}초 후 재시도)`)
+        console.warn(`[GeminiProvider:${this.apiKeyEnvVar}] Rate Limit - 키 차단: ...${keyHash} (${Math.floor(blockDuration / 1000)}초 후 재시도)`)
     }
 
     async complete(userPrompt: string, options?: AIOptions): Promise<string> {
@@ -189,7 +193,7 @@ export class GeminiProvider implements AIProvider {
             }
 
             if (attempt > 0) {
-                console.log(`[GeminiProvider] ${attempt + 1}회 재시도 - 키: ...${keyStatus.keyHash}`)
+                console.log(`[GeminiProvider:${this.apiKeyEnvVar}] ${attempt + 1}회 재시도 - 키: ...${keyStatus.keyHash}`)
             }
 
             try {
@@ -223,7 +227,7 @@ export class GeminiProvider implements AIProvider {
 
                 if (!content) {
                     if (attempt < maxRetries - 1) {
-                        console.warn(`[GeminiProvider] content 없음 (시도 ${attempt + 1}/${maxRetries}) - 재시도`)
+                        console.warn(`[GeminiProvider:${this.apiKeyEnvVar}] content 없음 (시도 ${attempt + 1}/${maxRetries}) - 재시도`)
                         await new Promise((resolve) => setTimeout(resolve, 1000))
                         continue
                     }
@@ -248,7 +252,7 @@ export class GeminiProvider implements AIProvider {
 
                 if (!isRateLimit) {
                     incrementApiUsage('gemini', { calls: 1, failures: 1 }).catch(() => {})
-                    console.error(`[GeminiProvider] API 호출 실패 (키: ...${keyStatus.keyHash}):`, error.message?.slice(0, 300))
+                    console.error(`[GeminiProvider:${this.apiKeyEnvVar}] API 호출 실패 (키: ...${keyStatus.keyHash}):`, error.message?.slice(0, 300))
                     throw error
                 }
 

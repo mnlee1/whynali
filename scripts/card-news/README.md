@@ -29,13 +29,17 @@ npx tsx scripts/card-news/pipeline.ts --publish
 ```
 scripts/card-news/
 ├── pipeline.ts              # 메인 스크립트
-├── templates/               # HTML 템플릿
-│   ├── slide-01-cover.html
-│   ├── slide-02-body.html
-│   ├── slide-03-badge.html
-│   └── slide-04-follow.html
 ├── output/                  # 생성된 이미지
 └── check-storage.ts         # Supabase Storage 확인 스크립트
+
+lib/card-news/
+├── core.ts                  # 템플릿 렌더링 등 공통 로직
+└── templates/               # HTML 템플릿 (Vercel 배포 번들에 포함되어야 해서 scripts/ 밖에 위치)
+    ├── slide-01-cover.html
+    ├── slide-02-body.html
+    ├── slide-03-badge.html
+    ├── slide-04-follow.html
+    └── slide-05-numbers.html
 ```
 
 ## GitHub Actions
