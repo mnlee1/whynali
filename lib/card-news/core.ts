@@ -433,7 +433,7 @@ export function getIssueThumbnail(issue: Issue): string {
 
 // ─── 템플릿 ─────────────────────────────────────────────
 
-const TEMPLATE_DIR = path.join(process.cwd(), 'scripts/card-news/templates')
+const TEMPLATE_DIR = path.join(process.cwd(), 'lib/card-news/templates')
 
 export function getTemplateHtml(type: SlideContent['type']): string {
   const fileMap = {

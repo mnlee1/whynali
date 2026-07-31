@@ -121,6 +121,18 @@ export async function generateAndCacheSummaries(
         grouped.get(p.stage)!.push({ title: p.title ?? '', occurred_at: p.occurred_at })
     }
 
+    // 병합 등으로 한 단계에 포인트가 과도하게 쌓이면(실측: "레버리지 ETF" 이슈 전개 94건)
+    // 프롬프트가 지나치게 커져 AI가 과도하게 압축하거나 단계 자체를 스킵하는 문제가 있어
+    // (실측: 전개 94건→bullet 2개, 진정 4건→통째로 스킵) 단계별로 최근 N개까지만 사용한다.
+    // 발단은 이슈의 시작이라 캡 없이 항상 전부 포함한다.
+    const POINT_CAP_PER_STAGE = 15
+    for (const [stage, items] of grouped) {
+        if (stage === '발단') continue
+        if (items.length > POINT_CAP_PER_STAGE) {
+            grouped.set(stage, items.slice(items.length - POINT_CAP_PER_STAGE))
+        }
+    }
+
     const stages = [...grouped.keys()].sort(
         (a, b) => (STAGE_ORDER_MAP[a] ?? 9) - (STAGE_ORDER_MAP[b] ?? 9)
     )

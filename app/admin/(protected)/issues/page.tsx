@@ -1082,10 +1082,24 @@ export default function AdminIssuesPage() {
             {blogDraftIssue && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold">네이버 블로그 초안 — {blogDraftIssue.title}</h3>
-                            <button onClick={() => setBlogDraftIssue(null)} className="text-content-muted hover:text-content-primary">✕</button>
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                            <h3 className="text-lg font-semibold truncate">네이버 블로그 초안 — {blogDraftIssue.title}</h3>
+                            <div className="flex items-center gap-2 shrink-0">
+                                {blogDraftIssue.blog_post_status === 'ready_to_publish' && (
+                                    <button
+                                        disabled={publishingBlog}
+                                        onClick={() => handleRetryBlogDraft(blogDraftIssue.id)}
+                                        className="px-3 py-1.5 text-xs rounded border border-border hover:bg-surface-subtle disabled:opacity-50"
+                                    >
+                                        {publishingBlog ? '처리 중...' : '재생성'}
+                                    </button>
+                                )}
+                                <button onClick={() => setBlogDraftIssue(null)} className="text-content-muted hover:text-content-primary">✕</button>
+                            </div>
                         </div>
+                        <p className="text-xs text-content-muted mb-4">
+                            자동 게시가 불가능해 수동 게시가 필요해요 — 아래 순서대로 복사해 blog.naver.com에 붙여넣으세요.
+                        </p>
 
                         {(blogDraftIssue.blog_post_status === 'failed' || blogDraftIssue.blog_post_status === 'skipped') ? (
                             <div className="mb-4">
@@ -1112,13 +1126,12 @@ export default function AdminIssuesPage() {
                             </div>
                         ) : (
                             <>
-                                <p className="text-sm text-content-secondary mb-4">
-                                    네이버 블로그 글쓰기 API가 폐지되어 자동 게시가 불가능합니다. 아래 제목·본문을 복사해 blog.naver.com에 직접 붙여넣은 뒤 게시완료를 눌러주세요.
-                                </p>
-
                                 <div className="mb-4">
                                     <div className="flex items-center justify-between mb-1">
-                                        <label className="text-xs font-medium text-content-muted uppercase">제목</label>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">1</span>
+                                            <label className="text-xs font-medium text-content-muted uppercase">제목</label>
+                                        </div>
                                         <button
                                             onClick={() => handleCopyText(blogDraftIssue.blog_post_title ?? '')}
                                             className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
@@ -1136,7 +1149,10 @@ export default function AdminIssuesPage() {
                                 {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
                                     <div className="mb-4">
                                         <div className="flex items-center justify-between mb-1">
-                                            <label className="text-xs font-medium text-content-muted uppercase">태그 (네이버 에디터 태그란에 입력)</label>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">2</span>
+                                                <label className="text-xs font-medium text-content-muted uppercase">태그 (네이버 에디터 태그란에 입력)</label>
+                                            </div>
                                             <button
                                                 onClick={() => handleCopyText(blogDraftIssue.blog_post_tags?.join(', ') ?? '')}
                                                 className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
@@ -1158,9 +1174,10 @@ export default function AdminIssuesPage() {
                                     const thumbnailUrl = blogDraftIssue.thumbnail_urls?.[blogDraftIssue.primary_thumbnail_index ?? 0]
                                     return thumbnailUrl ? (
                                         <div className="mb-4">
-                                            <label className="text-xs font-medium text-content-muted uppercase block mb-1">
-                                                대표 이미지 (직접 다운로드해 네이버 에디터에 첨부하세요)
-                                            </label>
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">3</span>
+                                                <label className="text-xs font-medium text-content-muted uppercase">대표 이미지 (이미지 복사해 네이버 에디터에 첨부하세요)</label>
+                                            </div>
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img src={thumbnailUrl} alt="" className="w-full max-w-xs rounded border border-border" />
                                         </div>
@@ -1169,7 +1186,10 @@ export default function AdminIssuesPage() {
 
                                 <div className="mb-4">
                                     <div className="flex items-center justify-between mb-1">
-                                        <label className="text-xs font-medium text-content-muted uppercase">본문 (그대로 복사해서 붙여넣으세요)</label>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">4</span>
+                                            <label className="text-xs font-medium text-content-muted uppercase">본문 (그대로 복사해서 붙여넣으세요)</label>
+                                        </div>
                                         <button
                                             onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
                                             className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"

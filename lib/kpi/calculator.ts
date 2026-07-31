@@ -96,7 +96,7 @@ function buildConversionRatePeriod(
     }
 }
 
-type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'organic'
+type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'naverBlog' | 'organic'
 
 type VisitorCountsByChannel = Record<ChannelKey, number>
 
@@ -108,10 +108,10 @@ type ChannelInboundStat = {
 
 type ChannelInboundBreakdown = Record<ChannelKey, ChannelInboundStat>
 
-const CHANNEL_KEYS: ChannelKey[] = ['instagram', 'threads', 'x', 'youtube', 'tiktok', 'organic']
+const CHANNEL_KEYS: ChannelKey[] = ['instagram', 'threads', 'x', 'youtube', 'tiktok', 'naverBlog', 'organic']
 
 function emptyVisitorCounts(): VisitorCountsByChannel {
-    return { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 }
+    return { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, naverBlog: 0, organic: 0 }
 }
 
 function emptyChannelInboundBreakdown(): ChannelInboundBreakdown {
@@ -122,6 +122,7 @@ function emptyChannelInboundBreakdown(): ChannelInboundBreakdown {
         x: zero(),
         youtube: zero(),
         tiktok: zero(),
+        naverBlog: zero(),
         organic: zero(),
     }
 }
@@ -133,6 +134,7 @@ function mapUtmToChannelKey(utm: string | null): ChannelKey | null {
     if (utm === 'twitter') return 'x'
     if (utm === 'youtube') return 'youtube'
     if (utm === 'tiktok') return 'tiktok'
+    if (utm === 'naver_blog') return 'naverBlog'
     if (['google', 'naver', 'daum', 'organic'].includes(utm)) return 'organic'
     return null
 }
@@ -144,6 +146,7 @@ function buildVisitorCounts(data: { utm_source: string | null; session_id: strin
         x:         new Set(data?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
         youtube:   new Set(data?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
         tiktok:    new Set(data?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
+        naverBlog: new Set(data?.filter(v => v.utm_source === 'naver_blog').map(v => v.session_id) || []).size,
         organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'daum', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
     }
 }

@@ -4,7 +4,10 @@
  * 이슈가 점화→논란중으로 전환될 때 네이버 블로그 포스팅용 콘텐츠 자동 생성
  * (generate-naver-blog-draft 크론에서 호출 — lib/naver/blog-schedule.ts로 예약된 건 처리 시점)
  *
- * - AI: Groq (무료, 배치성 작업)
+ * - AI: Gemini (whynali blog AI 프로젝트 전용 키, 무료 등급 — 다른 기능과 할당량 분리됨)
+ *   Groq의 만성적인 rate limit(하루 실패율 14~46%, thinking 모델 토큰 소모 문제)를
+ *   피하기 위해 채택. gemini-3.5-flash-lite 고정 사용 (타임라인 요약과 동일 모델,
+ *   단 프로젝트/키는 별도라 할당량은 안 겹침 — lib/ai/gemini-provider.ts 참고)
  * - 팩트체크: 이슈에 연결된 news_data(제목/날짜/출처)를 근거자료로 프롬프트에 첨부해
  *   본문의 날짜·수치·발언이 실제 수집된 뉴스와 어긋나지 않도록 유도한다
  *   (기사 본문까지는 저장돼 있지 않아 "헤드라인·날짜 대조" 수준의 검증이다)
@@ -18,7 +21,7 @@
  *   이슈 자체의 썸네일(thumbnail_urls)을 별도로 보여주고 수동으로 첨부하게 한다
  */
 
-import { callGroq } from '@/lib/ai/groq-client'
+import { callGeminiBlog } from '@/lib/ai/gemini-client'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
@@ -67,8 +70,10 @@ const HEADING_VARIANTS: HeadingVariant[] = [
     { intro: '지금 무슨 일이 벌어지고 있나?', points: '핵심 포인트', closing: '앞으로 어떻게 될까?', outro: '실시간 타임라인 보기', ctaLead: '왜난리에서 최신 타임라인과 커뮤니티 반응을 더 볼 수 있어요.' },
 ]
 
-// 카테고리·개별 이슈 태그와 별개로 항상 붙는 브랜드 고정 태그
-const FIXED_TAGS = ['왜난리', '이슈']
+// 네이버 에디터 태그란은 붙여넣기로 한 번에 등록이 안 되고 하나씩 입력해야 해서,
+// 관리자가 매번 손으로 채우는 태그 수를 줄이기 위해 항상 붙는 고정 태그 세트를 넉넉히 둔다.
+// 이슈별 AI 생성 태그(개별 사건명 등)는 이 위에 추가로 덧붙는다.
+const FIXED_TAGS = ['왜난리', '이슈', '논란', '한국이슈', '연예', '스포츠', '정치', '사회', '경제', '기술', 'AI', '세계']
 
 // 순수 텍스트 조립용 구분선·번호 이모지
 const DIVIDER = '─'.repeat(20)
@@ -122,7 +127,8 @@ export async function generateNaverBlogPost(
         return null
     }
 
-    const issueUrl = `${SITE_URL}/issue/${issueId}`
+    // 네이버 블로그발 유입을 검색 유입과 구분해서 집계하기 위한 UTM 파라미터 (lib/kpi/calculator.ts 참고)
+    const issueUrl = `${SITE_URL}/issue/${issueId}?utm_source=naver_blog&utm_medium=blog`
     const categoryLabel = CATEGORY_LABEL[basic.category] ?? basic.category
     const variant = pickHeadingVariant()
 
@@ -137,7 +143,7 @@ export async function generateNaverBlogPost(
 
     const prompt = buildPrompt(basic, extra, categoryLabel, newsFactsBlock)
 
-    const raw = await callGroq(
+    const raw = await callGeminiBlog(
         [
             {
                 role: 'system',
@@ -148,7 +154,7 @@ export async function generateNaverBlogPost(
             },
             { role: 'user', content: prompt },
         ],
-        { model: 'qwen/qwen3.6-27b', temperature: 0.7, max_tokens: 2500 }
+        { model: 'gemini-3.5-flash-lite', temperature: 0.7, max_tokens: 2500, jsonMode: true }
     )
 
     return parsePost(raw, basic, extra, issueUrl, categoryLabel, variant)
@@ -250,7 +256,7 @@ function buildContents(
         '',
         `🔥 ${variant.outro}`,
         variant.ctaLead,
-        `[왜난리 이슈] ${issueTitle} 바로가기 →`,
+        `[왜난리 이슈] ${issueTitle} 바로가기 → ${issueUrl}`,
     ].join('\n')
 }
 
