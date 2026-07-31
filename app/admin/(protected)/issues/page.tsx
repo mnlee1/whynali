@@ -59,6 +59,7 @@ export default function AdminIssuesPage() {
     const [mergeSourceIssue, setMergeSourceIssue] = useState<Issue | null>(null)
     const [blogDraftIssue, setBlogDraftIssue] = useState<Issue | null>(null)
     const [publishingBlog, setPublishingBlog] = useState(false)
+    const [regeneratingAllBlog, setRegeneratingAllBlog] = useState(false)
     const [blogPublishUrl, setBlogPublishUrl] = useState('')
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
     const [editingTitleValue, setEditingTitleValue] = useState('')
@@ -272,6 +273,56 @@ export default function AdminIssuesPage() {
             await navigator.clipboard.writeText(text)
         } catch {
             alert('복사 실패 — 브라우저 권한을 확인해주세요')
+        }
+    }
+
+    // 본문 마지막 줄("[왜난리 이슈] {제목} 바로가기 → {URL}") 전체를 실제 링크로 바꾼 HTML을 만든다.
+    // 리치 텍스트 붙여넣기를 지원하는 에디터(네이버 등)에 붙여넣으면 URL은 안 보이고
+    // 줄 전체가 클릭 가능한 링크로 표시된다.
+    const buildContentHtmlForClipboard = (content: string) => {
+        const escaped = content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+        const withLink = escaped.replace(
+            /(\[왜난리 이슈\].*?바로가기 → )(https?:\/\/\S+)/,
+            (_match, prefix: string, url: string) => `<a href="${url}">${prefix.trim()}</a>`
+        )
+        return withLink.replace(/\n/g, '<br>')
+    }
+
+    // 본문 복사 전용 — 일반 텍스트와 링크 포함 HTML을 함께 클립보드에 담아서,
+    // 리치 텍스트 붙여넣기를 지원하는 곳엔 링크로, 아니면 원문 텍스트 그대로 붙여넣어지게 한다.
+    const handleCopyContent = async (content: string) => {
+        try {
+            const html = buildContentHtmlForClipboard(content)
+            await navigator.clipboard.write([
+                new ClipboardItem({
+                    'text/plain': new Blob([content], { type: 'text/plain' }),
+                    'text/html': new Blob([html], { type: 'text/html' }),
+                }),
+            ])
+        } catch {
+            await handleCopyText(content)
+        }
+    }
+
+    // 이미 생성된(ready_to_publish) 블로그 초안을 전부 pending으로 되돌려, 최신 코드로 다시
+    // 만들어지게 한다 — 코드/프롬프트가 바뀌어도 예전 내용이 그대로 남아있는 문제를 한 번에 해소.
+    const handleRegenerateAllBlogDrafts = async () => {
+        if (!confirm('이미 만들어진 블로그 초안을 전부 최신 로직으로 다시 생성합니다. 계속할까요?')) return
+
+        setRegeneratingAllBlog(true)
+        try {
+            const response = await fetch('/api/admin/issues/blog-post/regenerate-stale', { method: 'POST' })
+            if (!response.ok) throw new Error('일괄 재생성 실패')
+            const { count } = await response.json()
+            alert(`${count}개 이슈의 블로그 초안이 재생성 예약됐습니다. 다음 크론 주기부터 순차적으로 처리됩니다.`)
+            fetchIssues()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : '일괄 재생성 실패')
+        } finally {
+            setRegeneratingAllBlog(false)
         }
     }
 
@@ -515,12 +566,21 @@ export default function AdminIssuesPage() {
         <div>
             <div className="mb-6 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-content-primary">이슈 관리</h1>
-                <button
-                    onClick={() => setManualWizardOpen(true)}
-                    className="text-sm px-4 py-2 bg-primary text-white rounded-full hover:bg-primary/90 font-medium"
-                >
-                    수동 등록
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleRegenerateAllBlogDrafts}
+                        disabled={regeneratingAllBlog}
+                        className="text-sm px-4 py-2 border border-border rounded-full hover:bg-surface-subtle font-medium disabled:opacity-50"
+                    >
+                        {regeneratingAllBlog ? '처리 중...' : '블로그 초안 일괄 재생성'}
+                    </button>
+                    <button
+                        onClick={() => setManualWizardOpen(true)}
+                        className="text-sm px-4 py-2 bg-primary text-white rounded-full hover:bg-primary/90 font-medium"
+                    >
+                        수동 등록
+                    </button>
+                </div>
             </div>
 
             {/* 이슈 키워드 추천 */}
@@ -1148,23 +1208,22 @@ export default function AdminIssuesPage() {
 
                                 {blogDraftIssue.blog_post_tags && blogDraftIssue.blog_post_tags.length > 0 && (
                                     <div className="mb-4">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">2</span>
-                                                <label className="text-xs font-medium text-content-muted uppercase">태그 (네이버 에디터 태그란에 입력)</label>
-                                            </div>
-                                            <button
-                                                onClick={() => handleCopyText(blogDraftIssue.blog_post_tags?.join(', ') ?? '')}
-                                                className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
-                                            >
-                                                복사
-                                            </button>
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">2</span>
+                                            <label className="text-xs font-medium text-content-muted uppercase">
+                                                태그 (네이버는 여러 개 한번에 붙여넣기가 안 돼요 — 아래 태그를 하나씩 눌러 복사한 뒤, 네이버 태그란에 붙여넣고 엔터를 누르고 다음 태그를 눌러주세요)
+                                            </label>
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {blogDraftIssue.blog_post_tags.map((tag, i) => (
-                                                <span key={i} className="px-2 py-1 text-xs rounded bg-surface-subtle border border-border">
+                                                <button
+                                                    key={i}
+                                                    onClick={() => handleCopyText(tag)}
+                                                    className="px-2 py-1 text-xs rounded bg-surface-subtle border border-border hover:bg-primary/10 hover:border-primary"
+                                                    title="클릭해서 이 태그만 복사"
+                                                >
                                                     #{tag}
-                                                </span>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
@@ -1191,7 +1250,7 @@ export default function AdminIssuesPage() {
                                             <label className="text-xs font-medium text-content-muted uppercase">본문 (그대로 복사해서 붙여넣으세요)</label>
                                         </div>
                                         <button
-                                            onClick={() => handleCopyText(blogDraftIssue.blog_post_content ?? '')}
+                                            onClick={() => handleCopyContent(blogDraftIssue.blog_post_content ?? '')}
                                             className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-subtle"
                                         >
                                             복사

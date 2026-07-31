@@ -202,7 +202,7 @@ export function usePageTracking() {
     
     if (path === '/') {
         trackPageView({ pageType: 'home' })
-    } else if (path.startsWith('/issues/')) {
+    } else if (path.startsWith('/issue/')) {
         const issueId = path.split('/')[2]
         trackPageView({ pageType: 'issue', issueId })
     } else if (path.startsWith('/discussions/')) {
