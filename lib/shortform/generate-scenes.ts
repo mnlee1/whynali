@@ -309,7 +309,7 @@ export async function createTypingFrames(
     const layout = computeLayout(title, desc, sceneNumber)
 
     // 씬1: 타이틀+설명 모두 애니메이션 / 씬2,3: 설명만 애니메이션 (타이틀은 정적 레이어)
-    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, 10) : []
+    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, 13) : []
     const descFinalLines = desc ? wordWrapLines(desc, 13) : []
 
     const titleWords = titleFinalLines.flatMap(l => l.split(' ').filter(Boolean))
