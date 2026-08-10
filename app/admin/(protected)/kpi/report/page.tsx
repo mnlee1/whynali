@@ -91,6 +91,7 @@ interface ChannelPromoStat {
     total_views: number | null
     likes: number | null
     comments: number | null
+    shares: number | null
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: '인스타그램', youtube: '유튜브', tiktok: '틱톡' }
@@ -188,7 +189,7 @@ function reportSubtitle(kind: ReportKind, periodStart: Date, periodEnd: Date, pr
 }
 
 
-const emptyPromo = { views: '', totalSubscribers: '', totalViewsRaw: null as number | null, likes: '', comments: '' }
+const emptyPromo = { views: '', totalSubscribers: '', totalViewsRaw: null as number | null, likes: '', comments: '', shares: '' }
 type PromoEntry = typeof emptyPromo
 
 export default function KPIReportPage() {
@@ -202,6 +203,7 @@ export default function KPIReportPage() {
         instagram: { subscribers: null, views: null }, youtube: { subscribers: null, views: null }, tiktok: { subscribers: null, views: null },
     })
     const [promoLoading, setPromoLoading] = useState(true)
+    const [liveFetchedAt, setLiveFetchedAt] = useState<string | null>(null)
     const [liveError, setLiveError] = useState<{ youtube: string | null; instagram: string | null }>({ youtube: null, instagram: null })
     const [saving, setSaving] = useState(false)
     const [savedAt, setSavedAt] = useState<string | null>(null)
@@ -271,6 +273,7 @@ export default function KPIReportPage() {
                         totalViewsRaw: row.total_views ?? null,
                         likes: row.likes?.toString() ?? '',
                         comments: row.comments?.toString() ?? '',
+                        shares: row.shares?.toString() ?? '',
                     }
                 }
             }
@@ -286,14 +289,13 @@ export default function KPIReportPage() {
             setPreviousTotals(prev)
 
             if (liveJson.youtube && (overwrite || cur.youtube.totalSubscribers === '')) {
-                const prevViews = prev.youtube.views
-                const periodViews = prevViews !== null ? liveJson.youtube.totalViews - prevViews : null
                 cur.youtube = {
-                    views: periodViews !== null ? String(periodViews) : cur.youtube.views,
+                    views: liveJson.youtube.periodViews !== null ? String(liveJson.youtube.periodViews) : cur.youtube.views,
                     totalSubscribers: String(liveJson.youtube.subscribers),
                     totalViewsRaw: liveJson.youtube.totalViews,
                     likes: liveJson.youtube.periodLikes !== null ? String(liveJson.youtube.periodLikes) : cur.youtube.likes,
                     comments: liveJson.youtube.periodComments !== null ? String(liveJson.youtube.periodComments) : cur.youtube.comments,
+                    shares: liveJson.youtube.periodShares !== null ? String(liveJson.youtube.periodShares) : cur.youtube.shares,
                 }
             }
             if (liveJson.instagram && (overwrite || cur.instagram.totalSubscribers === '')) {
@@ -303,12 +305,14 @@ export default function KPIReportPage() {
                     totalViewsRaw: null,
                     likes: liveJson.instagram.periodLikes !== null ? String(liveJson.instagram.periodLikes) : cur.instagram.likes,
                     comments: liveJson.instagram.periodComments !== null ? String(liveJson.instagram.periodComments) : cur.instagram.comments,
+                    shares: liveJson.instagram.periodShares !== null ? String(liveJson.instagram.periodShares) : cur.instagram.shares,
                 }
             }
             setLiveError({
                 youtube: liveJson.youtube ? null : (liveJson.youtubeError || '실시간 조회 실패'),
                 instagram: liveJson.instagram ? null : (liveJson.instagramError || '실시간 조회 실패'),
             })
+            setLiveFetchedAt(new Date().toLocaleTimeString('ko-KR'))
 
             setPromoStats(cur)
         } finally {
@@ -338,6 +342,7 @@ export default function KPIReportPage() {
                 totalViews: v.totalViewsRaw,
                 likes: v.likes,
                 comments: v.comments,
+                shares: v.shares,
             }),
         })
         const json = await res.json()
@@ -468,9 +473,11 @@ export default function KPIReportPage() {
             }
             const likesStr = promoStats[platform].likes
             const commentsStr = promoStats[platform].comments
+            const sharesStr = promoStats[platform].shares
             const engagementRows = platform !== 'tiktok' ? `
                 <p class="promo-row"><span class="muted">좋아요 수</span> <strong>${likesStr === '' ? '-' : `${Number(likesStr).toLocaleString()}개`}</strong></p>
-                <p class="promo-row"><span class="muted">댓글 수</span> <strong>${commentsStr === '' ? '-' : `${Number(commentsStr).toLocaleString()}개`}</strong></p>` : ''
+                <p class="promo-row"><span class="muted">댓글 수</span> <strong>${commentsStr === '' ? '-' : `${Number(commentsStr).toLocaleString()}개`}</strong></p>
+                <p class="promo-row"><span class="muted">공유 수</span> <strong>${sharesStr === '' ? '-' : `${Number(sharesStr).toLocaleString()}개`}</strong></p>` : ''
             return `
             <div class="promo-card">
                 <p class="promo-title">${PLATFORM_LABEL[platform]}</p>
@@ -747,13 +754,18 @@ export default function KPIReportPage() {
             <div className="card p-5">
                 <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
                     <h2 className="text-base font-semibold text-content-primary">홍보 채널 현황</h2>
-                    <button
-                        onClick={() => refreshPromoSection(true)}
-                        disabled={promoLoading}
-                        className="no-print px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                        {promoLoading ? '불러오는 중...' : '실시간 값 다시 불러오기'}
-                    </button>
+                    <div className="no-print flex items-center gap-2">
+                        {liveFetchedAt && !promoLoading && (
+                            <span className="text-xs text-content-muted">{liveFetchedAt} 기준</span>
+                        )}
+                        <button
+                            onClick={() => refreshPromoSection(true)}
+                            disabled={promoLoading}
+                            className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            {promoLoading ? '불러오는 중...' : '실시간 값 다시 불러오기'}
+                        </button>
+                    </div>
                 </div>
                 <p className="text-sm text-content-secondary mb-4">
                     유튜브·인스타는 API로 자동 조회, 틱톡은 권한 문제로 직접 확인해서 입력함 (해당 기간: {fmtDate(periodStart)} ~ {fmtDate(periodEnd)}) — 값은 필요하면 직접 고칠 수 있음
@@ -804,7 +816,7 @@ export default function KPIReportPage() {
                                     })()}
                                 </div>
                                 {platform !== 'tiktok' && (
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-3 gap-2">
                                         <label className="block">
                                             <span className="text-xs text-slate-500">좋아요 수</span>
                                             <input
@@ -823,6 +835,16 @@ export default function KPIReportPage() {
                                                 value={promoStats[platform].comments}
                                                 onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], comments: e.target.value } }))}
                                                 placeholder="예: 12"
+                                            />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-xs text-slate-500">공유 수</span>
+                                            <input
+                                                type="number"
+                                                className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
+                                                value={promoStats[platform].shares}
+                                                onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], shares: e.target.value } }))}
+                                                placeholder="예: 3"
                                             />
                                         </label>
                                     </div>
