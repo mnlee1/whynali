@@ -1077,7 +1077,7 @@ export default function AdminIssuesPage() {
                                 <td className="px-4 py-3 text-sm text-content-secondary whitespace-nowrap w-32">
                                     {formatDate(issue.created_at)}
                                 </td>
-                                <td className="sticky right-0 z-10 px-2 py-3 text-sm w-28 bg-surface group-hover:bg-surface-subtle shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.15)]">
+                                <td className={`sticky right-0 ${openDropdownId === issue.id ? 'z-30' : 'z-10'} px-2 py-3 text-sm w-28 bg-surface group-hover:bg-surface-subtle shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.15)]`}>
                                     <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={() => setPreviewIssue(issue)}

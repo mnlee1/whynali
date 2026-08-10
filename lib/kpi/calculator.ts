@@ -24,6 +24,8 @@ const supabase = supabaseAdmin
 type PeriodStat = {
     newUsers: number
     comments: number
+    issueComments: number
+    discussionComments: number
     reactions: number
     votes: number
     issues: number
@@ -31,11 +33,28 @@ type PeriodStat = {
     cardNews: number
 }
 
+type DeltaStat = { current: number; previous: number; delta: number; deltaPercent: number | null }
+
+type PeriodComparisonStat = {
+    newUsers: DeltaStat
+    comments: DeltaStat
+    issueComments: DeltaStat
+    discussionComments: DeltaStat
+    reactions: DeltaStat
+    votes: DeltaStat
+    issues: DeltaStat
+    shortforms: DeltaStat
+    cardNews: DeltaStat
+    uniqueVisitors: DeltaStat
+}
+
 export type WeekStat = {
     week: number      // 1-indexed
     label: string     // "1주차", "2주차", ...
     newUsers: number
     comments: number
+    issueComments: number
+    discussionComments: number
     reactions: number
     votes: number
     issues: number
@@ -96,7 +115,7 @@ function buildConversionRatePeriod(
     }
 }
 
-type ChannelKey = 'threads' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'naverBlog' | 'organic'
+type ChannelKey = 'threads' | 'instagram' | 'youtube' | 'tiktok' | 'naverBlog' | 'organic' | 'other'
 
 type VisitorCountsByChannel = Record<ChannelKey, number>
 
@@ -104,70 +123,116 @@ type ChannelInboundStat = {
     visitors: number
     signups: number
     signupRate: number
+    comments: number
+    commentRate: number
+    reactions: number
+    reactionRate: number
+    votes: number
+    voteRate: number
+    discussionComments: number
+    discussionCommentRate: number
 }
 
 type ChannelInboundBreakdown = Record<ChannelKey, ChannelInboundStat>
 
-const CHANNEL_KEYS: ChannelKey[] = ['instagram', 'threads', 'x', 'youtube', 'tiktok', 'naverBlog', 'organic']
+const CHANNEL_KEYS: ChannelKey[] = ['instagram', 'threads', 'youtube', 'tiktok', 'naverBlog', 'organic', 'other']
 
 function emptyVisitorCounts(): VisitorCountsByChannel {
-    return { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, naverBlog: 0, organic: 0 }
+    return { threads: 0, instagram: 0, youtube: 0, tiktok: 0, naverBlog: 0, organic: 0, other: 0 }
 }
 
 function emptyChannelInboundBreakdown(): ChannelInboundBreakdown {
-    const zero = (): ChannelInboundStat => ({ visitors: 0, signups: 0, signupRate: 0 })
+    const zero = (): ChannelInboundStat => ({
+        visitors: 0,
+        signups: 0, signupRate: 0,
+        comments: 0, commentRate: 0,
+        reactions: 0, reactionRate: 0,
+        votes: 0, voteRate: 0,
+        discussionComments: 0, discussionCommentRate: 0,
+    })
     return {
         threads: zero(),
         instagram: zero(),
-        x: zero(),
         youtube: zero(),
         tiktok: zero(),
         naverBlog: zero(),
         organic: zero(),
+        other: zero(),
     }
 }
 
-function mapUtmToChannelKey(utm: string | null): ChannelKey | null {
-    if (!utm) return null
+// 알려진 채널에 매칭되지 않는 경우(직접 방문, UTM 없는 리퍼럴, X(구 트위터)처럼
+// 카드뉴스가 자동 업로드되지 않는 채널 등)는 'other'로 묶어서
+// 채널별 합계가 전체 순방문자 수와 항상 일치하도록 함
+function mapUtmToChannelKey(utm: string | null): ChannelKey {
     if (utm === 'threads') return 'threads'
     if (utm === 'instagram') return 'instagram'
-    if (utm === 'twitter') return 'x'
     if (utm === 'youtube') return 'youtube'
     if (utm === 'tiktok') return 'tiktok'
     if (utm === 'naver_blog') return 'naverBlog'
-    if (['google', 'naver', 'daum', 'organic'].includes(utm)) return 'organic'
-    return null
+    if (utm && ['google', 'naver', 'daum', 'organic'].includes(utm)) return 'organic'
+    return 'other'
 }
 
-function buildVisitorCounts(data: { utm_source: string | null; session_id: string }[] | null): VisitorCountsByChannel {
-    return {
-        threads:   new Set(data?.filter(v => v.utm_source === 'threads').map(v => v.session_id) || []).size,
-        instagram: new Set(data?.filter(v => v.utm_source === 'instagram').map(v => v.session_id) || []).size,
-        x:         new Set(data?.filter(v => v.utm_source === 'twitter').map(v => v.session_id) || []).size,
-        youtube:   new Set(data?.filter(v => v.utm_source === 'youtube').map(v => v.session_id) || []).size,
-        tiktok:    new Set(data?.filter(v => v.utm_source === 'tiktok').map(v => v.session_id) || []).size,
-        naverBlog: new Set(data?.filter(v => v.utm_source === 'naver_blog').map(v => v.session_id) || []).size,
-        organic:   new Set(data?.filter(v => v.utm_source && ['google', 'naver', 'daum', 'organic'].includes(v.utm_source)).map(v => v.session_id) || []).size,
+// 세션 하나가 기간 내에 여러 utm_source를 거치는 경우(예: referral로 들어왔다가 이후 페이지가 naver로 찍힘),
+// "이 기간에 처음 찍힌 utm_source" 하나로만 채널을 정해서 채널별 합계가 항상 전체 순방문자 수와 일치하게 함
+function buildVisitorCounts(data: { utm_source: string | null; session_id: string; created_at: string }[] | null): VisitorCountsByChannel {
+    const firstSeenAt = new Map<string, { created_at: string; utm_source: string | null }>()
+    for (const v of data || []) {
+        const existing = firstSeenAt.get(v.session_id)
+        if (!existing || v.created_at < existing.created_at) {
+            firstSeenAt.set(v.session_id, { created_at: v.created_at, utm_source: v.utm_source })
+        }
     }
+    const result = emptyVisitorCounts()
+    for (const { utm_source } of firstSeenAt.values()) {
+        result[mapUtmToChannelKey(utm_source)]++
+    }
+    return result
+}
+
+type ChannelSourceEvents = { first_utm_source: string | null }[]
+
+function countEventsByChannel(events: ChannelSourceEvents | null): VisitorCountsByChannel {
+    const counts = emptyVisitorCounts()
+    for (const event of events || []) {
+        counts[mapUtmToChannelKey(event.first_utm_source)]++
+    }
+    return counts
 }
 
 function buildChannelInboundBreakdown(
     visitorCounts: VisitorCountsByChannel,
-    signupEvents: { first_utm_source: string | null }[] | null,
+    events: {
+        signup: ChannelSourceEvents
+        comment: ChannelSourceEvents
+        reaction: ChannelSourceEvents
+        vote: ChannelSourceEvents
+        discussionComment: ChannelSourceEvents
+    },
 ): ChannelInboundBreakdown {
-    const signupCounts = emptyVisitorCounts()
-    for (const event of signupEvents || []) {
-        const channel = mapUtmToChannelKey(event.first_utm_source)
-        if (channel) signupCounts[channel]++
-    }
+    const signupCounts             = countEventsByChannel(events.signup)
+    const commentCounts            = countEventsByChannel(events.comment)
+    const reactionCounts           = countEventsByChannel(events.reaction)
+    const voteCounts               = countEventsByChannel(events.vote)
+    const discussionCommentCounts  = countEventsByChannel(events.discussionComment)
 
-    const toRate = (visitors: number, signups: number) => visitors > 0 ? (signups / visitors) * 100 : 0
+    const toRate = (visitors: number, count: number) => visitors > 0 ? (count / visitors) * 100 : 0
     const result = emptyChannelInboundBreakdown()
     for (const key of CHANNEL_KEYS) {
+        const visitors = visitorCounts[key]
         result[key] = {
-            visitors: visitorCounts[key],
+            visitors,
             signups: signupCounts[key],
-            signupRate: toRate(visitorCounts[key], signupCounts[key]),
+            signupRate: toRate(visitors, signupCounts[key]),
+            comments: commentCounts[key],
+            commentRate: toRate(visitors, commentCounts[key]),
+            reactions: reactionCounts[key],
+            reactionRate: toRate(visitors, reactionCounts[key]),
+            votes: voteCounts[key],
+            voteRate: toRate(visitors, voteCounts[key]),
+            discussionComments: discussionCommentCounts[key],
+            discussionCommentRate: toRate(visitors, discussionCommentCounts[key]),
         }
     }
     return result
@@ -202,15 +267,26 @@ async function fetchConversionCounts(sinceIso: string, excludeIds: string[] = []
     }
 }
 
-async function fetchSignupEventsBySource(sinceIso: string, beforeIso?: string) {
+async function fetchConversionEventsBySource(sinceIso: string, excludeIds: string[] = [], beforeIso?: string) {
     let q = supabase
         .from('conversion_events')
-        .select('first_utm_source')
-        .eq('event_type', 'signup')
+        .select('event_type, first_utm_source')
         .gte('created_at', sinceIso)
+    if (excludeIds.length > 0) q = q.not('user_id', 'in', `(${excludeIds.join(',')})`) as typeof q
     if (beforeIso) q = q.lt('created_at', beforeIso) as typeof q
     const { data } = await q
     return data || []
+}
+
+function splitConversionEventsByType(rows: { event_type: string; first_utm_source: string | null }[]) {
+    const byType = (type: string) => rows.filter(r => r.event_type === type).map(r => ({ first_utm_source: r.first_utm_source }))
+    return {
+        signup:            byType('signup'),
+        comment:           byType('comment'),
+        reaction:          byType('reaction'),
+        vote:              byType('vote'),
+        discussionComment: byType('discussion_comment'),
+    }
 }
 
 interface KPIMetrics {
@@ -235,9 +311,9 @@ interface KPIMetrics {
     
     // 유입 경로별 (기간별)
     visitorsBySource: {
-        d1:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
-        d7:  { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
-        d30: { threads: number; instagram: number; x: number; youtube: number; tiktok: number; organic: number }
+        d1:  { threads: number; instagram: number; youtube: number; tiktok: number; naverBlog: number; organic: number; other: number }
+        d7:  { threads: number; instagram: number; youtube: number; tiktok: number; naverBlog: number; organic: number; other: number }
+        d30: { threads: number; instagram: number; youtube: number; tiktok: number; naverBlog: number; organic: number; other: number }
     }
     // 채널별 방문자 + 가입 + 가입 전환율 (기간별)
     channelInboundByPeriod: {
@@ -269,11 +345,15 @@ interface KPIMetrics {
     
     // 이달 활성 참여자 (중복 제거된 유저 수)
     monthlyActiveCommenters: number
+    monthlyActiveIssueCommenters: number
+    monthlyActiveDiscussionCommenters: number
     monthlyActiveReactors: number
     monthlyActiveVoters: number
 
     // 이달 참여율 (활성 유저 / 전체 가입자)
     commentParticipation: number
+    issueCommentParticipation: number
+    discussionCommentParticipation: number
     reactionParticipation: number
     voteParticipation: number
     
@@ -302,18 +382,24 @@ interface KPIMetrics {
         voteProgress: number
     }
 
-    // 추이 비교
-    weekOverWeek: {
-        newUsers:  { current: number; previous: number; delta: number; deltaPercent: number | null }
-        comments:  { current: number; previous: number; delta: number; deltaPercent: number | null }
-        reactions: { current: number; previous: number; delta: number; deltaPercent: number | null }
-        votes:     { current: number; previous: number; delta: number; deltaPercent: number | null }
+    // 추이 비교: 진행 중인 기간(지금까지) vs 바로 전 기간 전체
+    // d1 = 오늘 vs 어제 하루 전체 / d7 = 이번 주 vs 저번 주 전체(일~토) / d30 = 이번 달 vs 저번 달 전체(1일~말일)
+    periodComparison: {
+        d1: PeriodComparisonStat
+        d7: PeriodComparisonStat
+        d30: PeriodComparisonStat
     }
-    monthOverMonth: {
-        newUsers:  { current: number; previous: number; delta: number; deltaPercent: number | null }
-        comments:  { current: number; previous: number; delta: number; deltaPercent: number | null }
-        reactions: { current: number; previous: number; delta: number; deltaPercent: number | null }
-        votes:     { current: number; previous: number; delta: number; deltaPercent: number | null }
+    // 채널별 방문자의 전일/전주/전월 대비
+    channelVisitorComparison: {
+        d1: Record<ChannelKey, DeltaStat>
+        d7: Record<ChannelKey, DeltaStat>
+        d30: Record<ChannelKey, DeltaStat>
+    }
+    // 채널별 전환율의 전일/전주/전월 대비용 — 이전 기간의 전체 breakdown (프론트에서 현재값과 직접 빼서 비교)
+    previousChannelInboundByPeriod: {
+        d1: ChannelInboundBreakdown
+        d7: ChannelInboundBreakdown
+        d30: ChannelInboundBreakdown
     }
 
     // 스파크라인 (최근 14일 일별)
@@ -337,6 +423,20 @@ interface KPIMetrics {
 
     periodStats: { d1: PeriodStat; d7: PeriodStat; d30: PeriodStat }
     weeklyBreakdown: WeekStat[] | null  // 과거 월에만 존재
+
+    // 주간 리포트용: "완전히 끝난 지난 한 주(일~토) 전체" vs "그 전 한 주 전체" 비교
+    // (periodStats.d7/periodComparison.d7은 "이번 주 진행 중" 기준이라 리포트 발행 시점(주로 월요일)엔 데이터가 거의 비어있어 별도로 둠)
+    weekOverWeek: {
+        current: PeriodStat
+        uniqueVisitors: number
+        pageViews: number
+        comparison: PeriodComparisonStat
+        channelBreakdown: ChannelInboundBreakdown
+        previousChannelBreakdown: ChannelInboundBreakdown
+        channelVisitorComparison: Record<ChannelKey, DeltaStat>
+        periodStart: string  // 지난주 시작일 (ISO)
+        periodEnd: string    // 지난주 종료일 다음날 0시 (ISO, exclusive)
+    }
 
     // 목표값
     targets: {
@@ -426,7 +526,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     // 과거 월이면 월말 1초 전, 현재 월이면 지금을 기준으로 날짜 계산
     const queryNow        = pastMonth ? new Date(periodEnd.getTime() - 1000) : new Date()
     const todayStart      = getKSTTodayStart(queryNow)
+    const yesterdayStart  = getKSTDaysAgoStart(1, queryNow)
     const thisWeekStart   = getKSTWeekStart(queryNow)
+    const lastWeekStart   = new Date(thisWeekStart.getTime() - 7 * 86400000)
     const sevenDaysAgo    = getKSTDaysAgoStart(7, queryNow)
     const fourteenDaysAgo = getKSTDaysAgoStart(14, queryNow)
     const thisMonthStart  = periodStart
@@ -514,35 +616,35 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .not('issue_id', 'is', null)
-        .eq('is_hidden', false)))
+        .eq('visibility', 'public')))
 
     // 토론 의견 (discussion_topic_id가 있는 것)
     const { count: discussionOpinions } = await cap(fi(supabase
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .not('discussion_topic_id', 'is', null)
-        .eq('is_hidden', false)))
+        .eq('visibility', 'public')))
 
     const totalComments = (issueComments || 0) + (discussionOpinions || 0)
 
-    const { count: totalReactions } = await cap(fi(supabase
-        .from('reactions')
-        .select('*', { count: 'exact', head: true })))
-
-    const { count: totalVotes } = await cap(fi(supabase
-        .from('user_votes')
-        .select('*', { count: 'exact', head: true })))
-
     // 4. 이달 활성 참여자 수 (중복 제거, KST 기준)
+    // 댓글은 이슈 댓글 / 토론 의견을 각각 별개 요소로 보고 참여자 수도 따로 집계함
     const [
-        { data: monthlyCommentUsers },
+        { data: monthlyIssueCommentUsers },
+        { data: monthlyDiscussionCommentUsers },
         { data: monthlyReactionUsers },
         { data: monthlyVoteUsers },
     ] = await Promise.all([
         cap(fi(supabase.from('comments').select('user_id')
             .gte('created_at', thisMonthStart.toISOString())
-            .eq('is_hidden', false)
-            .not('user_id', 'is', null))),
+            .eq('visibility', 'public')
+            .not('user_id', 'is', null)
+            .not('issue_id', 'is', null))),
+        cap(fi(supabase.from('comments').select('user_id')
+            .gte('created_at', thisMonthStart.toISOString())
+            .eq('visibility', 'public')
+            .not('user_id', 'is', null)
+            .not('discussion_topic_id', 'is', null))),
         cap(fi(supabase.from('reactions').select('user_id')
             .gte('created_at', thisMonthStart.toISOString())
             .not('user_id', 'is', null))),
@@ -551,10 +653,17 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             .not('user_id', 'is', null))),
     ])
 
-    const monthlyActiveCommenters  = new Set(monthlyCommentUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id)  || []).size
+    const monthlyActiveIssueCommenters      = new Set(monthlyIssueCommentUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id) || []).size
+    const monthlyActiveDiscussionCommenters = new Set(monthlyDiscussionCommentUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id) || []).size
+    const monthlyActiveCommenters = new Set([
+        ...(monthlyIssueCommentUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id) || []),
+        ...(monthlyDiscussionCommentUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id) || []),
+    ]).size
     const monthlyActiveReactors    = new Set(monthlyReactionUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id) || []).size
     const monthlyActiveVoters      = new Set(monthlyVoteUsers?.filter((r: { user_id: string }) => !internalIdSet.has(r.user_id)).map((r: { user_id: string }) => r.user_id)     || []).size
 
+    const issueCommentParticipation      = (totalUsers || 0) > 0 ? (monthlyActiveIssueCommenters      / (totalUsers || 0)) * 100 : 0
+    const discussionCommentParticipation = (totalUsers || 0) > 0 ? (monthlyActiveDiscussionCommenters / (totalUsers || 0)) * 100 : 0
     const commentParticipation  = (totalUsers || 0) > 0 ? (monthlyActiveCommenters  / (totalUsers || 0)) * 100 : 0
     const reactionParticipation = (totalUsers || 0) > 0 ? (monthlyActiveReactors    / (totalUsers || 0)) * 100 : 0
     const voteParticipation     = (totalUsers || 0) > 0 ? (monthlyActiveVoters      / (totalUsers || 0)) * 100 : 0
@@ -569,6 +678,8 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { count: monthlyCardNewsCount },
         { count: todayNewUsersCount },
         { count: todayCommentsCount },
+        { count: todayIssueCommentsCount },
+        { count: todayDiscussionCommentsCount },
         { count: todayReactionsCount },
         { count: todayVotesCount },
     ] = await Promise.all([
@@ -591,7 +702,11 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         cap(supabase.from('users').select('*', { count: 'exact', head: true })
             .eq('is_internal', false).gte('created_at', todayStart.toISOString())),
         cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', todayStart.toISOString()).eq('is_hidden', false))),
+            .gte('created_at', todayStart.toISOString()).eq('visibility', 'public'))),
+        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()).eq('visibility', 'public').not('issue_id', 'is', null))),
+        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', todayStart.toISOString()).eq('visibility', 'public').not('discussion_topic_id', 'is', null))),
         cap(fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
             .gte('created_at', todayStart.toISOString()))),
         cap(fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
@@ -612,7 +727,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', sevenDaysAgo.toISOString())
-        .eq('is_hidden', false)))
+        .eq('visibility', 'public')))
 
     const { count: newReactions7d } = await cap(fi(supabase
         .from('reactions')
@@ -641,6 +756,10 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { count: newUsersThisMonth },
         { count: newCommentsThisWeek },
         { count: newCommentsThisMonth },
+        { count: newIssueCommentsThisWeek },
+        { count: newIssueCommentsThisMonth },
+        { count: newDiscussionCommentsThisWeek },
+        { count: newDiscussionCommentsThisMonth },
         { count: newReactionsThisWeek },
         { count: newReactionsThisMonth },
         { count: newVotesThisWeek },
@@ -663,9 +782,17 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         cap(supabase.from('users').select('*', { count: 'exact', head: true })
             .eq('is_internal', false).gte('created_at', thisMonthStart.toISOString())),
         cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisWeekStart.toISOString()).eq('is_hidden', false))),
+            .gte('created_at', thisWeekStart.toISOString()).eq('visibility', 'public'))),
         cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()).eq('is_hidden', false))),
+            .gte('created_at', thisMonthStart.toISOString()).eq('visibility', 'public'))),
+        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisWeekStart.toISOString()).eq('visibility', 'public').not('issue_id', 'is', null))),
+        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()).eq('visibility', 'public').not('issue_id', 'is', null))),
+        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisWeekStart.toISOString()).eq('visibility', 'public').not('discussion_topic_id', 'is', null))),
+        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
+            .gte('created_at', thisMonthStart.toISOString()).eq('visibility', 'public').not('discussion_topic_id', 'is', null))),
         cap(fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
             .gte('created_at', thisWeekStart.toISOString()))),
         cap(fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
@@ -677,9 +804,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     ])
 
     const periodStats = {
-        d1:  { newUsers: todayNewUsersCount ?? 0, comments: todayCommentsCount ?? 0, reactions: todayReactionsCount ?? 0, votes: todayVotesCount ?? 0, issues: todayIssuesCount ?? 0, shortforms: todayShortforms, cardNews: todayCardNewsCount ?? 0 },
-        d7:  { newUsers: newUsersThisWeek ?? 0, comments: newCommentsThisWeek ?? 0, reactions: newReactionsThisWeek ?? 0, votes: newVotesThisWeek ?? 0, issues: newIssuesThisWeek ?? 0, shortforms: shortformsThisWeek ?? 0, cardNews: cardNewsThisWeek ?? 0 },
-        d30: { newUsers: newUsersThisMonth ?? 0, comments: newCommentsThisMonth ?? 0, reactions: newReactionsThisMonth ?? 0, votes: newVotesThisMonth ?? 0, issues: newIssuesThisMonth ?? 0, shortforms: shortformsThisMonth ?? 0, cardNews: cardNewsThisMonth ?? 0 },
+        d1:  { newUsers: todayNewUsersCount ?? 0, comments: todayCommentsCount ?? 0, issueComments: todayIssueCommentsCount ?? 0, discussionComments: todayDiscussionCommentsCount ?? 0, reactions: todayReactionsCount ?? 0, votes: todayVotesCount ?? 0, issues: todayIssuesCount ?? 0, shortforms: todayShortforms, cardNews: todayCardNewsCount ?? 0 },
+        d7:  { newUsers: newUsersThisWeek ?? 0, comments: newCommentsThisWeek ?? 0, issueComments: newIssueCommentsThisWeek ?? 0, discussionComments: newDiscussionCommentsThisWeek ?? 0, reactions: newReactionsThisWeek ?? 0, votes: newVotesThisWeek ?? 0, issues: newIssuesThisWeek ?? 0, shortforms: shortformsThisWeek ?? 0, cardNews: cardNewsThisWeek ?? 0 },
+        d30: { newUsers: newUsersThisMonth ?? 0, comments: newCommentsThisMonth ?? 0, issueComments: newIssueCommentsThisMonth ?? 0, discussionComments: newDiscussionCommentsThisMonth ?? 0, reactions: newReactionsThisMonth ?? 0, votes: newVotesThisMonth ?? 0, issues: newIssuesThisMonth ?? 0, shortforms: shortformsThisMonth ?? 0, cardNews: cardNewsThisMonth ?? 0 },
     }
 
     // 7. 방문자 데이터
@@ -722,21 +849,21 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
 
     const monthlyUniqueVisitors = new Set(monthlyVisitors?.map((v: { session_id: string }) => v.session_id) || []).size
 
-    // 유입 경로별 방문자 + 채널별 가입 (오늘/7일/30일)
+    // 유입 경로별 방문자 + 채널별 가입/댓글/반응/투표/토론의견 (오늘/7일/30일)
     const [
         { data: sourceDataD1 },
         { data: sourceDataD7 },
         { data: sourceDataD30 },
-        signupEventsD1,
-        signupEventsD7,
-        signupEventsD30,
+        convEventsD1,
+        convEventsD7,
+        convEventsD30,
     ] = await Promise.all([
-        nob(cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', todayStart.toISOString()))),
-        nob(cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', sevenDaysAgo.toISOString()))),
-        nob(cap(supabase.from('page_views').select('utm_source, session_id').gte('created_at', thisMonthStart.toISOString()))),
-        fetchSignupEventsBySource(todayStart.toISOString(), pastMonth ? periodEnd.toISOString() : undefined),
-        fetchSignupEventsBySource(sevenDaysAgo.toISOString(), pastMonth ? periodEnd.toISOString() : undefined),
-        fetchSignupEventsBySource(thisMonthStart.toISOString(), pastMonth ? periodEnd.toISOString() : undefined),
+        nob(cap(supabase.from('page_views').select('utm_source, session_id, created_at').gte('created_at', todayStart.toISOString()))),
+        nob(cap(supabase.from('page_views').select('utm_source, session_id, created_at').gte('created_at', sevenDaysAgo.toISOString()))),
+        nob(cap(supabase.from('page_views').select('utm_source, session_id, created_at').gte('created_at', thisMonthStart.toISOString()))),
+        fetchConversionEventsBySource(todayStart.toISOString(), internalIds, pastMonth ? periodEnd.toISOString() : undefined),
+        fetchConversionEventsBySource(sevenDaysAgo.toISOString(), internalIds, pastMonth ? periodEnd.toISOString() : undefined),
+        fetchConversionEventsBySource(thisMonthStart.toISOString(), internalIds, pastMonth ? periodEnd.toISOString() : undefined),
     ])
 
     const visitorsD1 = buildVisitorCounts(sourceDataD1)
@@ -750,9 +877,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
     }
 
     const channelInboundByPeriod = {
-        d1:  buildChannelInboundBreakdown(visitorsD1, signupEventsD1),
-        d7:  buildChannelInboundBreakdown(visitorsD7, signupEventsD7),
-        d30: buildChannelInboundBreakdown(visitorsD30, signupEventsD30),
+        d1:  buildChannelInboundBreakdown(visitorsD1, splitConversionEventsByType(convEventsD1)),
+        d7:  buildChannelInboundBreakdown(visitorsD7, splitConversionEventsByType(convEventsD7)),
+        d30: buildChannelInboundBreakdown(visitorsD30, splitConversionEventsByType(convEventsD30)),
     }
 
     // 전환율 계산 (기간별: 오늘 / 7일 / 30일)
@@ -807,7 +934,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             .from('comments')
             .select('issue_id')
             .in('issue_id', issueIds)
-            .eq('is_hidden', false))
+            .eq('visibility', 'public'))
 
         const { data: reactions } = await fi(supabase
             .from('reactions')
@@ -854,10 +981,12 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         : 0
 
     // 8. 목표 대비 진척도
+    // 가입자는 누적 목표(시작 인원 → N명 달성)라 누적치(totalUsers)와 비교하지만,
+    // 댓글/반응/투표는 "이번 달 신규 발생량" 목표라 이번 달 집계치와 비교해야 함
     const userProgress = ((totalUsers || 0) / goal.target_users) * 100
-    const commentProgress = ((totalComments || 0) / goal.target_comments) * 100
-    const reactionProgress = ((totalReactions || 0) / goal.target_reactions) * 100
-    const voteProgress = ((totalVotes || 0) / goal.target_votes) * 100
+    const commentProgress = ((newCommentsThisMonth || 0) / goal.target_comments) * 100
+    const reactionProgress = ((newReactionsThisMonth || 0) / goal.target_reactions) * 100
+    const voteProgress = ((newVotesThisMonth || 0) / goal.target_votes) * 100
 
     // 현재 가입자 기준 환산 목표 (이사님 목표는 가입자 100명 달성 시 기대치)
     const userRatio = Math.min((totalUsers || 0) / goal.target_users, 1)
@@ -868,12 +997,13 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         comments:        stageTargetComments,
         reactions:       stageTargetReactions,
         votes:           stageTargetVotes,
-        commentProgress:  ((totalComments  || 0) / stageTargetComments)  * 100,
-        reactionProgress: ((totalReactions || 0) / stageTargetReactions) * 100,
-        voteProgress:     ((totalVotes     || 0) / stageTargetVotes)     * 100,
+        commentProgress:  ((newCommentsThisMonth  || 0) / stageTargetComments)  * 100,
+        reactionProgress: ((newReactionsThisMonth || 0) / stageTargetReactions) * 100,
+        voteProgress:     ((newVotesThisMonth     || 0) / stageTargetVotes)     * 100,
     }
 
-    // 9. 추이 비교 (지난주 대비 / 지난달 대비)
+    // 9. 추이 비교: 진행 중인 기간(지금까지) vs 바로 전 기간 전체
+    // d1 = 오늘 vs 어제 하루 전체 / d7 = 이번 주 vs 저번 주 전체(일~토) / d30 = 이번 달 vs 저번 달 전체(1일~말일)
     const delta = (current: number, previous: number) => ({
         current,
         previous,
@@ -881,74 +1011,118 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         deltaPercent: previous > 0 ? ((current - previous) / previous) * 100 : null,
     })
 
-    // 지난주 (7-14일 전, KST 기준 — 과거 월이면 월말 기준)
-    const [
-        { count: prevUsers7d },
-        { count: prevComments7d },
-        { count: prevReactions7d },
-        { count: prevVotes7d },
-    ] = await Promise.all([
-        supabase.from('users').select('*', { count: 'exact', head: true })
-            .eq('is_internal', false)
-            .gte('created_at', fourteenDaysAgo.toISOString())
-            .lt('created_at', sevenDaysAgo.toISOString()),
-        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', fourteenDaysAgo.toISOString())
-            .lt('created_at', sevenDaysAgo.toISOString())
-            .eq('is_hidden', false)),
-        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', fourteenDaysAgo.toISOString())
-            .lt('created_at', sevenDaysAgo.toISOString())),
-        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', fourteenDaysAgo.toISOString())
-            .lt('created_at', sevenDaysAgo.toISOString())),
-    ])
-
-    // 이번 달 / 지난달 (KST 기준)
-    const [
-        { count: thisMonthUsers },
-        { count: thisMonthComments },
-        { count: thisMonthReactions },
-        { count: thisMonthVotes },
-        { count: lastMonthUsers },
-        { count: lastMonthComments },
-        { count: lastMonthReactions },
-        { count: lastMonthVotes },
-    ] = await Promise.all([
-        cap(supabase.from('users').select('*', { count: 'exact', head: true })
-            .eq('is_internal', false).gte('created_at', thisMonthStart.toISOString())),
-        cap(fi(supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()).eq('is_hidden', false))),
-        cap(fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()))),
-        cap(fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', thisMonthStart.toISOString()))),
-        supabase.from('users').select('*', { count: 'exact', head: true })
-            .eq('is_internal', false)
-            .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString()),
-        fi(supabase.from('comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString()).eq('is_hidden', false)),
-        fi(supabase.from('reactions').select('*', { count: 'exact', head: true })
-            .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString())),
-        fi(supabase.from('user_votes').select('*', { count: 'exact', head: true })
-            .gte('created_at', lastMonthStart.toISOString())
-            .lt('created_at', thisMonthStart.toISOString())),
-    ])
-
-    const weekOverWeek = {
-        newUsers:  delta(newUsers7d  || 0, prevUsers7d  || 0),
-        comments:  delta(newComments7d  || 0, prevComments7d  || 0),
-        reactions: delta(newReactions7d || 0, prevReactions7d || 0),
-        votes:     delta(newVotes7d  || 0, prevVotes7d  || 0),
+    const countRange = async (table: string, field: string, gte: Date, lt: Date, extra: (q: any) => any = (q) => q) => {
+        const { count } = await extra(supabase.from(table).select('*', { count: 'exact', head: true })
+            .gte(field, gte.toISOString()).lt(field, lt.toISOString()))
+        return count || 0
     }
-    const monthOverMonth = {
-        newUsers:  delta(thisMonthUsers  || 0, lastMonthUsers  || 0),
-        comments:  delta(thisMonthComments  || 0, lastMonthComments  || 0),
-        reactions: delta(thisMonthReactions || 0, lastMonthReactions || 0),
-        votes:     delta(thisMonthVotes  || 0, lastMonthVotes  || 0),
+    const visitorSessionCount = async (gte: Date, lt: Date) => {
+        const { data } = await nob(supabase.from('page_views').select('session_id')
+            .gte('created_at', gte.toISOString()).lt('created_at', lt.toISOString()))
+        return new Set((data || []).map((v: { session_id: string }) => v.session_id)).size
+    }
+
+    // 채널별 전환율 "전주/전월 대비"용 — 이전 기간의 채널별 방문자+전환 breakdown을 통째로 계산
+    const prevChannelBreakdown = async (gte: Date, lt: Date) => {
+        const [{ data: pvRows }, { data: convRows }] = await Promise.all([
+            nob(supabase.from('page_views').select('utm_source, session_id, created_at')
+                .gte('created_at', gte.toISOString()).lt('created_at', lt.toISOString())),
+            fi(supabase.from('conversion_events').select('event_type, first_utm_source')
+                .gte('created_at', gte.toISOString()).lt('created_at', lt.toISOString())),
+        ])
+        const visitors = buildVisitorCounts(pvRows as { utm_source: string | null; session_id: string; created_at: string }[])
+        const events = splitConversionEventsByType((convRows || []) as { event_type: string; first_utm_source: string | null }[])
+        return { visitors, breakdown: buildChannelInboundBreakdown(visitors, events) }
+    }
+
+    const prevPeriodCounts = async (gte: Date, lt: Date) => {
+        const [users, comments, issueComments, discussionComments, reactions, votes, issues, shortforms, cardNews, uniqueVisitors, pageViews, channel] = await Promise.all([
+            countRange('users', 'created_at', gte, lt, (q) => q.eq('is_internal', false)),
+            countRange('comments', 'created_at', gte, lt, (q) => fi(q).eq('visibility', 'public')),
+            countRange('comments', 'created_at', gte, lt, (q) => fi(q).eq('visibility', 'public').not('issue_id', 'is', null)),
+            countRange('comments', 'created_at', gte, lt, (q) => fi(q).eq('visibility', 'public').not('discussion_topic_id', 'is', null)),
+            countRange('reactions', 'created_at', gte, lt, fi),
+            countRange('user_votes', 'created_at', gte, lt, fi),
+            countRange('issues', 'approved_at', gte, lt, (q) => q.eq('approval_status', '승인')),
+            countRange('shortform_jobs', 'youtube_uploaded_at', gte, lt, (q) => q.not('youtube_uploaded_at', 'is', null)),
+            countRange('card_news_logs', 'published_at', gte, lt),
+            visitorSessionCount(gte, lt),
+            countRange('page_views', 'created_at', gte, lt),
+            prevChannelBreakdown(gte, lt),
+        ])
+        return {
+            users, comments, issueComments, discussionComments, reactions, votes, issues, shortforms, cardNews, uniqueVisitors, pageViews,
+            channelVisitors: channel.visitors,
+            channelBreakdown: channel.breakdown,
+        }
+    }
+
+    const twoWeeksAgoStart = new Date(lastWeekStart.getTime() - 7 * 86400000)
+
+    const [yesterdayFull, lastWeekFull, lastMonthFull, twoWeeksAgoFull] = await Promise.all([
+        prevPeriodCounts(yesterdayStart, todayStart),
+        prevPeriodCounts(lastWeekStart, thisWeekStart),
+        prevPeriodCounts(lastMonthStart, thisMonthStart),
+        prevPeriodCounts(twoWeeksAgoStart, lastWeekStart),
+    ])
+
+    const toComparisonStat = (current: PeriodStat, currentVisitors: number, previous: typeof yesterdayFull): PeriodComparisonStat => ({
+        newUsers:           delta(current.newUsers, previous.users),
+        comments:           delta(current.comments, previous.comments),
+        issueComments:      delta(current.issueComments, previous.issueComments),
+        discussionComments: delta(current.discussionComments, previous.discussionComments),
+        reactions:          delta(current.reactions, previous.reactions),
+        votes:              delta(current.votes, previous.votes),
+        issues:             delta(current.issues, previous.issues),
+        shortforms:         delta(current.shortforms, previous.shortforms),
+        cardNews:           delta(current.cardNews, previous.cardNews),
+        uniqueVisitors:     delta(currentVisitors, previous.uniqueVisitors),
+    })
+
+    const periodComparison = {
+        d1:  toComparisonStat(periodStats.d1,  todayUniqueVisitors,   yesterdayFull),
+        d7:  toComparisonStat(periodStats.d7,  weeklyUniqueVisitors,  lastWeekFull),
+        d30: toComparisonStat(periodStats.d30, monthlyUniqueVisitors, lastMonthFull),
+    }
+
+    // 채널별 방문자의 전일/전주/전월 대비 (채널별 유입 표에서 씀)
+    const toChannelVisitorComparison = (
+        current: VisitorCountsByChannel, previous: VisitorCountsByChannel,
+    ): Record<ChannelKey, DeltaStat> => {
+        const result = {} as Record<ChannelKey, DeltaStat>
+        for (const key of CHANNEL_KEYS) result[key] = delta(current[key], previous[key])
+        return result
+    }
+    const channelVisitorComparison = {
+        d1:  toChannelVisitorComparison(visitorsD1,  yesterdayFull.channelVisitors),
+        d7:  toChannelVisitorComparison(visitorsD7,  lastWeekFull.channelVisitors),
+        d30: toChannelVisitorComparison(visitorsD30, lastMonthFull.channelVisitors),
+    }
+
+    // 채널별 "전환율"의 전일/전주/전월 대비용 — 이전 기간의 채널별 전체 breakdown(방문자+전환율)을 그대로 노출
+    const previousChannelInboundByPeriod = {
+        d1:  yesterdayFull.channelBreakdown,
+        d7:  lastWeekFull.channelBreakdown,
+        d30: lastMonthFull.channelBreakdown,
+    }
+
+    // 주간 리포트용: 지난주 전체 vs 그 전주 전체 (매주 월요일 발행 기준으로 "완결된 한 주" 비교)
+    const lastWeekPeriodStat: PeriodStat = {
+        newUsers: lastWeekFull.users, comments: lastWeekFull.comments,
+        issueComments: lastWeekFull.issueComments, discussionComments: lastWeekFull.discussionComments,
+        reactions: lastWeekFull.reactions, votes: lastWeekFull.votes, issues: lastWeekFull.issues,
+        shortforms: lastWeekFull.shortforms, cardNews: lastWeekFull.cardNews,
+    }
+    const weekOverWeek = {
+        current: lastWeekPeriodStat,
+        uniqueVisitors: lastWeekFull.uniqueVisitors,
+        pageViews: lastWeekFull.pageViews,
+        comparison: toComparisonStat(lastWeekPeriodStat, lastWeekFull.uniqueVisitors, twoWeeksAgoFull),
+        channelBreakdown: lastWeekFull.channelBreakdown,
+        previousChannelBreakdown: twoWeeksAgoFull.channelBreakdown,
+        channelVisitorComparison: toChannelVisitorComparison(lastWeekFull.channelVisitors, twoWeeksAgoFull.channelVisitors),
+        periodStart: lastWeekStart.toISOString(),
+        periodEnd: thisWeekStart.toISOString(),
     }
 
     // 10. 스파크라인 (최근 14일 일별 집계, 과거 월이면 월말 기준 14일)
@@ -959,7 +1133,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         { data: sparkVoteRows },
     ] = await Promise.all([
         cap(supabase.from('users').select('created_at').eq('is_internal', false).gte('created_at', fourteenDaysAgo.toISOString())),
-        cap(fi(supabase.from('comments').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()).eq('is_hidden', false))),
+        cap(fi(supabase.from('comments').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()).eq('visibility', 'public'))),
         cap(fi(supabase.from('reactions').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()))),
         cap(fi(supabase.from('user_votes').select('created_at').gte('created_at', fourteenDaysAgo.toISOString()))),
     ])
@@ -997,7 +1171,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
         ] = await Promise.all([
             supabase.from('users').select('created_at').eq('is_internal', false)
                 .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
-            fi(supabase.from('comments').select('created_at').eq('is_hidden', false)
+            fi(supabase.from('comments').select('created_at, issue_id, discussion_topic_id').eq('visibility', 'public')
                 .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString())),
             fi(supabase.from('reactions').select('created_at')
                 .gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString())),
@@ -1036,17 +1210,20 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             const weekReactions  = weekConvRows.filter((r: { event_type: string }) => r.event_type === 'reaction').length
             const convRate = buildConversionRatePeriod(weekUniqueVisitors, weekSignups, weekVotes, weekComments, weekReactions)
 
-            const weekVisitorCounts = buildVisitorCounts(weekPVRows as { utm_source: string | null; session_id: string }[])
-            const weekSignupEvents = weekConvRows
-                .filter((r: { event_type: string }) => r.event_type === 'signup')
-                .map((r: { first_utm_source?: string | null }) => ({ first_utm_source: r.first_utm_source ?? null }))
-            const weekChannelInbound = buildChannelInboundBreakdown(weekVisitorCounts, weekSignupEvents)
+            const weekVisitorCounts = buildVisitorCounts(weekPVRows as { utm_source: string | null; session_id: string; created_at: string }[])
+            const weekChannelInbound = buildChannelInboundBreakdown(
+                weekVisitorCounts,
+                splitConversionEventsByType(weekConvRows.map((r: { event_type: string; first_utm_source?: string | null }) =>
+                    ({ event_type: r.event_type, first_utm_source: r.first_utm_source ?? null })))
+            )
 
             return {
                 week: i + 1,
                 label: `${i + 1}주차`,
                 newUsers:       wUserRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
                 comments:       wCommentRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
+                issueComments:      wCommentRows?.filter((r: { created_at: string; issue_id: string | null }) => r.issue_id && toWeekIdx(r.created_at) === i).length || 0,
+                discussionComments: wCommentRows?.filter((r: { created_at: string; discussion_topic_id: string | null }) => r.discussion_topic_id && toWeekIdx(r.created_at) === i).length || 0,
                 reactions:      wReactionRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
                 votes:          wVoteRows?.filter((r: { created_at: string }) => toWeekIdx(r.created_at) === i).length || 0,
                 issues:         wIssueRows?.filter((r: { approved_at: string | null }) => r.approved_at && toWeekIdx(r.approved_at) === i).length || 0,
@@ -1092,11 +1269,11 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             internalUsersCount: internalUsersCount || 0,
             currentActiveIssues: activeIssues || 0,
             currentTotalIssues: totalApprovedIssues || 0,
-            currentComments: totalComments,
+            currentComments: newCommentsThisMonth || 0,
             currentIssueComments: issueComments || 0,
             currentDiscussionOpinions: discussionOpinions || 0,
-            currentReactions: totalReactions || 0,
-            currentVotes: totalVotes || 0,
+            currentReactions: newReactionsThisMonth || 0,
+            currentVotes: newVotesThisMonth || 0,
 
             // 방문자 지표
             todayPageViews,
@@ -1112,9 +1289,13 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             issueQuality,
             
             monthlyActiveCommenters,
+            monthlyActiveIssueCommenters,
+            monthlyActiveDiscussionCommenters,
             monthlyActiveReactors,
             monthlyActiveVoters,
             commentParticipation,
+            issueCommentParticipation,
+            discussionCommentParticipation,
             reactionParticipation,
             voteParticipation,
             dailyNewUsers,
@@ -1127,8 +1308,9 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             reactionProgress,
             voteProgress,
             stageTargets,
-            weekOverWeek,
-            monthOverMonth,
+            periodComparison,
+            channelVisitorComparison,
+            previousChannelInboundByPeriod,
             sparklines,
             todayIssues: todayIssuesCount ?? 0,
             monthlyIssues: monthlyIssuesCount ?? 0,
@@ -1140,6 +1322,7 @@ export async function calculateKPI(year?: number, month?: number): Promise<{
             todayComments: todayCommentsCount ?? 0,
             todayReactions: todayReactionsCount ?? 0,
             periodStats,
+            weekOverWeek,
             weeklyBreakdown,
             targets: {
                 users: goal.target_users,
@@ -1196,13 +1379,13 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .not('issue_id', 'is', null)
-        .eq('is_hidden', false)
+        .eq('visibility', 'public')
 
     const { count: discussionOpinions } = await supabase
         .from('comments')
         .select('*', { count: 'exact', head: true })
         .not('discussion_topic_id', 'is', null)
-        .eq('is_hidden', false)
+        .eq('visibility', 'public')
 
     const totalComments = (issueComments || 0) + (discussionOpinions || 0)
 
@@ -1233,9 +1416,9 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         monthlyPageViews: 0,
         monthlyUniqueVisitors: 0,
         visitorsBySource: {
-            d1:  { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
-            d7:  { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
-            d30: { threads: 0, instagram: 0, x: 0, youtube: 0, tiktok: 0, organic: 0 },
+            d1:  { threads: 0, instagram: 0, youtube: 0, tiktok: 0, naverBlog: 0, organic: 0, other: 0 },
+            d7:  { threads: 0, instagram: 0, youtube: 0, tiktok: 0, naverBlog: 0, organic: 0, other: 0 },
+            d30: { threads: 0, instagram: 0, youtube: 0, tiktok: 0, naverBlog: 0, organic: 0, other: 0 },
         },
         channelInboundByPeriod: {
             d1:  emptyChannelInboundBreakdown(),
@@ -1261,9 +1444,13 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         },
         
         monthlyActiveCommenters: 0,
+        monthlyActiveIssueCommenters: 0,
+        monthlyActiveDiscussionCommenters: 0,
         monthlyActiveReactors: 0,
         monthlyActiveVoters: 0,
         commentParticipation: 0,
+        issueCommentParticipation: 0,
+        discussionCommentParticipation: 0,
         reactionParticipation: 0,
         voteParticipation: 0,
         dailyNewUsers: 0,
@@ -1276,8 +1463,21 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         reactionProgress: 0,
         voteProgress: 0,
         stageTargets: { comments: 1, reactions: 1, votes: 1, commentProgress: 0, reactionProgress: 0, voteProgress: 0 },
-        weekOverWeek:   { newUsers: zd, comments: zd, reactions: zd, votes: zd },
-        monthOverMonth: { newUsers: zd, comments: zd, reactions: zd, votes: zd },
+        periodComparison: {
+            d1:  { newUsers: zd, comments: zd, issueComments: zd, discussionComments: zd, reactions: zd, votes: zd, issues: zd, shortforms: zd, cardNews: zd, uniqueVisitors: zd },
+            d7:  { newUsers: zd, comments: zd, issueComments: zd, discussionComments: zd, reactions: zd, votes: zd, issues: zd, shortforms: zd, cardNews: zd, uniqueVisitors: zd },
+            d30: { newUsers: zd, comments: zd, issueComments: zd, discussionComments: zd, reactions: zd, votes: zd, issues: zd, shortforms: zd, cardNews: zd, uniqueVisitors: zd },
+        },
+        channelVisitorComparison: {
+            d1:  { threads: zd, instagram: zd, youtube: zd, tiktok: zd, naverBlog: zd, organic: zd, other: zd },
+            d7:  { threads: zd, instagram: zd, youtube: zd, tiktok: zd, naverBlog: zd, organic: zd, other: zd },
+            d30: { threads: zd, instagram: zd, youtube: zd, tiktok: zd, naverBlog: zd, organic: zd, other: zd },
+        },
+        previousChannelInboundByPeriod: {
+            d1:  emptyChannelInboundBreakdown(),
+            d7:  emptyChannelInboundBreakdown(),
+            d30: emptyChannelInboundBreakdown(),
+        },
         sparklines: { newUsers: new Array(14).fill(0), comments: new Array(14).fill(0), reactions: new Array(14).fill(0), votes: new Array(14).fill(0) },
         todayIssues: 0,
         monthlyIssues: 0,
@@ -1289,9 +1489,20 @@ async function getDefaultMetrics(): Promise<KPIMetrics> {
         todayComments: 0,
         todayReactions: 0,
         periodStats: {
-            d1:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
-            d7:  { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
-            d30: { newUsers: 0, comments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+            d1:  { newUsers: 0, comments: 0, issueComments: 0, discussionComments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+            d7:  { newUsers: 0, comments: 0, issueComments: 0, discussionComments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+            d30: { newUsers: 0, comments: 0, issueComments: 0, discussionComments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+        },
+        weekOverWeek: {
+            current: { newUsers: 0, comments: 0, issueComments: 0, discussionComments: 0, reactions: 0, votes: 0, issues: 0, shortforms: 0, cardNews: 0 },
+            uniqueVisitors: 0,
+            pageViews: 0,
+            comparison: { newUsers: zd, comments: zd, issueComments: zd, discussionComments: zd, reactions: zd, votes: zd, issues: zd, shortforms: zd, cardNews: zd, uniqueVisitors: zd },
+            channelBreakdown: emptyChannelInboundBreakdown(),
+            previousChannelBreakdown: emptyChannelInboundBreakdown(),
+            channelVisitorComparison: { threads: zd, instagram: zd, youtube: zd, tiktok: zd, naverBlog: zd, organic: zd, other: zd },
+            periodStart: new Date(0).toISOString(),
+            periodEnd: new Date(0).toISOString(),
         },
         weeklyBreakdown: null,
         targets: {

@@ -94,6 +94,16 @@ export function formatKstDateHeader(dateString: string): string {
 }
 
 /**
+ * 타임라인 항목의 연도 배지 표기 (KST 기준, 예: "2026년")
+ */
+export function formatKstYear(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+    })
+}
+
+/**
  * 타임라인 항목의 시각 표기 (KST 기준, 예: "14:00")
  */
 export function formatKstTime(dateString: string): string {
