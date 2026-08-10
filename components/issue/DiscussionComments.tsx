@@ -19,6 +19,7 @@ import LoginPromptModal from '@/components/common/LoginPromptModal'
 import { formatDate } from '@/lib/utils/format-date'
 import { goToLogin, goToLoginWithPendingAction } from '@/lib/pendingAction'
 import { usePendingAction } from '@/hooks/usePendingAction'
+import { trackConversion } from '@/lib/analytics/tracker'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
@@ -269,6 +270,7 @@ export default function DiscussionComments({
             }
             if (!res.ok) { setWriteError(json.error ?? '오류가 발생했어요.'); return }
             setDraft('')
+            trackConversion({ eventType: 'discussion_comment', discussionId: discussionTopicId })
             if (json.pending) {
                 /* 금칙어 포함 댓글: 알럿 없이 state에만 추가 */
                 if (json.data) {
@@ -458,6 +460,7 @@ export default function DiscussionComments({
             }
             if (!res.ok) { setReplyError(json.error ?? '오류가 발생했습니다.'); return }
             setReplyDraft('')
+            trackConversion({ eventType: 'discussion_comment', discussionId: discussionTopicId })
             if (json.data) {
                 const repliesRes = await fetch(`/api/comments?${contextParam}&parent_id=${parentId}&limit=50&offset=0`)
                 const repliesJson = await repliesRes.json()

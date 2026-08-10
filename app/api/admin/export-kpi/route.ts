@@ -4,7 +4,7 @@
  * KPI 데이터를 Google Sheets로 내보내는 관리자 전용 API.
  *
  * POST /api/admin/export-kpi
- * Body: { year: number, month: number }
+ * Body: { year: number, month: number, kind?: 'weekly' | 'monthly' }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,9 +16,10 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const year: number = body.year ?? new Date().getFullYear()
         const month: number = body.month ?? (new Date().getMonth() + 1)
+        const kind: 'weekly' | 'monthly' = body.kind === 'weekly' ? 'weekly' : 'monthly'
 
         const kpi = await calculateKPI(year, month)
-        const result = await exportKPIToGoogleSheets(year, month, kpi)
+        const result = await exportKPIToGoogleSheets(year, month, kpi, kind)
 
         const spreadsheetId = process.env.KPI_SPREADSHEET_ID
         const sheetUrl = spreadsheetId
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
             success: true,
             action: result.action,
             label: result.label,
+            sheetName: result.sheetName,
             sheetUrl,
         })
     } catch (error: unknown) {
