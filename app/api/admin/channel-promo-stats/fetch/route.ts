@@ -2,7 +2,7 @@
  * app/api/admin/channel-promo-stats/fetch/route.ts
  *
  * 유튜브·인스타그램 채널 통계를 실시간으로 불러온다 (틱톡은 권한 부족으로 아직 미지원, 수동 입력 유지).
- * - 유튜브: 채널 전체 누적 구독자·조회수(API 키) + 지정 기간 좋아요·댓글(애널리틱스, OAuth)
+ * - 유튜브: 채널 전체 누적 구독자 수(API 키) + 지정 기간 조회수·좋아요·댓글(애널리틱스, OAuth)
  * - 인스타그램: 팔로워 수 + 지정 기간(since~until) 조회수·좋아요·댓글
  *
  * GET /api/admin/channel-promo-stats/fetch?since=2026-08-02T00:00:00.000Z&until=2026-08-09T00:00:00.000Z
@@ -29,8 +29,10 @@ export async function GET(request: NextRequest) {
     const youtube = youtubeChannel.status === 'fulfilled'
         ? {
             ...youtubeChannel.value,
+            periodViews: youtubeEngagement.status === 'fulfilled' ? youtubeEngagement.value.periodViews : null,
             periodLikes: youtubeEngagement.status === 'fulfilled' ? youtubeEngagement.value.periodLikes : null,
             periodComments: youtubeEngagement.status === 'fulfilled' ? youtubeEngagement.value.periodComments : null,
+            periodShares: youtubeEngagement.status === 'fulfilled' ? youtubeEngagement.value.periodShares : null,
         }
         : null
 
