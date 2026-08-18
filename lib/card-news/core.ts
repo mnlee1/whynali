@@ -1207,14 +1207,17 @@ export async function generateSurgingSlides(issue: Issue, logoBase64: string): P
     isValidLineBlock(d?.background?.desc, 3) &&
     isValidLineBlock(d?.controversy?.desc, 3, true)
 
+  // 여러 섹션이 동시에 깨졌을 때 하나만 짚어주면, 재시도할 때 그 하나만 고치고 나머지가 다시
+  // 깨지는 "두더지잡기"가 반복될 수 있다 — 깨진 섹션을 전부 모아서 한 번에 알려준다.
   const describeSurgingFailure = (d: any): string | undefined => {
+    const issues: string[] = []
     const badgeMsg = describeLineBlockFailure(d?.badge?.desc, 3)
-    if (badgeMsg) return `badge.desc: ${badgeMsg}`
+    if (badgeMsg) issues.push(`badge.desc: ${badgeMsg}`)
     const bgMsg = describeLineBlockFailure(d?.background?.desc, 3)
-    if (bgMsg) return `background.desc: ${bgMsg}`
+    if (bgMsg) issues.push(`background.desc: ${bgMsg}`)
     const controversyMsg = describeLineBlockFailure(d?.controversy?.desc, 3, true)
-    if (controversyMsg) return `controversy.desc: ${controversyMsg}`
-    return undefined
+    if (controversyMsg) issues.push(`controversy.desc: ${controversyMsg}`)
+    return issues.length ? issues.join(' / ') : undefined
   }
 
   // 콘텐츠 생성
