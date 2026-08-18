@@ -346,6 +346,37 @@ function isValidLineBlock(text: unknown, minLines: number, requireQuestion = fal
   return true
 }
 
+// isValidLineBlock이 왜 실패했는지 사유를 반환 — groqCreateValidated의 재시도 안내(describeFailure)에 사용.
+// 검사 순서는 isValidLineBlock과 동일하게 맞춰서 "어느 조건에서 막혔는지"가 항상 일치하게 한다.
+function describeLineBlockFailure(text: unknown, minLines: number, requireQuestion = false): string | undefined {
+  const lines = (typeof text === 'string' ? text : '').split('\n')
+  if (lines.length < minLines) return `${minLines}줄이 필요한데 ${lines.length}줄뿐이야 — 반드시 ${minLines}줄로 나눠 작성해줘.`
+  const slice = lines.slice(0, minLines)
+  const incompleteIdx = slice.findIndex(l => !l.trim() || hasIncompleteLine(l))
+  if (incompleteIdx !== -1) return `${incompleteIdx + 1}번째 줄이 조사·의존명사로 끊긴 미완성 문장이야 — 서술어로 완결된 문장으로 다시 써줘.`
+  const bannedIdx = slice.findIndex(l => BANNED_ENDINGS.test(l.trim()))
+  if (bannedIdx !== -1) return `${bannedIdx + 1}번째 줄이 금지된 종결 표현(궁금해/중인대/같아/니다 계열)으로 끝났어 — 다른 어미로 바꿔줘.`
+  const spacingIdx = slice.findIndex(hasSpacingIssue)
+  if (spacingIdx !== -1) return `${spacingIdx + 1}번째 줄이 띄어쓰기 없이 너무 길게 붙어있어 — 자연스럽게 띄어써줘.`
+  if (requireQuestion && !endsWithQuestion(slice[slice.length - 1])) return `마지막 줄이 물음표로 안 끝났어 — 반드시 ?로 끝나는 질문으로 바꿔줘.`
+  for (let i = 0; i < slice.length; i++) {
+    for (let j = i + 1; j < slice.length; j++) {
+      if (isNearDuplicateLine(slice[i], slice[j])) return `${i + 1}번째 줄과 ${j + 1}번째 줄 표현이 겹쳐(근접 중복) — 서로 다른 표현으로 다시 써줘.`
+    }
+  }
+  return undefined
+}
+
+// topic_description은 대부분 개행 없이 마침표로 끝나는 문장 1~2개짜리 한 문단이라 '\n' 분리만으로는
+// 여러 줄을 못 얻는 경우가 많다 — 그럴 땐 문장 종결 부호(.!?) 뒤 공백 기준으로 나눠 폴백 줄 수를 확보한다.
+function splitTopicSentences(text: string | null | undefined): string[] {
+  const trimmed = (text ?? '').trim()
+  if (!trimmed) return []
+  const byNewline = trimmed.split('\n').map(l => l.trim()).filter(Boolean)
+  if (byNewline.length >= 2) return byNewline
+  return trimmed.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean)
+}
+
 // 카드뉴스 생성 중 폴백(AI 텍스트 대신 topic_description 등 대체 텍스트)이 몇 번 쓰였는지 추적 —
 // pipeline.ts가 발행 직전 자동 품질 게이트로 사용한다 (사람 검수 없이 자동 발행되는 구조는 유지하되,
 // 폴백이 발생한 결과물은 자동으로 발행을 막고 알림만 보냄).
@@ -991,6 +1022,10 @@ export async function generateBadgeContent(
     p?.desc_3 ?? p?.desc?.split('\n')?.[2] ?? '',
   ].join('\n')
   const validateBadge = (p: any) => isValidLineBlock(badgeDescOf(p), 3, true)
+  const describeBadgeFailure = (p: any) => {
+    const reason = describeLineBlockFailure(badgeDescOf(p), 3, true)
+    return reason ? `desc: ${reason}` : undefined
+  }
 
   const { parsed } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
@@ -1017,6 +1052,14 @@ export async function generateBadgeContent(
           '주어 반복 금지: 주체 명사(인물명·기업명)는 desc_1에서만 명시. desc_2·desc_3에서는 주어를 생략할 것 — 매줄 같은 명사를 반복하면 기계적으로 들려서 금지.',
           '  ❌ "마이크론 실적이 좋았어.\\n마이크론은 AI 수요 덕분이래." → "마이크론" 반복. 절대 금지.',
           '  ✅ "마이크론 실적이 좋았어.\\nAI 수요 덕분이래." → 주어 생략',
+          '',
+          '[재난·사고·속보성 이슈 예외]',
+          '이슈가 호우·태풍·지진·화재·붕괴·대형사고·대규모 인명피해처럼 인명·재산 피해가 현재진행형인 재난·사고·속보성 사건이면, 위 "주체를 인물/기업으로 고정" 규칙 대신 아래처럼 써도 됨:',
+          '- 주체를 특정 인물/기업이 아니라 "이 상황" 자체로 잡아도 됨',
+          '- desc_1: 지금 상황 요약(규모·피해·조치). desc_2: 왜/어떻게 이렇게 커졌는지. desc_3: 앞으로 어떻게 될지 전망(피해 확산·구조 진행 등)',
+          '- 문장 완결·어미 통일·근접 중복 금지 등 기본 규칙은 재난·사고 이슈에도 동일하게 적용됨',
+          '정치 스캔들·연예 논란처럼 특정 인물이 분명한 이슈는 이 예외 대상 아님 — 원래 인물 중심 규칙 그대로 따를 것.',
+          '',
           'desc_1: 이슈의 핵심 사실을 짧고 구체적으로. 이슈 제목의 핵심 주체를 직접 언급. 마침표(.)로 끝낼 것.',
           '  ✅ "마이크론 3분기 매출이 예상을 크게 넘었어."',
           '  ✅ "BTS 슈가가 활동 복귀를 알렸어."',
@@ -1074,9 +1117,10 @@ export async function generateBadgeContent(
       },
     ],
     temperature: 0.65,
-  }, validateBadge)
+  }, validateBadge, 3, describeBadgeFailure)
 
-  const fallbackDesc = issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? '내용을 불러오는 중 오류가 발생했습니다.'
+  const fallbackDescLines = splitTopicSentences(issue.topic_description)
+  const fallbackDesc = fallbackDescLines.length ? fallbackDescLines.slice(0, 3).join('\n') : '내용을 불러오는 중 오류가 발생했습니다.'
 
   if (!parsed) {
     fallbackCount++
@@ -1163,6 +1207,16 @@ export async function generateSurgingSlides(issue: Issue, logoBase64: string): P
     isValidLineBlock(d?.background?.desc, 3) &&
     isValidLineBlock(d?.controversy?.desc, 3, true)
 
+  const describeSurgingFailure = (d: any): string | undefined => {
+    const badgeMsg = describeLineBlockFailure(d?.badge?.desc, 3)
+    if (badgeMsg) return `badge.desc: ${badgeMsg}`
+    const bgMsg = describeLineBlockFailure(d?.background?.desc, 3)
+    if (bgMsg) return `background.desc: ${bgMsg}`
+    const controversyMsg = describeLineBlockFailure(d?.controversy?.desc, 3, true)
+    if (controversyMsg) return `controversy.desc: ${controversyMsg}`
+    return undefined
+  }
+
   // 콘텐츠 생성
   const { parsed: d } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
@@ -1212,6 +1266,13 @@ ${issueContext}
   ❌ "마이크론 실적이 좋았어.\\n마이크론은 AI 수요 덕분이래." → "마이크론" 반복. 절대 금지.
   ✅ "마이크론 실적이 좋았어.\\nAI 수요 덕분이래." → 주어 생략
 
+[재난·사고·속보성 이슈 예외]
+이슈가 호우·태풍·지진·화재·붕괴·대형사고·대규모 인명피해처럼 인명·재산 피해가 현재진행형인 재난·사고·속보성 사건이면, 위 "주체를 인물/기업으로 고정" 규칙 대신 아래처럼 써도 됨:
+- 주체를 특정 인물/기업이 아니라 "이 상황" 자체로 잡아도 됨
+- badge.desc: 지금 상황 요약(규모·피해·조치). background.desc: 왜/어떻게 이렇게 커졌는지. controversy.desc: 앞으로 어떻게 될지 전망(피해 확산·구조 진행 등)
+- 문장 완결·어미 통일·근접 중복 금지 등 기본 규칙은 재난·사고 이슈에도 동일하게 적용됨
+정치 스캔들·연예 논란처럼 특정 인물이 분명한 이슈는 이 예외 대상 아님 — 원래 인물 중심 규칙 그대로 따를 것.
+
 [각 슬라이드 역할 — 슬라이드마다 반드시 다른 내용을 다룰 것. 앞 슬라이드에서 한 말 반복 금지.]
 badge.desc: "지금 무슨 일?" — 이슈 제목의 핵심 주체(인물·기업·사건)에만 집중. 3줄. 그 주체를 줄1~3에서 계속 다룰 것.
 background.desc: "왜 터졌나?" — badge와 다른 각도. 이 이슈의 배경·원인·맥락. 3줄. 인물명·수치 포함. badge와 같은 주체를 다른 측면으로 심화.
@@ -1231,7 +1292,7 @@ JSON (순수 JSON만, 코드블록 없이):
       },
     ],
     temperature: 0.65,
-  }, validateSurging)
+  }, validateSurging, 3, describeSurgingFailure)
 
   let content: {
     badge: { desc: string; point_text_01: string; point_text_02: string }
@@ -1240,7 +1301,7 @@ JSON (순수 JSON만, 코드블록 없이):
   }
 
   // 섹션별로 다른 폴백 — topic_description 줄을 나눠 사용
-  const topicLines = (issue.topic_description ?? '').split('\n').map(l => l.trim()).filter(Boolean)
+  const topicLines = splitTopicSentences(issue.topic_description)
   const badgeFallback = topicLines.slice(0, 3).join('\n') || (issue.topic ?? issue.title)
   const bgFallback = topicLines.slice(3, 6).join('\n') || topicLines.slice(0, 2).join('\n') || `${issue.title} 관련 배경`
   const controversyFallback = topicLines.slice(6, 9).join('\n') || topicLines.slice(2, 4).join('\n') || `${issue.title} 관련 쟁점`
@@ -1570,7 +1631,8 @@ JSON (순수 JSON만, 코드블록 없이):
     }, validateQA, 2, describeQAFailure),
   ])
 
-  const qaFallback = issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? '정보를 불러오는 중 오류가 발생했습니다.'
+  const qaFallbackLines = splitTopicSentences(issue.topic_description)
+  const qaFallback = qaFallbackLines.length ? qaFallbackLines.slice(0, 3).join('\n') : '정보를 불러오는 중 오류가 발생했습니다.'
 
   // 항목별로 독립 검증 — 3개 중 일부만 통과해도 통과한 만큼만 사용한다 (억지로 채우지 않음).
   const rawQa: Array<{ question?: string; answer?: string; pexels_keywords?: string }> =
@@ -1700,7 +1762,8 @@ JSON (순수 JSON만, 코드블록 없이):
     status: { sub_title: string; desc: string; pexels_keywords?: string }
   } | null = null
 
-  const debateFallback = issue.topic_description?.split('\n').slice(0, 3).join('\n') ?? issue.topic ?? issue.title
+  const debateFallbackLines = splitTopicSentences(issue.topic_description)
+  const debateFallback = debateFallbackLines.length ? debateFallbackLines.slice(0, 3).join('\n') : (issue.topic ?? issue.title)
 
   if (d) {
     // pro.points/con.points/status.desc는 각각 독립된 3줄 단위 — 섹션별로 따로 판단해서
