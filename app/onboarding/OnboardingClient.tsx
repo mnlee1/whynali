@@ -151,6 +151,10 @@ export default function OnboardingClient({ initialNickname, provider, providerAc
                 return
             }
 
+            if (typeof window !== 'undefined' && window.gtag) {
+                window.gtag('event', 'sign_up')
+            }
+
             const params = new URLSearchParams(window.location.search)
             const next = params.get('next') ?? '/'
             const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'

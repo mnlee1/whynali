@@ -293,6 +293,9 @@ export default function CommentsSection({
             if (!res.ok) { setWriteError(json.error ?? '오류가 발생했어요.'); return }
             setDraft('')
             trackConversion({ eventType: 'comment', issueId: issueId ?? undefined })
+            if (typeof window !== 'undefined' && window.gtag) {
+                window.gtag('event', 'comment_submit', { issue_id: issueId })
+            }
             if (json.pending) {
                 /* 금칙어 포함 댓글: 알럿 없이 state에만 추가 */
                 if (json.data) {
