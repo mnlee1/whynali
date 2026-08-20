@@ -1009,6 +1009,19 @@ export async function fetchPexelsImage(keywords: string): Promise<string | null>
   }
 }
 
+// desc 블록의 종결 어미 계열 — 이 중 하나만 계속 골라 쓰면("됐어/졌어"만 반복) 단조롭게 느껴져서
+// 여러 계열을 두고 코드에서 섹션별로 다르게 배정한다(AI 선택에만 맡기면 한 계열로 쏠리는 경향이 있음).
+const ENDING_FAMILIES = [
+  '"~했어"·"~됐어" 계열, 질문은 "~까?"로 끝낼 것. 예: "비가 쏟아졌어." "피해가 커졌어." "더 심해질까?"',
+  '"~했대"·"~였대" 계열, 질문은 "~까?"로 끝낼 것. 예: "비가 많이 왔대." "피해가 크대." "더 올까?"',
+  '"~하더라"·"~더라" 계열, 질문은 "~려나?"로 끝낼 것. 예: "비가 억수로 쏟아지더라." "피해가 만만치 않더라." "더 심해지려나?"',
+]
+
+function pickDistinctEndingFamilies(count: number): string[] {
+  const shuffled = [...ENDING_FAMILIES].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, count)
+}
+
 export async function generateBadgeContent(
   issue: Issue,
   context = ''
@@ -1026,6 +1039,7 @@ export async function generateBadgeContent(
     const reason = describeLineBlockFailure(badgeDescOf(p), 3, true)
     return reason ? `desc: ${reason}` : undefined
   }
+  const [badgeEndingFamily] = pickDistinctEndingFamilies(1)
 
   const { parsed } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
@@ -1046,7 +1060,7 @@ export async function generateBadgeContent(
           'desc_1·desc_2·desc_3는 하나의 주체(인물/기업/사건)에 집중. desc_1에서 정한 주체가 desc_2·desc_3에서도 유지되어야 함.',
           '  ❌ "코스피 9000선 안착했어.\\n마이크론 실적 발표로 관심 쏠려.\\n1만원 고지 넘을까?" → 줄마다 주체가 달라짐. 절대 금지.',
           '  ✅ "마이크론 3분기 매출이 예상을 크게 넘었어.\\nAI 수요가 HBM 판매를 끌어올렸어.\\n이번이 진짜 반등 신호일까?" → 마이크론에 집중',
-          '어미 통일: 세 줄의 종결 스타일을 하나로 통일할 것 — "~했어"·"~됐어" 계열 또는 "~했대"·"~거래" 계열 중 하나만 사용. 줄마다 다른 스타일 섞으면 절대 금지.',
+          `어미 통일: 세 줄의 종결 스타일을 아래 지정된 계열로 통일할 것 — ${badgeEndingFamily} 지정된 계열이 이 이슈 내용상 부자연스러우면 다른 자연스러운 구어체 계열로 바꿔써도 되지만, 줄마다 스타일을 섞는 것만은 절대 금지.`,
           '  ❌ "마이크론 실적이 역대급을 찍었어.\\nAI 수요 덕분이었대." → "~했어"와 "~했대" 혼용. 절대 금지.',
           '  ✅ "마이크론 실적이 역대급을 찍었어.\\nAI 수요 덕분이었어." → 동일 스타일 유지',
           '주어 반복 금지: 주체 명사(인물명·기업명)는 desc_1에서만 명시. desc_2·desc_3에서는 주어를 생략할 것 — 매줄 같은 명사를 반복하면 기계적으로 들려서 금지.',
@@ -1220,6 +1234,8 @@ export async function generateSurgingSlides(issue: Issue, logoBase64: string): P
     return issues.length ? issues.join(' / ') : undefined
   }
 
+  const [badgeFamily, bgFamily, controversyFamily] = pickDistinctEndingFamilies(3)
+
   // 콘텐츠 생성
   const { parsed: d } = await groqCreateValidated(groq, {
     model: 'openai/gpt-oss-120b',
@@ -1262,8 +1278,12 @@ ${issueContext}
 ❌ 나쁜 예 (매줄 소재 바뀜): "코스피 9000선 안착했어.\\n마이크론 실적 발표로 관심 쏠려.\\n1만원 고지 넘을 수 있을지 주목해."
    → 줄1: 코스피, 줄2: 마이크론, 줄3: 1만원 — 매줄 주체가 달라짐. 절대 금지.
 ❌ 나쁜 예 (소재 점프): "마이크론 3분기 매출 346% 급증.\\n삼성전자·SK하이닉스와 순위 비교 중.\\n시장 반응은 어떤가?"
-어미 통일: 줄1~3의 종결 스타일을 하나로 통일할 것 — "~했어"·"~됐어" 계열 또는 "~했대"·"~거래" 계열 중 하나만 사용. 줄마다 다른 스타일 섞으면 절대 금지.
-  ❌ "마이크론 실적이 역대급을 찍었어.\\nAI 수요 덕분이었대." → "~했어"와 "~했대" 혼용. 절대 금지.
+어미 통일: 각 필드마다 줄1~3의 종결 스타일을 아래 지정된 계열로 통일할 것. 줄마다 스타일 섞는 것만은 절대 금지.
+  badge.desc: ${badgeFamily}
+  background.desc: ${bgFamily}
+  controversy.desc: ${controversyFamily}
+  (지정된 계열이 그 내용상 부자연스러우면 다른 자연스러운 구어체 계열로 바꿔써도 됨 — 단, 세 필드가 전부 같은 계열로 수렴하지 않게 서로 다르게 유지할 것)
+  ❌ "마이크론 실적이 역대급을 찍었어.\\nAI 수요 덕분이었대." → 한 필드 안에서 "~했어"와 "~했대" 혼용. 절대 금지.
   ✅ "마이크론 실적이 역대급을 찍었어.\\nAI 수요 덕분이었어." → 동일 스타일 유지
 주어 반복 금지: 주체 명사(인물명·기업명)는 줄1에서만 명시. 줄2·줄3에서는 주어를 생략할 것 — 매줄 같은 명사를 반복하면 기계적으로 들려서 금지.
   ❌ "마이크론 실적이 좋았어.\\n마이크론은 AI 수요 덕분이래." → "마이크론" 반복. 절대 금지.
@@ -1273,7 +1293,7 @@ ${issueContext}
 이슈가 호우·태풍·지진·화재·붕괴·대형사고·대규모 인명피해처럼 인명·재산 피해가 현재진행형인 재난·사고·속보성 사건이면, 위 "주체를 인물/기업으로 고정" 규칙 대신 아래처럼 써도 됨:
 - 주체를 특정 인물/기업이 아니라 "이 상황" 자체로 잡아도 됨
 - badge.desc: 지금 상황 요약(규모·피해·조치). background.desc: 왜/어떻게 이렇게 커졌는지. controversy.desc: 앞으로 어떻게 될지 전망(피해 확산·구조 진행 등)
-- 문장 완결·어미 통일·근접 중복 금지 등 기본 규칙은 재난·사고 이슈에도 동일하게 적용됨
+- 문장 완결·근접 중복 금지 등 기본 규칙과 위에서 지정한 필드별 어미 계열은 재난·사고 이슈에도 동일하게 적용됨
 정치 스캔들·연예 논란처럼 특정 인물이 분명한 이슈는 이 예외 대상 아님 — 원래 인물 중심 규칙 그대로 따를 것.
 
 [각 슬라이드 역할 — 슬라이드마다 반드시 다른 내용을 다룰 것. 앞 슬라이드에서 한 말 반복 금지.]

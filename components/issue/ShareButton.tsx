@@ -102,8 +102,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
 
     const handleShare = async (platform: string) => {
         console.log('[ShareButton] 공유 플랫폼:', platform)
-        trackShare(platform)
-        
+
         const shareUrl = getShareUrlWithUTM(platform)
 
         // X (트위터) 공유
@@ -111,6 +110,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             const tweetText = `${title}\n왜난리에서 이슈 확인하고 투표와 토론에 참여하세요!\n\n🔗 ${shareUrl}\n\n#️⃣ #왜난리 #이슈 #실시간`
             const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`
             window.open(url, '_blank', 'width=600,height=400')
+            trackShare('twitter')
             setShowMenu(false)
         }
         // 카카오톡 공유
@@ -126,6 +126,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                 try {
                     await navigator.clipboard.writeText(shareUrl)
                     console.log('[ShareButton] 링크 복사 성공')
+                    trackShare('copy_link')
                     setKakaoCopied(true)
                     setTimeout(() => {
                         setKakaoCopied(false)
@@ -176,12 +177,14 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                     ],
                 })
                 console.log('[ShareButton] Kakao Share API 호출 성공')
+                trackShare('kakaotalk')
                 setShowMenu(false)
             } catch (err) {
                 console.error('[ShareButton] Kakao Share 실패:', err)
                 // 실패 시 링크 복사로 폴백
                 try {
                     await navigator.clipboard.writeText(shareUrl)
+                    trackShare('copy_link')
                     setKakaoCopied(true)
                     setTimeout(() => {
                         setKakaoCopied(false)

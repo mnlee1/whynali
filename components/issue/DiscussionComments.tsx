@@ -23,6 +23,8 @@ import { trackConversion } from '@/lib/analytics/tracker'
 
 interface DiscussionCommentsProps {
     discussionTopicId: string
+    issueId?: string | null
+    issueTitle?: string | null
     userId: string | null
     isClosed?: boolean
 }
@@ -43,6 +45,8 @@ function authorLabel(comment: Comment): string {
 
 export default function DiscussionComments({
     discussionTopicId,
+    issueId,
+    issueTitle,
     userId: serverUserId,
     isClosed = false,
 }: DiscussionCommentsProps) {
@@ -271,6 +275,9 @@ export default function DiscussionComments({
             if (!res.ok) { setWriteError(json.error ?? '오류가 발생했어요.'); return }
             setDraft('')
             trackConversion({ eventType: 'discussion_comment', discussionId: discussionTopicId })
+            if (typeof window !== 'undefined' && window.gtag) {
+                window.gtag('event', 'discussion_post', { issue_id: issueId, issue_title: issueTitle })
+            }
             if (json.pending) {
                 /* 금칙어 포함 댓글: 알럿 없이 state에만 추가 */
                 if (json.data) {
@@ -461,6 +468,9 @@ export default function DiscussionComments({
             if (!res.ok) { setReplyError(json.error ?? '오류가 발생했습니다.'); return }
             setReplyDraft('')
             trackConversion({ eventType: 'discussion_comment', discussionId: discussionTopicId })
+            if (typeof window !== 'undefined' && window.gtag) {
+                window.gtag('event', 'discussion_post', { issue_id: issueId, issue_title: issueTitle })
+            }
             if (json.data) {
                 const repliesRes = await fetch(`/api/comments?${contextParam}&parent_id=${parentId}&limit=50&offset=0`)
                 const repliesJson = await repliesRes.json()
