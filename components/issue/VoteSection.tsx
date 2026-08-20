@@ -99,6 +99,9 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 })
                 const postJson = await postRes.json()
                 if (!postRes.ok) throw new Error(postJson.error)
+                if (typeof window !== 'undefined' && window.gtag) {
+                    window.gtag('event', 'vote_cast', { issue_id: issueId, vote_choice: choiceId })
+                }
             } else {
                 // 처음 투표
                 const res = await fetch(`/api/votes/${voteId}/vote`, {
@@ -109,6 +112,9 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 const json = await res.json()
                 if (!res.ok) throw new Error(json.error)
                 trackConversion({ eventType: 'vote', issueId })
+                if (typeof window !== 'undefined' && window.gtag) {
+                    window.gtag('event', 'vote_cast', { issue_id: issueId, vote_choice: choiceId })
+                }
             }
             
             // 투표 후 데이터 갱신 (투표 카드 순서 + 선택지 순서 유지)

@@ -164,6 +164,8 @@ export default async function DiscussionTopicPage({ params }: { params: Promise<
                 <div className="p-4">
                     <DiscussionComments
                         discussionTopicId={id}
+                        issueId={issueData?.id}
+                        issueTitle={issueData?.title}
                         userId={userId}
                         isClosed={isClosed}
                     />

@@ -13,17 +13,17 @@ DELETE FROM issues WHERE id::text LIKE 'a1000000%';
 -- ============================================================
 -- 이슈 10개
 -- ============================================================
-INSERT INTO issues (id, title, description, status, category, heat_index, created_heat_index, approval_status, approval_type, visibility_status, source_track, created_at, updated_at) VALUES
-('a1000000-0000-0000-0000-000000000001','아이돌 그룹 멤버 열애설 공식 인정','인기 아이돌 그룹 멤버가 동료 배우와의 열애설을 소속사를 통해 공식 인정했다.','논란중','연예',72,68,'승인','auto','visible','track_a',NOW() - INTERVAL '3 hours',NOW() - INTERVAL '1 hour'),
-('a1000000-0000-0000-0000-000000000002','국회의원 막말 논란 사과 거부','여당 국회의원이 기자간담회에서 논란이 된 발언에 대해 사과를 거부하며 오히려 강경 입장을 고수했다.','점화','정치',85,80,'승인','manual','visible','track_a',NOW() - INTERVAL '1 hour',NOW() - INTERVAL '30 minutes'),
-('a1000000-0000-0000-0000-000000000003','대기업 직원 직장 내 괴롭힘 폭로','국내 대기업 계열사 직원이 상급자로부터 수년간 지속적인 직장 내 괴롭힘을 당했다고 폭로해 파장이 일고 있다.','논란중','사회',61,55,'승인','auto','visible','track_a',NOW() - INTERVAL '6 hours',NOW() - INTERVAL '2 hours'),
-('a1000000-0000-0000-0000-000000000004','삼성 갤럭시 신제품 출시 예고','삼성전자가 차세대 갤럭시 시리즈를 다음 달 공개한다고 공식 발표했다.','점화','기술',45,42,'승인','auto','visible','track_a',NOW() - INTERVAL '2 hours',NOW() - INTERVAL '1 hour'),
-('a1000000-0000-0000-0000-000000000005','프로야구 선수 도핑 적발 충격','국내 프로야구 리그 소속 선수가 도핑 검사에서 금지 약물이 검출돼 자격 정지 처분을 받았다.','종결','스포츠',38,55,'승인','auto','visible','track_a',NOW() - INTERVAL '2 days',NOW() - INTERVAL '12 hours'),
-('a1000000-0000-0000-0000-000000000006','유명 유튜버 세금 탈루 의혹 제기','구독자 500만 유명 유튜버가 수억원대 세금을 탈루했다는 의혹이 제기돼 파장이 일고 있다.','점화','사회',78,74,'승인','auto','visible','track_a',NOW() - INTERVAL '4 hours',NOW() - INTERVAL '2 hours'),
-('a1000000-0000-0000-0000-000000000007','네이버-카카오 AI 서비스 경쟁 본격화','국내 양대 IT 기업이 생성형 AI 서비스를 동시에 출시하며 치열한 경쟁을 예고했다.','논란중','기술',52,48,'승인','auto','visible','track_a',NOW() - INTERVAL '5 hours',NOW() - INTERVAL '3 hours'),
-('a1000000-0000-0000-0000-000000000008','여자 배구 국가대표팀 감독 성희롱 폭로','여자 배구 국가대표팀 전 선수가 감독으로부터 성희롱을 당했다고 폭로해 체육계가 발칵 뒤집혔다.','논란중','스포츠',91,88,'승인','manual','visible','track_a',NOW() - INTERVAL '8 hours',NOW() - INTERVAL '4 hours'),
-('a1000000-0000-0000-0000-000000000009','한국은행 기준금리 0.25%p 인하 결정','한국은행 금융통화위원회가 기준금리를 0.25%p 인하하기로 결정했다.','종결','경제',44,50,'승인','auto','visible','track_a',NOW() - INTERVAL '1 day',NOW() - INTERVAL '20 hours'),
-('a1000000-0000-0000-0000-000000000010','드라마 촬영장 스태프 사망 사고 발생','인기 드라마 촬영 현장에서 스태프가 추락 사고로 사망해 방송계 노동환경이 다시 도마에 올랐다.','논란중','사회',83,79,'승인','manual','visible','track_a',NOW() - INTERVAL '10 hours',NOW() - INTERVAL '6 hours');
+INSERT INTO issues (id, title, status, category, heat_index, created_heat_index, approval_status, approval_type, visibility_status, source_track, created_at, updated_at) VALUES
+('a1000000-0000-0000-0000-000000000001','아이돌 그룹 멤버 열애설 공식 인정','논란중','연예',72,68,'승인','auto','visible','track_a',NOW() - INTERVAL '3 hours',NOW() - INTERVAL '1 hour'),
+('a1000000-0000-0000-0000-000000000002','국회의원 막말 논란 사과 거부','점화','정치',85,80,'승인','manual','visible','track_a',NOW() - INTERVAL '1 hour',NOW() - INTERVAL '30 minutes'),
+('a1000000-0000-0000-0000-000000000003','대기업 직원 직장 내 괴롭힘 폭로','논란중','사회',61,55,'승인','auto','visible','track_a',NOW() - INTERVAL '6 hours',NOW() - INTERVAL '2 hours'),
+('a1000000-0000-0000-0000-000000000004','삼성 갤럭시 신제품 출시 예고','점화','기술',45,42,'승인','auto','visible','track_a',NOW() - INTERVAL '2 hours',NOW() - INTERVAL '1 hour'),
+('a1000000-0000-0000-0000-000000000005','프로야구 선수 도핑 적발 충격','종결','스포츠',38,55,'승인','auto','visible','track_a',NOW() - INTERVAL '2 days',NOW() - INTERVAL '12 hours'),
+('a1000000-0000-0000-0000-000000000006','유명 유튜버 세금 탈루 의혹 제기','점화','사회',78,74,'승인','auto','visible','track_a',NOW() - INTERVAL '4 hours',NOW() - INTERVAL '2 hours'),
+('a1000000-0000-0000-0000-000000000007','네이버-카카오 AI 서비스 경쟁 본격화','논란중','기술',52,48,'승인','auto','visible','track_a',NOW() - INTERVAL '5 hours',NOW() - INTERVAL '3 hours'),
+('a1000000-0000-0000-0000-000000000008','여자 배구 국가대표팀 감독 성희롱 폭로','논란중','스포츠',91,88,'승인','manual','visible','track_a',NOW() - INTERVAL '8 hours',NOW() - INTERVAL '4 hours'),
+('a1000000-0000-0000-0000-000000000009','한국은행 기준금리 0.25%p 인하 결정','종결','경제',44,50,'승인','auto','visible','track_a',NOW() - INTERVAL '1 day',NOW() - INTERVAL '20 hours'),
+('a1000000-0000-0000-0000-000000000010','드라마 촬영장 스태프 사망 사고 발생','논란중','사회',83,79,'승인','manual','visible','track_a',NOW() - INTERVAL '10 hours',NOW() - INTERVAL '6 hours');
 
 -- ============================================================
 -- 타임라인
@@ -65,7 +65,8 @@ INSERT INTO news_data (title, link, source, published_at, category, issue_id, se
 ('네이버 HyperCLOVA X vs 카카오 KoGPT 정면 대결','https://news.naver.com/9','전자신문',NOW() - INTERVAL '5 hours','기술','a1000000-0000-0000-0000-000000000007','AI경쟁'),
 ('배구 국대 감독 G 성희롱 의혹, 충격 폭로','https://news.naver.com/10','스포츠경향',NOW() - INTERVAL '8 hours','스포츠','a1000000-0000-0000-0000-000000000008','성희롱'),
 ('한은 기준금리 3.25%로 인하... 경기 부양 의지','https://news.naver.com/11','한국경제',NOW() - INTERVAL '1 day','경제','a1000000-0000-0000-0000-000000000009','기준금리'),
-('드라마 촬영장 스태프 추락사... 방송계 노동환경 논란','https://news.naver.com/12','미디어오늘',NOW() - INTERVAL '10 hours','사회','a1000000-0000-0000-0000-000000000010','촬영현장');
+('드라마 촬영장 스태프 추락사... 방송계 노동환경 논란','https://news.naver.com/12','미디어오늘',NOW() - INTERVAL '10 hours','사회','a1000000-0000-0000-0000-000000000010','촬영현장')
+ON CONFLICT (link) DO NOTHING;
 
 -- ============================================================
 -- 투표 10개
