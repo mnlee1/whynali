@@ -594,31 +594,31 @@ export default function DiscussionComments({
                                 </div>
                             )}
 
-                            <textarea
-                                value={draft}
-                                onChange={(e) => {
-                                    setDraft(e.target.value)
-                                    if (writeErrorType === 'validation') { setWriteError(null); setWriteErrorType(null) }
-                                }}
-                                placeholder="단순 찬반보다는, 이 주제에 대한 나만의 관점이나 경험을 자유롭게 적어주세요."
-                                maxLength={300}
-                                rows={4}
-                                className={[
-                                    'w-full px-3 py-2 text-sm border rounded-xl resize-none focus:outline-none transition-colors',
-                                    writeErrorType === 'validation'
-                                        ? 'border-red-400 focus:border-red-500'
-                                        : 'border-border focus:border-primary',
-                                ].join(' ')}
-                            />
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-content-muted">{draft.length} / 300</span>
-                                <button
-                                    onClick={() => handleWrite()}
-                                    disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
-                                    className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {submittingWrite ? '등록 중...' : '의견 남기기'}
-                                </button>
+                            <div className={[
+                                'border rounded-xl focus-within:border-primary transition-colors overflow-hidden',
+                                writeErrorType === 'validation' ? 'border-red-400 focus-within:border-red-500' : 'border-border',
+                            ].join(' ')}>
+                                <textarea
+                                    value={draft}
+                                    onChange={(e) => {
+                                        setDraft(e.target.value)
+                                        if (writeErrorType === 'validation') { setWriteError(null); setWriteErrorType(null) }
+                                    }}
+                                    placeholder="단순 찬반보다는, 이 주제에 대한 나만의 관점이나 경험을 자유롭게 적어주세요."
+                                    maxLength={300}
+                                    rows={4}
+                                    className="block w-full rounded-t-xl px-3 pt-2 pb-1 text-sm resize-none focus:outline-none bg-transparent thin-scrollbar"
+                                />
+                                <div className="flex items-center justify-between rounded-b-xl border-t border-border-muted px-3 pt-1.5 pb-2">
+                                    <span className="text-xs text-content-muted">{draft.length} / 300</span>
+                                    <button
+                                        onClick={() => handleWrite()}
+                                        disabled={!draft.trim() || submittingWrite || rateLimitCountdown > 0}
+                                        className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {submittingWrite ? '등록 중...' : '의견 남기기'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1028,23 +1028,25 @@ function DiscussionCommentItem({
              !(comment.visibility === 'pending_review' && comment.pending_reason === 'safety' && safetyBotEnabled && !isMine) && (
                 <div className="mt-3 pl-4 border-l-2 border-border-muted">
                     {replyError && <p className="text-xs text-red-500 mb-1">{replyError}</p>}
-                    <textarea
-                        value={replyDraft ?? ''}
-                        onChange={(e) => onReplyDraftChange(e.target.value)}
-                        placeholder="답글을 입력하세요"
-                        rows={2}
-                        maxLength={300}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-xl resize-none focus:outline-none focus:border-primary transition-colors"
-                    />
-                    <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs text-content-muted">{(replyDraft ?? '').length} / 300</span>
-                        <button
-                            onClick={() => onReplySubmit(comment.id)}
-                            disabled={!replyDraft?.trim() || submittingReply || (rateLimitCountdown ?? 0) > 0}
-                            className="btn-primary btn-sm text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {submittingReply ? '등록 중...' : '등록'}
-                        </button>
+                    <div className="border border-border rounded-xl focus-within:border-primary transition-colors overflow-hidden">
+                        <textarea
+                            value={replyDraft ?? ''}
+                            onChange={(e) => onReplyDraftChange(e.target.value)}
+                            placeholder="답글을 입력하세요"
+                            rows={2}
+                            maxLength={300}
+                            className="block w-full rounded-t-xl px-3 pt-2 pb-1 text-sm resize-none focus:outline-none bg-transparent thin-scrollbar"
+                        />
+                        <div className="flex items-center justify-between rounded-b-xl border-t border-border-muted px-3 pt-1.5 pb-2">
+                            <span className="text-xs text-content-muted">{(replyDraft ?? '').length} / 300</span>
+                            <button
+                                onClick={() => onReplySubmit(comment.id)}
+                                disabled={!replyDraft?.trim() || submittingReply || (rateLimitCountdown ?? 0) > 0}
+                                className="btn-primary btn-sm text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {submittingReply ? '등록 중...' : '등록'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

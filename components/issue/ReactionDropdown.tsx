@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Plus } from 'lucide-react'
 import type { ReactionType } from '@/types'
 import { goToLoginWithPendingAction } from '@/lib/pendingAction'
 import { usePendingAction } from '@/hooks/usePendingAction'
@@ -10,6 +11,8 @@ interface ReactionDropdownProps {
     issueId: string
     userId: string | null
     align?: 'left' | 'right'
+    layout?: 'inline' | 'block' // block: 아이콘 위 + 카운트 아래 (좌측 레일용)
+    panelDirection?: 'down' | 'right' | 'up' // right: 좌측 레일용, up: 하단 캡슐바용(화면 밖으로 안 잘리게 위로 펼침)
 }
 
 type CountMap = Partial<Record<ReactionType, number>>
@@ -24,7 +27,7 @@ const REACTION_META: { type: ReactionType; emoji: string; label: string }[] = [
     { type: '사이다',  emoji: '🥤', label: '사이다' },
 ]
 
-export default function ReactionDropdown({ issueId, userId, align = 'left' }: ReactionDropdownProps) {
+export default function ReactionDropdown({ issueId, userId, align = 'left', layout = 'inline', panelDirection = 'down' }: ReactionDropdownProps) {
     const [open, setOpen] = useState(false)
     const [counts, setCounts] = useState<CountMap>({})
     const [userReaction, setUserReaction] = useState<ReactionType | null>(null)
@@ -133,11 +136,12 @@ export default function ReactionDropdown({ issueId, userId, align = 'left' }: Re
     }
 
     const totalCount = Object.values(counts).reduce((s, c) => s + (c ?? 0), 0)
-    const topReactions = REACTION_META
+    const topReaction = REACTION_META
         .map((r) => ({ ...r, count: counts[r.type] ?? 0 }))
         .filter((r) => r.count > 0)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 2)
+        .sort((a, b) => b.count - a.count)[0]
+    const selectedMeta = REACTION_META.find((r) => r.type === userReaction)
+    const displayEmoji = selectedMeta?.emoji ?? topReaction?.emoji ?? '😊'
 
     return (
         <div className="relative" ref={ref}>
@@ -145,36 +149,34 @@ export default function ReactionDropdown({ issueId, userId, align = 'left' }: Re
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex items-center pr-2.5 py-1 text-xs transition-colors"
+                className={layout === 'block'
+                    ? 'relative flex items-center justify-center w-9 h-9 rounded-full hover:bg-surface-subtle transition-colors'
+                    : 'relative flex items-center justify-center w-11 h-11 rounded-full hover:bg-surface-subtle transition-colors'}
             >
-                {/* 이모지 겹침 영역 */}
-                <span className="flex items-center">
-                    {topReactions.length > 0 ? (
-                        topReactions.map((r, i) => (
-                            <span
-                                key={r.type}
-                                className="text-lg leading-tight inline-block"
-                                style={{ marginLeft: i > 0 ? '-6px' : 0, zIndex: topReactions.length - i, position: 'relative', lineHeight: '1.3' }}
-                            >
-                                {r.emoji}
-                            </span>
-                        ))
-                    ) : (
-                        <span className="text-lg leading-tight inline-block" style={{ lineHeight: '1.3' }}>😊</span>
-                    )}
+                <span className="text-lg leading-none inline-flex items-center justify-center w-8 h-8 rounded-full">
+                    {displayEmoji}
                 </span>
-                {/* 총 수치 */}
-                {totalCount > 0 && (
-                    <span className={[
-                        'tabular-nums',
-                        userReaction ? 'text-primary font-semibold' : 'text-content-secondary font-normal',
-                    ].join(' ')}>{totalCount.toLocaleString()}</span>
+                {/* 카운트/유도 배지 */}
+                {totalCount > 0 ? (
+                    <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-primary text-white text-[11px] font-extrabold flex items-center justify-center leading-none tabular-nums">
+                        {totalCount > 99 ? '99+' : totalCount}
+                    </span>
+                ) : (
+                    <span className="absolute -top-1 -right-1 w-[17px] h-[17px] rounded-full bg-primary text-white">
+                        <Plus className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5" strokeWidth={3} />
+                    </span>
                 )}
             </button>
 
             {/* 드롭다운 */}
             {open && (
-                <div className={`absolute top-full z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`}>
+                <div className={
+                    panelDirection === 'right'
+                        ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px]'
+                        : panelDirection === 'up'
+                        ? `absolute bottom-full mb-2 z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`
+                        : `absolute top-full z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`
+                }>
                     <div className="grid grid-cols-4 gap-1.5">
                         {REACTION_META.slice(0, 4).map(({ type, emoji, label }) => {
                             const count = counts[type] ?? 0

@@ -20,7 +20,6 @@ import type { Metadata } from 'next'
 import { cache } from 'react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { Eye, MessageCircleMore } from 'lucide-react'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { decodeHtml } from '@/lib/utils/decode-html'
@@ -32,10 +31,12 @@ import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
 import StatusBadge from '@/components/common/StatusBadge'
-import IssueScrollHeader from '@/components/issue/IssueScrollHeader'
 import ViewCounter from '@/components/issue/ViewCounter'
-import IssueStatBar from '@/components/issue/IssueStatBar'
-import ShareButton from '@/components/issue/ShareButton'
+import IssueActionBar from '@/components/issue/IssueActionBar'
+import RelatedHotIssuesSidebar from '@/components/issue/RelatedHotIssuesSidebar'
+import PopularComments from '@/components/issue/PopularComments'
+import RelatedCategoryShortforms from '@/components/issue/RelatedCategoryShortforms'
+import RelatedDiscussionTopics from '@/components/issue/RelatedDiscussionTopics'
 import { formatFullDate } from '@/lib/utils/format-date'
 import { generateArticleSchema, generateBreadcrumbSchema, createJsonLd } from '@/lib/seo/schema'
 import { SITE_NAME, SITE_OG_IMAGE, SITE_URL } from '@/lib/seo/site'
@@ -147,6 +148,25 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     }
 }
 
+/* 이슈 헤더 - 본문과 우측 사이드바 스페이서에서 동일하게 재사용해 시작 라인을 정확히 맞춘다 */
+function IssueHeaderBlock({ issue }: { issue: any }) {
+    return (
+        <>
+            <div className="flex items-center gap-2 mb-3">
+                <StatusBadge status={issue.status} size="md" />
+            </div>
+            <h1 id="issue-title" className="text-2xl md:text-3xl font-bold text-content-primary mb-3">
+                {decodeHtml(issue.title)}
+            </h1>
+            <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
+                <span>{issue.category}</span>
+                <span>·</span>
+                <span>{formatFullDate(issue.approved_at ?? issue.created_at)}</span>
+            </div>
+        </>
+    )
+}
+
 export default async function IssuePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
@@ -159,6 +179,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         sessionClient,
         { data: timelineSummariesRaw },
         { data: newsData },
+        { data: relatedHotIssuesRaw },
     ] = await Promise.all([
         getIssue(id),
         supabaseAdmin
@@ -182,6 +203,17 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             .select('id, title, link, source, published_at, issue_id, created_at')
             .eq('issue_id', id)
             .order('published_at', { ascending: false }),
+        /* 우측 사이드바: 화력 절대값 상위 (카테고리 무관, 현재 이슈 제외, 종결 제외) */
+        supabaseAdmin
+            .from('issues')
+            .select('id, title, category, thumbnail_urls, primary_thumbnail_index')
+            .eq('approval_status', '승인')
+            .eq('visibility_status', 'visible')
+            .is('merged_into_id', null)
+            .neq('id', id)
+            .neq('status', '종결')
+            .order('heat_index', { ascending: false, nullsFirst: false })
+            .limit(5),
     ])
 
     const STAGE_ORDER: Record<string, number> = { '발단': 0, '전개': 1, '파생': 2, '진정': 3, '종결': 4 }
@@ -254,9 +286,32 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
         )
     }
 
-    /* 사용자 세션 확인 */
-    const { data: { user } } = await sessionClient.auth.getUser()
+    /* 사용자 세션 확인 + 하단 "관련 카테고리 최신 숏폼" 후보 조회 (같은 카테고리, 현재 이슈 제외 없음) */
+    const [
+        { data: { user } },
+        { data: categoryShortformsRaw },
+    ] = await Promise.all([
+        sessionClient.auth.getUser(),
+        supabaseAdmin
+            .from('shortform_jobs')
+            .select('id, issue_id, issue_title, upload_status, created_at, youtube_uploaded_at, issues!inner(category)')
+            .eq('approval_status', 'approved')
+            .eq('issues.category', issue.category)
+            .order('youtube_uploaded_at', { ascending: false, nullsFirst: false })
+            .limit(12),
+    ])
     const userId = user?.id ?? null
+
+    /* upload_status.youtube.status는 JSONB 경로 필터가 아니라 애플리케이션 코드에서 확인 (다른 곳도 동일 관례) */
+    const categoryShortforms = (categoryShortformsRaw ?? [])
+        .filter((job: any) => job.upload_status?.youtube?.status === 'success')
+        .slice(0, 6)
+        .map((job: any) => ({
+            id: job.id as string,
+            issueId: job.issue_id as string,
+            issueTitle: job.issue_title as string,
+            videoId: job.upload_status.youtube.video_id as string,
+        }))
 
     const baseUrl = SITE_URL
 
@@ -294,34 +349,10 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 type="application/ld+json"
                 dangerouslySetInnerHTML={createJsonLd(breadcrumbSchema)}
             />
-            <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl">
-                {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출) */}
+            <div className="container mx-auto px-4 py-6 md:py-8 max-w-2xl xl:max-w-[968px]">
+                {/* 조회수 증가 (클라이언트에서 마운트 시 한 번 호출, 화면 미노출) */}
                 <ViewCounter endpoint={`/api/issues/${id}/view`} />
-                <IssueScrollHeader
-                    title={decodeHtml(issue.title)}
-                    status={issue.status}
-                    issueId={id}
-                    userId={userId}
-                    initialVoteCount={voteCount ?? 0}
-                    initialDiscussionCount={discussionTopicsWithStats?.length ?? 0}
-                    shortCode={issue.short_code}
-                    thumbnailUrl={thumbnailUrl}
-                />
-
-            {/* 이슈 헤더 */}
-            <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                    <StatusBadge status={issue.status} size="md" />
-                </div>
-                <h1 id="issue-title" className="text-2xl md:text-3xl font-bold text-content-primary mb-3">
-                    {decodeHtml(issue.title)}
-                </h1>
-                <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
-                    <span>{issue.category}</span>
-                    <span>·</span>
-                    <span>{formatFullDate(issue.approved_at ?? issue.created_at)}</span>
-                </div>
-                <IssueStatBar
+                <IssueActionBar
                     issueId={id}
                     userId={userId}
                     initialVoteCount={voteCount ?? 0}
@@ -330,6 +361,12 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     title={issue.title}
                     thumbnailUrl={thumbnailUrl}
                 />
+                <div className="xl:grid xl:grid-cols-[672px_272px] xl:gap-6">
+                <div className="min-w-0">
+
+            {/* 이슈 헤더 */}
+            <div className="mb-6">
+                <IssueHeaderBlock issue={issue} />
             </div>
 
             {/* 핵심만 콕 (3줄 요약) - 타임라인과 별도 카드 */}
@@ -358,65 +395,15 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                 <VoteSection issueId={id} userId={userId} />
             </div>
 
-            {/* 관련 토론 주제 */}
+            {/* 관련 토론 주제 (클릭 시 Drawer로 참여, 풀페이지 이동 없음) */}
             {discussionTopicsWithStats && discussionTopicsWithStats.length > 0 && (
                 <div id="section-discussion" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
-                    <div className="card overflow-hidden mb-6">
-                    <div className="px-4 py-3 border-b border-border-muted flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-sm font-bold text-content-primary">관련 토론 주제</h2>
-                            {discussionTopicsWithStats.length >= 1 && (
-                                <span className="text-xs text-content-muted">{discussionTopicsWithStats.length}</span>
-                            )}
-                        </div>
-                        <Link
-                            href="/community"
-                            className="text-xs text-content-secondary hover:text-content-primary font-semibold"
-                        >
-                            더 많은 토론 보기 →
-                        </Link>
-                    </div>
-                    <div className="divide-y divide-border-muted">
-                        {discussionTopicsWithStats.map((topic) => (
-                            <Link
-                                key={topic.id}
-                                href={`/community/${topic.id}`}
-                                className="block p-5 hover:bg-surface-muted transition-colors group"
-                            >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-2.5">
-                                            {topic.approval_status === '진행중' ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
-                                                    토론 진행중
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-surface-muted text-content-muted border-border text-xs font-medium">
-                                                    토론 마감
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        <p className="text-[15px] font-medium text-content-primary line-clamp-2 leading-snug mb-3 group-hover:text-primary">
-                                            {topic.body}
-                                        </p>
-
-                                        <div className="flex items-center gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
-                                            <span className="flex items-center gap-1">
-                                                <Eye className="w-4 h-4" strokeWidth={1.8} />
-                                                <span>{topic.viewCount.toLocaleString()}</span>
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <MessageCircleMore className="w-4 h-4" strokeWidth={1.8} />
-                                                <span>{topic.opinionCount.toLocaleString()}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
+                    <RelatedDiscussionTopics
+                        topics={discussionTopicsWithStats}
+                        issueId={id}
+                        issueTitle={issue.title}
+                        userId={userId}
+                    />
                 </div>
             )}
 
@@ -452,13 +439,39 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 댓글 */}
-            <div id="section-comments" className="card overflow-hidden" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
+            <div id="section-comments" className="card overflow-hidden mb-6" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">댓글</h2>
                 </div>
                 <div className="p-4">
                     <CommentsSection issueId={id} userId={userId} />
                 </div>
+            </div>
+
+            {/* 지금 뜨는 이슈 + 관련 숏폼 - xl 미만에서는 여기(댓글 하단)로, xl 이상에서는 우측 사이드바로 */}
+            <div className="xl:hidden">
+                <PopularComments currentIssueId={id} category={issue.category} />
+                <RelatedHotIssuesSidebar title="지금 왜난리 TOP 5" issues={relatedHotIssuesRaw ?? []} />
+                <RelatedCategoryShortforms items={categoryShortforms} currentIssueId={id} variant="grid" />
+            </div>
+            </div>
+
+            <aside
+                className="hidden xl:block sticky self-start w-[272px] shrink-0"
+                style={{ top: 'var(--scroll-offset, 126px)' }}
+            >
+                {/* 투명 스페이서 - 본문 제목 블록과 정확히 같은 마크업/폭(672px)으로 높이만 맞춰서,
+                    "지금 왜난리 TOP 5" 카드가 제목 줄바꿈 여부와 무관하게 "핵심만 콕"과 시작점이 일치하게 함.
+                    폭이 사이드바(272px)보다 넓어 overflow-hidden으로 감싸서 잘라냄(어차피 invisible) */}
+                <div className="overflow-hidden mb-4">
+                    <div className="invisible w-[672px]" aria-hidden="true">
+                        <IssueHeaderBlock issue={issue} />
+                    </div>
+                </div>
+                <PopularComments currentIssueId={id} category={issue.category} />
+                <RelatedHotIssuesSidebar title="지금 왜난리 TOP 5" issues={relatedHotIssuesRaw ?? []} />
+                <RelatedCategoryShortforms items={categoryShortforms} currentIssueId={id} variant="compact" />
+            </aside>
             </div>
         </div>
         </>
