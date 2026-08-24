@@ -11,7 +11,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Share2, Copy, Check, Link } from 'lucide-react'
+import { Share, Share2, Copy, Check, Link } from 'lucide-react'
 import { initKakao, isKakaoReady } from '@/lib/kakao/init'
 
 interface ShareButtonProps {
@@ -20,9 +20,10 @@ interface ShareButtonProps {
     title: string
     thumbnailUrl?: string // 이슈 대표 이미지
     compact?: boolean // 컴팩트 모드 (아이콘만 표시)
+    panelDirection?: 'down' | 'right' | 'up' // right: 좌측 레일용, up: 하단 캡슐바용(화면 밖으로 안 잘리게 위로 펼침)
 }
 
-export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, compact = false }: ShareButtonProps) {
+export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, compact = false, panelDirection = 'down' }: ShareButtonProps) {
     const [copied, setCopied] = useState(false)
     const [showMenu, setShowMenu] = useState(false)
     const [kakaoCopied, setKakaoCopied] = useState(false)
@@ -224,10 +225,10 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             <div className="relative">
                 <button
                     onClick={() => setShowMenu(!showMenu)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
+                    className={`flex items-center justify-center rounded-full text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors ${panelDirection === 'up' ? 'w-11 h-11' : 'w-9 h-9'}`}
                     aria-label="공유하기"
                 >
-                    <Share2 className="w-4 h-4" strokeWidth={1.8} />
+                    <Share className="w-4 h-4" strokeWidth={1.8} />
                 </button>
 
                 {showMenu && (
@@ -236,7 +237,13 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                             className="fixed inset-0 z-40"
                             onClick={() => setShowMenu(false)}
                         />
-                        <div className="absolute right-0 top-full mt-2 bg-surface rounded-xl shadow-lg border border-border z-50 p-3">
+                        <div className={
+                            panelDirection === 'right'
+                                ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 bg-surface rounded-xl shadow-lg border border-border z-50 p-3'
+                                : panelDirection === 'up'
+                                ? 'absolute right-0 bottom-full mb-2 bg-surface rounded-xl shadow-lg border border-border z-50 p-3'
+                                : 'absolute right-0 top-full mt-2 bg-surface rounded-xl shadow-lg border border-border z-50 p-3'
+                        }>
                             <div className="flex items-center gap-2">
                                 {/* X (트위터) */}
                                 <button
