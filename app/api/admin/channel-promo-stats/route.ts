@@ -6,11 +6,12 @@
  *
  * GET  /api/admin/channel-promo-stats?periodType=weekly&periodStart=2026-08-09
  * POST /api/admin/channel-promo-stats
- *   Body: { periodType, periodStart, periodEnd, platform, views, newSubscribers, totalSubscribers, totalViews, likes, comments, shares }
+ *   Body: { periodType, periodStart, periodEnd, platform, views, newSubscribers, totalSubscribers, totalViews, likes, comments, shares, profileViews }
  *
  * totalViews: 유튜브 채널 통계(구독자·전체 누적 조회수) 조회 시 받은 누적 스냅샷. 지금은 화면에서
  * 참고용으로만 저장하고, "이번 기간 발생 조회수"는 애널리틱스 API로 바로 조회해서 쓴다.
- * likes/comments/shares: 유튜브(애널리틱스)·인스타(인사이트) 둘 다 기간을 직접 지정해서 조회하므로 바로 저장.
+ * likes/comments/shares: 유튜브(애널리틱스)·인스타(인사이트)는 API로 바로 조회, 틱톡은 수동 입력.
+ * profileViews: 틱톡 전용 — 틱톡 스튜디오 분석 화면에서 직접 확인해서 입력.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { periodType, periodStart, periodEnd, platform, views, newSubscribers, totalSubscribers, totalViews, likes, comments, shares } = body
+        const { periodType, periodStart, periodEnd, platform, views, newSubscribers, totalSubscribers, totalViews, likes, comments, shares, profileViews } = body
 
         if (!periodType || !periodStart || !periodEnd || !platform) {
             return NextResponse.json({ error: 'periodType, periodStart, periodEnd, platform은 필수입니다' }, { status: 400 })
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
                 likes: likes === '' || likes === null || likes === undefined ? null : Number(likes),
                 comments: comments === '' || comments === null || comments === undefined ? null : Number(comments),
                 shares: shares === '' || shares === null || shares === undefined ? null : Number(shares),
+                profile_views: profileViews === '' || profileViews === null || profileViews === undefined ? null : Number(profileViews),
                 updated_at: new Date().toISOString(),
             }, { onConflict: 'period_type,period_start,platform' })
             .select()

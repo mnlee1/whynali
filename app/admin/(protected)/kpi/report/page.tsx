@@ -92,6 +92,7 @@ interface ChannelPromoStat {
     likes: number | null
     comments: number | null
     shares: number | null
+    profile_views: number | null
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: '인스타그램', youtube: '유튜브', tiktok: '틱톡' }
@@ -189,7 +190,7 @@ function reportSubtitle(kind: ReportKind, periodStart: Date, periodEnd: Date, pr
 }
 
 
-const emptyPromo = { views: '', totalSubscribers: '', totalViewsRaw: null as number | null, likes: '', comments: '', shares: '' }
+const emptyPromo = { views: '', totalSubscribers: '', totalViewsRaw: null as number | null, likes: '', comments: '', shares: '', profileViews: '' }
 type PromoEntry = typeof emptyPromo
 
 export default function KPIReportPage() {
@@ -274,6 +275,7 @@ export default function KPIReportPage() {
                         likes: row.likes?.toString() ?? '',
                         comments: row.comments?.toString() ?? '',
                         shares: row.shares?.toString() ?? '',
+                        profileViews: row.profile_views?.toString() ?? '',
                     }
                 }
             }
@@ -296,6 +298,7 @@ export default function KPIReportPage() {
                     likes: liveJson.youtube.periodLikes !== null ? String(liveJson.youtube.periodLikes) : cur.youtube.likes,
                     comments: liveJson.youtube.periodComments !== null ? String(liveJson.youtube.periodComments) : cur.youtube.comments,
                     shares: liveJson.youtube.periodShares !== null ? String(liveJson.youtube.periodShares) : cur.youtube.shares,
+                    profileViews: cur.youtube.profileViews,
                 }
             }
             if (liveJson.instagram && (overwrite || cur.instagram.totalSubscribers === '')) {
@@ -306,6 +309,7 @@ export default function KPIReportPage() {
                     likes: liveJson.instagram.periodLikes !== null ? String(liveJson.instagram.periodLikes) : cur.instagram.likes,
                     comments: liveJson.instagram.periodComments !== null ? String(liveJson.instagram.periodComments) : cur.instagram.comments,
                     shares: liveJson.instagram.periodShares !== null ? String(liveJson.instagram.periodShares) : cur.instagram.shares,
+                    profileViews: cur.instagram.profileViews,
                 }
             }
             setLiveError({
@@ -343,6 +347,7 @@ export default function KPIReportPage() {
                 likes: v.likes,
                 comments: v.comments,
                 shares: v.shares,
+                profileViews: v.profileViews,
             }),
         })
         const json = await res.json()
@@ -474,14 +479,20 @@ export default function KPIReportPage() {
             const likesStr = promoStats[platform].likes
             const commentsStr = promoStats[platform].comments
             const sharesStr = promoStats[platform].shares
-            const engagementRows = platform !== 'tiktok' ? `
-                <p class="promo-row"><span class="muted">좋아요 수</span> <strong>${likesStr === '' ? '-' : `${Number(likesStr).toLocaleString()}개`}</strong></p>
-                <p class="promo-row"><span class="muted">댓글 수</span> <strong>${commentsStr === '' ? '-' : `${Number(commentsStr).toLocaleString()}개`}</strong></p>
-                <p class="promo-row"><span class="muted">공유 수</span> <strong>${sharesStr === '' ? '-' : `${Number(sharesStr).toLocaleString()}개`}</strong></p>` : ''
+            const profileViewsStr = promoStats[platform].profileViews
+            const periodLabel = kind === 'weekly' ? '지난주' : '이번 달'
+            const engagementRows = `
+                <p class="promo-row"><span class="muted">${periodLabel} 발생 좋아요 수</span> <strong>${likesStr === '' ? '-' : `${Number(likesStr).toLocaleString()}개`}</strong></p>
+                <p class="promo-row"><span class="muted">${periodLabel} 발생 댓글 수</span> <strong>${commentsStr === '' ? '-' : `${Number(commentsStr).toLocaleString()}개`}</strong></p>
+                <p class="promo-row"><span class="muted">${periodLabel} 발생 공유 수</span> <strong>${sharesStr === '' ? '-' : `${Number(sharesStr).toLocaleString()}개`}</strong></p>`
+            const profileViewsRow = platform === 'tiktok'
+                ? `<p class="promo-row"><span class="muted">${periodLabel} 발생 프로필 조회수</span> <strong>${profileViewsStr === '' ? '-' : `${Number(profileViewsStr).toLocaleString()}회`}</strong></p>`
+                : ''
             return `
             <div class="promo-card">
                 <p class="promo-title">${PLATFORM_LABEL[platform]}</p>
                 <p class="promo-row"><span class="muted">${kind === 'weekly' ? '지난주' : '이번 달'} 발생 조회수</span> <strong>${viewsStr === '' ? '-' : `${Number(viewsStr).toLocaleString()}회`}</strong></p>
+                ${profileViewsRow}
                 <p class="promo-row"><span class="muted">전체 구독자 수</span> <strong>${cur === null ? '-' : `${cur.toLocaleString()}명`}</strong></p>
                 <p class="promo-row">신규 구독자: ${subNote}</p>
                 ${engagementRows}
@@ -792,6 +803,18 @@ export default function KPIReportPage() {
                                         placeholder="예: 12400"
                                     />
                                 </label>
+                                {platform === 'tiktok' && (
+                                    <label className="block">
+                                        <span className="text-xs text-slate-500">{kind === 'weekly' ? '지난주' : '이번 달'} 발생 프로필 조회수</span>
+                                        <input
+                                            type="number"
+                                            className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
+                                            value={promoStats[platform].profileViews}
+                                            onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], profileViews: e.target.value } }))}
+                                            placeholder="예: 3"
+                                        />
+                                    </label>
+                                )}
                                 <label className="block">
                                     <span className="text-xs text-slate-500">전체 구독자 수 (프로필에서 바로 확인)</span>
                                     <input
@@ -815,40 +838,38 @@ export default function KPIReportPage() {
                                         </span>
                                     })()}
                                 </div>
-                                {platform !== 'tiktok' && (
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <label className="block">
-                                            <span className="text-xs text-slate-500">좋아요 수</span>
-                                            <input
-                                                type="number"
-                                                className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
-                                                value={promoStats[platform].likes}
-                                                onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], likes: e.target.value } }))}
-                                                placeholder="예: 38"
-                                            />
-                                        </label>
-                                        <label className="block">
-                                            <span className="text-xs text-slate-500">댓글 수</span>
-                                            <input
-                                                type="number"
-                                                className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
-                                                value={promoStats[platform].comments}
-                                                onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], comments: e.target.value } }))}
-                                                placeholder="예: 12"
-                                            />
-                                        </label>
-                                        <label className="block">
-                                            <span className="text-xs text-slate-500">공유 수</span>
-                                            <input
-                                                type="number"
-                                                className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
-                                                value={promoStats[platform].shares}
-                                                onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], shares: e.target.value } }))}
-                                                placeholder="예: 3"
-                                            />
-                                        </label>
-                                    </div>
-                                )}
+                                <div className="grid grid-cols-3 gap-2">
+                                    <label className="block">
+                                        <span className="text-xs text-slate-500">{kind === 'weekly' ? '지난주' : '이번 달'} 발생 좋아요 수</span>
+                                        <input
+                                            type="number"
+                                            className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
+                                            value={promoStats[platform].likes}
+                                            onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], likes: e.target.value } }))}
+                                            placeholder="예: 38"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-xs text-slate-500">{kind === 'weekly' ? '지난주' : '이번 달'} 발생 댓글 수</span>
+                                        <input
+                                            type="number"
+                                            className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
+                                            value={promoStats[platform].comments}
+                                            onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], comments: e.target.value } }))}
+                                            placeholder="예: 12"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-xs text-slate-500">{kind === 'weekly' ? '지난주' : '이번 달'} 발생 공유 수</span>
+                                        <input
+                                            type="number"
+                                            className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg"
+                                            value={promoStats[platform].shares}
+                                            onChange={e => setPromoStats(p => ({ ...p, [platform]: { ...p[platform], shares: e.target.value } }))}
+                                            placeholder="예: 3"
+                                        />
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     ))}
