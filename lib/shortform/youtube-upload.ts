@@ -15,6 +15,8 @@ export interface YoutubeUploadOptions {
     description: string
     tags?: string[]
     categoryId?: string
+    /** 기본 true(Shorts 태그 포함) — 롱폼처럼 세로 짧은 영상이 아니면 false로 전달 */
+    isShort?: boolean
 }
 
 /**
@@ -55,10 +57,10 @@ export async function uploadToYouTube(
 ): Promise<string> {
     const youtube = getYoutubeClient()
 
-    const { title, description, tags = [], categoryId = '22' } = options
+    const { title, description, tags = [], categoryId = '22', isShort = true } = options
 
     const fullDescription = description
-    const fullTags = ['Shorts', '왜난리', ...tags]
+    const fullTags = isShort ? ['Shorts', '왜난리', ...tags] : ['왜난리', ...tags]
 
     const videoStream = Readable.from(videoBuffer)
 
