@@ -51,6 +51,15 @@
     --color-border-muted: #f1f1f3;
     --color-surface:      #ffffff;
     --color-surface-muted:#fafafa;
+
+    /* 전역 상단 네비게이션 높이 + 여유(24px). 이슈 상세 페이지의 앵커 스크롤(scrollMarginTop)에 사용 */
+    --scroll-offset: 112px;
+}
+
+@media (min-width: 1280px) {
+    :root {
+        --scroll-offset: 80px;
+    }
 }
 
 /* ── 버튼 컴포넌트 ───────────────────────────────── */
@@ -116,6 +125,21 @@
 
     .card-hover {
         @apply card hover:shadow-card-hover transition-shadow duration-150;
+    }
+
+    /* 라운드 박스 안 textarea용 - 기본 스크롤바가 두꺼워서 둥근 모서리와 부딪히는 문제 방지 */
+    .thin-scrollbar {
+        scrollbar-width: thin;
+    }
+    .thin-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .thin-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .thin-scrollbar::-webkit-scrollbar-thumb {
+        background: theme('colors.border');
+        border-radius: 3px;
     }
 
     /* ── 테이블 ───────────────────────────────────── */
