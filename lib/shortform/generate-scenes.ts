@@ -11,6 +11,7 @@ import sharp from 'sharp'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { downloadImage } from './fetch-stock-images'
+import { wordWrapLines, DESC_MAX_CHARS_PER_LINE, DESC_SAFE_MAX_LINES } from './text-wrap'
 
 const WIDTH = 720
 const HEIGHT = 1280
@@ -47,71 +48,27 @@ interface SceneLayout {
     descStartY: number
 }
 
-/** 단어 경계 기준 줄바꿈 + 마지막 줄 orphan 방지. \n 명시 줄바꿈 지원. */
-function wordWrapLines(text: string, maxCharsPerLine: number): string[] {
-    // \n 포함 시 각 세그먼트를 독립적으로 처리
-    const segments = text.split('\n').map(s => s.trim()).filter(s => s.length > 0)
-    if (segments.length === 0) return ['']
-
-    const allLines: string[] = []
-
-    for (const segment of segments) {
-        const words = segment.split(' ').filter(w => w.length > 0)
-        if (words.length === 0) continue
-
-        const lines: string[] = []
-        let current = ''
-
-        for (const word of words) {
-            // 단일 어절이 maxCharsPerLine 초과 시 강제 분할
-            if (word.length > maxCharsPerLine) {
-                if (current) { lines.push(current); current = '' }
-                for (let i = 0; i < word.length; i += maxCharsPerLine) {
-                    lines.push(word.slice(i, i + maxCharsPerLine))
-                }
-                continue
-            }
-            const test = current ? `${current} ${word}` : word
-            if (test.length <= maxCharsPerLine) {
-                current = test
-            } else {
-                if (current) lines.push(current)
-                current = word
-            }
-        }
-        if (current) lines.push(current)
-
-        // 마지막 줄이 단어 1개(orphan)이면 앞 줄 마지막 단어를 당겨서 균형 맞춤
-        if (lines.length >= 2) {
-            const lastLine = lines[lines.length - 1]
-            if (lastLine.split(' ').filter(Boolean).length === 1) {
-                const prevWords = lines[lines.length - 2].split(' ')
-                if (prevWords.length >= 2) {
-                    const moved = prevWords[prevWords.length - 1]
-                    const newPrev = prevWords.slice(0, -1).join(' ')
-                    const newLast = `${moved} ${lastLine}`
-                    if (newPrev.length <= maxCharsPerLine && newLast.length <= maxCharsPerLine) {
-                        lines[lines.length - 2] = newPrev
-                        lines[lines.length - 1] = newLast
-                    }
-                }
-            }
-        }
-
-        allLines.push(...lines)
-    }
-
-    return allLines.length > 0 ? allLines : ['']
-}
+// 화면 맨 아래(HEIGHT)로부터 확보할 여백 — YouTube Shorts 광고 하단 UI
+// (채널명·스폰서 표시·좋아요/댓글/공유 아이콘 열) 회피용. 실측 스크린샷 기준 추정치.
+// 값을 줄이면 텍스트가 더 아래(화면 끝에 가깝게), 늘리면 더 위로 이동한다.
+const DESC_BOTTOM_MARGIN = 380
+const DESC_SAFE_BOTTOM_Y = HEIGHT - DESC_BOTTOM_MARGIN
 
 /**
  * 상단: 로고 + 타이틀 (씬1,2,3 공통 고정)
  * 하단: 이슈 설명 + CTA 버튼 (씬3만 버튼)
+ *
+ * descStartY는 실제 줄 수 기준으로 역산한다 — 하단 안전선(DESC_SAFE_BOTTOM_Y =
+ * HEIGHT - DESC_BOTTOM_MARGIN)에 블록의 "끝"을 고정하고, 줄이 늘어날수록
+ * 시작점만 위로 올라가는 구조. 그래야 줄 수가 적을 때 밑에 빈 여백이 남지 않는다.
+ * DESC_SAFE_MAX_LINES(5줄)를 넘는 경우에만 안전선 침범을 막기 위해 클램프한다.
  */
-function computeLayout(_title: string, _desc: string, _sceneNumber?: number): SceneLayout {
+function computeLayout(_title: string, desc: string, _sceneNumber?: number): SceneLayout {
     const logoY = LOGO_TOP_Y
     const titleStartY = LOGO_TOP_Y + LOGO_H + 60
-    const descStartY = Math.floor(HEIGHT * 0.60)
+    const descLineCount = desc ? wordWrapLines(desc, DESC_MAX_CHARS_PER_LINE).length : 0
+    const clampedLines = Math.min(Math.max(descLineCount, 1), DESC_SAFE_MAX_LINES)
+    const descStartY = DESC_SAFE_BOTTOM_Y - clampedLines * DESC_LINE_HEIGHT
     return { logoY, titleStartY, descStartY }
 }
 
@@ -181,6 +138,63 @@ function addLinePaths(
 }
 
 /**
+ * 하이라이트 단어별 "남은 강조 횟수"를 센다. 같은 단어가 목록에 여러 번 있으면
+ * (칩이 여러 개면) 그 문장에서 등장 순서대로 그만큼만 강조하고, 소진되면
+ * 이후 등장은 강조하지 않는다 — 칩 개별 삭제/관리가 그대로 강조 개수에 반영되도록.
+ */
+function buildHighlightBudget(highlights: string[]): Map<string, number> {
+    const budget = new Map<string, number>()
+    for (const h of highlights) {
+        if (!h) continue
+        budget.set(h, (budget.get(h) ?? 0) + 1)
+    }
+    return budget
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawTextWithHighlights(
+    font: any,
+    svgPaths: string[],
+    text: string,
+    x: number, y: number,
+    fontSize: number, defaultColor: string, strokeW: number,
+    highlightBudget: Map<string, number>,
+): void {
+    if (highlightBudget.size === 0) {
+        addLinePaths(font, svgPaths, text, x, y, fontSize, defaultColor, strokeW)
+        return
+    }
+    // 부분 문자열 검색 → 여러 단어짜리 강조 키워드도 정확히 매칭
+    let remaining = text
+    let xPos = x
+    while (remaining.length > 0) {
+        let matchIdx = -1
+        let matchedH = ''
+        for (const [h, remainingBudget] of highlightBudget) {
+            if (remainingBudget <= 0) continue
+            const idx = remaining.indexOf(h)
+            if (idx !== -1 && (matchIdx === -1 || idx < matchIdx)) {
+                matchIdx = idx
+                matchedH = h
+            }
+        }
+        if (matchIdx === -1) {
+            addLinePaths(font, svgPaths, remaining, xPos, y, fontSize, defaultColor, strokeW)
+            break
+        }
+        if (matchIdx > 0) {
+            const prefix = remaining.slice(0, matchIdx)
+            addLinePaths(font, svgPaths, prefix, xPos, y, fontSize, defaultColor, strokeW)
+            xPos += font.getAdvanceWidth(prefix, fontSize)
+        }
+        addLinePaths(font, svgPaths, matchedH, xPos, y, fontSize, '#FFFF4D', strokeW)
+        highlightBudget.set(matchedH, (highlightBudget.get(matchedH) ?? 1) - 1)
+        xPos += font.getAdvanceWidth(matchedH, fontSize)
+        remaining = remaining.slice(matchIdx + matchedH.length)
+    }
+}
+
+/**
  * 타이핑 애니메이션 한 프레임 렌더링.
  * - 씬1: titleFinalLines 전달 시 타이틀+설명 순서로 애니메이션
  * - 씬2,3: descFinalLines만 애니메이션 (타이틀은 정적 레이어에서 처리)
@@ -202,6 +216,7 @@ async function renderTypingStatePNG(
         const descD = Math.round(Math.abs(font.descender) * DESC_FONTSIZE / font.unitsPerEm)
 
         // 타이틀 애니메이션 (씬1만, titleFinalLines 전달 시)
+        // 타이틀은 하이라이트와 무관 — 강조는 설명(desc/자막)에만 적용
         if (titleFinalLines.length > 0) {
             let rendered = 0
             for (let i = 0; i < titleFinalLines.length; i++) {
@@ -220,6 +235,7 @@ async function renderTypingStatePNG(
         }
 
         // 설명: 줄 위치 고정, 단어 수만큼 표시 (타이틀 완료 후 시작)
+        const descHighlightBudget = buildHighlightBudget(highlights)
         const descVisible = Math.max(0, visibleCount - titleWordCount)
         let rendered = 0
         const descRects: string[] = []
@@ -243,43 +259,7 @@ async function renderTypingStatePNG(
                     `width="${w + PAD_X * 2}" height="${ascD + descD + PAD_TOP + PAD_BOT - LINE_GAP}" ` +
                     `fill="black" fill-opacity="0.55"/>`
                 )
-                if (highlights.length > 0) {
-                    let xPos = x
-                    for (let wi = 0; wi < visibleWords.length; wi++) {
-                        const word = visibleWords[wi]
-                        // 첫 번째로 매칭되는 하이라이트 키워드와 위치를 탐색
-                        let matchedH: string | null = null
-                        let matchIdx = -1
-                        for (const h of highlights) {
-                            if (h.length === 0) continue
-                            const idx = word.indexOf(h)
-                            if (idx !== -1) { matchedH = h; matchIdx = idx; break }
-                        }
-                        if (matchedH !== null) {
-                            // prefix (조사 앞 또는 빈 문자열)
-                            let curX = xPos
-                            if (matchIdx > 0) {
-                                const prefix = word.slice(0, matchIdx)
-                                addLinePaths(font, svgPaths, prefix, curX, y, DESC_FONTSIZE, '#E5E7EB', 5)
-                                curX += font.getAdvanceWidth(prefix, DESC_FONTSIZE)
-                            }
-                            // 매칭 부분 (노란색)
-                            addLinePaths(font, svgPaths, matchedH, curX, y, DESC_FONTSIZE, '#FFFF4D', 5)
-                            curX += font.getAdvanceWidth(matchedH, DESC_FONTSIZE)
-                            // suffix (조사 등 나머지)
-                            const suffix = word.slice(matchIdx + matchedH.length)
-                            if (suffix) {
-                                addLinePaths(font, svgPaths, suffix, curX, y, DESC_FONTSIZE, '#E5E7EB', 5)
-                            }
-                        } else {
-                            addLinePaths(font, svgPaths, word, xPos, y, DESC_FONTSIZE, '#E5E7EB', 5)
-                        }
-                        const spacer = wi < visibleWords.length - 1 ? `${word} ` : word
-                        xPos += font.getAdvanceWidth(spacer, DESC_FONTSIZE)
-                    }
-                } else {
-                    addLinePaths(font, svgPaths, text, x, y, DESC_FONTSIZE, '#E5E7EB', 5)
-                }
+                drawTextWithHighlights(font, svgPaths, text, x, y, DESC_FONTSIZE, '#E5E7EB', 5, descHighlightBudget)
             }
             rendered += lineWords.length
         }
@@ -309,8 +289,8 @@ export async function createTypingFrames(
     const layout = computeLayout(title, desc, sceneNumber)
 
     // 씬1: 타이틀+설명 모두 애니메이션 / 씬2,3: 설명만 애니메이션 (타이틀은 정적 레이어)
-    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, 13) : []
-    const descFinalLines = desc ? wordWrapLines(desc, 13) : []
+    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, DESC_MAX_CHARS_PER_LINE) : []
+    const descFinalLines = desc ? wordWrapLines(desc, DESC_MAX_CHARS_PER_LINE) : []
 
     const titleWords = titleFinalLines.flatMap(l => l.split(' ').filter(Boolean))
     const descWords = descFinalLines.flatMap(l => l.split(' ').filter(Boolean))
@@ -543,11 +523,13 @@ export async function createBackgroundFrames(
  * @param sceneNumber - 씬 번호
  * @param title - 타이틀 (레이아웃 계산용)
  * @param desc - 설명 (레이아웃 계산용)
+ * @param highlights - 타이틀 내 노란색(#FFFF4D)으로 강조할 키워드 목록 (desc 하이라이트와 동일 색상)
  */
 export async function createSceneTextOverlay(
     sceneNumber: number,
     title: string = '',
-    desc: string = ''
+    desc: string = '',
+    highlights: string[] = []
 ): Promise<Buffer> {
     const layout = computeLayout(title, desc, sceneNumber)
     const logoBase64 = getLogoBase64()
@@ -557,15 +539,16 @@ export async function createSceneTextOverlay(
 
     // 타이틀 정적 렌더링 (씬2,3만 — 씬1은 타이핑 애니메이션으로 처리)
     if (font && title && sceneNumber !== 1) {
-        const titleLines = wordWrapLines(title, 13)
+        const titleLines = wordWrapLines(title, DESC_MAX_CHARS_PER_LINE)
         const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
+        const titleHighlightBudget = buildHighlightBudget(highlights)
         for (let i = 0; i < titleLines.length; i++) {
             const line = titleLines[i]
             if (!line.trim()) continue
             const w = font.getAdvanceWidth(line, TITLE_FONTSIZE)
             const x = Math.floor((WIDTH - w) / 2)
             const y = layout.titleStartY + i * TITLE_LINE_HEIGHT + ascT
-            addLinePaths(font, svgPaths, line, x, y, TITLE_FONTSIZE, '#ffffff', 8)
+            drawTextWithHighlights(font, svgPaths, line, x, y, TITLE_FONTSIZE, '#ffffff', 8, titleHighlightBudget)
         }
     }
 

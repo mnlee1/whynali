@@ -41,7 +41,7 @@ const NAV_ITEMS = [
         icon: <CheckSquare className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },
     {
-        label: '숏폼 관리',
+        label: '숏폼/롱폼 관리',
         href: '/admin/shortform',
         icon: <Video className="w-4 h-4 shrink-0" strokeWidth={2} />,
     },

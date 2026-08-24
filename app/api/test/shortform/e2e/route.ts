@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
         } else {
             const createdJobId = await createShortformJob({
                 issueId: TEST_ISSUE_ID,
-                triggerType: 'daily_batch',
+                triggerType: 'issue_created',
             })
             
             if (!createdJobId) {
