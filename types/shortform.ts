@@ -1,10 +1,10 @@
 /**
  * types/shortform.ts
- * 
- * 숏폼 자동 생성·배포 관련 타입 정의
+ *
+ * 숏폼 관련 타입 정의
  */
 
-export type ShortformTriggerType = 'issue_created' | 'status_changed' | 'daily_batch'
+export type ShortformTriggerType = 'issue_created'
 export type ShortformApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type HeatGrade = '높음' | '보통' | '낮음'
 

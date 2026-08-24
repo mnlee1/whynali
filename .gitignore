@@ -34,6 +34,9 @@ next-env.d.ts
 backups/
 backups-auth/
 
+# 로컬 테스트 산출물(영상/이미지)
+output/
+
 # Claude Code
 CLAUDE.md
 .claude/

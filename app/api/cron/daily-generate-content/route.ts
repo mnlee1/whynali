@@ -16,12 +16,7 @@
  *   - 욕설/혐오 외 신고(스팸·허위정보·기타)를 우선순위별로 분류
  *   - Dooray로 일일 현황 발송
  *
- * 작업 3: 숏폼 일일 자동생성
- *   - 승인된 이슈 중 heat_index ≥ 30인 전체 대상
- *   - 쿨다운(20시간) 체크하여 중복 생성 방지
- *   - 완료 후 Dooray 알림
- *
- * 작업 4: brief_summary(3줄 요약) 백필
+ * 작업 3: brief_summary(3줄 요약) 백필
  *   - 승인된 이슈 중 timeline_points는 있는데 brief_summary가 없는 이슈 대상
  *     (뉴스 1건이라 생성 시점에 건너뛰었거나 AI 호출 실패로 비어 있는 경우)
  *   - 저장된 timeline_points만으로 재생성 시도
@@ -34,8 +29,6 @@ import { generateVoteOptions } from '@/lib/ai/vote-generator'
 import { generateSummariesForIssue } from '@/lib/pipeline/backfill-brief-summary'
 import type { IssueMetadata as DiscussionMetadata } from '@/lib/ai/discussion-generator'
 import type { IssueMetadata as VoteMetadata } from '@/lib/ai/vote-generator'
-import { SHORTFORM_ENABLED, SHORTFORM_MIN_HEAT } from '@/lib/config/shortform-thresholds'
-import type { ShortformSourceCount } from '@/types/shortform'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -53,111 +46,6 @@ function verifyCronRequest(req: NextRequest): boolean {
     const cronSecret = process.env.CRON_SECRET
     if (!cronSecret) return false
     return authHeader === `Bearer ${cronSecret}`
-}
-
-/**
- * 화력 지수를 화력 등급으로 변환
- */
-function convertHeatGrade(heatIndex: number | null): '높음' | '보통' | '낮음' {
-    if (heatIndex === null) return '낮음'
-    if (heatIndex >= 60) return '높음'
-    if (heatIndex >= 30) return '보통'
-    return '낮음'
-}
-
-/**
- * 숏폼 일일 배치 — 승인된 이슈 중 heat_index ≥ 30인 전체 대상
- *
- * @returns 생성된 job 수
- */
-async function generateShortformBatch(): Promise<{ jobsGenerated: number; issueCount: number }> {
-    if (!SHORTFORM_ENABLED) {
-        console.log('[숏폼 배치] SHORTFORM_ENABLED=false — 스킵')
-        return { jobsGenerated: 0, issueCount: 0 }
-    }
-
-    // 한 번에 처리할 최대 숏폼 수 (타임아웃 방지, 기본 3개)
-    const SHORTFORM_BATCH_SIZE = parseInt(process.env.SHORTFORM_BATCH_SIZE ?? '3')
-
-    const { data: issues, error: issuesError } = await supabaseAdmin
-        .from('issues')
-        .select('id, title, category, status, heat_index')
-        .eq('approval_status', '승인')
-        .eq('visibility_status', 'visible')
-        .neq('status', '종결')
-        .gte('heat_index', SHORTFORM_MIN_HEAT)
-        .order('heat_index', { ascending: false })
-        .limit(SHORTFORM_BATCH_SIZE)
-
-    if (issuesError || !issues) {
-        console.error('[숏폼 배치] 이슈 조회 실패:', issuesError)
-        return { jobsGenerated: 0, issueCount: 0 }
-    }
-
-    let jobsGenerated = 0
-
-    for (const issue of issues) {
-        // 동일 이슈 job 중복 체크 — pending/approved는 물론 rejected도 포함하여 재생성 방지
-        const { count: recentJobCount, error: recentJobError } = await supabaseAdmin
-            .from('shortform_jobs')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', issue.id)
-            .in('approval_status', ['pending', 'approved', 'rejected'])
-
-        if (recentJobError) {
-            console.error(`[숏폼 배치] 활성 job 조회 실패 (${issue.id}):`, recentJobError)
-            continue
-        }
-
-        if ((recentJobCount ?? 0) > 0) {
-            continue
-        }
-
-        const { count: newsCount } = await supabaseAdmin
-            .from('news_data')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', issue.id)
-
-        const { count: communityCount } = await supabaseAdmin
-            .from('community_data')
-            .select('*', { count: 'exact', head: true })
-            .eq('issue_id', issue.id)
-
-        const sourceCount: ShortformSourceCount = {
-            news: newsCount ?? 0,
-            community: communityCount ?? 0,
-        }
-
-        const heatGrade = convertHeatGrade(issue.heat_index)
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://whynali.com'
-        const issueUrl = `${siteUrl}/issue/${issue.id}`
-
-        const { data: job, error: insertError } = await supabaseAdmin
-            .from('shortform_jobs')
-            .insert({
-                issue_id: issue.id,
-                issue_title: issue.title,
-                issue_status: issue.status,
-                heat_grade: heatGrade,
-                source_count: sourceCount,
-                issue_url: issueUrl,
-                trigger_type: 'daily_batch',
-                approval_status: 'pending',
-            })
-            .select('id')
-            .single()
-
-        if (!insertError && job) {
-            jobsGenerated++
-            console.log(`  ✓ [숏폼] "${issue.title}" — job 생성 (화력: ${issue.heat_index})`)
-            // 영상 생성은 어드민이 이미지 확인 후 직접 진행
-        } else {
-            console.error(`  ✗ [숏폼 생성 실패] "${issue.title}":`, insertError)
-        }
-    }
-
-    console.log(`[숏폼 배치] 완료 — ${jobsGenerated}개 job 생성 (대상 이슈: ${issues.length}개)`)
-    return { jobsGenerated, issueCount: issues.length }
 }
 
 /**
@@ -282,8 +170,7 @@ export async function GET(request: NextRequest) {
         .slice(0, MAX_ISSUES_PER_RUN)
 
     if (targets.length === 0) {
-        console.log('[daily-generate] 토론/투표 생성 대상 이슈 없음 — 숏폼 배치는 계속 진행')
-        const shortformResult = await generateShortformBatch()
+        console.log('[daily-generate] 토론/투표 생성 대상 이슈 없음')
         return NextResponse.json({
             success: true,
             deletedStaleVotes: deletedVotes,
@@ -291,8 +178,6 @@ export async function GET(request: NextRequest) {
             discussionGenerated: 0,
             voteGenerated: 0,
             issueCount: 0,
-            shortformGenerated: shortformResult.jobsGenerated,
-            shortformIssueCount: shortformResult.issueCount,
         })
     }
 
@@ -392,10 +277,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`[daily-generate] 완료 — 토론 ${discussionGenerated}건, 투표 ${voteGenerated}건`)
 
-    // 작업 2: 숏폼 일일 배치
-    const shortformResult = await generateShortformBatch()
-
-    // 작업 3: brief_summary(3줄 요약) 백필 배치
+    // 작업 2: brief_summary(3줄 요약) 백필 배치
     const briefBackfillResult = await generateBriefSummaryBackfillBatch()
 
     return NextResponse.json({
@@ -405,8 +287,6 @@ export async function GET(request: NextRequest) {
         discussionGenerated,
         voteGenerated,
         issueCount: targets.length,
-        shortformGenerated: shortformResult.jobsGenerated,
-        shortformIssueCount: shortformResult.issueCount,
         briefSummaryBackfilled: briefBackfillResult.backfilled,
         briefSummaryBackfillCandidates: briefBackfillResult.issueCount,
     })

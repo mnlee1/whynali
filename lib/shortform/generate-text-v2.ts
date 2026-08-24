@@ -138,7 +138,7 @@ export async function generateShortformText(input: ShortformTextInput): Promise<
 
     const processDesc = (raw: string): string => fixIncomplete(truncate(clean(raw), 70))
     const safeT = (raw: unknown, fb: string) => fixIncomplete(truncate(clean(String(raw ?? fb)), 10))
-    const safeD = (raw: unknown, fb: string) => fixIncomplete(truncate(clean(String(raw ?? fb)), 35))
+    const safeD = (raw: unknown, fb: string) => fixIncomplete(truncate(clean(String(raw ?? fb)), 51))
 
     const fallback: ShortformTextOutput = {
         scene1Title,

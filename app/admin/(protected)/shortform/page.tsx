@@ -6,10 +6,12 @@
  * [관리자 - 숏폼 job 관리 페이지]
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import AdminPagination from '@/components/admin/AdminPagination'
 import AdminTabFilter from '@/components/admin/AdminTabFilter'
+import LongformTab from '@/components/admin/LongformTab'
+import { wordWrapLines, DESC_MAX_CHARS_PER_LINE, DESC_SAFE_MAX_LINES } from '@/lib/shortform/text-wrap'
 
 interface PlatformStats {
     youtube?: { views: number; likes: number; comments: number; averageViewPercentage: number | null; fetched_at: string }
@@ -28,7 +30,7 @@ interface ShortformJob {
     approval_status: 'pending' | 'approved' | 'rejected'
     upload_status: Record<string, string> | null
     platform_stats: PlatformStats | null
-    trigger_type: 'issue_created' | 'status_changed' | 'daily_batch'
+    trigger_type: 'issue_created'
     created_at: string
 }
 
@@ -125,6 +127,7 @@ interface ImagePreviewModal {
     rewriteError: string | null
     highlightsLoading: boolean
     highlightsBudgetExceeded: boolean
+    highlightsFailedIndices: number[]
 }
 
 const FILTER_LABELS: { value: FilterStatus; label: string }[] = [
@@ -138,12 +141,6 @@ const APPROVAL_STATUS_STYLE: Record<string, string> = {
     'pending': 'bg-yellow-100 text-yellow-700',
     'approved': 'bg-green-100 text-green-700',
     'rejected': 'bg-red-100 text-red-700',
-}
-
-const TRIGGER_TYPE_LABEL: Record<string, string> = {
-    'issue_created': '수동 생성',
-    'status_changed': '수동 생성',
-    'daily_batch': '자동 생성',
 }
 
 function formatDate(dateString: string): string {
@@ -169,7 +166,149 @@ function getStoragePublicUrl(path: string): string {
 
 const PAGE_SIZE = 20
 
+/** 씬 카드 상단 — 배지(씬 번호/타임라인 단계) + 원문 텍스트. 씬 1개/2개 레이아웃 공용. */
+function SceneSourceHeader({ sceneIndex, item, className }: {
+    sceneIndex: number
+    item: SelectedContentItem
+    className?: string
+}) {
+    const sourceStyle = item.source === 'stage' && item.stage
+        ? (STAGE_STYLE[item.stage] ?? STAGE_STYLE['진정'])
+        : null
+    return (
+        <div className={className}>
+            <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-[10px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full">씬 {sceneIndex + 1}</span>
+                {sourceStyle && item.stage ? (
+                    <>
+                        <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">타임라인</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sourceStyle.badge}`}>{item.stage}</span>
+                    </>
+                ) : (
+                    <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">이슈 설명</span>
+                )}
+            </div>
+            <p className="text-[11px] text-content-muted leading-relaxed line-clamp-3">{item.text}</p>
+        </div>
+    )
+}
+
+/** 씬 카드 하단 — "씬 자막" textarea + 줄수 표시 + 하이라이트 칩/입력. 씬 1개/2개 레이아웃 공용. */
+function SceneCaptionEditor({
+    sceneIndex, text, highlights, highlightInput, refreshIcon,
+    isRewriting, rewritingBusy, rewriteLoading,
+    isHighlighting, highlightingBusy, highlightsLoading, highlightExtractDisabled, extractionFailed,
+    onChangeText, onExtractHighlight, onRefreshText, onRemoveHighlight, onAddHighlight, onChangeHighlightInput,
+}: {
+    sceneIndex: number
+    text: string
+    highlights: string[]
+    highlightInput: string
+    refreshIcon: ReactNode
+    isRewriting: boolean
+    rewritingBusy: boolean
+    rewriteLoading: boolean
+    isHighlighting: boolean
+    highlightingBusy: boolean
+    highlightsLoading: boolean
+    highlightExtractDisabled: boolean
+    extractionFailed: boolean
+    onChangeText: (value: string) => void
+    onExtractHighlight: () => void
+    onRefreshText: () => void
+    onRemoveHighlight: (wordIndex: number) => void
+    onAddHighlight: (word: string) => void
+    onChangeHighlightInput: (value: string) => void
+}) {
+    const descLines = wordWrapLines(text, DESC_MAX_CHARS_PER_LINE)
+    const isOverLimit = descLines.length > DESC_SAFE_MAX_LINES
+    return (
+        <>
+            <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold text-primary">씬 자막</span>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        onClick={onExtractHighlight}
+                        disabled={highlightExtractDisabled || highlightingBusy || highlightsLoading || !text.trim()}
+                        className="text-content-muted enabled:hover:text-primary disabled:opacity-40 transition-colors"
+                        title="하이라이트 추출"
+                    >
+                        {isHighlighting
+                            ? <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
+                            : <span className="w-4 h-4 flex items-center justify-center text-[18px] leading-none">✦</span>
+                        }
+                    </button>
+                    <button
+                        onClick={onRefreshText}
+                        disabled={rewritingBusy || rewriteLoading}
+                        className="text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
+                        title="텍스트 재생성"
+                    >
+                        {isRewriting
+                            ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            : refreshIcon
+                        }
+                    </button>
+                </div>
+            </div>
+            {rewriteLoading ? (
+                <div className="space-y-1.5">
+                    <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
+                    <div className="h-2.5 bg-surface-muted rounded animate-pulse w-4/5" />
+                    <div className="h-2.5 bg-surface-muted rounded animate-pulse w-3/5" />
+                </div>
+            ) : (
+                <>
+                <textarea
+                    value={text}
+                    onChange={e => onChangeText(e.target.value)}
+                    rows={3}
+                    placeholder="씬 자막을 입력하세요."
+                    className="w-full text-xs font-medium text-content-primary resize-none bg-transparent outline-none leading-relaxed placeholder:text-content-muted rounded-none"
+                />
+                <div
+                    className={`mt-1 text-[10px] font-medium ${isOverLimit ? 'text-red-500' : 'text-content-muted'}`}
+                    title={`최대 ${DESC_SAFE_MAX_LINES}줄까지 입력 가능`}
+                >
+                    {descLines.length}/<span className="text-content-secondary font-semibold">{DESC_SAFE_MAX_LINES}</span>줄{isOverLimit ? ' · 하단 UI와 겹칠 수 있어요' : ''}
+                </div>
+                <div className="mt-2">
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-semibold text-primary">하이라이트 자막</span>
+                        {extractionFailed && (
+                            <span className="text-[10px] font-medium text-red-500">추출 실패 · ✦ 버튼으로 다시 시도해 주세요</span>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1 items-center">
+                        {highlights.map((word, wi) => (
+                            <span key={wi} className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">
+                                {word}
+                                <button
+                                    onClick={() => onRemoveHighlight(wi)}
+                                    className="ml-0.5 text-yellow-600 hover:text-yellow-900 leading-none"
+                                >×</button>
+                            </span>
+                        ))}
+                        <input
+                            type="text"
+                            value={highlightInput}
+                            onChange={e => onChangeHighlightInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') onAddHighlight(highlightInput) }}
+                            placeholder="+ 단어 추가"
+                            size={Math.max(4, highlightInput.length + 2)}
+                            style={{ borderRadius: 0 }}
+                            className="text-[10px] text-content-muted placeholder:text-content-muted bg-transparent outline-none min-w-0 rounded-none"
+                        />
+                    </div>
+                </div>
+                </>
+            )}
+        </>
+    )
+}
+
 export default function AdminShortformPage() {
+    const [pageTab, setPageTab] = useState<'shortform' | 'longform'>('shortform')
     const [jobs, setJobs] = useState<ShortformJob[]>([])
     const [total, setTotal] = useState(0)
     const [filter, setFilter] = useState<FilterStatus>('pending')
@@ -182,6 +321,7 @@ export default function AdminShortformPage() {
     const [rewritingIndex, setRewritingIndex] = useState<number | null>(null)
     const [highlightingGroupIndex, setHighlightingGroupIndex] = useState<number | null>(null)
     const [copiedTiktokId, setCopiedTiktokId] = useState<string | null>(null)
+    const [lastAiCallAt, setLastAiCallAt] = useState(0)
 
     const [previewJob, setPreviewJob] = useState<ShortformJob | null>(null)
     const [tabCounts, setTabCounts] = useState<Record<string, number>>({})
@@ -205,6 +345,7 @@ export default function AdminShortformPage() {
         rewriteError: null,
         highlightsLoading: false,
         highlightsBudgetExceeded: false,
+        highlightsFailedIndices: [],
     })
 
     // Instagram 미디어 선택 모달
@@ -221,7 +362,6 @@ export default function AdminShortformPage() {
     }>({ open: false, jobId: null, jobTitle: '', media: [], loading: false, loadingMore: false, error: null, nextCursor: null, hasMore: false })
 
     // 수동 생성 인라인 영역
-    const [manualCreateOpen, setManualCreateOpen] = useState(false)
     const [selectedIssueId, setSelectedIssueId] = useState('')
     const [manualCreateLoading, setManualCreateLoading] = useState(false)
     const [manualCreateError, setManualCreateError] = useState<string | null>(null)
@@ -233,10 +373,19 @@ export default function AdminShortformPage() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const igScrollContainerRef = useRef<HTMLDivElement>(null)
     const igSentinelRef = useRef<HTMLDivElement>(null)
+    const shortformModalRef = useRef<HTMLDivElement>(null)
     const [videoPlaying, setVideoPlaying] = useState(false)
     const [videoCurrentTime, setVideoCurrentTime] = useState(0)
     const [videoDuration, setVideoDuration] = useState(0)
 
+    const AI_CALL_COOLDOWN_MS = 3000
+    /** 과금되는 AI 재생성 호출(텍스트/이미지/하이라이트) 연타 방지 — 쿨다운 중이면 false */
+    const tryStartAiCall = (): boolean => {
+        const now = Date.now()
+        if (now - lastAiCallAt < AI_CALL_COOLDOWN_MS) return false
+        setLastAiCallAt(now)
+        return true
+    }
 
     const loadTabCounts = useCallback(async () => {
         const tabParams: { value: FilterStatus; params: Record<string, string> }[] = [
@@ -320,6 +469,64 @@ export default function AdminShortformPage() {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [issueDropdownOpen])
 
+    /* 숏폼 제작 팝업 열릴 때 body 스크롤 잠금 — 내부 스크롤 끝/시작 지점에서
+       배경 페이지로 스크롤이 체이닝되는 것을 방지 */
+    useEffect(() => {
+        if (imagePreview.open) {
+            document.body.style.overflow = 'hidden'
+        } else {
+            document.body.style.overflow = ''
+        }
+        return () => {
+            document.body.style.overflow = ''
+        }
+    }, [imagePreview.open])
+
+    // 숏폼 제작 팝업에서 "지금 뭔가 진행 중인가"를 한 곳에서 판단 — 개별 재생성 중에도
+    // 닫기 버튼이 활성화돼 있던 문제(레이스 컨디션의 원인) 방지
+    const isImagePreviewBusy = imagePreview.generating
+        || imagePreview.loading
+        || imagePreview.rewriteLoading
+        || imagePreview.highlightsLoading
+        || regeneratingIndex !== null
+        || rewritingIndex !== null
+        || highlightingGroupIndex !== null
+
+    /* 숏폼 제작 팝업 — ESC로 닫기(작업 진행 중이면 무시) + Tab 포커스 트랩 */
+    useEffect(() => {
+        if (!imagePreview.open) return
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (!isImagePreviewBusy) setImagePreview(prev => ({ ...prev, open: false }))
+                return
+            }
+            if (e.key === 'Tab' && shortformModalRef.current) {
+                const focusable = Array.from(
+                    shortformModalRef.current.querySelectorAll<HTMLElement>(
+                        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                    )
+                ).filter(el => !el.hasAttribute('disabled'))
+                if (focusable.length === 0) return
+                const first = focusable[0]
+                const last = focusable[focusable.length - 1]
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault()
+                    last.focus()
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault()
+                    first.focus()
+                }
+            }
+        }
+        document.addEventListener('keydown', handleKeyDown)
+        return () => document.removeEventListener('keydown', handleKeyDown)
+    }, [imagePreview.open, isImagePreviewBusy])
+
+    /* 팝업 열릴 때 포커스를 모달 안으로 이동 (배경 콘텐츠로 Tab이 새는 것 방지) */
+    useEffect(() => {
+        if (imagePreview.open) shortformModalRef.current?.focus()
+    }, [imagePreview.open])
+
     const filteredIssueOptions = issueOptions.filter((issue) =>
         issue.title.toLowerCase().includes(issueSearchQuery.toLowerCase())
     )
@@ -329,6 +536,10 @@ export default function AdminShortformPage() {
     useEffect(() => {
         loadTabCounts()
     }, [loadTabCounts])
+
+    useEffect(() => {
+        loadIssueOptions()
+    }, [loadIssueOptions])
 
     useEffect(() => {
         setPage(1)
@@ -346,17 +557,6 @@ export default function AdminShortformPage() {
         document.addEventListener('keydown', handleKeyDown)
         return () => document.removeEventListener('keydown', handleKeyDown)
     }, [previewJob])
-
-    const handleToggleManualCreate = () => {
-        if (!manualCreateOpen) {
-            setManualCreateOpen(true)
-            setSelectedIssueId('')
-            setManualCreateError(null)
-            loadIssueOptions()
-        } else {
-            setManualCreateOpen(false)
-        }
-    }
 
     const handleAction = async (id: string, action: 'approve' | 'reject') => {
         const confirmMsg = action === 'approve'
@@ -414,22 +614,29 @@ export default function AdminShortformPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            setImagePreview((prev) => ({
-                ...prev,
-                loading: false,
-                images: json.images ?? [],
-                fullImages: json.fullImages ?? [],
-            }))
+            setImagePreview((prev) => {
+                if (prev.jobId !== jobId) return prev // 그 사이 다른 이슈 팝업이 열렸으면 무시
+                return {
+                    ...prev,
+                    loading: false,
+                    images: json.images ?? [],
+                    fullImages: json.fullImages ?? [],
+                }
+            })
         } catch (e) {
-            setImagePreview((prev) => ({
-                ...prev,
-                loading: false,
-                error: e instanceof Error ? e.message : '이미지 조회 실패',
-            }))
+            setImagePreview((prev) => {
+                if (prev.jobId !== jobId) return prev
+                return {
+                    ...prev,
+                    loading: false,
+                    error: e instanceof Error ? e.message : '이미지 조회 실패',
+                }
+            })
         }
     }
 
     const handlePreviewImages = async (job: ShortformJob) => {
+        const requestJobId = job.id
         setImagePreview({
             open: true,
             jobId: job.id,
@@ -450,6 +657,7 @@ export default function AdminShortformPage() {
             rewriteError: null,
             highlightsLoading: false,
             highlightsBudgetExceeded: false,
+            highlightsFailedIndices: [],
         })
         try {
             const summaryRes = await fetch(`/api/issues/${job.issue_id}/timeline/summary`)
@@ -470,23 +678,27 @@ export default function AdminShortformPage() {
                 s.bullets.map((b) => (typeof b === 'string' ? b : b.text))
             ).filter(Boolean)
 
-            setImagePreview(prev => ({
-                ...prev,
-                contentLoading: false,
-                selectedItems: allItems,
-                allBullets,
-                loading: allItems.length > 0,
-            }))
+            setImagePreview(prev => {
+                if (prev.jobId !== requestJobId) return prev
+                return {
+                    ...prev,
+                    contentLoading: false,
+                    selectedItems: allItems,
+                    allBullets,
+                    loading: allItems.length > 0,
+                }
+            })
             if (allItems.length === 0) return
 
-            await fetchPreviewImages(job.id, allItems.map(item => item.text))
+            await fetchPreviewImages(requestJobId, allItems.map(item => item.text))
         } catch {
-            setImagePreview(prev => ({ ...prev, contentLoading: false }))
+            setImagePreview(prev => (prev.jobId !== requestJobId ? prev : { ...prev, contentLoading: false }))
         }
     }
 
     /** timeline/points 소스 텍스트를 1회 AI로 압축·흐름 처리 */
     const fetchRewrittenTexts = async (items: SelectedContentItem[], issueTitle: string, issueStatus?: string, contextBullets?: string[]) => {
+        const requestJobId = imagePreview.jobId
         setImagePreview(prev => ({ ...prev, rewriteLoading: true, rewriteError: null }))
         const sceneTexts = items.map(item => item.text)
         try {
@@ -502,37 +714,64 @@ export default function AdminShortformPage() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            setImagePreview(prev => ({
-                ...prev,
-                rewriteLoading: false,
-                rewrittenTexts: json.texts ?? sceneTexts,
-                rewrittenHighlights: (json.highlights ?? []).map((words: string[], i: number) =>
-                    sortHighlightsByPosition(words, (json.texts ?? sceneTexts)[i] ?? '')
-                ),
-            }))
+            setImagePreview(prev => {
+                if (prev.jobId !== requestJobId) return prev
+                return {
+                    ...prev,
+                    rewriteLoading: false,
+                    rewrittenTexts: json.texts ?? sceneTexts,
+                    rewrittenHighlights: (json.highlights ?? []).map((words: string[], i: number) =>
+                        sortHighlightsByPosition(words, (json.texts ?? sceneTexts)[i] ?? '')
+                    ),
+                }
+            })
         } catch (e) {
-            setImagePreview(prev => ({
-                ...prev,
-                rewriteLoading: false,
-                rewrittenTexts: sceneTexts,
-                rewriteError: e instanceof Error ? e.message : '재작성 실패 — 원문을 사용합니다',
-            }))
+            setImagePreview(prev => {
+                if (prev.jobId !== requestJobId) return prev
+                return {
+                    ...prev,
+                    rewriteLoading: false,
+                    rewrittenTexts: sceneTexts,
+                    rewriteError: e instanceof Error ? e.message : '재작성 실패 — 원문을 사용합니다',
+                }
+            })
         }
     }
 
     const handleUpdateRewrittenText = (index: number, value: string) => {
+        // 5줄(DESC_SAFE_MAX_LINES) 초과로 래핑되는 입력은 반영하지 않음 — 하단 UI 침범 방지
+        if (wordWrapLines(value, DESC_MAX_CHARS_PER_LINE).length > DESC_SAFE_MAX_LINES) return
         setImagePreview(prev => {
             const newTexts = [...prev.rewrittenTexts]
             newTexts[index] = value
-            return { ...prev, rewrittenTexts: newTexts }
+            // 텍스트가 바뀌어 더 이상 등장하지 않거나(또는 등장 횟수가 줄어) 자리를 잃은
+            // 하이라이트 칩은 자동으로 제거 — 본문에 없는 단어가 생성 요청에 실리는 것을 방지
+            const currentHighlights = prev.rewrittenHighlights[index] ?? []
+            const seenCount = new Map<string, number>()
+            const filteredHighlights = currentHighlights.filter(word => {
+                const used = seenCount.get(word) ?? 0
+                if (used >= countOccurrences(value, word)) return false
+                seenCount.set(word, used + 1)
+                return true
+            })
+            const newHighlights = filteredHighlights.length === currentHighlights.length
+                ? prev.rewrittenHighlights
+                : prev.rewrittenHighlights.map((hl, i) => (i === index ? filteredHighlights : hl))
+            // 텍스트가 바뀌었으니 이전 텍스트 기준의 "추출 실패" 표시는 더 이상 유효하지 않음
+            const newFailedIndices = prev.highlightsFailedIndices.includes(index)
+                ? prev.highlightsFailedIndices.filter(i => i !== index)
+                : prev.highlightsFailedIndices
+            return { ...prev, rewrittenTexts: newTexts, rewrittenHighlights: newHighlights, highlightsFailedIndices: newFailedIndices }
         })
     }
 
     const handleRefreshAllTexts = () => {
+        if (!tryStartAiCall()) return
         fetchRewrittenTexts(imagePreview.selectedItems, imagePreview.jobTitle, imagePreview.jobIssueStatus, imagePreview.allBullets)
     }
 
     const handleExtractHighlights = async () => {
+        if (!tryStartAiCall()) return
         const allTexts = imagePreview.rewrittenTexts
         const nonEmptyIndices: number[] = []
         const filteredTexts: string[] = []
@@ -540,7 +779,8 @@ export default function AdminShortformPage() {
             if (t.trim().length > 0) { nonEmptyIndices.push(i); filteredTexts.push(t) }
         })
         if (filteredTexts.length === 0) return
-        setImagePreview(prev => ({ ...prev, highlightsLoading: true, highlightsBudgetExceeded: false }))
+        const requestJobId = imagePreview.jobId
+        setImagePreview(prev => ({ ...prev, highlightsLoading: true, highlightsBudgetExceeded: false, highlightsFailedIndices: [] }))
         try {
             const res = await fetch('/api/admin/shortform/highlights', {
                 method: 'POST',
@@ -549,20 +789,27 @@ export default function AdminShortformPage() {
             })
             const json = await res.json()
             const apiHighlights: string[][] = json.highlights ?? []
+            const apiFailedIndices: number[] = json.failedIndices ?? []
             // 원본 씬 인덱스에 맞게 재매핑 (빈 텍스트 제거로 인한 인덱스 어긋남 방지)
             const remapped: string[][] = Array.from({ length: allTexts.length }, () => [])
+            const failedOrigIndices: number[] = []
             nonEmptyIndices.forEach((origIdx, apiIdx) => {
                 const words = apiHighlights[apiIdx] ?? []
                 remapped[origIdx] = sortHighlightsByPosition(words, allTexts[origIdx])
+                if (apiFailedIndices.includes(apiIdx)) failedOrigIndices.push(origIdx)
             })
-            setImagePreview(prev => ({
-                ...prev,
-                rewrittenHighlights: remapped,
-                highlightsLoading: false,
-                highlightsBudgetExceeded: !!json.budgetExceeded,
-            }))
+            setImagePreview(prev => {
+                if (prev.jobId !== requestJobId) return prev
+                return {
+                    ...prev,
+                    rewrittenHighlights: remapped,
+                    highlightsLoading: false,
+                    highlightsBudgetExceeded: !!json.budgetExceeded,
+                    highlightsFailedIndices: failedOrigIndices,
+                }
+            })
         } catch {
-            setImagePreview(prev => ({ ...prev, highlightsLoading: false }))
+            setImagePreview(prev => (prev.jobId !== requestJobId ? prev : { ...prev, highlightsLoading: false }))
         }
     }
 
@@ -570,6 +817,8 @@ export default function AdminShortformPage() {
         if (highlightingGroupIndex !== null) return
         const texts = sceneIndices.map(i => imagePreview.rewrittenTexts[i] ?? '').filter(t => t.trim().length > 0)
         if (texts.length === 0) return
+        if (!tryStartAiCall()) return
+        const requestJobId = imagePreview.jobId
         setHighlightingGroupIndex(imgIndex)
         try {
             const res = await fetch('/api/admin/shortform/highlights', {
@@ -579,16 +828,22 @@ export default function AdminShortformPage() {
             })
             const json = await res.json()
             const newHighlights: string[][] = json.highlights ?? []
+            const apiFailedIndices: number[] = json.failedIndices ?? []
             setImagePreview(prev => {
+                if (prev.jobId !== requestJobId) return prev
                 const updated = [...prev.rewrittenHighlights]
+                const stillFailed = new Set(prev.highlightsFailedIndices)
                 sceneIndices.forEach((si, idx) => {
                     const words = newHighlights[idx] ?? []
                     updated[si] = sortHighlightsByPosition(words, prev.rewrittenTexts[si] ?? '')
+                    if (apiFailedIndices.includes(idx)) stillFailed.add(si)
+                    else stillFailed.delete(si)
                 })
                 return {
                     ...prev,
                     rewrittenHighlights: updated,
                     highlightsBudgetExceeded: !!json.budgetExceeded,
+                    highlightsFailedIndices: Array.from(stillFailed),
                 }
             })
         } catch {
@@ -601,7 +856,8 @@ export default function AdminShortformPage() {
     const [highlightInputs, setHighlightInputs] = useState<Record<number, string>>({})
 
     const sortHighlightsByPosition = (words: string[], text: string): string[] => {
-        const flat = [...new Set(words.flatMap(w => w.split(/\s+/).filter(Boolean)))]
+        // 같은 단어가 문장에 여러 번 등장하면 칩도 그만큼 분리 유지 (중복 제거하지 않음)
+        const flat = words.flatMap(w => w.split(/\s+/).filter(Boolean))
         return flat.sort((a, b) => {
             const pa = text.indexOf(a)
             const pb = text.indexOf(b)
@@ -610,6 +866,20 @@ export default function AdminShortformPage() {
             if (pb === -1) return -1
             return pa - pb
         })
+    }
+
+    /** 텍스트 내 word(부분 문자열)가 등장하는 횟수 — 하이라이트 렌더링(indexOf 순차 매칭)과 동일 기준 */
+    const countOccurrences = (text: string, word: string): number => {
+        if (!word) return 0
+        let count = 0
+        let idx = 0
+        while (true) {
+            const found = text.indexOf(word, idx)
+            if (found === -1) break
+            count++
+            idx = found + word.length
+        }
+        return count
     }
 
     const handleRemoveHighlight = (sceneIndex: number, wordIndex: number) => {
@@ -627,8 +897,10 @@ export default function AdminShortformPage() {
             const maxLen = Math.max(prev.rewrittenHighlights.length, sceneIndex + 1)
             const updated = Array.from({ length: maxLen }, (_, idx) => prev.rewrittenHighlights[idx] ?? [])
             const current = updated[sceneIndex]
-            if (current.includes(trimmed)) return prev
             const sceneText = prev.rewrittenTexts[sceneIndex] ?? ''
+            const existingCount = current.filter(w => w === trimmed).length
+            // 문장에 실제 등장하는 횟수를 넘어서는 중복 칩은 추가 불가 (강조할 자리가 없음)
+            if (existingCount >= countOccurrences(sceneText, trimmed)) return prev
             updated[sceneIndex] = sortHighlightsByPosition([...current, trimmed], sceneText)
             return { ...prev, rewrittenHighlights: updated }
         })
@@ -636,6 +908,7 @@ export default function AdminShortformPage() {
     }
 
     const handleRefreshAllImages = () => {
+        if (!tryStartAiCall()) return
         const sceneTexts = imagePreview.selectedItems.map((item, i) =>
             imagePreview.rewrittenTexts[i] ?? item.text
         )
@@ -646,6 +919,8 @@ export default function AdminShortformPage() {
         if (rewritingIndex !== null) return
         const item = imagePreview.selectedItems[index]
         if (!item) return
+        if (!tryStartAiCall()) return
+        const requestJobId = imagePreview.jobId
         setRewritingIndex(index)
         try {
             const res = await fetch('/api/admin/shortform/rewrite', {
@@ -662,23 +937,32 @@ export default function AdminShortformPage() {
             })
             const json = await res.json()
             if (!res.ok) {
-                setImagePreview(prev => ({
+                setImagePreview(prev => (prev.jobId !== requestJobId ? prev : {
                     ...prev,
                     rewriteError: json.message || 'AI 자막 재생성 실패',
                 }))
                 return
             }
             if (json.texts?.[0]) {
-                handleUpdateRewrittenText(index, json.texts[0])
+                const newText: string = json.texts[0]
+                // 5줄(DESC_SAFE_MAX_LINES) 초과 결과는 반영하지 않음 — 반영 안 하면서
+                // 하이라이트만 새 텍스트 기준으로 갱신되는 불일치를 막기 위해 텍스트·하이라이트를 함께 처리
+                const exceedsLineLimit = wordWrapLines(newText, DESC_MAX_CHARS_PER_LINE).length > DESC_SAFE_MAX_LINES
                 setImagePreview(prev => {
+                    if (prev.jobId !== requestJobId) return prev
+                    if (exceedsLineLimit) {
+                        return { ...prev, rewriteError: 'AI가 생성한 자막이 너무 길어 반영하지 못했습니다 (5줄 초과)' }
+                    }
+                    const newTexts = [...prev.rewrittenTexts]
+                    newTexts[index] = newText
                     const newHL = [...prev.rewrittenHighlights]
                     const words = json.highlights?.[0] ?? []
-                    newHL[index] = sortHighlightsByPosition(words, json.texts[0])
-                    return { ...prev, rewrittenHighlights: newHL }
+                    newHL[index] = sortHighlightsByPosition(words, newText)
+                    return { ...prev, rewrittenTexts: newTexts, rewrittenHighlights: newHL }
                 })
             }
         } catch (e) {
-            setImagePreview(prev => ({
+            setImagePreview(prev => (prev.jobId !== requestJobId ? prev : {
                 ...prev,
                 rewriteError: e instanceof Error ? e.message : 'AI 자막 재생성 실패',
             }))
@@ -689,6 +973,8 @@ export default function AdminShortformPage() {
 
     const handleRefreshSingleImage = async (index: number) => {
         if (regeneratingIndex !== null || imagePreview.generating) return
+        if (!tryStartAiCall()) return
+        const requestJobId = imagePreview.jobId
         setRegeneratingIndex(index)
         try {
             const seed = Math.floor(Math.random() * 100000)
@@ -703,6 +989,7 @@ export default function AdminShortformPage() {
                 const picked = json.images[0] as string
                 const pickedFull = json.fullImages?.[0] ?? picked
                 setImagePreview(prev => {
+                    if (prev.jobId !== requestJobId) return prev
                     const newImages = [...prev.images]
                     const newFullImages = [...prev.fullImages]
                     newImages[index] = picked
@@ -784,7 +1071,6 @@ export default function AdminShortformPage() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
 
-            setManualCreateOpen(false)
             setSelectedIssueId('')
             setFilter('pending')
             await Promise.all([loadJobs('pending', 1), loadTabCounts()])
@@ -1033,36 +1319,40 @@ export default function AdminShortformPage() {
         }
     }
 
-
     return (
         <div>
+            {/* 페이지 타이틀 — 탭과 무관하게 항상 노출 */}
+            <h1 className="text-2xl font-bold text-content-primary mb-4">숏폼/롱폼 관리</h1>
+
+            {/* 페이지 레벨 탭 (숏폼/롱폼) — 하위 필터(pill)와 위계가 다르므로 밑줄(bar) 스타일 사용 */}
+            <nav className="flex gap-7 border-b border-border mb-6">
+                {[{ value: 'shortform' as const, label: '숏폼' }, { value: 'longform' as const, label: '롱폼' }].map(tab => (
+                    <button
+                        key={tab.value}
+                        onClick={() => setPageTab(tab.value)}
+                        className={`-mb-px pb-3 pt-1 text-[15px] font-semibold border-b-2 transition-colors ${
+                            pageTab === tab.value
+                                ? 'text-primary-dark border-primary'
+                                : 'text-content-muted border-transparent hover:text-content-secondary'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </nav>
+
+            {pageTab === 'longform' && <LongformTab />}
+
+            {pageTab === 'shortform' && (
+            <>
             {/* 헤더 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-content-primary">숏폼 관리</h1>
-                    <p className="text-sm text-content-muted mt-1">숏폼 Job은 일일 배치로 자동 생성되거나 수동으로 직접 생성할 수 있습니다.</p>
-                </div>
-                <button
-                    onClick={handleToggleManualCreate}
-                    className="btn-primary btn-md"
-                >
-                    + 수동 생성
-                </button>
+            <div className="mb-6">
+                <p className="text-sm text-content-muted">이슈를 선택해 숏폼 Job을 생성합니다.</p>
             </div>
 
             {/* 수동 생성 인라인 폼 */}
-            {manualCreateOpen && (
-                <div className="mb-6 p-4 border border-primary-muted bg-primary-light/20 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-semibold text-primary-dark">수동 숏폼 Job 생성</h2>
-                        <button
-                            type="button"
-                            onClick={handleToggleManualCreate}
-                            className="text-content-muted hover:text-content-secondary text-lg leading-none"
-                        >
-                            ×
-                        </button>
-                    </div>
+            <div className="mb-6 p-4 border border-primary-muted bg-primary-light/20 rounded-xl space-y-3">
+                    <h2 className="text-sm font-semibold text-primary-dark">숏폼 Job 생성</h2>
 
                     {manualCreateError && <p className="text-sm text-red-500">{manualCreateError}</p>}
 
@@ -1134,10 +1424,10 @@ export default function AdminShortformPage() {
                     <div className="flex gap-2 justify-end">
                         <button
                             type="button"
-                            onClick={handleToggleManualCreate}
+                            onClick={() => { setSelectedIssueId(''); setManualCreateError(null) }}
                             className="btn-neutral btn-sm"
                         >
-                            취소
+                            초기화
                         </button>
                         <button
                             type="button"
@@ -1148,8 +1438,7 @@ export default function AdminShortformPage() {
                             {manualCreateLoading ? '생성 중...' : '등록'}
                         </button>
                     </div>
-                </div>
-            )}
+            </div>
 
             {/* 필터 탭 */}
             <div className="mb-4">
@@ -1179,9 +1468,6 @@ export default function AdminShortformPage() {
                                 성과
                             </th>
                             <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
-                                생성 타입
-                            </th>
-                            <th className="w-24 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
                                 상태
                             </th>
                             <th className="w-44 px-4 py-3 text-left text-xs font-medium text-content-muted uppercase">
@@ -1196,14 +1482,14 @@ export default function AdminShortformPage() {
                         {loading ? (
                             [1, 2, 3].map((i) => (
                                 <tr key={i}>
-                                    <td colSpan={6} className="px-4 py-3">
+                                    <td colSpan={5} className="px-4 py-3">
                                         <div className="h-3 w-full bg-surface-muted rounded-xl animate-pulse" />
                                     </td>
                                 </tr>
                             ))
                         ) : jobs.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-12 text-center text-sm text-content-muted">
+                                <td colSpan={5} className="px-4 py-12 text-center text-sm text-content-muted">
                                     해당 상태의 숏폼 job이 없습니다.
                                 </td>
                             </tr>
@@ -1276,11 +1562,6 @@ export default function AdminShortformPage() {
                                             {!job.platform_stats?.youtube && !job.platform_stats?.instagram && (
                                                 <span className="text-content-muted">—</span>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-200">
-                                                {TRIGGER_TYPE_LABEL[job.trigger_type]}
-                                            </span>
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`inline-block px-2 py-1 text-xs rounded-full ${APPROVAL_STATUS_STYLE[job.approval_status]}`}>
@@ -1568,18 +1849,24 @@ export default function AdminShortformPage() {
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
                     >
                         <div
-                            className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+                            ref={shortformModalRef}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="shortform-modal-title"
+                            tabIndex={-1}
+                            className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col outline-none"
                             onClick={e => e.stopPropagation()}
                         >
                             {/* 헤더 */}
                             <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
                                 <div>
-                                    <h2 className="text-lg font-bold text-content-primary">숏폼 제작</h2>
+                                    <h2 id="shortform-modal-title" className="text-lg font-bold text-content-primary">숏폼 제작</h2>
                                     <p className="text-sm text-content-secondary mt-0.5">{imagePreview.jobTitle}</p>
                                 </div>
                                 <button
-                                    onClick={() => { if (!imagePreview.generating) setImagePreview(prev => ({ ...prev, open: false })) }}
-                                    disabled={imagePreview.generating}
+                                    onClick={() => { if (!isImagePreviewBusy) setImagePreview(prev => ({ ...prev, open: false })) }}
+                                    disabled={isImagePreviewBusy}
+                                    title={isImagePreviewBusy ? '작업이 진행 중입니다' : undefined}
                                     className="w-8 h-8 text-content-secondary rounded-full flex items-center justify-center hover:bg-surface-subtle disabled:opacity-40"
                                 >
                                     ✕
@@ -1692,93 +1979,35 @@ export default function AdminShortformPage() {
                                                                     (() => {
                                                                         const i = sceneIndices[0]
                                                                         const item = imagePreview.selectedItems[i]
-                                                                        const sourceStyle = item.source === 'stage' && item.stage
-                                                                            ? (STAGE_STYLE[item.stage] ?? STAGE_STYLE['진정'])
-                                                                            : null
-                                                                        const isThisTextRegenerating = rewritingIndex === i
                                                                         return (
                                                                             <div className="flex-1 flex flex-col border-t border-border">
-                                                                                <div className="px-3 py-2.5 bg-surface-subtle border-b border-border">
-                                                                                    <div className="flex items-center gap-1.5 mb-1.5">
-                                                                                        <span className="text-[10px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full">씬 {i + 1}</span>
-                                                                                        {sourceStyle && item.stage ? (
-                                                                                            <>
-                                                                                                <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">타임라인</span>
-                                                                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sourceStyle.badge}`}>{item.stage}</span>
-                                                                                            </>
-                                                                                        ) : (
-                                                                                            <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">이슈 설명</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <p className="text-[11px] text-content-muted leading-relaxed line-clamp-3">{item.text}</p>
-                                                                                </div>
+                                                                                <SceneSourceHeader
+                                                                                    sceneIndex={i}
+                                                                                    item={item}
+                                                                                    className="px-3 py-2.5 bg-surface-subtle border-b border-border"
+                                                                                />
                                                                                 <div className="flex-1 flex flex-col px-3 py-2.5 bg-surface">
-                                                                                    <div className="flex items-center justify-between mb-1.5">
-                                                                                        <span className="text-[10px] font-semibold text-primary">씬 자막</span>
-                                                                                        <div className="flex items-center gap-1.5">
-                                                                                            <button
-                                                                                                onClick={() => handleExtractSingleHighlight(i, [i])}
-                                                                                                disabled={imagePreview.generating || highlightingGroupIndex !== null || imagePreview.highlightsLoading || !(imagePreview.rewrittenTexts[i] ?? '').trim()}
-                                                                                                className="text-content-muted enabled:hover:text-primary disabled:opacity-40 transition-colors"
-                                                                                                title="하이라이트 추출"
-                                                                                            >
-                                                                                                {highlightingGroupIndex === i
-                                                                                                    ? <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-                                                                                                    : <span className="w-4 h-4 flex items-center justify-center text-[18px] leading-none">✦</span>
-                                                                                                }
-                                                                                            </button>
-                                                                                            <button
-                                                                                                onClick={() => handleRefreshSingleText(i)}
-                                                                                                disabled={rewritingIndex !== null || imagePreview.rewriteLoading}
-                                                                                                className="text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
-                                                                                                title="텍스트 재생성"
-                                                                                            >
-                                                                                                {isThisTextRegenerating
-                                                                                                    ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                                                                                    : refreshIcon
-                                                                                                }
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    {imagePreview.rewriteLoading ? (
-                                                                                        <div className="space-y-1.5">
-                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
-                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-4/5" />
-                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-3/5" />
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <>
-                                                                                        <textarea
-                                                                                            value={imagePreview.rewrittenTexts[i] ?? ''}
-                                                                                            onChange={e => handleUpdateRewrittenText(i, e.target.value)}
-                                                                                            rows={3}
-                                                                                            placeholder="씬 자막을 입력하세요."
-                                                                                            className="w-full text-xs font-medium text-content-primary resize-none bg-transparent outline-none leading-relaxed placeholder:text-content-muted rounded-none"
-                                                                                        />
-                                                                                        <div className="mt-2">
-                                                                                            <span className="text-[10px] font-semibold text-primary">하이라이트 자막</span>
-                                                                                            <div className="flex flex-wrap gap-1 mt-1 items-center">
-                                                                                                {(imagePreview.rewrittenHighlights[i] ?? []).map((word, wi) => (
-                                                                                                    <span key={wi} className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">
-                                                                                                        {word}
-                                                                                                        <button
-                                                                                                            onClick={() => handleRemoveHighlight(i, wi)}
-                                                                                                            className="ml-0.5 text-yellow-600 hover:text-yellow-900 leading-none"
-                                                                                                        >×</button>
-                                                                                                    </span>
-                                                                                                ))}
-                                                                                                <input
-                                                                                                    type="text"
-                                                                                                    value={highlightInputs[i] ?? ''}
-                                                                                                    onChange={e => setHighlightInputs(prev => ({ ...prev, [i]: e.target.value }))}
-                                                                                                    onKeyDown={e => { if (e.key === 'Enter') handleAddHighlight(i, highlightInputs[i] ?? '') }}
-                                                                                                    placeholder="+ 단어 추가"
-                                                                                                    className="text-[10px] text-content-muted placeholder:text-content-muted bg-transparent outline-none w-16 min-w-0"
-                                                                                                />
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        </>
-                                                                                    )}
+                                                                                    <SceneCaptionEditor
+                                                                                        sceneIndex={i}
+                                                                                        text={imagePreview.rewrittenTexts[i] ?? ''}
+                                                                                        highlights={imagePreview.rewrittenHighlights[i] ?? []}
+                                                                                        highlightInput={highlightInputs[i] ?? ''}
+                                                                                        refreshIcon={refreshIcon}
+                                                                                        isRewriting={rewritingIndex === i}
+                                                                                        rewritingBusy={rewritingIndex !== null}
+                                                                                        rewriteLoading={imagePreview.rewriteLoading}
+                                                                                        isHighlighting={highlightingGroupIndex === i}
+                                                                                        highlightingBusy={highlightingGroupIndex !== null}
+                                                                                        highlightsLoading={imagePreview.highlightsLoading}
+                                                                                        highlightExtractDisabled={imagePreview.generating || !(imagePreview.rewrittenTexts[i] ?? '').trim()}
+                                                                                        extractionFailed={imagePreview.highlightsFailedIndices.includes(i)}
+                                                                                        onChangeText={value => handleUpdateRewrittenText(i, value)}
+                                                                                        onExtractHighlight={() => handleExtractSingleHighlight(i, [i])}
+                                                                                        onRefreshText={() => handleRefreshSingleText(i)}
+                                                                                        onRemoveHighlight={wi => handleRemoveHighlight(i, wi)}
+                                                                                        onAddHighlight={word => handleAddHighlight(i, word)}
+                                                                                        onChangeHighlightInput={value => setHighlightInputs(prev => ({ ...prev, [i]: value }))}
+                                                                                    />
                                                                                 </div>
                                                                             </div>
                                                                         )
@@ -1787,103 +2016,40 @@ export default function AdminShortformPage() {
                                                                     // 씬 2개: 원문 행 / AI 자막 행을 grid row로 분리 → 같은 높이 자동 통일
                                                                     <div className="flex-1 grid grid-cols-2 grid-rows-[auto_1fr] border-t border-border">
                                                                         {/* 원문 행 */}
-                                                                        {sceneIndices.map((i, colIdx) => {
-                                                                            const item = imagePreview.selectedItems[i]
-                                                                            const sourceStyle = item.source === 'stage' && item.stage
-                                                                                ? (STAGE_STYLE[item.stage] ?? STAGE_STYLE['진정'])
-                                                                                : null
-                                                                            return (
-                                                                                <div key={`원문-${item.id}`} className={`px-3 py-2.5 bg-surface-subtle border-b border-border ${colIdx === 0 ? 'border-r' : ''}`}>
-                                                                                    <div className="flex items-center gap-1.5 mb-1.5">
-                                                                                        <span className="text-[10px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full">씬 {i + 1}</span>
-                                                                                        {sourceStyle && item.stage ? (
-                                                                                            <>
-                                                                                                <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">타임라인</span>
-                                                                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sourceStyle.badge}`}>{item.stage}</span>
-                                                                                            </>
-                                                                                        ) : (
-                                                                                            <span className="text-[10px] font-semibold text-content-muted bg-surface px-1.5 py-0.5 rounded-full border border-border">이슈 설명</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <p className="text-[11px] text-content-muted leading-relaxed line-clamp-3">{item.text}</p>
-                                                                                </div>
-                                                                            )
-                                                                        })}
+                                                                        {sceneIndices.map((i, colIdx) => (
+                                                                            <SceneSourceHeader
+                                                                                key={`원문-${imagePreview.selectedItems[i].id}`}
+                                                                                sceneIndex={i}
+                                                                                item={imagePreview.selectedItems[i]}
+                                                                                className={`px-3 py-2.5 bg-surface-subtle border-b border-border ${colIdx === 0 ? 'border-r' : ''}`}
+                                                                            />
+                                                                        ))}
                                                                         {/* AI 자막 행 */}
-                                                                        {sceneIndices.map((i, colIdx) => {
-                                                                            const item = imagePreview.selectedItems[i]
-                                                                            const isThisTextRegenerating = rewritingIndex === i
-                                                                            return (
-                                                                                <div key={`ai-${item.id}`} className={`flex flex-col px-3 py-2.5 bg-surface ${colIdx === 0 ? 'border-r border-border' : ''}`}>
-                                                                                    <div className="flex items-center justify-between mb-1.5">
-                                                                                        <span className="text-[10px] font-semibold text-primary">씬 자막</span>
-                                                                                        <div className="flex items-center gap-1.5">
-                                                                                            <button
-                                                                                                onClick={() => handleExtractSingleHighlight(i, [i])}
-                                                                                                disabled={imagePreview.generating || highlightingGroupIndex !== null || imagePreview.highlightsLoading || !(imagePreview.rewrittenTexts[i] ?? '').trim()}
-                                                                                                className="text-content-muted enabled:hover:text-primary disabled:opacity-40 transition-colors"
-                                                                                                title="하이라이트 추출"
-                                                                                            >
-                                                                                                {highlightingGroupIndex === i
-                                                                                                    ? <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-                                                                                                    : <span className="w-4 h-4 flex items-center justify-center text-[18px] leading-none">✦</span>
-                                                                                                }
-                                                                                            </button>
-                                                                                            <button
-                                                                                                onClick={() => handleRefreshSingleText(i)}
-                                                                                                disabled={rewritingIndex !== null || imagePreview.rewriteLoading}
-                                                                                                className="text-content-muted hover:text-primary disabled:opacity-40 transition-colors"
-                                                                                                title="텍스트 재생성"
-                                                                                            >
-                                                                                                {isThisTextRegenerating
-                                                                                                    ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                                                                                    : refreshIcon
-                                                                                                }
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    {imagePreview.rewriteLoading ? (
-                                                                                        <div className="space-y-1.5">
-                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse" />
-                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-4/5" />
-                                                                                            <div className="h-2.5 bg-surface-muted rounded animate-pulse w-3/5" />
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <>
-                                                                                        <textarea
-                                                                                            value={imagePreview.rewrittenTexts[i] ?? ''}
-                                                                                            onChange={e => handleUpdateRewrittenText(i, e.target.value)}
-                                                                                            rows={3}
-                                                                                            placeholder="씬 자막을 입력하세요."
-                                                                                            className="w-full text-xs font-medium text-content-primary resize-none bg-transparent outline-none leading-relaxed placeholder:text-content-muted rounded-none"
-                                                                                        />
-                                                                                        <div className="mt-2">
-                                                                                            <span className="text-[10px] font-semibold text-primary">하이라이트 자막</span>
-                                                                                            <div className="flex flex-wrap gap-1 mt-1 items-center">
-                                                                                                {(imagePreview.rewrittenHighlights[i] ?? []).map((word, wi) => (
-                                                                                                    <span key={wi} className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">
-                                                                                                        {word}
-                                                                                                        <button
-                                                                                                            onClick={() => handleRemoveHighlight(i, wi)}
-                                                                                                            className="ml-0.5 text-yellow-600 hover:text-yellow-900 leading-none"
-                                                                                                        >×</button>
-                                                                                                    </span>
-                                                                                                ))}
-                                                                                                <input
-                                                                                                    type="text"
-                                                                                                    value={highlightInputs[i] ?? ''}
-                                                                                                    onChange={e => setHighlightInputs(prev => ({ ...prev, [i]: e.target.value }))}
-                                                                                                    onKeyDown={e => { if (e.key === 'Enter') handleAddHighlight(i, highlightInputs[i] ?? '') }}
-                                                                                                    placeholder="+ 단어 추가"
-                                                                                                    className="text-[10px] text-content-muted placeholder:text-content-muted bg-transparent outline-none w-16 min-w-0"
-                                                                                                />
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        </>
-                                                                                    )}
-                                                                                </div>
-                                                                            )
-                                                                        })}
+                                                                        {sceneIndices.map((i, colIdx) => (
+                                                                            <div key={`ai-${imagePreview.selectedItems[i].id}`} className={`flex flex-col px-3 py-2.5 bg-surface ${colIdx === 0 ? 'border-r border-border' : ''}`}>
+                                                                                <SceneCaptionEditor
+                                                                                    sceneIndex={i}
+                                                                                    text={imagePreview.rewrittenTexts[i] ?? ''}
+                                                                                    highlights={imagePreview.rewrittenHighlights[i] ?? []}
+                                                                                    highlightInput={highlightInputs[i] ?? ''}
+                                                                                    refreshIcon={refreshIcon}
+                                                                                    isRewriting={rewritingIndex === i}
+                                                                                    rewritingBusy={rewritingIndex !== null}
+                                                                                    rewriteLoading={imagePreview.rewriteLoading}
+                                                                                    isHighlighting={highlightingGroupIndex === i}
+                                                                                    highlightingBusy={highlightingGroupIndex !== null}
+                                                                                    highlightsLoading={imagePreview.highlightsLoading}
+                                                                                    highlightExtractDisabled={imagePreview.generating || !(imagePreview.rewrittenTexts[i] ?? '').trim()}
+                                                                                    extractionFailed={imagePreview.highlightsFailedIndices.includes(i)}
+                                                                                    onChangeText={value => handleUpdateRewrittenText(i, value)}
+                                                                                    onExtractHighlight={() => handleExtractSingleHighlight(i, [i])}
+                                                                                    onRefreshText={() => handleRefreshSingleText(i)}
+                                                                                    onRemoveHighlight={wi => handleRemoveHighlight(i, wi)}
+                                                                                    onAddHighlight={word => handleAddHighlight(i, word)}
+                                                                                    onChangeHighlightInput={value => setHighlightInputs(prev => ({ ...prev, [i]: value }))}
+                                                                                />
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -2171,6 +2337,8 @@ export default function AdminShortformPage() {
                         </div>
                     </div>
                 </div>
+            )}
+            </>
             )}
         </div>
     )
