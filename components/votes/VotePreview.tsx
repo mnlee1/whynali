@@ -167,12 +167,12 @@ export default function VotePreview({ initialVotes }: Props) {
                     {/* 상태 뱃지 + 참여 수 */}
                     <div className="flex items-center justify-between pb-3">
                         {isActive ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-green-200 bg-green-50 text-xs font-semibold text-green-700">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 text-xs font-bold text-green-700">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                                 투표 진행중
                             </span>
                         ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-surface-muted text-xs font-semibold text-content-muted">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-subtle text-xs font-bold text-content-muted">
                                 <span className="w-1.5 h-1.5 rounded-full bg-content-muted" />
                                 투표 마감
                             </span>
@@ -225,7 +225,7 @@ export default function VotePreview({ initialVotes }: Props) {
                                         </div>
                                         <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full transition-all duration-500 ${isMyChoice ? 'bg-gradient-primary' : 'bg-border-strong'}`}
+                                                className={`h-full rounded-full transition-all duration-500 ${isMyChoice ? 'bg-primary' : 'bg-border-strong'}`}
                                                 style={{ width: `${ratio}%` }}
                                             />
                                         </div>

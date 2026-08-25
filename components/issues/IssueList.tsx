@@ -40,7 +40,7 @@ interface IssueListProps {
 // 상태 탭 목록
 const STATUS_TABS = [
     { value: '', label: '전체 이슈', fullLabel: '전체 이슈', icon: null },
-    { value: '점화', label: '점화 중', fullLabel: '점화 중', icon: '🔥' },
+    { value: '점화', label: '점화중', fullLabel: '점화중', icon: '🔥' },
     { value: '논란중', label: '화제 집중', fullLabel: '화제 집중', icon: '⚡' },
     { value: '종결', label: '종결', fullLabel: '종결', icon: '🏁' },
 ]
@@ -227,7 +227,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                         text={
                             <span className="flex flex-col gap-1">
                                 <span>최신 등록순으로 정렬됩니다.</span>
-                                <span>· 점화 중: 반응이 급격히 늘어나는 이슈</span>
+                                <span>· 점화중: 반응이 급격히 늘어나는 이슈</span>
                                 <span>· 화제 집중: 반응이 활발한 이슈</span>
                                 <span>· 종결: 관심이 줄어든 이슈</span>
                             </span>

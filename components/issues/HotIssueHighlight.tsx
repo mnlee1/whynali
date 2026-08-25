@@ -90,7 +90,7 @@ export default function HotIssueHighlight({ initialIssues }: Props) {
         <section className="relative h-[300px] lg:h-full lg:min-h-[350px]">
             {/* 최신 이슈 뱃지 */}
             <div className="absolute top-3 right-3 z-10">
-                <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">
+                <span className="px-3 py-1.5 rounded-full bg-[#f97317] text-white text-xs font-bold shadow-sm">
                     최신 이슈 TOP 5
                 </span>
             </div>

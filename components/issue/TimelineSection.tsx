@@ -102,9 +102,9 @@ function VoteNudge({ vote, className = '' }: { vote: { title: string; totalCount
                 const el = document.getElementById('section-vote')
                 if (!el) return
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                el.classList.add('ring-2', 'ring-[#7b3aed]', 'ring-offset-4', 'rounded-2xl', 'transition-shadow')
+                el.classList.add('ring-2', 'ring-primary', 'ring-offset-4', 'rounded-2xl', 'transition-shadow')
                 setTimeout(() => {
-                    el.classList.remove('ring-2', 'ring-[#7b3aed]', 'ring-offset-4')
+                    el.classList.remove('ring-2', 'ring-primary', 'ring-offset-4')
                 }, 1500)
             }}
             className={`flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity ${className}`}
@@ -330,7 +330,7 @@ export default function TimelineSection({
         const isLastItem = index === displayList.length - 1 && (showAll || collapsible.length === 0)
         const isFirstItem = index === 0
         const isSideIssue = item.stage === '파생'
-        const dotColor = isSideIssue ? 'bg-[#f97317]' : 'bg-[#7b3aed]'
+        const dotColor = isSideIssue ? 'bg-[#f97317]' : 'bg-primary'
         const linkedVote = item.linkedVoteId ? activeVotes[item.linkedVoteId] : undefined
         const DOT_CENTER = 12 // px: dot top offset(8px) + dot radius(4px)
         const showItemLine = !(isFirstItem && isLastItem)
@@ -406,7 +406,7 @@ export default function TimelineSection({
                                 onClick={() => { setSortMode(mode); setShowAll(false) }}
                                 className={`px-3 py-1 rounded-full text-xs transition-colors ${
                                     sortMode === mode
-                                        ? 'bg-[#7b3aed] text-white font-bold'
+                                        ? 'bg-primary text-white font-bold'
                                         : 'text-content-muted hover:text-content-secondary'
                                 }`}
                             >
@@ -436,7 +436,7 @@ export default function TimelineSection({
                                     {peek.timeLabel ?? '–'}
                                 </div>
                                 <div className="w-2 shrink-0 relative">
-                                    <div className={`absolute top-2 left-0 w-2 h-2 rounded-full ${peek.stage === '파생' ? 'bg-[#f97317]' : 'bg-[#7b3aed]'}`} />
+                                    <div className={`absolute top-2 left-0 w-2 h-2 rounded-full ${peek.stage === '파생' ? 'bg-[#f97317]' : 'bg-primary'}`} />
                                 </div>
                                 <div className="flex-1 min-w-0 pb-3">
                                     <p className="text-sm text-content-primary leading-relaxed">
@@ -463,7 +463,7 @@ export default function TimelineSection({
                         </div>
                         <button
                             onClick={() => goToLogin()}
-                            className="w-full sm:w-auto shrink-0 px-5 py-2 rounded-full bg-[#7b3aed] text-white text-sm font-bold hover:opacity-90 transition-opacity"
+                            className="w-full sm:w-auto shrink-0 px-5 py-2 rounded-full bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity"
                         >
                             로그인하기 →
                         </button>

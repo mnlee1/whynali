@@ -233,11 +233,11 @@ async function SearchResults({ query }: { query: string }) {
                                     <article className="card-hover p-5">
                                         <div className="mb-2.5">
                                             {topic.approval_status === '진행중' ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">
                                                     토론 진행중
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-surface-muted text-content-muted border-border text-xs font-medium">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-subtle text-content-muted text-xs font-bold">
                                                     토론 마감
                                                 </span>
                                             )}
@@ -294,12 +294,12 @@ async function SearchResults({ query }: { query: string }) {
                                         {/* 상태 라벨 + 참여 수 */}
                                         <div className="flex items-center justify-between mb-3">
                                             {isActive ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-green-200 bg-green-50 text-xs font-semibold text-green-700">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 text-xs font-bold text-green-700">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                                                     투표 진행중
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-surface-muted text-xs font-semibold text-content-muted">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-subtle text-xs font-bold text-content-muted">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-content-muted" />
                                                     투표 마감
                                                 </span>

@@ -1060,7 +1060,7 @@ function CommentItem({
                                         'flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors',
                                         myType === 'like'
                                             ? 'bg-blue-100 text-blue-700 font-semibold'
-                                            : 'bg-gray-100 text-content-secondary hover:bg-gray-200',
+                                            : 'bg-surface-muted text-content-secondary hover:bg-surface-subtle',
                                         isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                                     ].join(' ')}
                                 >
@@ -1074,7 +1074,7 @@ function CommentItem({
                                         'flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors',
                                         myType === 'dislike'
                                             ? 'bg-red-100 text-red-700 font-semibold'
-                                            : 'bg-gray-100 text-content-secondary hover:bg-gray-200',
+                                            : 'bg-surface-muted text-content-secondary hover:bg-surface-subtle',
                                         isLiking ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                                     ].join(' ')}
                                 >
