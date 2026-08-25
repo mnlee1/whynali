@@ -119,6 +119,9 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
             const json = await res.json()
             if (!res.ok) throw new Error(json.error)
             trackConversion({ eventType: 'reaction', issueId })
+            if (json.action !== 'removed' && typeof window !== 'undefined' && window.gtag) {
+                window.gtag('event', 'reaction_click', { issue_id: issueId, reaction_type: type })
+            }
             // 서버 확정값으로 동기화 + 상대 컴포넌트(ReactionDropdown) 업데이트
             await loadReactions()
             window.dispatchEvent(new CustomEvent('reactionUpdated', { detail: { issueId, source: 'ReactionsSection' } }))

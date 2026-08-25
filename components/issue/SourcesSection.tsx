@@ -19,15 +19,18 @@ import { formatDate } from '@/lib/utils/format-date'
 import { getNewsSourceName } from '@/lib/utils/news-source-mapper'
 import type { NewsData } from '@/types/issue'
 
-const INITIAL_SHOW_COUNT = 5
+const INITIAL_SHOW_COUNT = 2
 const SHOW_STEP = 5
+const SCROLL_MAX_HEIGHT = 'max-h-[420px]'
 
 interface SourcesSectionProps {
     issueId: string
     initialNews?: NewsData[]
+    /** true면 "더보기" 클릭 시 전체 목록을 한 번에 표시 (기본: 5건씩 단계적 표시) */
+    expandFully?: boolean
 }
 
-export default function SourcesSection({ issueId, initialNews }: SourcesSectionProps) {
+export default function SourcesSection({ issueId, initialNews, expandFully = false }: SourcesSectionProps) {
     const [news, setNews] = useState<NewsData[]>(initialNews ?? [])
     const [loading, setLoading] = useState(!initialNews)
     const [error, setError] = useState<string | null>(null)
@@ -72,48 +75,47 @@ export default function SourcesSection({ issueId, initialNews }: SourcesSectionP
 
     return (
         <div className="card overflow-hidden mb-6">
-            <div className="px-4 py-3 border-b border-border-muted">
-                <h2 className="text-sm font-bold text-content-primary">출처</h2>
+            <div className="px-4 py-3 border-b border-border-muted flex items-end gap-2">
+                <h2 className="text-sm font-bold text-content-primary">출처 뉴스</h2>
+                <span className="text-xs font-normal text-content-muted">{news.length}건</span>
             </div>
             <div className="p-4">
-                <div className="space-y-6">
-                    {/* 뉴스 출처 */}
-                    {hasNews && (
-                        <div>
-                            <h3 className="text-sm font-semibold text-content-primary mb-2">
-                                뉴스
-                                <span className="ml-1.5 text-xs font-normal text-content-muted">{news.length}건</span>
-                            </h3>
-                            <div className="space-y-2">
-                                {visibleNews.map((item) => (
-                                    <div key={item.id} className="border border-border rounded-xl bg-surface p-3">
-                                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                                            <a
-                                                href={item.link}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-sm font-medium text-content-primary hover:text-primary underline underline-offset-2 flex-1 transition-colors"
-                                            >
-                                                {item.title}
-                                            </a>
-                                        </div>
-                                        <div className="text-xs text-content-secondary">
-                                            {getNewsSourceName(item.source)} · {formatDate(item.published_at)}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            {showNewsCount < news.length && (
-                                <button
-                                    onClick={() => setShowNewsCount((prev) => Math.min(prev + SHOW_STEP, news.length))}
-                                    className="btn-neutral btn-md mt-3 w-full"
+                <div className={`space-y-2 ${showNewsCount > INITIAL_SHOW_COUNT ? `${SCROLL_MAX_HEIGHT} overflow-y-auto thin-scrollbar pr-1` : ''}`}>
+                    {visibleNews.map((item) => (
+                        <div key={item.id} className="border border-border rounded-xl bg-surface p-3">
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <a
+                                    href={item.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm font-medium text-content-primary hover:text-primary underline underline-offset-2 flex-1 transition-colors"
                                 >
-                                    {`${Math.min(SHOW_STEP, news.length - showNewsCount)}건 더 보기 (${news.length - showNewsCount}건 남음)`}
-                                </button>
-                            )}
+                                    {item.title}
+                                </a>
+                            </div>
+                            <div className="text-xs text-content-secondary">
+                                {getNewsSourceName(item.source)} · {formatDate(item.published_at)}
+                            </div>
                         </div>
+                    ))}
+                </div>
+                <div className="flex gap-2 mt-3">
+                    {showNewsCount < news.length && (
+                        <button
+                            onClick={() => setShowNewsCount(expandFully ? news.length : (prev) => Math.min(prev + SHOW_STEP, news.length))}
+                            className="btn-neutral btn-md flex-1"
+                        >
+                            {expandFully ? `더보기 (전체 ${news.length}건)` : `더보기 +${Math.min(SHOW_STEP, news.length - showNewsCount)}`}
+                        </button>
                     )}
-
+                    {showNewsCount > INITIAL_SHOW_COUNT && (
+                        <button
+                            onClick={() => setShowNewsCount(INITIAL_SHOW_COUNT)}
+                            className="btn-neutral btn-md flex-1"
+                        >
+                            접기
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

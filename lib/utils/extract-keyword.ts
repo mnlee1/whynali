@@ -36,6 +36,43 @@ const CORE_KEYWORDS = new Set([
 // 따옴표 안에서 무시할 단어 (법률용어, 일반용어)
 const QUOTED_STOPWORDS = new Set(['방지법', '혐의', '소지', '투약', '사건', '사고'])
 
+// 조사 제거 규칙에서 예외로 보호할 고유명사/외래어 (마지막 글자가 조사와 우연히 겹침, 예: '탱크데이')
+const PROTECTED_WORDS = new Set([
+    '탱크데이',
+])
+
+// 여러 글자 조사: 우연히 이 형태로 끝나는 고유명사가 거의 없어 항상 제거
+const MULTI_CHAR_JOSA = /(으로|에서|부터|까지|한테|에게|께서)$/
+// 한 글자 조사: 외래어·고유명사 끝음절과 자주 겹쳐 문맥(다음 단어) 확인 후에만 제거
+const SINGLE_CHAR_JOSA = /(의|로|에|는|은|이|가|을|를|와|과|도|만|으|께)$/
+
+/**
+ * stripJosa - 단어 끝의 조사 제거
+ *
+ * 다음 단어가 있어야 문장 조사로 보고, 다음 단어가 STOPWORDS(발표/공개/충격 등
+ * 뉴스 제목 서술어)에 속할 때만 한 글자 조사를 제거한다.
+ * "탱크데이 스타벅스"처럼 명사구가 나열되는 제목에서는 뒤에 서술어가 오지 않으므로
+ * 조사로 오인하지 않는다.
+ */
+function stripJosa(word: string, nextWord: string | undefined): string {
+    const multiMatch = word.match(MULTI_CHAR_JOSA)
+    if (multiMatch) {
+        return word.slice(0, -multiMatch[0].length)
+    }
+
+    if (PROTECTED_WORDS.has(word)) return word
+
+    const singleMatch = word.match(SINGLE_CHAR_JOSA)
+    if (singleMatch && nextWord) {
+        const looksLikePredicate = Array.from(STOPWORDS).some(sw => nextWord.startsWith(sw))
+        if (looksLikePredicate) {
+            return word.slice(0, -singleMatch[0].length)
+        }
+    }
+
+    return word
+}
+
 /** 날짜/시간 패턴 판별 */
 function isDateTimeWord(word: string): boolean {
     return /^\d+[일월년시분초]$/.test(word) || /^\d{2,4}$/.test(word)
@@ -67,10 +104,13 @@ export function extractKeyword(text: string): string | null {
     }
 
     // 2. 일반 단어 추출 (조사 제거 + 불용어 필터)
-    const words = cleanText
+    const rawWords = cleanText
         .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣0-9]/g, ' ')
         .split(/\s+/)
-        .map((w) => w.replace(/(의|로|에|는|은|이|가|을|를|와|과|도|만|으로|으|에서|부터|까지|한테|에게|께|께서)$/, ''))
+        .filter(Boolean)
+
+    const words = rawWords
+        .map((w, i) => stripJosa(w, rawWords[i + 1]))
         .filter((w) => {
             if (w.length < 2) return false
             if (STOPWORDS.has(w)) return false

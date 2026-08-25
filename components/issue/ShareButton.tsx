@@ -11,7 +11,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Share2, Copy, Check, Link } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Share, Share2, Copy, Check, Link } from 'lucide-react'
 import { initKakao, isKakaoReady } from '@/lib/kakao/init'
 
 interface ShareButtonProps {
@@ -20,9 +21,10 @@ interface ShareButtonProps {
     title: string
     thumbnailUrl?: string // 이슈 대표 이미지
     compact?: boolean // 컴팩트 모드 (아이콘만 표시)
+    panelDirection?: 'down' | 'right' | 'up' // right: 좌측 레일용, up: 하단 캡슐바용(화면 밖으로 안 잘리게 위로 펼침)
 }
 
-export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, compact = false }: ShareButtonProps) {
+export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, compact = false, panelDirection = 'down' }: ShareButtonProps) {
     const [copied, setCopied] = useState(false)
     const [showMenu, setShowMenu] = useState(false)
     const [kakaoCopied, setKakaoCopied] = useState(false)
@@ -102,8 +104,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
 
     const handleShare = async (platform: string) => {
         console.log('[ShareButton] 공유 플랫폼:', platform)
-        trackShare(platform)
-        
+
         const shareUrl = getShareUrlWithUTM(platform)
 
         // X (트위터) 공유
@@ -111,6 +112,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             const tweetText = `${title}\n왜난리에서 이슈 확인하고 투표와 토론에 참여하세요!\n\n🔗 ${shareUrl}\n\n#️⃣ #왜난리 #이슈 #실시간`
             const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`
             window.open(url, '_blank', 'width=600,height=400')
+            trackShare('twitter')
             setShowMenu(false)
         }
         // 카카오톡 공유
@@ -126,6 +128,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                 try {
                     await navigator.clipboard.writeText(shareUrl)
                     console.log('[ShareButton] 링크 복사 성공')
+                    trackShare('copy_link')
                     setKakaoCopied(true)
                     setTimeout(() => {
                         setKakaoCopied(false)
@@ -176,12 +179,14 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                     ],
                 })
                 console.log('[ShareButton] Kakao Share API 호출 성공')
+                trackShare('kakaotalk')
                 setShowMenu(false)
             } catch (err) {
                 console.error('[ShareButton] Kakao Share 실패:', err)
                 // 실패 시 링크 복사로 폴백
                 try {
                     await navigator.clipboard.writeText(shareUrl)
+                    trackShare('copy_link')
                     setKakaoCopied(true)
                     setTimeout(() => {
                         setKakaoCopied(false)
@@ -221,10 +226,10 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             <div className="relative">
                 <button
                     onClick={() => setShowMenu(!showMenu)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors"
+                    className={`flex items-center justify-center rounded-full text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors ${panelDirection === 'up' ? 'w-11 h-11' : 'w-9 h-9'}`}
                     aria-label="공유하기"
                 >
-                    <Share2 className="w-4 h-4" strokeWidth={1.8} />
+                    <Share className="w-5 h-5" strokeWidth={1.8} />
                 </button>
 
                 {showMenu && (
@@ -233,7 +238,13 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                             className="fixed inset-0 z-40"
                             onClick={() => setShowMenu(false)}
                         />
-                        <div className="absolute right-0 top-full mt-2 bg-surface rounded-xl shadow-lg border border-border z-50 p-3">
+                        <div className={
+                            panelDirection === 'right'
+                                ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 bg-surface rounded-xl shadow-card border border-border z-50 p-3'
+                                : panelDirection === 'up'
+                                ? 'absolute right-0 bottom-full mb-2 bg-surface rounded-xl shadow-card border border-border z-50 p-3'
+                                : 'absolute right-0 top-full mt-2 bg-surface rounded-xl shadow-card border border-border z-50 p-3'
+                        }>
                             <div className="flex items-center gap-2">
                                 {/* X (트위터) */}
                                 <button
@@ -280,13 +291,14 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
     </div>
 
             {/* 토스트 메시지 */}
-            {showToast && (
+            {showToast && createPortal(
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300">
-                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-[#9333EA]">
-                        <Check className="w-4 h-4 text-[#9333EA]" strokeWidth={3} />
-                        <span className="text-sm font-semibold text-[#9333EA]">링크를 복사했어요.</span>
+                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-primary">
+                        <Check className="w-4 h-4 text-primary" strokeWidth={3} />
+                        <span className="text-sm font-semibold text-primary">링크를 복사했어요.</span>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
             </>
         )
@@ -334,18 +346,19 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <p className="text-xs text-content-secondary break-all">{baseShareUrl}</p>
                 <p className="text-xs text-content-muted">
-                    공유 시 자동으로 유입 경로가 추적됩니다
+                    X·카카오톡 공유 시 링크가 자동으로 포함돼요
                 </p>
             </div>
 
             {/* 토스트 메시지 */}
-            {showToast && (
+            {showToast && createPortal(
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300">
-                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-[#9333EA]">
-                        <Check className="w-4 h-4 text-[#9333EA]" strokeWidth={3} />
-                        <span className="text-sm font-semibold text-[#9333EA]">링크를 복사했어요.</span>
+                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-primary">
+                        <Check className="w-4 h-4 text-primary" strokeWidth={3} />
+                        <span className="text-sm font-semibold text-primary">링크를 복사했어요.</span>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     )

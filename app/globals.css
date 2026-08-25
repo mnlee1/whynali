@@ -43,14 +43,21 @@
 /* ── 디자인 토큰 ─────────────────────────────────── */
 
 :root {
-    --color-primary-from: #a202e3;
-    --color-primary-to:   #7700b9;
-    --gradient-primary:   linear-gradient(to right, var(--color-primary-from), var(--color-primary-to));
+    --color-primary:      #7b3aed;
 
     --color-border:       #e4e4e7;
     --color-border-muted: #f1f1f3;
     --color-surface:      #ffffff;
     --color-surface-muted:#fafafa;
+
+    /* 전역 상단 네비게이션 높이 + 여유(24px). 이슈 상세 페이지의 앵커 스크롤(scrollMarginTop)에 사용 */
+    --scroll-offset: 112px;
+}
+
+@media (min-width: 1280px) {
+    :root {
+        --scroll-offset: 80px;
+    }
 }
 
 /* ── 버튼 컴포넌트 ───────────────────────────────── */
@@ -67,7 +74,7 @@
 
     /* Primary — 그라데이션 */
     .btn-primary {
-        background: var(--gradient-primary);
+        background: var(--color-primary);
         @apply text-white shadow-sm hover:opacity-90 active:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed;
     }
 
@@ -116,6 +123,21 @@
 
     .card-hover {
         @apply card hover:shadow-card-hover transition-shadow duration-150;
+    }
+
+    /* 라운드 박스 안 textarea용 - 기본 스크롤바가 두꺼워서 둥근 모서리와 부딪히는 문제 방지 */
+    .thin-scrollbar {
+        scrollbar-width: thin;
+    }
+    .thin-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .thin-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .thin-scrollbar::-webkit-scrollbar-thumb {
+        background: theme('colors.border');
+        border-radius: 3px;
     }
 
     /* ── 테이블 ───────────────────────────────────── */
@@ -333,9 +355,9 @@
 
 .vote-swiper .swiper-pagination-bullet-active {
     width: 28px !important;
-    background: linear-gradient(to right, var(--color-primary-from), var(--color-primary-to)) !important;
+    background: var(--color-primary) !important;
     border-radius: 9999px !important;
-    box-shadow: 0 0 12px rgba(162, 2, 227, 0.3) !important;
+    box-shadow: 0 0 12px rgba(123, 58, 237, 0.3) !important;
 }
 
 /* 1536px 이상에서 페이지네이션 숨김 */

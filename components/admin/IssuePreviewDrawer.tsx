@@ -440,22 +440,30 @@ export default function IssuePreviewDrawer({
                                     그라데이션 배경 사용 중
                                 </p>
                             ) : (
-                                <div className="grid grid-cols-4 gap-3">
-                                    {/* 현재 대표 */}
-                                    {localThumbnailUrls.length > 0 && selectedThumbnailIndex >= 0 && (
-                                        <div className="relative aspect-video rounded-lg overflow-hidden ring-2 ring-primary shadow-md">
-                                            <Image
-                                                src={localThumbnailUrls[selectedThumbnailIndex]}
-                                                alt="현재 대표"
-                                                fill
-                                                sizes="180px"
-                                                className="object-cover"
-                                            />
-                                            <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-primary text-white text-[10px] font-bold rounded shadow">
-                                                대표
-                                            </span>
-                                        </div>
-                                    )}
+                                <div className="grid grid-cols-3 gap-3">
+                                    {/* 저장된 후보 — 클릭하면 대표로 전환 */}
+                                    {localThumbnailUrls.map((url, i) => (
+                                        <button
+                                            key={url}
+                                            onClick={() => i !== selectedThumbnailIndex && handlePrimaryThumbnailChange(i)}
+                                            className="block w-full"
+                                        >
+                                            <div className={`relative aspect-video rounded-lg overflow-hidden ring-2 transition-all ${selectedThumbnailIndex === i ? 'ring-primary shadow-md' : 'ring-transparent hover:ring-primary'}`}>
+                                                <Image
+                                                    src={url}
+                                                    alt={`이미지 ${i + 1}`}
+                                                    fill
+                                                    sizes="180px"
+                                                    className="object-cover"
+                                                />
+                                                {selectedThumbnailIndex === i && (
+                                                    <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-primary text-white text-[10px] font-bold rounded shadow">
+                                                        대표
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </button>
+                                    ))}
                                     {/* 재검색 후보 */}
                                     {candidateUrls.map((url, i) => (
                                         <button key={url} onClick={() => handleCandidatePick(i)} className="block w-full">
@@ -532,7 +540,7 @@ export default function IssuePreviewDrawer({
 
 
                     {/* 출처 */}
-                    <SourcesSection key={sourcesKey} issueId={issue.id} />
+                    <SourcesSection key={sourcesKey} issueId={issue.id} expandFully />
                 </div>
 
                 {/* 하단 액션 (대기 상태일 때만) */}

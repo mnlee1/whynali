@@ -28,26 +28,26 @@ function getStatusMeta(status: IssueStatus): {
         case '점화':
             return {
                 icon: '🔥',
-                label: '점화 중',
-                baseClass: 'bg-red-50 text-red-600 border-red-200'
+                label: '점화중',
+                baseClass: 'bg-red-100 text-red-600'
             }
         case '논란중':
             return {
                 icon: '⚡',
                 label: '화제 집중',
-                baseClass: 'bg-orange-50 text-orange-600 border-orange-200'
+                baseClass: 'bg-orange-100 text-[#f97317]'
             }
         case '종결':
             return {
                 icon: '🏁',
                 label: '종결',
-                baseClass: 'bg-gray-50 text-gray-500 border-gray-200'
+                baseClass: 'bg-gray-100 text-gray-500'
             }
         default:
             return {
                 icon: '○',
                 label: status,
-                baseClass: 'bg-gray-50 text-gray-500 border-gray-200'
+                baseClass: 'bg-gray-100 text-gray-500'
             }
     }
 }
@@ -93,7 +93,7 @@ export default function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
 
     return (
         <span className={`
-            inline-flex items-center rounded-full border font-medium
+            inline-flex items-center rounded-full font-bold
             ${meta.baseClass}
             ${sizeClass.containerClass}
         `}>

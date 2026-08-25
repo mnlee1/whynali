@@ -162,7 +162,7 @@ export async function trackPageView(params: {
 
 // 전환 이벤트 추적 (재미나이 제안 2번)
 export async function trackConversion(params: {
-    eventType: 'signup' | 'vote' | 'comment' | 'reaction'
+    eventType: 'signup' | 'vote' | 'comment' | 'reaction' | 'discussion_comment'
     issueId?: string
     discussionId?: string
 }) {

@@ -13,10 +13,10 @@ module.exports = {
             },
             colors: {
                 primary: {
-                    DEFAULT: '#a202e3',
-                    dark:    '#7700b9',
-                    light:   '#f3e6ff',
-                    muted:   '#e8c6ff',
+                    DEFAULT: '#7b3aed',
+                    dark:    '#5b21b6',
+                    light:   '#ede9fe',
+                    muted:   '#c4b5fd',
                 },
                 surface: {
                     DEFAULT: '#ffffff',
@@ -34,9 +34,6 @@ module.exports = {
                     muted:     '#a1a1aa',
                     disabled:  '#d4d4d8',
                 },
-            },
-            backgroundImage: {
-                'gradient-primary': 'linear-gradient(to right, #a202e3, #7700b9)',
             },
             borderRadius: {
                 btn: '9999px',

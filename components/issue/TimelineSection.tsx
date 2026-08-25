@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useMemo, type ReactNode, type CSSProperties } from 'react'
 import { Bot, Clock, ChevronDown, ChevronUp, BarChart3, ChevronRight } from 'lucide-react'
-import { formatKstDateHeader, formatKstTime, formatKstDateKey, parseKoreanMonthDayTime } from '@/lib/utils/format-date'
+import { formatKstDateHeader, formatKstTime, formatKstDateKey, formatKstYear, parseKoreanMonthDayTime } from '@/lib/utils/format-date'
 import { goToLogin } from '@/lib/pendingAction'
 
 type TimelineStage = '발단' | '전개' | '파생' | '진정' | '종결'
@@ -102,9 +102,9 @@ function VoteNudge({ vote, className = '' }: { vote: { title: string; totalCount
                 const el = document.getElementById('section-vote')
                 if (!el) return
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                el.classList.add('ring-2', 'ring-[#7b3aed]', 'ring-offset-4', 'rounded-2xl', 'transition-shadow')
+                el.classList.add('ring-2', 'ring-primary', 'ring-offset-4', 'rounded-2xl', 'transition-shadow')
                 setTimeout(() => {
-                    el.classList.remove('ring-2', 'ring-[#7b3aed]', 'ring-offset-4')
+                    el.classList.remove('ring-2', 'ring-primary', 'ring-offset-4')
                 }, 1500)
             }}
             className={`flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity ${className}`}
@@ -318,15 +318,19 @@ export default function TimelineSection({
     const collapsedLabel = sortMode === 'latest' ? '이전' : '이후'
 
     let lastDateKey: string | null = null
+    let lastYear: string | null = null
 
     const rows: ReactNode[] = displayList.map((item, index) => {
         const dateKey = formatKstDateKey(item.sortDate.toISOString())
         const showDateHeader = dateKey !== lastDateKey
         lastDateKey = dateKey
+        const year = formatKstYear(item.sortDate.toISOString())
+        const showYearBadge = year !== lastYear
+        lastYear = year
         const isLastItem = index === displayList.length - 1 && (showAll || collapsible.length === 0)
         const isFirstItem = index === 0
         const isSideIssue = item.stage === '파생'
-        const dotColor = isSideIssue ? 'bg-[#f97317]' : 'bg-[#7b3aed]'
+        const dotColor = isSideIssue ? 'bg-[#f97317]' : 'bg-primary'
         const linkedVote = item.linkedVoteId ? activeVotes[item.linkedVoteId] : undefined
         const DOT_CENTER = 12 // px: dot top offset(8px) + dot radius(4px)
         const showItemLine = !(isFirstItem && isLastItem)
@@ -338,51 +342,46 @@ export default function TimelineSection({
 
         return (
             <div key={item.key}>
+                {showYearBadge && (
+                    <div className={index === 0 ? '' : 'pt-4'}>
+                        <span className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full bg-[#1a1a1a] text-white">
+                            {year}
+                        </span>
+                    </div>
+                )}
                 {showDateHeader && (
-                    <div className="flex gap-3">
-                        <div className="w-2 shrink-0 relative">
-                            {index !== 0 && <div className="absolute left-[3px] inset-y-0 w-0.5 bg-border-muted" />}
-                        </div>
-                        <div className={`text-sm font-bold text-content-secondary pb-2 ${index === 0 ? 'pt-0' : 'pt-4'}`}>
-                            {formatKstDateHeader(item.sortDate.toISOString())}
-                        </div>
+                    <div className={`text-base font-bold text-content-secondary pb-3 ${showYearBadge ? 'pt-0.5' : (index === 0 ? 'pt-0' : 'pt-4')}`}>
+                        {formatKstDateHeader(item.sortDate.toISOString())}
                     </div>
                 )}
                 <div className="flex gap-3">
+                    <div className="w-11 shrink-0 pt-1 text-[13px] font-medium text-content-muted">
+                        {item.timeLabel ?? '–'}
+                    </div>
                     <div className="w-2 shrink-0 relative">
                         {showItemLine && <div className="absolute left-[3px] w-0.5 bg-border-muted" style={itemLineStyle} />}
                         <div className={`absolute top-2 left-0 w-2 h-2 rounded-full ${dotColor}`} />
                     </div>
                     <div className="flex-1 min-w-0 pb-5">
                         {isSideIssue ? (
-                            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 sm:items-start">
-                                <span className="sm:w-11 sm:shrink-0 sm:pt-0.5 text-[13px] font-medium text-content-muted">
-                                    {item.timeLabel ?? '–'}
+                            <div className="flex-1 min-w-0">
+                                <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#fef1e6] text-[#f97317] whitespace-nowrap">
+                                    ⚡ 파생 이슈
                                 </span>
-                                <div className="flex-1 min-w-0">
-                                    <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#fef1e6] text-[#f97317] whitespace-nowrap">
-                                        ⚡ 파생 이슈
-                                    </span>
-                                    <p className="mt-1 text-sm text-content-primary leading-relaxed">
-                                        {renderBulletText(item.text)}
-                                    </p>
-                                    {linkedVote && (
-                                        <VoteNudge vote={linkedVote} className="mt-1.5" />
-                                    )}
-                                </div>
+                                <p className="mt-1 text-sm text-content-primary leading-relaxed">
+                                    {renderBulletText(item.text)}
+                                </p>
+                                {linkedVote && (
+                                    <VoteNudge vote={linkedVote} className="mt-1.5" />
+                                )}
                             </div>
                         ) : (
                             <>
-                                <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-1 gap-y-1">
-                                    <span className="w-11 shrink-0 text-[13px] font-medium text-content-muted">
-                                        {item.timeLabel ?? '–'}
-                                    </span>
-                                    <p className="w-full sm:w-auto sm:flex-1 min-w-0 text-sm text-content-primary leading-relaxed">
-                                        {renderBulletText(item.text)}
-                                    </p>
-                                </div>
+                                <p className="text-sm text-content-primary leading-relaxed">
+                                    {renderBulletText(item.text)}
+                                </p>
                                 {linkedVote && (
-                                    <VoteNudge vote={linkedVote} className="mt-1.5 sm:pl-12" />
+                                    <VoteNudge vote={linkedVote} className="mt-1.5" />
                                 )}
                             </>
                         )}
@@ -407,7 +406,7 @@ export default function TimelineSection({
                                 onClick={() => { setSortMode(mode); setShowAll(false) }}
                                 className={`px-3 py-1 rounded-full text-xs transition-colors ${
                                     sortMode === mode
-                                        ? 'bg-[#7b3aed] text-white font-bold'
+                                        ? 'bg-primary text-white font-bold'
                                         : 'text-content-muted hover:text-content-secondary'
                                 }`}
                             >
@@ -433,18 +432,16 @@ export default function TimelineSection({
                         if (!peek) return null
                         return (
                             <div key={peek.key} className={`flex gap-3 ${step.blur} ${step.opacity} ${i > 0 ? 'mt-3' : ''}`}>
+                                <div className="w-11 shrink-0 pt-1 text-[13px] font-medium text-content-muted">
+                                    {peek.timeLabel ?? '–'}
+                                </div>
                                 <div className="w-2 shrink-0 relative">
-                                    <div className={`absolute top-2 left-0 w-2 h-2 rounded-full ${peek.stage === '파생' ? 'bg-[#f97317]' : 'bg-[#7b3aed]'}`} />
+                                    <div className={`absolute top-2 left-0 w-2 h-2 rounded-full ${peek.stage === '파생' ? 'bg-[#f97317]' : 'bg-primary'}`} />
                                 </div>
                                 <div className="flex-1 min-w-0 pb-3">
-                                    <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-1 gap-y-1">
-                                        <span className="w-11 shrink-0 text-[13px] font-medium text-content-muted">
-                                            {peek.timeLabel ?? '–'}
-                                        </span>
-                                        <p className="w-full sm:w-auto sm:flex-1 min-w-0 text-sm text-content-primary leading-relaxed">
-                                            {peek.text.replace(/\*\*/g, '')}
-                                        </p>
-                                    </div>
+                                    <p className="text-sm text-content-primary leading-relaxed">
+                                        {peek.text.replace(/\*\*/g, '')}
+                                    </p>
                                 </div>
                             </div>
                         )
@@ -466,7 +463,7 @@ export default function TimelineSection({
                         </div>
                         <button
                             onClick={() => goToLogin()}
-                            className="w-full sm:w-auto shrink-0 px-5 py-2 rounded-full bg-[#7b3aed] text-white text-sm font-bold hover:opacity-90 transition-opacity"
+                            className="w-full sm:w-auto shrink-0 px-5 py-2 rounded-full bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity"
                         >
                             로그인하기 →
                         </button>

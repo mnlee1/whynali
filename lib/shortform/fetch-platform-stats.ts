@@ -96,6 +96,68 @@ export async function fetchYoutubeStats(videoId: string): Promise<YoutubeStats> 
     }
 }
 
+// KPI 리포트 "홍보 채널 현황"용 — 영상 하나가 아니라 채널 전체 누적 구독자·조회수
+export interface YoutubeChannelStats {
+    subscribers: number
+    totalViews: number  // 채널 개설 이후 전체 누적 (기간별 API가 없어서, 이전 스냅샷과 비교해 기간 발생분을 계산해야 함)
+    fetched_at: string
+}
+
+// 채널 통계는 공개 정보라 OAuth(소유권 인증) 없이 API 키 + 채널 핸들만으로 조회 가능
+const YOUTUBE_CHANNEL_HANDLE = '왜난리'
+
+export async function fetchYoutubeChannelStats(): Promise<YoutubeChannelStats> {
+    const apiKey = process.env.YOUTUBE_API_KEY
+    if (!apiKey) throw new Error('YOUTUBE_API_KEY 없음')
+
+    const youtube = google.youtube({ version: 'v3', auth: apiKey })
+    const res = await youtube.channels.list({ part: ['statistics'], forHandle: YOUTUBE_CHANNEL_HANDLE })
+    const stats = res.data.items?.[0]?.statistics ?? {}
+
+    return {
+        subscribers: Number(stats.subscriberCount ?? 0),
+        totalViews:  Number(stats.viewCount ?? 0),
+        fetched_at:  new Date().toISOString(),
+    }
+}
+
+// KPI 리포트용 — 채널 전체의 "이번 기간" 조회수·좋아요·댓글 수 (애널리틱스가 기간을 직접 받아서,
+// 유튜브 채널 통계(fetchYoutubeChannelStats)처럼 누적값을 비교 계산할 필요 없이 바로 나옴).
+// yt-analytics.readonly scope가 있어야 함 (없으면 null 반환, 화면에서 수동 입력으로 폴백).
+// API 키로는 안 되고 OAuth(채널 소유자 인증)가 필요해서, 업로드용 refresh token을 그대로 씀.
+export interface YoutubeEngagementStats {
+    periodViews: number | null
+    periodLikes: number | null
+    periodComments: number | null
+    periodShares: number | null
+}
+
+export async function fetchYoutubeEngagementStats(sinceIso: string, untilIso: string): Promise<YoutubeEngagementStats> {
+    const empty = { periodViews: null, periodLikes: null, periodComments: null, periodShares: null }
+    try {
+        const auth = getOAuth2Client()
+        const analytics = google.youtubeAnalytics({ version: 'v2', auth })
+        const res = await analytics.reports.query({
+            ids: 'channel==MINE',
+            startDate: sinceIso.slice(0, 10),
+            endDate: untilIso.slice(0, 10),
+            metrics: 'views,likes,comments,shares',
+        })
+        const row = res.data.rows?.[0]
+        if (!row) return empty
+        // row = [views, likes, comments, shares] (metrics 순서대로)
+        return {
+            periodViews: Number(row[0]) ?? null,
+            periodLikes: Number(row[1]) ?? null,
+            periodComments: Number(row[2]) ?? null,
+            periodShares: Number(row[3]) ?? null,
+        }
+    } catch {
+        // yt-analytics.readonly scope 미부여 등 → null 반환, 화면에서 수동 입력으로 폴백
+        return empty
+    }
+}
+
 // ─── Instagram ───────────────────────────────────────────────────────────────
 
 const GRAPH_API = 'https://graph.instagram.com/v21.0'
@@ -127,5 +189,54 @@ export async function fetchInstagramStats(mediaId: string): Promise<InstagramSta
         saved:         pick('saved'),
         avgWatchTimeMs: rawAvgWatch != null ? rawAvgWatch : null,
         fetched_at:    new Date().toISOString(),
+    }
+}
+
+// KPI 리포트 "홍보 채널 현황"용 — 계정 전체 팔로워 수 + 지정 기간 조회수·좋아요·댓글·공유
+// (인스타는 인사이트 API가 기간(since~until)을 직접 받아서, 유튜브 조회수처럼 누적값 비교 계산이 필요 없음)
+export interface InstagramAccountStats {
+    followers: number
+    periodViews: number | null     // null = 조회 실패(권한 부족 등) → 화면에서 수동 입력으로 폴백
+    periodLikes: number | null
+    periodComments: number | null
+    periodShares: number | null
+    fetched_at: string
+}
+
+export async function fetchInstagramAccountStats(sinceIso: string, untilIso: string): Promise<InstagramAccountStats> {
+    const accessToken = await getInstagramAccessToken()
+    const userId = process.env.INSTAGRAM_USER_ID
+    if (!userId) throw new Error('INSTAGRAM_USER_ID 없음')
+
+    const since = Math.floor(new Date(sinceIso).getTime() / 1000)
+    const until = Math.floor(new Date(untilIso).getTime() / 1000)
+
+    // 팔로워 수 / 기간별 조회수·좋아요·댓글·공유는 서로 무관한 별개 요청이라 동시에 호출한다
+    const [profileRes, insightsResult] = await Promise.all([
+        fetch(`${GRAPH_API}/${userId}?fields=followers_count&access_token=${accessToken}`),
+        fetch(`${GRAPH_API}/${userId}/insights?metric=views,likes,comments,shares&period=day&metric_type=total_value&since=${since}&until=${until}&access_token=${accessToken}`)
+            .then(async res => ({ ok: res.ok, json: await res.json() }))
+            .catch(() => null),  // 조회 실패 시 팔로워 수만 반영하고 나머지는 수동 입력으로 남김
+    ])
+
+    const profileJson = await profileRes.json()
+    if (!profileRes.ok || profileJson.error) {
+        throw new Error(`Instagram 계정 정보 조회 실패: ${profileJson.error?.message ?? `HTTP ${profileRes.status}`}`)
+    }
+
+    const insightsOk = insightsResult?.ok && !insightsResult.json.error
+    const pickMetric = (name: string): number | null => {
+        if (!insightsOk) return null
+        const row = insightsResult!.json.data?.find((d: { name: string }) => d.name === name)
+        return row?.total_value?.value ?? null
+    }
+
+    return {
+        followers: Number(profileJson.followers_count ?? 0),
+        periodViews: pickMetric('views'),
+        periodLikes: pickMetric('likes'),
+        periodComments: pickMetric('comments'),
+        periodShares: pickMetric('shares'),
+        fetched_at: new Date().toISOString(),
     }
 }

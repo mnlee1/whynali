@@ -11,6 +11,7 @@ export type PendingAction =
     | { type: 'vote'; issueId: string; voteId: string; choiceId: string }
     | { type: 'reaction'; issueId: string; reactionType: ReactionType }
     | { type: 'comment'; issueId?: string; discussionTopicId?: string; parentId?: string | null; text: string }
+    | { type: 'bookmark'; issueId: string }
 
 type StoredPendingAction = PendingAction & { savedAt: number }
 
