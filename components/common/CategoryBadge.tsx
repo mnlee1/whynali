@@ -24,11 +24,11 @@ export default function CategoryBadge({ category, size = 'md' }: CategoryBadgePr
     
     const config = getCategoryById(category)
     const styleClass = config
-        ? `${config.badgeColors.bg} ${config.badgeColors.text} ${config.badgeColors.border}`
-        : 'bg-gray-100 text-gray-700 border-gray-200'
+        ? `${config.badgeColors.bg} ${config.badgeColors.text}`
+        : 'bg-gray-100 text-gray-700'
 
     return (
-        <span className={`inline-flex items-center font-medium border rounded-full ${sizeClass} ${styleClass}`}>
+        <span className={`inline-flex items-center font-bold rounded-full ${sizeClass} ${styleClass}`}>
             {category}
         </span>
     )

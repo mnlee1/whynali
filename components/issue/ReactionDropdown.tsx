@@ -172,10 +172,10 @@ export default function ReactionDropdown({ issueId, userId, align = 'left', layo
             {open && (
                 <div className={
                     panelDirection === 'right'
-                        ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px]'
+                        ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 bg-surface border border-border rounded-xl shadow-card p-2 w-[280px]'
                         : panelDirection === 'up'
-                        ? `absolute bottom-full mb-2 z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`
-                        : `absolute top-full z-50 bg-surface border border-border rounded-2xl shadow-lg p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`
+                        ? `absolute bottom-full mb-2 z-50 bg-surface border border-border rounded-xl shadow-card p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`
+                        : `absolute top-full z-50 bg-surface border border-border rounded-xl shadow-card p-2 w-[280px] ${align === 'right' ? 'right-0' : 'left-0'}`
                 }>
                     <div className="grid grid-cols-4 gap-1.5">
                         {REACTION_META.slice(0, 4).map(({ type, emoji, label }) => {
@@ -191,11 +191,11 @@ export default function ReactionDropdown({ issueId, userId, align = 'left', layo
                                     className={[
                                         'flex flex-col items-center px-3 py-2 rounded-xl transition-all w-full',
                                         selected
-                                            ? 'bg-purple-50 scale-105'
-                                            : 'bg-gray-50',
+                                            ? 'bg-primary-light scale-105'
+                                            : '',
                                         submitting
                                             ? 'opacity-60 cursor-not-allowed'
-                                            : 'hover:bg-surface-muted hover:scale-105 cursor-pointer',
+                                            : 'hover:bg-surface-subtle hover:scale-105 cursor-pointer',
                                     ].join(' ')}
                                 >
                                     <span className="text-xl leading-none">{emoji}</span>
@@ -229,11 +229,11 @@ export default function ReactionDropdown({ issueId, userId, align = 'left', layo
                                     className={[
                                         'flex flex-col items-center px-3 py-2 rounded-xl transition-all w-full',
                                         selected
-                                            ? 'bg-purple-50 scale-105'
-                                            : 'bg-gray-50',
+                                            ? 'bg-primary-light scale-105'
+                                            : '',
                                         submitting
                                             ? 'opacity-60 cursor-not-allowed'
-                                            : 'hover:bg-surface-muted hover:scale-105 cursor-pointer',
+                                            : 'hover:bg-surface-subtle hover:scale-105 cursor-pointer',
                                     ].join(' ')}
                                 >
                                     <span className="text-xl leading-none">{emoji}</span>

@@ -304,16 +304,17 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                         <div className="flex items-center gap-1">
                             {vote.phase && (
                                 <span className={[
-                                    'inline-flex items-center px-2 py-0.5 rounded-full border font-medium shrink-0 text-xs',
+                                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold shrink-0 text-xs',
                                     isClosed
-                                        ? 'bg-surface-muted text-content-muted border-border'
-                                        : 'bg-purple-50 text-purple-700 border-purple-200'
+                                        ? 'bg-surface-subtle text-content-muted'
+                                        : 'bg-green-100 text-green-700'
                                 ].join(' ')}>
+                                    {!isClosed && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
                                     {isClosed ? '투표 마감' : '투표 진행중'}
                                 </span>
                             )}
                             {vote.is_ai_generated && (
-                                <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200 font-medium">
+                                <span className="text-xs px-2.5 py-0.5 bg-primary-light text-primary rounded-full font-bold">
                                     AI 생성
                                 </span>
                             )}
@@ -359,19 +360,19 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                 className={[
                                     'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors overflow-hidden relative',
                                     isSelected
-                                        ? 'bg-purple-100 text-purple-800 font-medium'
-                                        : 'bg-gray-50 text-content-primary',
+                                        ? 'bg-primary-light text-primary-dark font-medium'
+                                        : 'bg-surface-muted text-content-primary',
                                     disabled
                                         ? 'cursor-not-allowed opacity-60'
-                                        : isSelected 
-                                            ? 'hover:bg-purple-200 cursor-pointer'
-                                            : 'hover:bg-gray-100 cursor-pointer',
+                                        : isSelected
+                                            ? 'hover:bg-primary-muted/40 cursor-pointer'
+                                            : 'hover:bg-surface-subtle cursor-pointer',
                                 ].join(' ')}
                             >
                                 <span
                                     className={[
                                         'vote-bar absolute inset-y-0 left-0 rounded-xl transition-all',
-                                        isSelected ? 'bg-purple-300/60' : 'bg-purple-100',
+                                        isSelected ? 'bg-primary-muted/60' : 'bg-primary-light',
                                     ].join(' ')}
                                     style={{ '--vote-pct': `${pct}%` } as CSSProperties}
                                 />
@@ -381,7 +382,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                         <span>{choice.label}</span>
                                     </span>
                                     {canSeeResults && totalCount > 0 && (
-                                        <span className={`text-xs ml-2 shrink-0 ${isSelected ? 'text-purple-800 font-medium' : 'text-content-secondary'}`}>
+                                        <span className={`text-xs ml-2 shrink-0 ${isSelected ? 'text-primary-dark font-medium' : 'text-content-secondary'}`}>
                                             {pct}%
                                         </span>
                                     )}

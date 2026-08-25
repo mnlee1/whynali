@@ -11,6 +11,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Share, Share2, Copy, Check, Link } from 'lucide-react'
 import { initKakao, isKakaoReady } from '@/lib/kakao/init'
 
@@ -228,7 +229,7 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                     className={`flex items-center justify-center rounded-full text-content-secondary hover:bg-surface-subtle hover:text-content-primary transition-colors ${panelDirection === 'up' ? 'w-11 h-11' : 'w-9 h-9'}`}
                     aria-label="공유하기"
                 >
-                    <Share className="w-4 h-4" strokeWidth={1.8} />
+                    <Share className="w-5 h-5" strokeWidth={1.8} />
                 </button>
 
                 {showMenu && (
@@ -239,10 +240,10 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
                         />
                         <div className={
                             panelDirection === 'right'
-                                ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 bg-surface rounded-xl shadow-lg border border-border z-50 p-3'
+                                ? 'absolute left-full top-1/2 -translate-y-1/2 ml-3 bg-surface rounded-xl shadow-card border border-border z-50 p-3'
                                 : panelDirection === 'up'
-                                ? 'absolute right-0 bottom-full mb-2 bg-surface rounded-xl shadow-lg border border-border z-50 p-3'
-                                : 'absolute right-0 top-full mt-2 bg-surface rounded-xl shadow-lg border border-border z-50 p-3'
+                                ? 'absolute right-0 bottom-full mb-2 bg-surface rounded-xl shadow-card border border-border z-50 p-3'
+                                : 'absolute right-0 top-full mt-2 bg-surface rounded-xl shadow-card border border-border z-50 p-3'
                         }>
                             <div className="flex items-center gap-2">
                                 {/* X (트위터) */}
@@ -290,13 +291,14 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
     </div>
 
             {/* 토스트 메시지 */}
-            {showToast && (
+            {showToast && createPortal(
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300">
-                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-[#9333EA]">
-                        <Check className="w-4 h-4 text-[#9333EA]" strokeWidth={3} />
-                        <span className="text-sm font-semibold text-[#9333EA]">링크를 복사했어요.</span>
+                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-primary">
+                        <Check className="w-4 h-4 text-primary" strokeWidth={3} />
+                        <span className="text-sm font-semibold text-primary">링크를 복사했어요.</span>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
             </>
         )
@@ -344,18 +346,19 @@ export default function ShareButton({ issueId, shortCode, title, thumbnailUrl, c
             <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <p className="text-xs text-content-secondary break-all">{baseShareUrl}</p>
                 <p className="text-xs text-content-muted">
-                    공유 시 자동으로 유입 경로가 추적됩니다
+                    X·카카오톡 공유 시 링크가 자동으로 포함돼요
                 </p>
             </div>
 
             {/* 토스트 메시지 */}
-            {showToast && (
+            {showToast && createPortal(
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300">
-                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-[#9333EA]">
-                        <Check className="w-4 h-4 text-[#9333EA]" strokeWidth={3} />
-                        <span className="text-sm font-semibold text-[#9333EA]">링크를 복사했어요.</span>
+                    <div className="bg-surface px-5 py-3 rounded-full shadow-xl flex items-center gap-2.5 border-2 border-primary">
+                        <Check className="w-4 h-4 text-primary" strokeWidth={3} />
+                        <span className="text-sm font-semibold text-primary">링크를 복사했어요.</span>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     )

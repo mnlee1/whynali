@@ -540,7 +540,7 @@ export default function IssuePreviewDrawer({
 
 
                     {/* 출처 */}
-                    <SourcesSection key={sourcesKey} issueId={issue.id} />
+                    <SourcesSection key={sourcesKey} issueId={issue.id} expandFully />
                 </div>
 
                 {/* 하단 액션 (대기 상태일 때만) */}

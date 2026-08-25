@@ -55,17 +55,17 @@ export default function RelatedDiscussionTopics({ topics, issueId, issueTitle, u
                             key={topic.id}
                             type="button"
                             onClick={() => setOpenTopic(topic)}
-                            className="block w-full text-left p-5 hover:bg-surface-muted transition-colors group"
+                            className="block w-full text-left p-4 hover:bg-surface-muted transition-colors group"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-2.5">
                                         {topic.approval_status === '진행중' ? (
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 text-xs font-medium">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">
                                                 토론 진행중
                                             </span>
                                         ) : (
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full border bg-surface-muted text-content-muted border-border text-xs font-medium">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-subtle text-content-muted text-xs font-bold">
                                                 토론 마감
                                             </span>
                                         )}

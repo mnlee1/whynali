@@ -43,9 +43,7 @@
 /* ── 디자인 토큰 ─────────────────────────────────── */
 
 :root {
-    --color-primary-from: #a202e3;
-    --color-primary-to:   #7700b9;
-    --gradient-primary:   linear-gradient(to right, var(--color-primary-from), var(--color-primary-to));
+    --color-primary:      #7b3aed;
 
     --color-border:       #e4e4e7;
     --color-border-muted: #f1f1f3;
@@ -76,7 +74,7 @@
 
     /* Primary — 그라데이션 */
     .btn-primary {
-        background: var(--gradient-primary);
+        background: var(--color-primary);
         @apply text-white shadow-sm hover:opacity-90 active:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed;
     }
 
@@ -357,9 +355,9 @@
 
 .vote-swiper .swiper-pagination-bullet-active {
     width: 28px !important;
-    background: linear-gradient(to right, var(--color-primary-from), var(--color-primary-to)) !important;
+    background: var(--color-primary) !important;
     border-radius: 9999px !important;
-    box-shadow: 0 0 12px rgba(162, 2, 227, 0.3) !important;
+    box-shadow: 0 0 12px rgba(123, 58, 237, 0.3) !important;
 }
 
 /* 1536px 이상에서 페이지네이션 숨김 */
