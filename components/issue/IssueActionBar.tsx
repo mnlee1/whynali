@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useState, useCallback, type ReactNode } from 'react'
-import { MessageSquare, ChartColumn, Users, Bookmark } from 'lucide-react'
+import { MessageCircleMore, ChartBarStacked, Users, Bookmark } from 'lucide-react'
 import ReactionDropdown from '@/components/issue/ReactionDropdown'
 import ShareButton from '@/components/issue/ShareButton'
 import LoginPromptModal from '@/components/common/LoginPromptModal'
@@ -39,9 +39,9 @@ interface Stats {
 const BOOKMARK_ENABLED = false
 
 const NAV_ITEMS = [
-    { key: 'voteCount' as keyof Stats,       icon: <ChartColumn className="w-5 h-5" strokeWidth={1.8} />,    scrollTo: 'section-vote',       label: '투표', indicator: 'dot' as const },
-    { key: 'discussionCount' as keyof Stats, icon: <Users className="w-5 h-5" strokeWidth={1.8} />,          scrollTo: 'section-discussion', label: '토론', indicator: 'dot' as const },
-    { key: 'commentCount' as keyof Stats,    icon: <MessageSquare className="w-5 h-5" strokeWidth={1.8} />,  scrollTo: 'section-comments',   label: '댓글', indicator: 'count' as const },
+    { key: 'voteCount' as keyof Stats,       icon: <ChartBarStacked className="w-5 h-5" strokeWidth={1.8} />,  scrollTo: 'section-vote',       label: '투표', indicator: 'dot' as const },
+    { key: 'discussionCount' as keyof Stats, icon: <Users className="w-5 h-5" strokeWidth={1.8} />,            scrollTo: 'section-discussion', label: '토론', indicator: 'dot' as const },
+    { key: 'commentCount' as keyof Stats,    icon: <MessageCircleMore className="w-5 h-5" strokeWidth={1.8} />, scrollTo: 'section-comments',   label: '댓글', indicator: 'count' as const },
 ]
 
 /* 투표/토론=존재 여부만(주황 점), 댓글=실제 개수(빨간 배지). 0이면 아이콘 자체를 흐리게. */
@@ -152,7 +152,7 @@ export default function IssueActionBar({ issueId, userId, initialVoteCount, init
         <>
             {/* 데스크톱: xl(1280px) 이상, 뷰포트 좌측 여백의 세로 레일 (position: fixed) */}
             <div
-                className="hidden xl:flex flex-col items-center gap-2 fixed top-1/2 -translate-y-1/2 z-10 bg-surface border border-border rounded-full shadow-md py-3 px-2"
+                className="hidden xl:flex flex-col items-center gap-2 fixed top-1/2 -translate-y-1/2 z-10 bg-surface border border-border rounded-full shadow-lg py-3 px-2"
                 style={{ left: 'calc(50% - 580px)' }}
             >
                 <ReactionDropdown issueId={issueId} userId={userId} layout="block" panelDirection="right" />

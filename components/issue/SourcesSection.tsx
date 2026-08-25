@@ -26,9 +26,11 @@ const SCROLL_MAX_HEIGHT = 'max-h-[420px]'
 interface SourcesSectionProps {
     issueId: string
     initialNews?: NewsData[]
+    /** true면 "더보기" 클릭 시 전체 목록을 한 번에 표시 (기본: 5건씩 단계적 표시) */
+    expandFully?: boolean
 }
 
-export default function SourcesSection({ issueId, initialNews }: SourcesSectionProps) {
+export default function SourcesSection({ issueId, initialNews, expandFully = false }: SourcesSectionProps) {
     const [news, setNews] = useState<NewsData[]>(initialNews ?? [])
     const [loading, setLoading] = useState(!initialNews)
     const [error, setError] = useState<string | null>(null)
@@ -100,10 +102,10 @@ export default function SourcesSection({ issueId, initialNews }: SourcesSectionP
                 <div className="flex gap-2 mt-3">
                     {showNewsCount < news.length && (
                         <button
-                            onClick={() => setShowNewsCount((prev) => Math.min(prev + SHOW_STEP, news.length))}
+                            onClick={() => setShowNewsCount(expandFully ? news.length : (prev) => Math.min(prev + SHOW_STEP, news.length))}
                             className="btn-neutral btn-md flex-1"
                         >
-                            {`더보기 +${Math.min(SHOW_STEP, news.length - showNewsCount)}`}
+                            {expandFully ? `더보기 (전체 ${news.length}건)` : `더보기 +${Math.min(SHOW_STEP, news.length - showNewsCount)}`}
                         </button>
                     )}
                     {showNewsCount > INITIAL_SHOW_COUNT && (

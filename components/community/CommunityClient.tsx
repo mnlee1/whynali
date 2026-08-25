@@ -90,10 +90,10 @@ function IssueGroupCard({ group }: { group: IssueGroup }) {
                         >
                             <div className="mb-1.5">
                                 <span className={[
-                                    'inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium',
+                                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold',
                                     topic.approval_status === '진행중'
-                                        ? 'bg-green-50 text-green-700 border-green-200'
-                                        : 'bg-surface-muted text-content-muted border-border'
+                                        ? 'bg-green-100 text-green-700'
+                                        : 'bg-surface-subtle text-content-muted'
                                 ].join(' ')}>
                                     {topic.approval_status === '진행중' ? '토론 진행중' : '토론 마감'}
                                 </span>

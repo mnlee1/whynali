@@ -16,7 +16,7 @@ export default function IssueBrief({ brief }: IssueBriefProps) {
     return (
         <div className="card overflow-hidden mb-6 p-4 space-y-2 bg-[#faf9fc]">
             <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#ece4fb] text-[#7b3aed] shrink-0 whitespace-nowrap">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary-light text-primary shrink-0 whitespace-nowrap">
                     AI 요약
                 </span>
                 <h3 className="text-sm font-bold text-content-primary">

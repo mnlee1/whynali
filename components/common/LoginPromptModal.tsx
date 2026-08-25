@@ -7,6 +7,8 @@
 
 'use client'
 
+import { createPortal } from 'react-dom'
+
 interface LoginPromptModalProps {
     isOpen: boolean
     description: string
@@ -17,7 +19,7 @@ interface LoginPromptModalProps {
 export default function LoginPromptModal({ isOpen, description, onClose, onConfirm }: LoginPromptModalProps) {
     if (!isOpen) return null
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
                 <div className="px-6 pt-6 pb-4">
@@ -39,6 +41,7 @@ export default function LoginPromptModal({ isOpen, description, onClose, onConfi
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     )
 }

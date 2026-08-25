@@ -118,7 +118,7 @@ export default function RootLayout({
                     type="application/ld+json"
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
                 />
-                <NextTopLoader color="#a202e3" showSpinner={false} />
+                <NextTopLoader color="#7b3aed" showSpinner={false} />
                 <Suspense fallback={null}>
                     <PageTracker />
                 </Suspense>
