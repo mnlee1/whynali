@@ -40,9 +40,10 @@ export async function extractHookHighlight(text: string): Promise<HookHighlightR
         return { ok: true, highlightsA: [], budgetExceeded: true }
     }
 
-    // 줄바꿈 = 이슈 1개 기준(폼 안내 문구와 동일한 전제) — 이슈당 2개씩 배분되도록 최대 개수를 줄 수에 비례해서 계산
+    // 줄바꿈 = 이슈 1개 기준(폼 안내 문구와 동일한 전제) — 이슈당 1개씩 배분되도록 최대 개수를 줄 수에 비례해서 계산
+    // (짧은 줄에 2개씩 넣으면 노란색이 절반 이상을 덮어서 오히려 강조 효과가 떨어짐)
     const lineCount = Math.max(1, cleanText.split('\n').map(l => l.trim()).filter(Boolean).length)
-    const maxWords = lineCount * 2
+    const maxWords = lineCount
 
     const client = new Anthropic({ apiKey: anthropicKey! })
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -53,7 +54,7 @@ export async function extractHookHighlight(text: string): Promise<HookHighlightR
                 temperature: 0,
                 messages: [{
                     role: 'user',
-                    content: `"${cleanText.replace(/\n/g, ' / ')}" 텍스트에서 강조할 핵심 단어를 등장 순서대로 JSON 배열로만 응답하세요 (최대 ${maxWords}개, 줄바꿈으로 구분된 이슈 1개당 2개씩).\n\n규칙:\n- 명사, 숫자+단위, 고유명사 위주로 추출\n- 한국어 조사/어미는 제거하고 어근만 반환\n\n예: ["단어1","단어2"]`,
+                    content: `"${cleanText.replace(/\n/g, ' / ')}" 텍스트에서 강조할 핵심 단어를 등장 순서대로 JSON 배열로만 응답하세요 (최대 ${maxWords}개, 줄바꿈으로 구분된 이슈 1개당 가장 중요한 단어 1개씩만).\n\n규칙:\n- 명사, 숫자+단위, 고유명사 위주로 추출\n- 한국어 조사/어미는 제거하고 어근만 반환\n\n예: ["단어1","단어2"]`,
                 }],
             })
             await incrementApiUsage(USAGE_KEY, {
