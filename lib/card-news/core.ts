@@ -881,6 +881,14 @@ function getEnglishKeywordFallback(issue: Issue): string {
   return 'news current events'
 }
 
+// AI가 프롬프트 지시(문자열로 반환)를 어기고 keywords를 배열 등으로 줄 때가 있다 —
+// 타입 방어 없이 .trim()을 호출하면 예외가 안 잡히고 파이프라인 전체가 죽는다.
+function normalizeKeywordsField(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.filter(v => typeof v === 'string').join(' ')
+  return ''
+}
+
 export async function generateCoverKeywords(issues: Issue[], mode: ContentMode): Promise<string> {
   const groq = getGroq()
   const topicsList = issues
@@ -946,7 +954,7 @@ Return JSON only: {"keywords": "2-3 specific english words"}`,
   })
 
   const raw = res.choices[0].message.content ?? '{}'
-  const keywords = parseJsonObject<{ keywords?: string }>(raw)?.keywords ?? ''
+  const keywords = normalizeKeywordsField(parseJsonObject<{ keywords?: unknown }>(raw)?.keywords)
   if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
     return getEnglishKeywordFallback(issues[0])
   }
@@ -978,7 +986,7 @@ Return JSON only: {"keywords": "2-3 specific english words"}`,
     max_tokens: 500,
   })
   const raw = res.choices[0].message.content ?? '{}'
-  const keywords = parseJsonObject<{ keywords?: string }>(raw)?.keywords ?? ''
+  const keywords = normalizeKeywordsField(parseJsonObject<{ keywords?: unknown }>(raw)?.keywords)
   if (!keywords || /[가-힣]/.test(keywords) || keywords.trim().split(/\s+/).length < 2) {
     return getEnglishKeywordFallback(issue)
   }
