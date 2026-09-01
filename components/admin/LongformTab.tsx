@@ -5,6 +5,8 @@
  *
  * 완료된 숏폼 중 여러 개를 순서대로 골라 훅 문장과 함께 옴니버스 롱폼을 생성하고,
  * 과거 생성된 롱폼 목록을 확인한다. 훅 문장 A는 직접 입력하고, 강조 단어만 AI로 추출(/api/admin/longform/hook) 가능.
+ * 훅 배경 이미지는 훅 문장 A의 여러 줄 중 관리자가 고른 한 줄을 검색어로 사용해 AI가 유추 — 미리보기
+ * (/api/admin/longform/hook-image)로 확인한 뒤 그 이미지(seed 고정) 그대로 롱폼 생성에 반영할 수 있다.
  */
 
 'use client'
@@ -65,6 +67,11 @@ export default function LongformTab() {
     const [highlightInput, setHighlightInput] = useState('')
     const [hookGenerating, setHookGenerating] = useState(false)
     const [hookError, setHookError] = useState<string | null>(null)
+    const [imageLineIndex, setImageLineIndex] = useState(0)
+    const [imageSeed, setImageSeed] = useState<number | null>(null)
+    const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+    const [imagePreviewLoading, setImagePreviewLoading] = useState(false)
+    const [imagePreviewError, setImagePreviewError] = useState<string | null>(null)
     const [generating, setGenerating] = useState(false)
     const [generateError, setGenerateError] = useState<string | null>(null)
     const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
@@ -167,6 +174,8 @@ export default function LongformTab() {
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
             await loadLongformJobs()
+            // 삭제로 다시 미사용 상태가 된 숏폼이 선택 목록에 반영되도록, 자동 선택 useEffect를 재실행시킴
+            setSelected([])
         } catch (e) {
             alert(e instanceof Error ? e.message : '삭제 실패')
         } finally {
@@ -256,6 +265,44 @@ export default function LongformTab() {
         setHighlightInput('')
     }
 
+    /**
+     * 훅 문장 A는 보통 선택된 이슈 여러 개의 제목이 줄바꿈으로 나열된 형태(예: 3줄).
+     * 서로 무관한 이슈 여러 개를 한 장의 이미지로 동시에 표현할 수는 없으므로, 그중 관리자가
+     * 고른 한 줄만 이미지 검색에 사용한다. 전체 텍스트를 그대로 넘기면 AI가 그중 하나(주로 마지막 줄)로
+     * 임의로 고정돼버리는 문제가 있었음 — 기본값은 등장 순서상 첫 번째(= 훅의 실제 대상) 줄.
+     */
+    const sentenceALines = sentenceA.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    const hookImageQuery = sentenceALines[imageLineIndex] ?? sentenceALines[0] ?? ''
+    const canPreviewImage = hookImageQuery.length > 0 && !imagePreviewLoading
+
+    const handleSelectImageLine = (index: number) => {
+        setImageLineIndex(index)
+        setImagePreviewUrl(null)
+        setImageSeed(null)
+    }
+
+    // 관리자가 고른 줄을 이미지 검색어로 사용 — 어떤 이미지를 찾을지는 그 텍스트에서 AI가 유추
+    const handlePreviewImage = async () => {
+        if (!canPreviewImage) return
+        setImagePreviewLoading(true)
+        setImagePreviewError(null)
+        try {
+            const res = await fetch('/api/admin/longform/hook-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: hookImageQuery }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.message || json.error)
+            setImagePreviewUrl(json.imageDataUrl)
+            setImageSeed(json.seed)
+        } catch (e) {
+            setImagePreviewError(e instanceof Error ? e.message : '이미지 미리보기 실패')
+        } finally {
+            setImagePreviewLoading(false)
+        }
+    }
+
     const handleGenerate = async () => {
         if (!canGenerate) return
         setGenerating(true)
@@ -271,6 +318,8 @@ export default function LongformTab() {
                         sentenceA: sentenceA.trim(),
                         sentenceB: sentenceB.trim() || undefined,
                         highlightsA,
+                        imageQuery: hookImageQuery,
+                        imageSeed: imageSeed ?? undefined,
                     },
                 }),
             })
@@ -281,6 +330,9 @@ export default function LongformTab() {
             setSentenceA('')
             setSentenceB(DEFAULT_SENTENCE_B)
             setHighlightsA([])
+            setImageLineIndex(0)
+            setImageSeed(null)
+            setImagePreviewUrl(null)
             await loadLongformJobs()
         } catch (e) {
             setGenerateError(e instanceof Error ? e.message : '롱폼 생성 실패')
@@ -403,6 +455,9 @@ export default function LongformTab() {
                                         return true
                                     })
                                 })
+                                // 훅 배경 이미지는 이 문장에서 유추하므로, 문장이 바뀌면 이전 미리보기는 더 이상 유효하지 않음
+                                setImagePreviewUrl(null)
+                                setImageSeed(null)
                             }}
                             rows={3}
                             placeholder="예: 황정민 스토킹 논란&#10;애플 깜짝 1위&#10;젠슨 황 5000억"
@@ -443,6 +498,49 @@ export default function LongformTab() {
                             className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:border-primary"
                         />
                     </div>
+                </div>
+
+                {/* 훅 배경 이미지 */}
+                <div className="space-y-2">
+                    <span className="text-xs font-medium text-content-secondary">훅 배경 이미지</span>
+                    <p className="text-xs text-content-muted">
+                        고른 줄의 내용을 바탕으로 어울리는 이미지를 자동으로 찾습니다. 마음에 드는 이미지가 나올 때까지 다시 불러올 수 있어요.
+                    </p>
+                    {sentenceALines.length > 1 && (
+                        <div className="flex flex-wrap gap-1.5">
+                            {sentenceALines.map((line, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => handleSelectImageLine(i)}
+                                    className={`text-xs px-2.5 py-1 rounded-full border truncate max-w-[220px] ${
+                                        i === imageLineIndex
+                                            ? 'bg-primary text-white border-primary'
+                                            : 'bg-white text-content-secondary border-border hover:border-primary-muted'
+                                    }`}
+                                    title={line}
+                                >
+                                    {line}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <button
+                        onClick={handlePreviewImage}
+                        disabled={!canPreviewImage}
+                        title={hookImageQuery.length === 0 ? '훅 문장 A를 먼저 입력하세요' : undefined}
+                        className="text-xs font-semibold px-3 py-2 rounded-lg border border-primary-muted text-primary enabled:hover:bg-primary-light/20 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                        {imagePreviewLoading ? '불러오는 중...' : imagePreviewUrl ? '다시 불러오기' : '미리보기'}
+                    </button>
+                    {imagePreviewError && <p className="text-sm text-red-500">{imagePreviewError}</p>}
+                    {imagePreviewUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            src={imagePreviewUrl}
+                            alt="훅 배경 미리보기"
+                            className="w-32 rounded-lg border border-border"
+                        />
+                    )}
                 </div>
 
                 {generateError && <p className="text-sm text-red-500">{generateError}</p>}

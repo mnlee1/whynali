@@ -35,9 +35,10 @@ const DEFAULT_HOOK_IMAGE_CATEGORY = '종합'
 export async function createHookBackground(
     tmpDir: string,
     query: string = DEFAULT_HOOK_IMAGE_QUERY,
-    category: string = DEFAULT_HOOK_IMAGE_CATEGORY
+    category: string = DEFAULT_HOOK_IMAGE_CATEGORY,
+    seed?: number
 ): Promise<{ buffer: Buffer; cleanImagePath: string }> {
-    const [imageUrl] = await fetchPexelsImages(query, category, undefined, 1)
+    const [imageUrl] = await fetchPexelsImages(query, category, seed, 1)
 
     const dimMaskSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><rect width="${WIDTH}" height="${HEIGHT}" fill="black" opacity="0.2"/></svg>`
 
