@@ -34,6 +34,8 @@ export interface OmnibusHookConfig {
     highlightsB?: string[]
     imageQuery?: string
     imageCategory?: string
+    /** 훅 이미지 미리보기 시 고정된 시드 — 생성 시에도 같은 값을 넘기면 미리본 이미지와 동일한 이미지가 선택됨 */
+    imageSeed?: number
 }
 
 export interface GenerateOmnibusOptions {
@@ -156,7 +158,7 @@ export async function generateOmnibusLongform(
             })),
             (async () => {
                 // 배경: Pexels 신규 검색, 이슈 영상과 중복 방지
-                const { buffer: heroBg, cleanImagePath } = await createHookBackground(tmpDir, hook.imageQuery, hook.imageCategory)
+                const { buffer: heroBg, cleanImagePath } = await createHookBackground(tmpDir, hook.imageQuery, hook.imageCategory, hook.imageSeed)
                 const hookPath = join(tmpDir, 'hook.mp4')
                 await createTwoBeatHookClip(
                     hook.sentenceA,
