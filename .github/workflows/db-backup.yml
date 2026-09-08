@@ -131,7 +131,7 @@ jobs:
                           text: ($text + " — " + $date),
                           attachments: [{
                               title: "백업 완료",
-                              text: ("📦 백업 대상\n• DB: " + $dbProject + " (whynali-main 실서버)\n\n📊 백업 통계\n• 테이블: " + $tables + " (" + $tableList + ")\n• 데이터: " + $rows + "\n• 커밋: " + $commit + "\n\n📁 저장: backups/" + (($date | split(" ")[0]) // "YYYY-MM-DD") + "/\n⏱️ 보관 기간: 30일"),
+                              text: ("📦 백업 대상\n• DB: " + $dbProject + " (whynali-main 실서버)\n\n📊 백업 통계\n• 테이블: " + $tables + " (" + $tableList + ")\n• 데이터: " + $rows + "\n• 커밋: " + $commit + "\n\n📁 저장: backups/" + (($date | split(" ")[0]) // "YYYY-MM-DD") + "/\n🔗 https://github.com/mnlee1/whynali-backups\n⏱️ 보관 기간: 30일"),
                               color: "green"
                           }]
                       }'
