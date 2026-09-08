@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, CSSProperties } from 'react'
-import { CheckCircle2, Calendar, ChevronDown, Check } from 'lucide-react'
+import { Calendar, ChevronDown, Check } from 'lucide-react'
 import type { Vote, VoteChoice } from '@/types'
 import { trackConversion } from '@/lib/analytics/tracker'
 import { goToLoginWithPendingAction } from '@/lib/pendingAction'
@@ -168,10 +168,9 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                 <div className="px-4 py-3 border-b border-border-muted">
                     <h2 className="text-sm font-bold text-content-primary">투표</h2>
                 </div>
-                <div className="px-4 py-8 flex flex-col items-center justify-center text-center gap-2">
-                    <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
+                <div className="px-4 py-4 flex flex-col items-center justify-center text-center gap-0.5">
                     <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없어요</p>
-                    <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
+                    <p className="text-xs text-content-secondary">새로운 투표가 열리면 여기에 표시돼요</p>
                 </div>
             </div>
         )
@@ -210,10 +209,9 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                         ))}
                     </>
                 ) : pastVotes.length > 0 ? (
-                    <div className="flex flex-col items-center justify-center text-center gap-2">
-                        <CheckCircle2 className="w-10 h-10 text-content-muted" strokeWidth={1.5} />
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5">
                         <p className="text-sm font-semibold text-content-primary">진행 중인 투표가 없어요</p>
-                        <p className="text-xs text-content-secondary">댓글과 반응을 남겨 논란도를 높여보세요!</p>
+                        <p className="text-xs text-content-secondary">새로운 투표가 열리면 여기에 표시돼요</p>
                     </div>
                 ) : null}
 
@@ -311,11 +309,6 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                 ].join(' ')}>
                                     {!isClosed && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
                                     {isClosed ? '투표 마감' : '투표 진행중'}
-                                </span>
-                            )}
-                            {vote.is_ai_generated && (
-                                <span className="text-xs px-2.5 py-0.5 bg-primary-light text-primary rounded-full font-bold">
-                                    AI 생성
                                 </span>
                             )}
                         </div>
