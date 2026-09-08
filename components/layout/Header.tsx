@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { User as UserIcon, ChevronDown, Search, X } from 'lucide-react'
+import { ChevronDown, Search, X } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import Nav from './Nav'
@@ -167,17 +167,9 @@ export default function Header() {
             return (
                 <Link
                     href="/login"
-                    className={mobile
-                        ? "p-2 text-content-secondary hover:text-content-primary transition-colors"
-                        : "px-4 py-1.5 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-                    }
-                    aria-label={mobile ? "로그인" : undefined}
+                    className="px-3 py-2 xl:px-4 xl:py-1.5 rounded-full bg-primary text-white text-xs xl:text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
                 >
-                    {mobile ? (
-                        <UserIcon className="w-6 h-6" strokeWidth={2} />
-                    ) : (
-                        "로그인"
-                    )}
+                    난리에 참여하기
                 </Link>
             )
         }

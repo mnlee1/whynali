@@ -16,7 +16,7 @@ import sharp from 'sharp'
 
 import { createSceneTextOverlay, createBackgroundFrames, createTypingFrames } from '../shortform/generate-scenes'
 import { generateGoogleTTS } from '../shortform/generate-voice'
-import { fetchPexelsImages } from '../pexels'
+import { fetchPexelsImages, extractKeywordsAndTone } from '../pexels'
 import { downloadImage } from '../shortform/fetch-stock-images'
 
 import { WIDTH, HEIGHT, FPS } from './constants'
@@ -31,14 +31,20 @@ const DEFAULT_HOOK_IMAGE_CATEGORY = '종합'
  * 훅 배경 생성. 이슈 영상 재사용 대신 Pexels 신규 검색으로 가져와 본편과 이미지가 중복되지 않게 함.
  * lib/shortform/generate-scenes.ts의 createBackgroundScene과 동일하게 밝기 0.65 + 검은 반투명 마스크(20%) 이중 적용.
  * cleanImagePath는 16:9 변환 시 블러 배경용(텍스트 없는 순수 이미지)으로 재사용.
+ *
+ * keywords를 넘기지 않으면 query/category로 AI 키워드 추출을 새로 수행한다 — 미리보기 때 이미 추출된
+ * 키워드가 있다면 반드시 넘겨서 재사용해야, 같은 seed로도 AI가 매번 조금씩 다른 키워드를 뽑아
+ * 미리본 이미지와 실제 생성 이미지가 어긋나는 문제를 막을 수 있다.
  */
 export async function createHookBackground(
     tmpDir: string,
     query: string = DEFAULT_HOOK_IMAGE_QUERY,
     category: string = DEFAULT_HOOK_IMAGE_CATEGORY,
-    seed?: number
-): Promise<{ buffer: Buffer; cleanImagePath: string }> {
-    const [imageUrl] = await fetchPexelsImages(query, category, seed, 1)
+    seed?: number,
+    keywords?: string
+): Promise<{ buffer: Buffer; cleanImagePath: string; keywords?: string }> {
+    const resolvedKeywords = keywords ?? (await extractKeywordsAndTone(query, category))?.keywords
+    const [imageUrl] = await fetchPexelsImages(query, category, seed, 1, resolvedKeywords)
 
     const dimMaskSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><rect width="${WIDTH}" height="${HEIGHT}" fill="black" opacity="0.2"/></svg>`
 
@@ -58,7 +64,7 @@ export async function createHookBackground(
     const cleanImagePath = join(tmpDir, 'hook-bg-clean.png')
     await writeFile(cleanImagePath, buffer)
 
-    return { buffer, cleanImagePath }
+    return { buffer, cleanImagePath, keywords: resolvedKeywords }
 }
 
 export interface TwoBeatHookOptions {
