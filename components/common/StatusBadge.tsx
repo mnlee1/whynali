@@ -19,7 +19,7 @@ interface StatusBadgeProps {
 }
 
 // 상태별 아이콘, 색상, 라벨
-function getStatusMeta(status: IssueStatus): { 
+export function getStatusMeta(status: IssueStatus): {
     icon: string
     label: string
     baseClass: string
