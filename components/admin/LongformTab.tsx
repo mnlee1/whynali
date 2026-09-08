@@ -6,7 +6,9 @@
  * 완료된 숏폼 중 여러 개를 순서대로 골라 훅 문장과 함께 옴니버스 롱폼을 생성하고,
  * 과거 생성된 롱폼 목록을 확인한다. 훅 문장 A는 직접 입력하고, 강조 단어만 AI로 추출(/api/admin/longform/hook) 가능.
  * 훅 배경 이미지는 훅 문장 A의 여러 줄 중 관리자가 고른 한 줄을 검색어로 사용해 AI가 유추 — 미리보기
- * (/api/admin/longform/hook-image)로 확인한 뒤 그 이미지(seed 고정) 그대로 롱폼 생성에 반영할 수 있다.
+ * (/api/admin/longform/hook-image)로 확인한 뒤 그 이미지(seed + AI가 뽑은 keywords 고정) 그대로 롱폼
+ * 생성에 반영할 수 있다. keywords까지 함께 고정해야 하는 이유: seed만 고정하면 생성 시 AI 키워드
+ * 추출이 매번 다시 실행되어 미리본 이미지와 다른 이미지가 나올 수 있음.
  */
 
 'use client'
@@ -69,6 +71,7 @@ export default function LongformTab() {
     const [hookError, setHookError] = useState<string | null>(null)
     const [imageLineIndex, setImageLineIndex] = useState(0)
     const [imageSeed, setImageSeed] = useState<number | null>(null)
+    const [imageKeywords, setImageKeywords] = useState<string | null>(null)
     const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
     const [imagePreviewLoading, setImagePreviewLoading] = useState(false)
     const [imagePreviewError, setImagePreviewError] = useState<string | null>(null)
@@ -279,6 +282,7 @@ export default function LongformTab() {
         setImageLineIndex(index)
         setImagePreviewUrl(null)
         setImageSeed(null)
+        setImageKeywords(null)
     }
 
     // 관리자가 고른 줄을 이미지 검색어로 사용 — 어떤 이미지를 찾을지는 그 텍스트에서 AI가 유추
@@ -296,6 +300,8 @@ export default function LongformTab() {
             if (!res.ok) throw new Error(json.message || json.error)
             setImagePreviewUrl(json.imageDataUrl)
             setImageSeed(json.seed)
+            // AI가 뽑은 키워드도 함께 저장 — 생성 시 재추출 없이 그대로 넘겨야 미리본 이미지와 동일하게 나옴
+            setImageKeywords(json.keywords ?? null)
         } catch (e) {
             setImagePreviewError(e instanceof Error ? e.message : '이미지 미리보기 실패')
         } finally {
@@ -320,6 +326,7 @@ export default function LongformTab() {
                         highlightsA,
                         imageQuery: hookImageQuery,
                         imageSeed: imageSeed ?? undefined,
+                        imageKeywords: imageKeywords ?? undefined,
                     },
                 }),
             })
@@ -332,6 +339,7 @@ export default function LongformTab() {
             setHighlightsA([])
             setImageLineIndex(0)
             setImageSeed(null)
+            setImageKeywords(null)
             setImagePreviewUrl(null)
             await loadLongformJobs()
         } catch (e) {
@@ -458,6 +466,7 @@ export default function LongformTab() {
                                 // 훅 배경 이미지는 이 문장에서 유추하므로, 문장이 바뀌면 이전 미리보기는 더 이상 유효하지 않음
                                 setImagePreviewUrl(null)
                                 setImageSeed(null)
+                                setImageKeywords(null)
                             }}
                             rows={3}
                             placeholder="예: 황정민 스토킹 논란&#10;애플 깜짝 1위&#10;젠슨 황 5000억"

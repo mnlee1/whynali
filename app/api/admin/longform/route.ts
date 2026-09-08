@@ -71,7 +71,7 @@ interface GenerateBody {
  *
  * Body:
  *   - shortformJobIds: string[] (필수, 2개 이상 — 배열 순서 = 영상 내 등장 순서, 첫 번째가 훅 대상)
- *   - hook: { sentenceA, sentenceB?, highlightsA?, highlightsB?, imageQuery?, imageCategory?, imageSeed? } (필수, sentenceA는 필수)
+ *   - hook: { sentenceA, sentenceB?, highlightsA?, highlightsB?, imageQuery?, imageCategory?, imageSeed?, imageKeywords? } (필수, sentenceA는 필수)
  *   - outputMode: 'vertical' | 'landscape' (선택, 기본 'landscape')
  */
 export async function POST(request: NextRequest) {
@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
         imageQuery: body.hook?.imageQuery,
         imageCategory: body.hook?.imageCategory,
         imageSeed: body.hook?.imageSeed,
+        imageKeywords: body.hook?.imageKeywords,
     }
 
     const result = await generateAndSaveOmnibusJob({
