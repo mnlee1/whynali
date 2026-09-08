@@ -149,6 +149,8 @@ export async function fetchPexelsByKeyword(
 
 /**
  * 이슈 제목과 카테고리로 Pexels 이미지 URL 반환 (preview만)
+ * presetKeywords를 넘기면 AI 키워드 추출을 건너뛰고 그 키워드로 바로 검색한다 —
+ * 호출마다 AI가 다른 키워드를 뽑아 동일 seed로도 다른 이미지가 나오는 것을 막기 위함(미리보기 재현용).
  * @returns URL 배열 — 실패 시 빈 배열
  */
 export async function fetchPexelsImages(
@@ -156,14 +158,15 @@ export async function fetchPexelsImages(
     category: string,
     seed?: number,
     count = 3,
+    presetKeywords?: string,
 ): Promise<string[]> {
     const apiKey = process.env.PEXELS_API_KEY
     if (!apiKey) return []
 
-    const groqResult = await extractKeywordsAndTone(title, category)
-    if (groqResult) {
+    const keywords = presetKeywords ?? (await extractKeywordsAndTone(title, category))?.keywords
+    if (keywords) {
         try {
-            const photos = await searchPexels(groqResult.keywords, apiKey, seed, count)
+            const photos = await searchPexels(keywords, apiKey, seed, count)
             if (photos.length > 0) return photos.map(p => p.large)
         } catch {
             // 실패 시 카테고리 폴백으로 진행
