@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useMemo, type ReactNode, type CSSProperties } from 'react'
-import { Bot, Clock, ChevronDown, ChevronUp, BarChart3, ChevronRight } from 'lucide-react'
+import { Clock, ChevronDown, ChevronUp, BarChart3, ChevronRight } from 'lucide-react'
 import { formatKstDateHeader, formatKstTime, formatKstDateKey, formatKstYear, parseKoreanMonthDayTime } from '@/lib/utils/format-date'
 import { goToLogin } from '@/lib/pendingAction'
 
@@ -49,6 +49,8 @@ interface FlatItem {
 }
 
 const VISIBLE_COUNT = 3
+// 비로그인 유저는 1개만 완전히 보여주고 바로 블러 미리보기로 넘어가 로그인 유도를 앞당김
+const VISIBLE_COUNT_LOGGED_OUT = 1
 const STAGE_ORDER: TimelineStage[] = ['발단', '전개', '파생', '진정', '종결']
 const SORT_LABEL: Record<SortMode, string> = { latest: '최신순', oldest: '시간순' }
 const SORT_MODES: SortMode[] = ['latest', 'oldest']
@@ -107,10 +109,10 @@ function VoteNudge({ vote, className = '' }: { vote: { title: string; totalCount
                     el.classList.remove('ring-2', 'ring-primary', 'ring-offset-4')
                 }, 1500)
             }}
-            className={`flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity ${className}`}
+            className={`flex items-start gap-1.5 w-full text-[13px] text-left hover:opacity-80 transition-opacity ${className}`}
         >
-            <BarChart3 className="w-4 h-4 shrink-0 text-[#16a34a]" />
-            <span className="truncate text-content-secondary">
+            <BarChart3 className="w-4 h-4 shrink-0 mt-0.5 text-[#16a34a]" />
+            <span className="text-content-secondary">
                 &quot;{vote.title}&quot;{' '}
                 {vote.totalCount > 0 ? (
                     <>
@@ -121,8 +123,8 @@ function VoteNudge({ vote, className = '' }: { vote: { title: string; totalCount
                 ) : (
                     <span className="text-[#16a34a] font-bold">가장 먼저 투표해보세요</span>
                 )}
+                <ChevronRight className="inline w-4 h-4 -mt-0.5 align-middle text-[#16a34a]" />
             </span>
-            <ChevronRight className="w-4 h-4 shrink-0 text-[#16a34a]" />
         </button>
     )
 }
@@ -182,7 +184,9 @@ export default function TimelineSection({
     const [summaries, setSummaries] = useState<StageSummary[]>(initialSummaries ?? [])
     const [loading, setLoading] = useState(!initialSummaries)
     const [error, setError] = useState<string | null>(null)
-    const [sortMode, setSortMode] = useState<SortMode>('latest')
+    // 비로그인 유저는 시간순(발단부터) 기본 노출 — 최근 소식은 게이트 뒤로 감춰 로그인 유도
+    // 로그인 유저는 기존처럼 최신순 기본 + 토글로 자유롭게 전환 가능
+    const [sortMode, setSortMode] = useState<SortMode>(userId ? 'latest' : 'oldest')
     const [showAll, setShowAll] = useState(false)
     const [activeVotes, setActiveVotes] = useState<Record<string, { title: string; totalCount: number }>>({})
 
@@ -310,7 +314,7 @@ export default function TimelineSection({
         : chronologicalAsc
 
     // 두 모드 모두 "표시 순서상 맨 앞 N건"이 기본 노출, 나머지는 같은 방향으로 이어서 펼쳐짐
-    const visibleCount = Math.min(VISIBLE_COUNT, orderedForMode.length)
+    const visibleCount = Math.min(userId ? VISIBLE_COUNT : VISIBLE_COUNT_LOGGED_OUT, orderedForMode.length)
     const alwaysVisible = orderedForMode.slice(0, visibleCount)
     const collapsible = orderedForMode.slice(visibleCount)
 
@@ -342,16 +346,9 @@ export default function TimelineSection({
 
         return (
             <div key={item.key}>
-                {showYearBadge && (
-                    <div className={index === 0 ? '' : 'pt-4'}>
-                        <span className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full bg-[#1a1a1a] text-white">
-                            {year}
-                        </span>
-                    </div>
-                )}
                 {showDateHeader && (
-                    <div className={`text-base font-bold text-content-secondary pb-3 ${showYearBadge ? 'pt-0.5' : (index === 0 ? 'pt-0' : 'pt-4')}`}>
-                        {formatKstDateHeader(item.sortDate.toISOString())}
+                    <div className={`text-base font-bold text-content-secondary pb-3 ${index === 0 ? 'pt-0' : 'pt-4'}`}>
+                        {showYearBadge ? `${year} ` : ''}{formatKstDateHeader(item.sortDate.toISOString())}
                     </div>
                 )}
                 <div className="flex gap-3">
@@ -484,13 +481,6 @@ export default function TimelineSection({
                 </button>
             )}
 
-            {/* AI 안내 문구 */}
-            <div className="!mt-3 -mx-4 px-4 pt-5 border-t border-border-muted flex items-start gap-2">
-                <Bot className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-gray-500 leading-relaxed">
-                    AI가 자동 생성한 타임라인으로, 실제 내용과 다를 수 있습니다.
-                </p>
-            </div>
         </div>
     )
 }

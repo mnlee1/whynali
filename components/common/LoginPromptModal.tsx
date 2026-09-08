@@ -20,7 +20,7 @@ export default function LoginPromptModal({ isOpen, description, onClose, onConfi
     if (!isOpen) return null
 
     return createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
                 <div className="px-6 pt-6 pb-4">
                     <h2 className="text-base font-bold text-content-primary mb-1.5">로그인이 필요해요</h2>

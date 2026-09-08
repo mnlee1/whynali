@@ -7,9 +7,10 @@ interface BriefSummary {
 
 interface IssueBriefProps {
     brief: BriefSummary
+    userId?: string | null
 }
 
-export default function IssueBrief({ brief }: IssueBriefProps) {
+export default function IssueBrief({ brief, userId }: IssueBriefProps) {
     const lines = brief.threeLine
     if (!lines || lines.length === 0) return null
 
@@ -25,12 +26,17 @@ export default function IssueBrief({ brief }: IssueBriefProps) {
             </div>
             <ul className="space-y-1.5">
                 {lines.map((line, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm text-content-primary leading-relaxed">
-                        <span className="w-1 h-1 rounded-full bg-content-muted shrink-0" />
+                    <li key={i} className="flex items-start gap-2 text-sm text-content-primary leading-relaxed">
+                        <span className="w-1 h-1 rounded-full bg-content-muted shrink-0 mt-[9px]" />
                         {line}
                     </li>
                 ))}
             </ul>
+            {!userId && (
+                <a href="/login" className="block pt-3 mt-1 border-t border-border-muted text-xs font-semibold text-primary hover:underline text-right">
+                    로그인하고 전체 타임라인 보기 →
+                </a>
+            )}
         </div>
     )
 }

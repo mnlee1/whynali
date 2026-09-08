@@ -19,6 +19,7 @@
 import type { Metadata } from 'next'
 import { cache } from 'react'
 import Link from 'next/link'
+import { Bot } from 'lucide-react'
 import { notFound, redirect } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
@@ -27,10 +28,11 @@ import TimelineSection from '@/components/issue/TimelineSection'
 import IssueBrief from '@/components/issue/IssueBrief'
 import { estimateReadingMinutes } from '@/lib/utils/reading-time'
 import SourcesSection from '@/components/issue/SourcesSection'
+import type { NewsData } from '@/types/issue'
 import ReactionsSection from '@/components/issue/ReactionsSection'
 import VoteSection from '@/components/issue/VoteSection'
 import CommentsSection from '@/components/issue/CommentsSection'
-import StatusBadge from '@/components/common/StatusBadge'
+import { getStatusMeta } from '@/components/common/StatusBadge'
 import ViewCounter from '@/components/issue/ViewCounter'
 import IssueActionBar from '@/components/issue/IssueActionBar'
 import RelatedHotIssuesSidebar from '@/components/issue/RelatedHotIssuesSidebar'
@@ -149,19 +151,20 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 /* 이슈 헤더 - 본문과 우측 사이드바 스페이서에서 동일하게 재사용해 시작 라인을 정확히 맞춘다 */
-function IssueHeaderBlock({ issue }: { issue: any }) {
+function IssueHeaderBlock({ issue, newsData }: { issue: any; newsData?: NewsData[] }) {
+    const statusMeta = getStatusMeta(issue.status)
     return (
         <>
-            <div className="flex items-center gap-2 mb-3">
-                <StatusBadge status={issue.status} size="md" />
-            </div>
             <h1 id="issue-title" className="text-2xl md:text-3xl font-bold text-content-primary mb-3">
                 {decodeHtml(issue.title)}
             </h1>
             <div className="flex items-center gap-2 text-xs text-content-muted mb-2">
+                <span>{statusMeta.icon} {statusMeta.label}</span>
+                <span>·</span>
                 <span>{issue.category}</span>
                 <span>·</span>
                 <span>{formatFullDate(issue.approved_at ?? issue.created_at)}</span>
+                <SourcesSection issueId={issue.id} initialNews={newsData ?? []} />
             </div>
         </>
     )
@@ -366,12 +369,12 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
 
             {/* 이슈 헤더 */}
             <div className="mb-6">
-                <IssueHeaderBlock issue={issue} />
+                <IssueHeaderBlock issue={issue} newsData={newsData ?? []} />
             </div>
 
             {/* 핵심만 콕 (3줄 요약) - 타임라인과 별도 카드 */}
             {issue.brief_summary?.threeLine?.length ? (
-                <IssueBrief brief={issue.brief_summary} />
+                <IssueBrief brief={issue.brief_summary} userId={userId} />
             ) : null}
 
             {/* 타임라인 (헤더/정렬 토글은 TimelineSection 내부에서 렌더) */}
@@ -386,9 +389,6 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     />
                 </div>
             </div>
-
-            {/* 출처 */}
-            <SourcesSection issueId={id} initialNews={newsData ?? []} />
 
             {/* 투표 */}
             <div id="section-vote" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>
@@ -427,6 +427,14 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
                     </div>
                 </div>
             )}
+
+            {/* AI 안내 문구 — 위 AI 생성 콘텐츠(AI 요약·타임라인·투표·토론 주제) 전체에 대한 통합 고지 */}
+            <div className="mb-6 px-1 flex items-start gap-2">
+                <Bot className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-500 leading-relaxed">
+                    위 내용은 AI가 자동 생성했으며, 실제 내용과 다를 수 있어요.
+                </p>
+            </div>
 
             {/* 감정 표현 */}
             <div id="section-reactions" className="card overflow-hidden mb-6" style={{ scrollMarginTop: 'var(--scroll-offset, 126px)' }}>

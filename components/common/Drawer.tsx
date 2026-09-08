@@ -6,7 +6,8 @@
  * 범용 Drawer 프리미티브.
  * - lg(1024px) 이상: 우측 슬라이드 패널 (기본 440px, "넓게 보기" 토글로 720px)
  * - lg 미만: 풀스크린 전환
- * z-40 사용 — LoginPromptModal/ReportModal 등 기존 모달(z-50)이 이 위에 겹쳐 뜰 수 있음.
+ * z-[55] 사용 — 헤더(z-50)보다는 위, LoginPromptModal/ReportModal 등 기존 모달(z-[60])보다는
+ * 아래로 둬서 그 모달들이 이 위에 겹쳐 뜰 수 있게 함.
  */
 
 import { useState, useEffect } from 'react'
@@ -36,7 +37,7 @@ export default function Drawer({ isOpen, onClose, title, children }: Props) {
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 z-40">
+        <div className="fixed inset-0 z-[55]">
             <div className="absolute inset-0 bg-black/40" onClick={onClose} />
             <div
                 className={`absolute right-0 top-0 bottom-0 w-full bg-surface shadow-2xl flex flex-col

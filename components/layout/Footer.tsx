@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * components/layout/Footer.tsx
  *
@@ -7,6 +9,7 @@
  */
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { FaInstagram, FaYoutube, FaThreads, FaXTwitter, FaTiktok } from 'react-icons/fa6'
 
 const SNS_LINKS = [
@@ -18,9 +21,14 @@ const SNS_LINKS = [
 ]
 
 export default function Footer() {
+    // 이슈 상세 페이지는 모바일~xl 미만에서 화면 하단에 고정된 액션바(감정·투표·토론·댓글·공유)가
+    // 떠 있어서, 스크롤을 끝까지 내리면 이 SNS 아이콘 줄을 가려버린다 — 그 페이지에서만 하단 여백을 더 준다.
+    const pathname = usePathname()
+    const isIssuePage = pathname?.startsWith('/issue/') ?? false
+
     return (
         <footer className="border-t border-border bg-surface mt-auto">
-            <div className="container mx-auto px-4 py-6">
+            <div className={`container mx-auto px-4 pt-6 ${isIssuePage ? 'pb-24 xl:pb-6' : 'pb-6'}`}>
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-content-secondary">
                     <Link href="/" className="font-medium text-content-primary hover:underline">
                         왜난리
