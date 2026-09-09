@@ -19,9 +19,9 @@ import type { Comment } from '@/types'
 import SafetyBotSettingModal from '@/components/issue/SafetyBotSettingModal'
 import ReportModal from '@/components/issue/ReportModal'
 import NicknameAvatar from '@/components/common/NicknameAvatar'
-import LoginPromptModal from '@/components/common/LoginPromptModal'
 import { trackConversion } from '@/lib/analytics/tracker'
-import { goToLogin, goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { savePendingAction } from '@/lib/pendingAction'
+import { openLoginModal } from '@/lib/loginModalStore'
 import { usePendingAction } from '@/hooks/usePendingAction'
 
 interface CommentsSectionProps {
@@ -99,8 +99,6 @@ export default function CommentsSection({
     const [safetyBotEnabled, setSafetyBotEnabled] = useState(true)
     const [safetyModalOpen, setSafetyModalOpen] = useState(false)
 
-    /* 로그인 유도 모달 */
-    const [loginPrompt, setLoginPrompt] = useState<{ description: string; onConfirm: () => void } | null>(null)
 
     /* 인증 보완: SSR에서 userId를 못 받은 경우 클라이언트에서 재조회 */
     useEffect(() => {
@@ -257,10 +255,8 @@ export default function CommentsSection({
         const text = (overrideText ?? draft).trim()
         if (!text) return
         if (!userId) {
-            setLoginPrompt({
-                description: '댓글을 작성하려면 로그인이 필요해요.',
-                onConfirm: () => goToLoginWithPendingAction({ type: 'comment', issueId, discussionTopicId, parentId: null, text }),
-            })
+            savePendingAction({ type: 'comment', issueId, discussionTopicId, parentId: null, text })
+            openLoginModal()
             return
         }
         if (submittingWrite || rateLimitCountdown > 0) return
@@ -384,7 +380,7 @@ export default function CommentsSection({
     /* 좋아요/싫어요 토글 (낙관적 업데이트, 답글도 포함) */
     const handleLike = async (commentId: string, type: 'like' | 'dislike') => {
         if (!userId) {
-            setLoginPrompt({ description: '좋아요/싫어요를 남기려면 로그인이 필요해요.', onConfirm: goToLogin })
+            openLoginModal()
             return
         }
         if (likingId) return
@@ -469,10 +465,8 @@ export default function CommentsSection({
         const text = (overrideText ?? replyDraft).trim()
         if (!text) return
         if (!userId) {
-            setLoginPrompt({
-                description: '답글을 작성하려면 로그인이 필요해요.',
-                onConfirm: () => goToLoginWithPendingAction({ type: 'comment', issueId, discussionTopicId, parentId, text }),
-            })
+            savePendingAction({ type: 'comment', issueId, discussionTopicId, parentId, text })
+            openLoginModal()
             return
         }
         if (submittingReply) return
@@ -546,7 +540,7 @@ export default function CommentsSection({
     /* 신고 모달 열기 */
     const handleOpenReportModal = (comment: Comment) => {
         if (!userId) {
-            setLoginPrompt({ description: '댓글을 신고하려면 로그인이 필요해요.', onConfirm: goToLogin })
+            openLoginModal()
             return
         }
         setReportTargetComment({
@@ -800,13 +794,6 @@ export default function CommentsSection({
                     onReport={handleReport}
                 />
             )}
-
-            <LoginPromptModal
-                isOpen={!!loginPrompt}
-                description={loginPrompt?.description ?? ''}
-                onClose={() => setLoginPrompt(null)}
-                onConfirm={() => loginPrompt?.onConfirm()}
-            />
         </>
     )
 }

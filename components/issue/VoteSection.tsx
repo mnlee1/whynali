@@ -13,9 +13,9 @@ import { useState, useEffect, useCallback, CSSProperties } from 'react'
 import { Calendar, ChevronDown, Check } from 'lucide-react'
 import type { Vote, VoteChoice } from '@/types'
 import { trackConversion } from '@/lib/analytics/tracker'
-import { goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { savePendingAction } from '@/lib/pendingAction'
+import { openLoginModal } from '@/lib/loginModalStore'
 import { usePendingAction } from '@/hooks/usePendingAction'
-import LoginPromptModal from '@/components/common/LoginPromptModal'
 
 interface VoteSectionProps {
     issueId: string
@@ -31,7 +31,6 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState<string | null>(null)
     const [, setError] = useState<string | null>(null)
-    const [loginPrompt, setLoginPrompt] = useState<{ voteId: string; choiceId: string } | null>(null)
 
 
     useEffect(() => {
@@ -60,7 +59,8 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
     const handleVote = (voteId: string, choiceId: string) => {
         if (!userId) {
-            setLoginPrompt({ voteId, choiceId })
+            savePendingAction({ type: 'vote', issueId, voteId, choiceId })
+            openLoginModal()
             return
         }
         submitVote(voteId, choiceId)
@@ -247,16 +247,6 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
                     </>
                 )}
             </div>
-
-            <LoginPromptModal
-                isOpen={!!loginPrompt}
-                description="투표하려면 로그인이 필요해요."
-                onClose={() => setLoginPrompt(null)}
-                onConfirm={() => {
-                    if (!loginPrompt) return
-                    goToLoginWithPendingAction({ type: 'vote', issueId, voteId: loginPrompt.voteId, choiceId: loginPrompt.choiceId })
-                }}
-            />
         </div>
     )
 }

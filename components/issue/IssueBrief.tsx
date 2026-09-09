@@ -1,3 +1,7 @@
+'use client'
+
+import { openLoginModal } from '@/lib/loginModalStore'
+
 interface BriefSummary {
     intro: string
     bullets: string[]
@@ -33,9 +37,13 @@ export default function IssueBrief({ brief, userId }: IssueBriefProps) {
                 ))}
             </ul>
             {!userId && (
-                <a href="/login" className="block pt-3 mt-1 border-t border-border-muted text-xs font-semibold text-primary hover:underline text-right">
+                <button
+                    type="button"
+                    onClick={() => openLoginModal()}
+                    className="block w-full pt-3 mt-1 border-t border-border-muted text-xs font-semibold text-primary hover:underline text-right"
+                >
                     로그인하고 전체 타임라인 보기 →
-                </a>
+                </button>
             )}
         </div>
     )

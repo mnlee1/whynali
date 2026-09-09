@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import type { ReactionType } from '@/types'
-import { goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { savePendingAction } from '@/lib/pendingAction'
+import { openLoginModal } from '@/lib/loginModalStore'
 import { usePendingAction } from '@/hooks/usePendingAction'
-import LoginPromptModal from '@/components/common/LoginPromptModal'
 
 interface ReactionDropdownProps {
     issueId: string
@@ -32,7 +32,6 @@ export default function ReactionDropdown({ issueId, userId, align = 'left', layo
     const [counts, setCounts] = useState<CountMap>({})
     const [userReaction, setUserReaction] = useState<ReactionType | null>(null)
     const [submitting, setSubmitting] = useState(false)
-    const [loginPrompt, setLoginPrompt] = useState<ReactionType | null>(null)
     const ref = useRef<HTMLDivElement>(null)
     const instanceId = useMemo(() => Math.random().toString(36).slice(2), [])
 
@@ -80,7 +79,8 @@ export default function ReactionDropdown({ issueId, userId, align = 'left', layo
 
     const handleClick = (type: ReactionType) => {
         if (!userId) {
-            setLoginPrompt(type)
+            savePendingAction({ type: 'reaction', issueId, reactionType: type })
+            openLoginModal()
             return
         }
         submitReaction(type)
@@ -255,16 +255,6 @@ export default function ReactionDropdown({ issueId, userId, align = 'left', layo
                     </div>
                 </div>
             )}
-
-            <LoginPromptModal
-                isOpen={!!loginPrompt}
-                description="반응을 남기려면 로그인이 필요해요."
-                onClose={() => setLoginPrompt(null)}
-                onConfirm={() => {
-                    if (!loginPrompt) return
-                    goToLoginWithPendingAction({ type: 'reaction', issueId, reactionType: loginPrompt })
-                }}
-            />
         </div>
     )
 }

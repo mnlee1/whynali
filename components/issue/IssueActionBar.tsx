@@ -15,8 +15,8 @@ import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { MessageCircleMore, ChartBarStacked, Users, Bookmark } from 'lucide-react'
 import ReactionDropdown from '@/components/issue/ReactionDropdown'
 import ShareButton from '@/components/issue/ShareButton'
-import LoginPromptModal from '@/components/common/LoginPromptModal'
-import { goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { savePendingAction } from '@/lib/pendingAction'
+import { openLoginModal } from '@/lib/loginModalStore'
 import { usePendingAction } from '@/hooks/usePendingAction'
 
 interface Props {
@@ -83,7 +83,6 @@ export default function IssueActionBar({ issueId, userId, initialVoteCount, init
     const [bookmarked, setBookmarked] = useState(false)
     const [bookmarkCount, setBookmarkCount] = useState(0)
     const [bookmarkSubmitting, setBookmarkSubmitting] = useState(false)
-    const [loginPromptOpen, setLoginPromptOpen] = useState(false)
 
     useEffect(() => {
         fetch(`/api/issues/${issueId}/stats`)
@@ -138,7 +137,8 @@ export default function IssueActionBar({ issueId, userId, initialVoteCount, init
 
     const handleBookmarkClick = () => {
         if (!userId) {
-            setLoginPromptOpen(true)
+            savePendingAction({ type: 'bookmark', issueId })
+            openLoginModal()
             return
         }
         submitBookmark()
@@ -230,16 +230,6 @@ export default function IssueActionBar({ issueId, userId, initialVoteCount, init
                     <ShareButton issueId={issueId} shortCode={shortCode} title={title} thumbnailUrl={thumbnailUrl} compact panelDirection="up" />
                 )}
             </div>
-
-            <LoginPromptModal
-                isOpen={loginPromptOpen}
-                description="북마크하려면 로그인이 필요해요."
-                onClose={() => setLoginPromptOpen(false)}
-                onConfirm={() => {
-                    setLoginPromptOpen(false)
-                    goToLoginWithPendingAction({ type: 'bookmark', issueId })
-                }}
-            />
         </>
     )
 }
