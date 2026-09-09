@@ -12,6 +12,7 @@ export type PendingAction =
     | { type: 'reaction'; issueId: string; reactionType: ReactionType }
     | { type: 'comment'; issueId?: string; discussionTopicId?: string; parentId?: string | null; text: string }
     | { type: 'bookmark'; issueId: string }
+    | { type: 'curationFollow'; curationKey: string }
 
 type StoredPendingAction = PendingAction & { savedAt: number }
 
