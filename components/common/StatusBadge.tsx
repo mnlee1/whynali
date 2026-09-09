@@ -1,11 +1,11 @@
 /**
  * components/common/StatusBadge.tsx
- * 
+ *
  * [이슈 상태 배지 컴포넌트]
- * 
+ *
  * 이슈의 상태(점화/논란중/종결)를 아이콘+텍스트 태그 형태로 표시합니다.
- * 01_AI기획.md §12 기준: 텍스트 우선, 아이콘 병기
- * 
+ * 디자인 가이드 04(배지·칩) 기준: 보더 없는 solid bg-*-100 배경 필, 이모지+텍스트.
+ *
  * 사용 예시:
  *   <StatusBadge status="점화" />
  *   <StatusBadge status="논란중" size="lg" />
@@ -23,33 +23,44 @@ export function getStatusMeta(status: IssueStatus): {
     icon: string
     label: string
     baseClass: string
+    iconColorClass: string
 } {
     switch (status) {
         case '점화':
             return {
                 icon: '🔥',
                 label: '점화중',
-                baseClass: 'bg-red-100 text-red-600'
+                baseClass: 'bg-red-100 text-red-600',
+                iconColorClass: 'text-red-600'
             }
         case '논란중':
             return {
                 icon: '⚡',
                 label: '화제 집중',
-                baseClass: 'bg-orange-100 text-[#f97317]'
+                baseClass: 'bg-orange-100 text-[#f97317]',
+                iconColorClass: 'text-[#f97317]'
             }
         case '종결':
             return {
                 icon: '🏁',
                 label: '종결',
-                baseClass: 'bg-gray-100 text-gray-500'
+                baseClass: 'bg-gray-100 text-gray-500',
+                iconColorClass: 'text-gray-500'
             }
         default:
             return {
                 icon: '○',
                 label: status,
-                baseClass: 'bg-gray-100 text-gray-500'
+                baseClass: 'bg-gray-100 text-gray-500',
+                iconColorClass: 'text-gray-500'
             }
     }
+}
+
+// 배경 필 없이 아이콘 글리프만 필요한 곳(예: 촘촘한 리스트의 하위 순위 행)에서 재사용
+export function getStatusIcon(status: IssueStatus): { icon: string; colorClass: string } {
+    const meta = getStatusMeta(status)
+    return { icon: meta.icon, colorClass: meta.iconColorClass }
 }
 
 // 크기별 클래스

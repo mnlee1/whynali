@@ -121,8 +121,10 @@
         @apply bg-surface rounded-xl border border-border shadow-card;
     }
 
+    /* 마우스 호버가 실제로 가능한 기기(pointer: fine)에서만 뜨는 효과 적용 —
+       모바일/태블릿(터치)에서는 탭 시 호버가 눌러붙는 문제를 피하기 위해 제외한다. */
     .card-hover {
-        @apply card hover:shadow-card-hover transition-shadow duration-150;
+        @apply card [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-card-hover [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1.5 transition-[box-shadow,transform] duration-300 ease-out;
     }
 
     /* 라운드 박스 안 textarea용 - 기본 스크롤바가 두꺼워서 둥근 모서리와 부딪히는 문제 방지 */
@@ -311,64 +313,6 @@
 /* 수집 현황 막대 그래프: CSS 변수로 너비 제어 */
 .collection-bar {
     width: var(--bar-pct, 0%);
-}
-
-/* 투표 Swiper 컨테이너 */
-.vote-swiper {
-    padding-bottom: 2rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-    margin-left: -1rem;
-    margin-right: -1rem;
-}
-
-.vote-swiper .swiper-wrapper {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-
-.vote-swiper .swiper-slide {
-    height: auto !important;
-}
-
-/* Swiper 페이지네이션 스타일 */
-.vote-swiper .swiper-pagination {
-    position: relative !important;
-    bottom: 0 !important;
-    margin-top: 0.5rem !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 0.5rem !important;
-    height: auto !important;
-}
-
-.vote-swiper .swiper-pagination-bullet {
-    width: 8px !important;
-    height: 8px !important;
-    border-radius: 9999px !important;
-    background: #e4e4e7 !important;
-    opacity: 1 !important;
-    margin: 0 !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.vote-swiper .swiper-pagination-bullet-active {
-    width: 28px !important;
-    background: var(--color-primary) !important;
-    border-radius: 9999px !important;
-    box-shadow: 0 0 12px rgba(123, 58, 237, 0.3) !important;
-}
-
-/* 1536px 이상에서 페이지네이션 숨김 */
-@media (min-width: 1536px) {
-    .vote-swiper {
-        padding-bottom: 1rem;
-    }
-    
-    .vote-swiper .swiper-pagination {
-        display: none !important;
-    }
 }
 
 /* ── 히어로 슬라이드 동적 패턴 ─────────────────────── */

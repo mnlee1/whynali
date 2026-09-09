@@ -9,9 +9,23 @@ import Link from 'next/link'
 import { ChevronRight, Eye, MessageSquare, MessageCircleMore, BadgeCheck, Users } from 'lucide-react'
 import type { Issue } from '@/types/issue'
 import { decodeHtml } from '@/lib/utils/decode-html'
+import { formatDate } from '@/lib/utils/format-date'
+import CategoryBadge from '@/components/common/CategoryBadge'
+
+const NEW_ISSUE_WINDOW_HOURS = 6
+
+export type IssueCardTier = 'hero' | 'medium' | 'normal'
 
 interface IssueCardProps {
     issue: Issue
+    tier?: IssueCardTier
+}
+
+// 상태별 좌측 강조 바 색상 — 종결은 무채색, 생존 상태는 상태색 유지
+const STATUS_ACCENT: Record<Issue['status'], string> = {
+    점화: 'bg-red-500',
+    논란중: 'bg-[#f97317]',
+    종결: 'bg-gray-300',
 }
 
 interface IssueStats {
@@ -30,7 +44,7 @@ interface DiscussionTopic {
     created_at: string
 }
 
-export default function IssueCard({ issue }: IssueCardProps) {
+export default function IssueCard({ issue, tier = 'normal' }: IssueCardProps) {
     const [stats, setStats] = useState<IssueStats | null>(null)
     const [discussions, setDiscussions] = useState<DiscussionTopic[]>([])
 
@@ -61,13 +75,46 @@ export default function IssueCard({ issue }: IssueCardProps) {
         loadDiscussions()
     }, [issue.id])
 
+    const totalEngagement = stats
+        ? stats.viewCount + stats.commentCount + stats.voteCount + stats.discussionCount
+        : null
+    const hoursSinceCreated = (Date.now() - new Date(issue.created_at).getTime()) / 3600000
+    const isNew = totalEngagement === 0 && hoursSinceCreated < NEW_ISSUE_WINDOW_HOURS
+
+    const metrics = stats ? [
+        { key: 'view', Icon: Eye, value: stats.viewCount },
+        { key: 'comment', Icon: MessageSquare, value: stats.commentCount },
+        { key: 'vote', Icon: BadgeCheck, value: stats.voteCount },
+        { key: 'discussion', Icon: Users, value: stats.discussionCount },
+    ].filter(m => m.value > 0) : []
+
+    const isClosed = issue.status === '종결'
+
+    const paddingClass = tier === 'hero' ? 'p-6 lg:p-8' : tier === 'medium' ? 'p-6' : 'p-5'
+    const titleSizeClass = tier === 'hero' ? 'text-xl lg:text-2xl' : tier === 'medium' ? 'text-lg' : 'text-base'
+    const titleWeightClass = isClosed ? 'font-medium text-content-secondary' : 'font-bold text-content-primary'
+    const summarySizeClass = tier === 'hero' ? 'text-sm' : 'text-[13px]'
+
     return (
-        <article className="card-hover p-5 transition-all h-full flex flex-col">
+        <article className={`card-hover ${paddingClass} transition-all h-full flex flex-col relative overflow-hidden ${isClosed ? 'grayscale-[50%] opacity-90' : ''}`}>
+            {/* 상태 강조 바 */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${STATUS_ACCENT[issue.status]}`} />
+
             {/* 이슈 영역 → 이슈 상세 */}
             <Link href={`/issue/${issue.id}`} className="block">
+                {/* 카테고리 배지 */}
+                <div className="mb-2">
+                    <CategoryBadge category={issue.category} size="sm" />
+                </div>
+
                 {/* 이슈 제목 */}
-                <div className="flex items-center gap-0.5 mb-1.5">
-                    <h3 className="text-base font-semibold text-content-primary line-clamp-2">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                    {isNew && (
+                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                            NEW
+                        </span>
+                    )}
+                    <h3 className={`${titleSizeClass} ${titleWeightClass} line-clamp-2`}>
                         {decodeHtml(issue.title)}
                     </h3>
                     <ChevronRight className="w-4 h-4 text-content-primary shrink-0" strokeWidth={2.5} />
@@ -75,30 +122,34 @@ export default function IssueCard({ issue }: IssueCardProps) {
 
                 {/* 이슈 내용 요약 */}
                 {(issue.topic_description || issue.brief_summary?.intro) && (
-                    <p className="text-[13px] text-content-secondary line-clamp-2 mb-3 leading-relaxed">
+                    <p className={`${summarySizeClass} text-content-secondary line-clamp-1 mb-1.5 leading-relaxed`}>
                         {issue.topic_description ?? issue.brief_summary!.intro}
                     </p>
                 )}
 
-                {/* 이슈 통계 */}
-                <div className="flex items-center gap-4 text-xs text-content-secondary mb-3">
-                    <span className="flex items-center gap-1">
-                        <Eye className="w-4 h-4" strokeWidth={1.8} />
-                        {stats ? stats.viewCount.toLocaleString() : '—'}
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <MessageSquare className="w-4 h-4" strokeWidth={1.8} />
-                        {stats ? stats.commentCount.toLocaleString() : '—'}
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <BadgeCheck className="w-4 h-4" strokeWidth={1.8} />
-                        {stats ? stats.voteCount.toLocaleString() : '—'}
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <Users className="w-4 h-4" strokeWidth={1.8} />
-                        {stats ? stats.discussionCount.toLocaleString() : '—'}
-                    </span>
-                </div>
+                {/* 등록 시각 */}
+                <p className="text-[11px] text-content-muted mb-3">
+                    {formatDate(issue.created_at)}
+                </p>
+
+                {/* 이슈 통계 — 로딩 중엔 스켈레톤, 전부 0이면 행 자체 생략 */}
+                {stats === null && (
+                    <div className="flex items-center gap-4 text-xs text-content-secondary mb-3">
+                        {[0, 1, 2, 3].map(i => (
+                            <span key={i} className="h-4 w-8 bg-border-muted rounded animate-pulse" />
+                        ))}
+                    </div>
+                )}
+                {metrics.length > 0 && (
+                    <div className="flex items-center gap-4 text-xs text-content-secondary mb-3">
+                        {metrics.map(({ key, Icon, value }) => (
+                            <span key={key} className="flex items-center gap-1">
+                                <Icon className="w-4 h-4" strokeWidth={1.8} />
+                                {value.toLocaleString()}
+                            </span>
+                        ))}
+                    </div>
+                )}
             </Link>
 
             {/* 토론 목록 → 각 토론 상세 */}

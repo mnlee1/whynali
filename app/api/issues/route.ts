@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 
 const VALID_CATEGORIES = getCategoryIds() as readonly IssueCategory[]
-const VALID_STATUSES: readonly IssueStatus[] = ['점화', '논란중', '종결']
+const VALID_STATUSES = ['점화', '논란중', '종결', '진행중'] as const
+const IN_PROGRESS_STATUSES: readonly IssueStatus[] = ['점화', '논란중']
 const VALID_SORTS = ['latest', 'heat'] as const
 
 export async function GET(request: NextRequest) {
@@ -42,7 +43,9 @@ export async function GET(request: NextRequest) {
             query = query.eq('category', category)
         }
 
-        if (status) {
+        if (status === '진행중') {
+            query = query.in('status', IN_PROGRESS_STATUSES)
+        } else if (status) {
             query = query.eq('status', status)
         }
 

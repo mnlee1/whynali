@@ -398,6 +398,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                     })}
                 </div>
 
+                {/* 다른 사람들 생각도 보기: 이슈 인기 댓글 미리보기 (인라인 확장) */}
                 {/* 카드 하단 — 자동 종료 안내 */}
                 {!isClosed && autoEndDate && (
                     <div className="mt-3 text-xs text-content-secondary">

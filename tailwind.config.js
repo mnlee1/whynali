@@ -8,6 +8,12 @@ module.exports = {
     ],
     theme: {
         extend: {
+            container: {
+                screens: {
+                    xl: '1200px',
+                    '2xl': '1200px',
+                },
+            },
             fontFamily: {
                 pretendard: ['Pretendard Variable', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
             },
