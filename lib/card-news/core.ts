@@ -182,8 +182,10 @@ function truncateDescLine(line: string, maxLen = 80): string {
   const lastPunct = Math.max(window.lastIndexOf('.'), window.lastIndexOf('?'), window.lastIndexOf('!'))
   if (lastPunct > maxLen / 2) return window.slice(0, lastPunct + 1)
   const spaceIdx = window.lastIndexOf(' ')
-  const cut = spaceIdx > maxLen / 2 ? window.slice(0, spaceIdx) : window
-  return cut.trimEnd() + '…'
+  const cut = (spaceIdx > maxLen / 2 ? window.slice(0, spaceIdx) : window).trimEnd()
+  // 원문에 이미 "…"가 있으면(뉴스 헤드라인풍 문장 등) 또 붙이지 않는다 — "…" 중복 방지.
+  if (cut.includes('…')) return cut
+  return cut + '…'
 }
 
 // desc 전체 포맷 정규화: 줄별 절단 + 최대 3줄

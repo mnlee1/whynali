@@ -187,7 +187,7 @@ export default function Header() {
         const subtitleText = null
 
         const dropdownMenu = (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-xl shadow-card z-50">
+            <div className="absolute right-0 top-full mt-2 w-[150px] bg-surface border border-border rounded-xl shadow-card z-50">
                 {subtitleText && (
                     <div className="px-4 py-3 border-b border-border-muted">
                         <span className="text-xs text-content-muted truncate block">{subtitleText}</span>
@@ -274,7 +274,7 @@ export default function Header() {
             {/* 모바일 레이아웃 (1280px 미만) - 상단 바 */}
             <div className="xl:hidden px-4">
                 <div className="flex items-center justify-between h-12">
-                    {renderLogo('h-6 w-auto')}
+                    {renderLogo('h-8 w-auto')}
 
                     <div className="flex items-center gap-1">
                         <button
