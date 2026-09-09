@@ -59,21 +59,20 @@ export default function RelatedDiscussionTopics({ topics, issueId, issueTitle, u
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2.5">
+                                    <div className="flex items-start justify-between gap-2 mb-3">
+                                        <p className="text-[15px] font-medium text-content-primary line-clamp-2 leading-snug flex-1 min-w-0 group-hover:text-primary">
+                                            {topic.body}
+                                        </p>
                                         {topic.approval_status === '진행중' ? (
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold shrink-0">
                                                 토론 진행중
                                             </span>
                                         ) : (
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-subtle text-content-muted text-xs font-bold">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-subtle text-content-muted text-xs font-bold shrink-0">
                                                 토론 마감
                                             </span>
                                         )}
                                     </div>
-
-                                    <p className="text-[15px] font-medium text-content-primary line-clamp-2 leading-snug mb-3 group-hover:text-primary">
-                                        {topic.body}
-                                    </p>
 
                                     <div className="flex items-center gap-3 text-xs text-content-secondary pt-3 border-t border-border-muted">
                                         <span className="flex items-center gap-1">
