@@ -1,9 +1,9 @@
 /**
  * lib/loginModalStore.ts
  *
- * 헤더 진입점 전용 로그인 오버레이 모달의 열림 상태를 앱 전역에서 공유하기 위한
- * 최소 pub-sub 스토어. 투표/댓글/반응 등 기존 로그인 유도 플로우(LoginPromptModal +
- * lib/pendingAction.ts)는 그대로 풀페이지 /login으로 이동하며, 이 스토어와는 무관하다.
+ * 앱 전역 로그인 오버레이 모달의 열림 상태를 공유하기 위한 최소 pub-sub 스토어.
+ * 헤더 진입점뿐 아니라 투표/댓글/반응/북마크 등 로그인 필요 액션 전부가
+ * savePendingAction(lib/pendingAction.ts) + openLoginModal() 조합으로 이 모달을 띄운다.
  */
 
 type LoginModalState = { isOpen: boolean; next: string }

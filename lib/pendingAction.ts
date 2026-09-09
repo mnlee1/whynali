@@ -50,13 +50,3 @@ export function clearPendingAction() {
         // no-op
     }
 }
-
-export function goToLogin() {
-    const currentPath = window.location.pathname
-    window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
-}
-
-export function goToLoginWithPendingAction(action: PendingAction) {
-    savePendingAction(action)
-    goToLogin()
-}
