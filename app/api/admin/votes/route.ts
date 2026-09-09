@@ -86,11 +86,8 @@ export async function POST(request: NextRequest) {
         if (!issue_id) {
             return NextResponse.json({ error: 'issue_id가 필요합니다.' }, { status: 400 })
         }
-        if (!Array.isArray(choices) || choices.length < 2) {
-            return NextResponse.json({ error: '선택지는 2개 이상이어야 합니다.' }, { status: 400 })
-        }
-        if (choices.length > 6) {
-            return NextResponse.json({ error: '선택지는 최대 6개까지 가능합니다.' }, { status: 400 })
+        if (!Array.isArray(choices) || choices.length !== 3) {
+            return NextResponse.json({ error: '선택지는 정확히 3개여야 합니다.' }, { status: 400 })
         }
 
         const sanitizedChoices = (choices as string[]).map((c) => sanitizeText(c))

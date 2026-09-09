@@ -263,6 +263,16 @@ export default function VoteSection({ issueId, userId: serverUserId }: VoteSecti
 
 /* ─── 투표 카드 컴포넌트 ─── */
 
+const EMOJI_PREFIX_RE = /^([\u{1F300}-\u{1FAFF}\u{2190}-\u{2BFF}\u{FE0F}]+)\s*(.*)$/u
+
+/** "✅ 지지해" 같은 라벨을 이모지/텍스트로 분리 — 문자열 속 띄어쓰기 한 칸에 기대지 않고
+ *  flex gap으로 간격과 수직 중앙 정렬을 직접 제어하기 위함 */
+function splitEmojiLabel(label: string): { emoji: string | null; text: string } {
+    const m = label.match(EMOJI_PREFIX_RE)
+    if (!m) return { emoji: null, text: label }
+    return { emoji: m[1], text: m[2] }
+}
+
 interface VoteCardProps {
     vote: Vote & { vote_choices: VoteChoice[] }
     myChoiceId: string | null
@@ -297,38 +307,37 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                     className={isClosed ? 'cursor-pointer' : ''}
                     onClick={() => isClosed && setIsExpanded(!isExpanded)}
                 >
-                    {/* 1행: 상태/생성 라벨 + 참여 중 */}
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-1">
-                            {vote.phase && (
-                                <span className={[
-                                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold shrink-0 text-xs',
-                                    isClosed
-                                        ? 'bg-surface-subtle text-content-muted'
-                                        : 'bg-green-100 text-green-700'
-                                ].join(' ')}>
-                                    {!isClosed && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
-                                    {isClosed ? '투표 마감' : '투표 진행중'}
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                            {canSeeResults && (
-                                <span className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-900">
-                                    <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
-                                </span>
-                            )}
-                            {isClosed && (
-                                <ChevronDown
-                                    className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                    strokeWidth={2}
-                                />
-                            )}
-                        </div>
+                    {/* 1행: 투표 제목(+참여 중) + 상태 배지 (배지는 오른쪽 끝) */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                        {vote.title && (
+                            <p className="font-semibold text-sm flex-1 min-w-0">
+                                {vote.title}
+                                {canSeeResults && (
+                                    <span className="ml-2.5 font-normal text-xs text-neutral-900">
+                                        <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중
+                                    </span>
+                                )}
+                            </p>
+                        )}
+                        {vote.phase && (
+                            <span className={[
+                                'inline-flex items-center px-2.5 py-1 rounded-full font-bold shrink-0 text-xs',
+                                isClosed
+                                    ? 'bg-surface-subtle text-content-muted'
+                                    : 'bg-green-100 text-green-700'
+                            ].join(' ')}>
+                                {isClosed ? '투표 마감' : '투표 진행중'}
+                            </span>
+                        )}
                     </div>
-                    {/* 2행: 투표 제목 */}
-                    {vote.title && (
-                        <p className="font-semibold text-sm">{vote.title}</p>
+                    {/* 2행: 펼침 화살표 (마감된 투표만) */}
+                    {isClosed && (
+                        <div className="flex items-center justify-end gap-2">
+                            <ChevronDown
+                                className={`w-4 h-4 text-content-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                strokeWidth={2}
+                            />
+                        </div>
                     )}
                 </div>
             </div>
@@ -344,6 +353,7 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                             : 0
                         const isSelected = myChoiceId === choice.id
                         const disabled = isProcessing || isClosed
+                        const { emoji, text } = splitEmojiLabel(choice.label)
 
                         return (
                             <button
@@ -372,7 +382,10 @@ function VoteCard({ vote, myChoiceId, isProcessing, onVote, highlight }: VoteCar
                                 <span className="relative flex items-center justify-between">
                                     <span className="flex items-center gap-1.5">
                                         {isSelected && <Check className="w-4 h-4" strokeWidth={2.5} />}
-                                        <span>{choice.label}</span>
+                                        <span className="flex items-center gap-2">
+                                            {emoji && <span className="flex items-center justify-center leading-none">{emoji}</span>}
+                                            <span className="leading-none font-medium">{text}</span>
+                                        </span>
                                     </span>
                                     {canSeeResults && totalCount > 0 && (
                                         <span className={`text-xs ml-2 shrink-0 ${isSelected ? 'text-primary-dark font-medium' : 'text-content-secondary'}`}>

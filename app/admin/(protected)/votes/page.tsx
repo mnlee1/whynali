@@ -161,7 +161,7 @@ export default function AdminVotesPage() {
             if (generated) {
                 setVoteTitle(generated.title || '')
                 setVoteChoices(
-                    generated.choices?.filter(Boolean) || ['', '']
+                    generated.choices?.filter(Boolean) || ['', '', '']
                 )
                 setIsAiFilled(true)
             }
@@ -180,8 +180,8 @@ export default function AdminVotesPage() {
             return
         }
         const validChoices = voteChoices.filter((c) => c.trim())
-        if (validChoices.length < 2) {
-            setFormError('선택지는 최소 2개 이상이어야 합니다.')
+        if (validChoices.length !== 3) {
+            setFormError('선택지 3개를 모두 입력하세요.')
             return
         }
 
@@ -474,7 +474,7 @@ export default function AdminVotesPage() {
 
                     {/* 선택지 */}
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-content-secondary">선택지 (2-6개)</label>
+                        <label className="text-xs font-medium text-content-secondary">선택지 (3개)</label>
                         {voteChoices.map((choice, idx) => (
                             <div key={idx} className="flex gap-2">
                                 <input
@@ -489,26 +489,8 @@ export default function AdminVotesPage() {
                                     placeholder={`선택지 ${idx + 1}`}
                                     className="flex-1 px-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:border-primary bg-surface"
                                 />
-                                {voteChoices.length > 2 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setVoteChoices(voteChoices.filter((_, i) => i !== idx))}
-                                        className="px-2 py-1 text-sm text-red-500 hover:text-red-700"
-                                    >
-                                        삭제
-                                    </button>
-                                )}
                             </div>
                         ))}
-                        {voteChoices.length < 6 && (
-                            <button
-                                type="button"
-                                onClick={() => setVoteChoices([...voteChoices, ''])}
-                                className="text-xs text-primary hover:text-primary-dark"
-                            >
-                                + 선택지 추가
-                            </button>
-                        )}
                     </div>
 
                     {/* 하단 버튼 */}
@@ -523,7 +505,7 @@ export default function AdminVotesPage() {
                         <button
                             type="button"
                             onClick={handleSubmitManual}
-                            disabled={!selectedIssue || !voteTitle.trim() || voteChoices.filter(c => c.trim()).length < 2 || submitting}
+                            disabled={!selectedIssue || !voteTitle.trim() || voteChoices.filter(c => c.trim()).length !== 3 || submitting}
                             className="btn-primary btn-sm disabled:opacity-50"
                         >
                             {submitting ? '생성 중...' : '등록'}

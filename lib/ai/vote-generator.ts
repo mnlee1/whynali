@@ -34,7 +34,7 @@ export interface GeneratedVote {
 /**
  * generateVoteOptions - AI 투표 후보 생성
  *
- * 이슈 메타데이터만 입력으로 받아 투표 제목과 2-4개 선택지를 생성한다.
+ * 이슈 메타데이터만 입력으로 받아 투표 제목과 3개 선택지를 생성한다.
  * 본문이나 요약문은 사용하지 않는다.
  *
  * 예시:
@@ -103,7 +103,7 @@ ${heatLine}${newsLine}
 1. 특정인 실명이나 특정 집단을 직접 지목하는 표현 금지
 2. 투표 제목: 이슈의 핵심 쟁점만 담은 짧고 명확한 의문형 (20자 이하, 서면체)
 3. 이슈 제목을 그대로 쓰지 말 것. 핵심만 뽑아 재구성할 것
-4. 선택지: 2~4개, 각 6자 이하의 단어나 짧은 어구. 완전한 어절로 끝낼 것
+4. 선택지: 정확히 3개, 각 6자 이하의 단어나 짧은 어구. 완전한 어절로 끝낼 것
 5. 선택지는 상호 배타적이고 대비가 명확해야 함
 6. 각 선택지 맨 앞에 그 내용과 어울리는 이모지를 정확히 1개 붙일 것 (이모지+띄어쓰기+텍스트 순서). 선택지끼리 이모지가 겹치지 않게 서로 다른 걸 고를 것
 
@@ -158,7 +158,11 @@ function parseVotes(raw: string): GeneratedVote[] {
         // 의문형 끝맺음 허용 패턴 (ASCII/전각 ? 및 한국어 의문 어미)
         const QUESTION_ENDINGS = /[?？]$|는가\??$|인가\??$|ㄴ가\??$|겠는가\??$|있나\??$|하나\??$/
         // 비정상 문자 포함 여부 (전각 ?！, 선택지 앞에 붙는 이모지도 허용)
-        const ABNORMAL = /[^가-힣ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿ -~！？·–—…\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/u
+        // \u{2600}-\u{27BF}만으로는 "▶️"(U+25B6, 도형기호 블록) 같은 이모지가 빠져서 정상 선택지가
+        // 통째로 걸러지는 문제가 있어, 화살표·도형기호·딩벳을 모두 포함하는 \u{2190}-\u{2BFF}로 확장
+        const ABNORMAL = /[^가-힣ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿ -~！？·–—…\u{1F300}-\u{1FAFF}\u{2190}-\u{2BFF}\u{FE0F}\u{200D}]/u
+        // 선택지 맨 앞 이모지(연속된 이모지 코드포인트) 캡처용 — 뒤따르는 공백 정규화에 사용
+        const EMOJI_PREFIX_RE = /^([\u{1F300}-\u{1FAFF}\u{2190}-\u{2BFF}\u{FE0F}\u{200D}]+)\s*/u
 
         const results = votesArray
             .filter((item): item is { title: string; choices: string[] } => {
@@ -173,8 +177,8 @@ function parseVotes(raw: string): GeneratedVote[] {
                 if (COLLOQUIAL.test(t)) { console.log(`[parseVotes] 탈락(제목 거친 반말): ${t}`); return false }
                 if (ABNORMAL.test(t)) { console.log(`[parseVotes] 탈락(제목 이상 문자): ${t}`); return false }
                 const choices = (item as { choices: unknown[] }).choices
-                if (!Array.isArray(choices) || choices.length < 2 || choices.length > 4) {
-                    console.log(`[parseVotes] 탈락(선택지 개수 ${Array.isArray(choices) ? choices.length : '?'}개): ${t}`)
+                if (!Array.isArray(choices) || choices.length !== 3) {
+                    console.log(`[parseVotes] 탈락(선택지 개수 ${Array.isArray(choices) ? choices.length : '?'}개, 3개여야 함): ${t}`)
                     return false
                 }
                 return true
@@ -187,12 +191,13 @@ function parseVotes(raw: string): GeneratedVote[] {
                         const s = c.trim()
                         return s.length >= 2 && s.length <= 15 && !ABNORMAL.test(s)
                     })
-                    .map((c) => c.trim())
-                    .slice(0, 4),
+                    // 이모지와 텍스트 사이 띄어쓰기가 0칸/2칸 이상으로 나오는 경우가 있어 항상 정확히 1칸으로 정규화
+                    .map((c) => c.trim().replace(EMOJI_PREFIX_RE, '$1 '))
+                    .slice(0, 3),
             }))
             .filter((vote) => {
-                if (vote.choices.length < 2) {
-                    console.log(`[parseVotes] 탈락(유효 선택지 ${vote.choices.length}개<2): ${vote.title}`)
+                if (vote.choices.length !== 3) {
+                    console.log(`[parseVotes] 탈락(유효 선택지 ${vote.choices.length}개, 3개여야 함): ${vote.title}`)
                     return false
                 }
                 return true
