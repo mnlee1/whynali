@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { ChevronDown, Search, X } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { openLoginModal } from '@/lib/loginModalStore'
 import Nav from './Nav'
 import SearchBar from './SearchBar'
 
@@ -165,12 +166,13 @@ export default function Header() {
         // displayName은 체크하지 않음 (OAuth 실명 감지로 null 반환되어도 드롭다운 표시)
         if (!user || (!termsAgreedAt && !isAdmin)) {
             return (
-                <Link
-                    href="/login"
+                <button
+                    type="button"
+                    onClick={() => openLoginModal(pathname)}
                     className="px-3 py-2 xl:px-4 xl:py-1.5 rounded-full bg-primary text-white text-xs xl:text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
                 >
                     난리에 참여하기
-                </Link>
+                </button>
             )
         }
 
