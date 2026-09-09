@@ -25,6 +25,8 @@ import IssueCard from './IssueCard'
 import SuggestedIssues from './SuggestedIssues'
 import SearchBar from '@/components/common/SearchBar'
 import Tooltip from '@/components/common/Tooltip'
+import SortDropdown from '@/components/common/SortDropdown'
+import { CATEGORIES } from '@/lib/config/categories'
 import type { Issue } from '@/types/issue'
 
 interface IssueListProps {
@@ -37,15 +39,21 @@ interface IssueListProps {
     infiniteScroll?: boolean                        // 인피니트 스크롤 여부 (기본: false)
 }
 
-// 상태 탭 목록
+// 상태 탭 목록 — 기본 선택은 '진행중'(점화중+화제집중 통합), 전체는 맨 뒤로 이동
 const STATUS_TABS = [
-    { value: '', label: '전체 이슈', fullLabel: '전체 이슈', icon: null },
+    { value: '진행중', label: '진행중', fullLabel: '진행중', icon: null },
     { value: '점화', label: '점화중', fullLabel: '점화중', icon: '🔥' },
     { value: '논란중', label: '화제 집중', fullLabel: '화제 집중', icon: '⚡' },
     { value: '종결', label: '종결', fullLabel: '종결', icon: '🏁' },
+    { value: '', label: '전체', fullLabel: '전체 이슈', icon: null },
 ]
 
-const LIMIT = 6
+const SORT_OPTIONS = [
+    { value: 'latest', label: '최신순' },
+    { value: 'heat', label: '인기순' },
+] as const
+
+const LIMIT = 10
 const DEBOUNCE_MS = 350
 
 const breakpointColumns = {
@@ -62,8 +70,11 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
     const [tabCounts, setTabCounts] = useState<Record<string, number>>(initialTabCounts ?? {})
     const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState('')
+    const [statusFilter, setStatusFilter] = useState('진행중')
+    const [categoryFilter, setCategoryFilter] = useState('') // 카테고리 칩 — category prop 있으면 미사용(고정 카테고리 페이지)
+    const [sortOption, setSortOption] = useState<'latest' | 'heat'>('latest')
     const [suggestedIssues, setSuggestedIssues] = useState<Issue[]>([])
+    const effectiveCategory = category ?? (categoryFilter || undefined)
 
     const offsetRef = useRef(initialData?.data.length ?? 0)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -78,9 +89,9 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             return
         }
         async function fetchCounts() {
-            const tabKeys = ['', '점화', '논란중', '종결']
+            const tabKeys = ['진행중', '점화', '논란중', '종결', '']
             const results = await Promise.allSettled(
-                tabKeys.map(s => getIssues({ category, status: s || undefined, sort: 'latest', limit: 1, offset: 0, q: searchQuery || undefined }))
+                tabKeys.map(s => getIssues({ category: effectiveCategory, status: s || undefined, sort: 'latest', limit: 1, offset: 0, q: searchQuery || undefined }))
             )
             const counts: Record<string, number> = {}
             tabKeys.forEach((s, i) => {
@@ -91,7 +102,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         }
         fetchCounts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [category, searchQuery])
+    }, [effectiveCategory, searchQuery])
 
     const handleSearchChange = (value: string) => {
         setSearchInput(value)
@@ -113,10 +124,10 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             offsetRef.current = 0
 
             const response = await getIssues({
-                category,
+                category: effectiveCategory,
                 status: statusFilter || undefined,
                 q: searchQuery || undefined,
-                sort: 'latest',
+                sort: sortOption,
                 limit: loadLimit,
                 offset: 0,
             })
@@ -128,7 +139,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             // 검색어 있을 때 추천 이슈 로드 (결과 있든 없든) - 중복 제외
             if (searchQuery) {
                 const suggested = await getIssues({
-                    category,
+                    category: effectiveCategory,
                     sort: 'heat',
                     limit: 12,  // 중복 제거 후 6개 확보용
                     offset: 0,
@@ -156,10 +167,10 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
             const currentOffset = offsetRef.current
 
             const response = await getIssues({
-                category,
+                category: effectiveCategory,
                 status: statusFilter || undefined,
                 q: searchQuery || undefined,
-                sort: 'latest',
+                sort: sortOption,
                 limit: LIMIT,
                 offset: currentOffset,
             })
@@ -181,7 +192,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         }
         fetchIssues()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [category, statusFilter, searchQuery])
+    }, [effectiveCategory, statusFilter, sortOption, searchQuery])
 
     useEffect(() => {
         if (!infiniteScroll) return
@@ -196,6 +207,16 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
         return () => observer.disconnect()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [infiniteScroll, issues.length, total, loadingMore, loading])
+
+    // 우선순위 스텝퍼: 화력지수 상위 카드를 위쪽에 크게 배치 (목록이 충분히 길 때만)
+    let heroIssue: Issue | null = null
+    const tierById = new Map<string, 'medium' | 'normal'>()
+    if (issues.length >= 4) {
+        const ranked = [...issues].sort((a, b) => (b.heat_index ?? -1) - (a.heat_index ?? -1))
+        heroIssue = ranked[0]
+        ranked.slice(1, 3).forEach(i => tierById.set(i.id, 'medium'))
+    }
+    const gridIssues = heroIssue ? issues.filter(i => i.id !== heroIssue!.id) : issues
 
     return (
         <div className="space-y-6">
@@ -226,7 +247,7 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                         width="w-max max-w-[290px]"
                         text={
                             <span className="flex flex-col gap-1">
-                                <span>최신 등록순으로 정렬됩니다.</span>
+                                <span>정렬 방식을 선택할 수 있어요.</span>
                                 <span>· 점화중: 반응이 급격히 늘어나는 이슈</span>
                                 <span>· 화제 집중: 반응이 활발한 이슈</span>
                                 <span>· 종결: 관심이 줄어든 이슈</span>
@@ -236,35 +257,63 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
                 </div>
             )}
 
-            {/* 상태 탭 */}
-            <div className={`w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5${category ? ' !mt-10' : ''}`}>
-                {STATUS_TABS.map((tab) => {
-                    const isActive = statusFilter === tab.value
-                    const count = tabCounts[tab.value]
-                    return (
-                        <button
-                            key={tab.value}
-                            onClick={() => setStatusFilter(tab.value)}
-                            className={[
-                                'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
-                                isActive
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
-                            ].join(' ')}
-                        >
-                            {tab.icon && <span className="leading-none">{tab.icon}</span>}
-                            <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
-                            {count !== undefined && (
-                                <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
-                                    isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
-                                }`}>
-                                    {count.toLocaleString()}
-                                </span>
-                            )}
-                        </button>
-                    )
-                })}
+            {/* 상태 탭 + 정렬 */}
+            <div className={`w-full flex items-center gap-2${category ? ' !mt-10' : ''}`}>
+                <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                    {STATUS_TABS.map((tab) => {
+                        const isActive = statusFilter === tab.value
+                        const count = tabCounts[tab.value]
+                        return (
+                            <button
+                                key={tab.value}
+                                onClick={() => setStatusFilter(tab.value)}
+                                className={[
+                                    'shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full border transition-colors whitespace-nowrap',
+                                    isActive
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                                ].join(' ')}
+                            >
+                                {tab.icon && <span className="leading-none">{tab.icon}</span>}
+                                <span>{showFullLabel ? tab.fullLabel : tab.label}</span>
+                                {count !== undefined && (
+                                    <span className={`inline-flex items-center justify-center min-w-[20px] h-4 text-[10px] font-semibold px-1 rounded-full ${
+                                        isActive ? 'bg-white/30 text-white' : 'bg-primary/10 text-primary'
+                                    }`}>
+                                        {count.toLocaleString()}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
+
+                {/* 정렬 드롭다운 */}
+                <SortDropdown value={sortOption} options={SORT_OPTIONS} onChange={setSortOption} />
             </div>
+
+            {/* 카테고리 칩 — 고정 카테고리 페이지(category prop)에서는 숨김 */}
+            {!category && (
+                <div className="w-full flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                    {[{ id: '', label: '전체' }, ...CATEGORIES].map((cat) => {
+                        const isActive = categoryFilter === cat.id
+                        return (
+                            <button
+                                key={cat.id || 'all'}
+                                onClick={() => setCategoryFilter(cat.id)}
+                                className={[
+                                    'shrink-0 px-3 py-1 text-xs font-medium rounded-full border transition-colors whitespace-nowrap',
+                                    isActive
+                                        ? 'bg-content-primary text-white border-content-primary'
+                                        : 'bg-surface text-content-secondary border-border hover:border-border-strong hover:text-content-primary',
+                                ].join(' ')}
+                            >
+                                {cat.label}
+                            </button>
+                        )
+                    })}
+                </div>
+            )}
 
             {/* 에러 */}
             {error && (
@@ -309,17 +358,26 @@ export default function IssueList({ category, initialLimit, hideSearch, showFull
 
             {/* 이슈 카드 리스트 */}
             {!loading && issues.length > 0 && (
-                <Masonry
-                    breakpointCols={breakpointColumns}
-                    className="flex gap-3 w-auto -ml-3"
-                    columnClassName="pl-3 bg-clip-padding"
-                >
-                    {issues.map((issue) => (
-                        <div key={issue.id} className="mb-3">
-                            <IssueCard issue={issue} />
+                <>
+                    {/* 우선순위 1위 — 와이드 히어로 카드 */}
+                    {heroIssue && (
+                        <div className="mb-3">
+                            <IssueCard issue={heroIssue} tier="hero" />
                         </div>
-                    ))}
-                </Masonry>
+                    )}
+
+                    <Masonry
+                        breakpointCols={breakpointColumns}
+                        className="flex gap-3 w-auto -ml-3"
+                        columnClassName="pl-3 bg-clip-padding"
+                    >
+                        {gridIssues.map((issue) => (
+                            <div key={issue.id} className="mb-3">
+                                <IssueCard issue={issue} tier={tierById.get(issue.id) ?? 'normal'} />
+                            </div>
+                        ))}
+                    </Masonry>
+                </>
             )}
 
             {/* 더 보기 — 인피니트 스크롤 or 버튼 */}

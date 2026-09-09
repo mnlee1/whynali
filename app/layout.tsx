@@ -13,6 +13,8 @@ import './globals.css'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ScrollToTopButton from '@/components/common/ScrollToTopButton'
+import VoteReminderBanner from '@/components/common/VoteReminderBanner'
+import LoginModal from '@/components/common/LoginModal'
 import NextTopLoader from 'nextjs-toploader'
 import PageTracker from '@/components/analytics/PageTracker'
 import {
@@ -128,6 +130,8 @@ export default function RootLayout({
                 </main>
                 <Footer />
                 <ScrollToTopButton />
+                <VoteReminderBanner />
+                <LoginModal />
             </body>
         </html>
     )

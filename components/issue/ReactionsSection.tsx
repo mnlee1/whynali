@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactionType } from '@/types'
 import { trackConversion } from '@/lib/analytics/tracker'
-import { goToLoginWithPendingAction } from '@/lib/pendingAction'
+import { savePendingAction } from '@/lib/pendingAction'
+import { openLoginModal } from '@/lib/loginModalStore'
 import { usePendingAction } from '@/hooks/usePendingAction'
-import LoginPromptModal from '@/components/common/LoginPromptModal'
 
 interface ReactionsSectionProps {
     issueId: string
@@ -32,7 +32,6 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [loginPrompt, setLoginPrompt] = useState<ReactionType | null>(null)
 
     useEffect(() => {
         // serverUserId가 null이면 서버에서 비로그인 확정 → 재조회 불필요
@@ -77,7 +76,8 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
 
     const handleClick = (type: ReactionType) => {
         if (!userId) {
-            setLoginPrompt(type)
+            savePendingAction({ type: 'reaction', issueId, reactionType: type })
+            openLoginModal()
             return
         }
         submitReaction(type)
@@ -187,16 +187,6 @@ export default function ReactionsSection({ issueId, userId: serverUserId }: Reac
                     )
                 })}
             </div>
-
-            <LoginPromptModal
-                isOpen={!!loginPrompt}
-                description="반응을 남기려면 로그인이 필요해요."
-                onClose={() => setLoginPrompt(null)}
-                onConfirm={() => {
-                    if (!loginPrompt) return
-                    goToLoginWithPendingAction({ type: 'reaction', issueId, reactionType: loginPrompt })
-                }}
-            />
         </div>
     )
 }

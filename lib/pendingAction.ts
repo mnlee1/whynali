@@ -12,6 +12,7 @@ export type PendingAction =
     | { type: 'reaction'; issueId: string; reactionType: ReactionType }
     | { type: 'comment'; issueId?: string; discussionTopicId?: string; parentId?: string | null; text: string }
     | { type: 'bookmark'; issueId: string }
+    | { type: 'curationFollow'; curationKey: string }
 
 type StoredPendingAction = PendingAction & { savedAt: number }
 
@@ -48,14 +49,4 @@ export function clearPendingAction() {
     } catch {
         // no-op
     }
-}
-
-export function goToLogin() {
-    const currentPath = window.location.pathname
-    window.location.href = `/login?next=${encodeURIComponent(currentPath)}`
-}
-
-export function goToLoginWithPendingAction(action: PendingAction) {
-    savePendingAction(action)
-    goToLogin()
 }

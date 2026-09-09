@@ -77,7 +77,6 @@ export default function LongformTab() {
     const [imagePreviewError, setImagePreviewError] = useState<string | null>(null)
     const [generating, setGenerating] = useState(false)
     const [generateError, setGenerateError] = useState<string | null>(null)
-    const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
     const [longformJobs, setLongformJobs] = useState<LongformJob[]>([])
     const [jobsLoading, setJobsLoading] = useState(true)
@@ -187,7 +186,6 @@ export default function LongformTab() {
     }
 
     const toggleSelect = (id: string) => {
-        setGenerateSuccess(null)
         setSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
     }
 
@@ -313,7 +311,6 @@ export default function LongformTab() {
         if (!canGenerate) return
         setGenerating(true)
         setGenerateError(null)
-        setGenerateSuccess(null)
         try {
             const res = await fetch('/api/admin/longform', {
                 method: 'POST',
@@ -332,7 +329,6 @@ export default function LongformTab() {
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.message || json.error)
-            setGenerateSuccess('롱폼 생성 완료!')
             setSelected([])
             setSentenceA('')
             setSentenceB(DEFAULT_SENTENCE_B)
@@ -553,7 +549,6 @@ export default function LongformTab() {
                 </div>
 
                 {generateError && <p className="text-sm text-red-500">{generateError}</p>}
-                {generateSuccess && <p className="text-sm text-green-600">{generateSuccess}</p>}
 
                 <div className="flex justify-end">
                     <button

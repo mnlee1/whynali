@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     
     let query = admin
         .from('votes')
-        .select('id, title, phase, approval_status, is_ai_generated, issue_id, created_at, auto_end_date, issue_status_snapshot, vote_choices(*), issues(id, title, approval_status, visibility_status)')
+        .select('id, title, phase, approval_status, is_ai_generated, issue_id, created_at, auto_end_date, issue_status_snapshot, vote_choices(*), issues(id, title, approval_status, visibility_status, category, topic_description, brief_summary, heat_index, thumbnail_urls, primary_thumbnail_index)')
         .in('phase', ['진행중', '마감'])
         .eq('approval_status', '승인')
         .order('created_at', { ascending: false })
@@ -41,9 +41,18 @@ export async function GET(request: NextRequest) {
             return iss.approval_status === '승인' && iss.visibility_status === 'visible'
         })
         .map((v) => {
-            /* 내부 필터용 필드를 제거하고 id·title만 남김 */
+            /* 내부 필터용 필드(approval_status/visibility_status)만 제거하고 나머지는 그대로 노출 */
             if (v.issues) {
-                const iss = v.issues as unknown as { id: any; title: any; approval_status?: string; visibility_status?: string }
+                const iss = v.issues as unknown as {
+                    id: string
+                    title: string
+                    category: string
+                    topic_description: string | null
+                    brief_summary: unknown
+                    heat_index: number | null
+                    approval_status?: string
+                    visibility_status?: string
+                }
                 const { approval_status: _a, visibility_status: _v, ...rest } = iss
                 return { ...v, issues: rest }
             }

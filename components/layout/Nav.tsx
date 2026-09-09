@@ -32,7 +32,7 @@ export default function Nav({ mobile = false }: NavProps) {
                         <Fragment key={cat.href}>
                             <Link
                                 href={cat.href}
-                                className={`pt-2 pb-2.5 text-sm whitespace-nowrap transition-colors border-b-2 ${
+                                className={`pt-2 pb-2.5 text-base whitespace-nowrap transition-colors border-b-2 ${
                                     isActive
                                         ? 'text-content-primary font-semibold border-primary'
                                         : 'text-content-secondary font-semibold border-transparent hover:text-content-primary'
@@ -58,7 +58,7 @@ export default function Nav({ mobile = false }: NavProps) {
                     <Fragment key={cat.href}>
                         <Link
                             href={cat.href}
-                            className={`flex items-center h-full text-sm whitespace-nowrap transition-colors border-b-2 ${
+                            className={`flex items-center h-full text-base whitespace-nowrap transition-colors border-b-2 ${
                                 isActive
                                     ? 'text-content-primary font-semibold border-primary'
                                     : 'text-content-secondary font-semibold border-transparent hover:text-content-primary'

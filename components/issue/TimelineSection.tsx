@@ -18,7 +18,7 @@
 import { useState, useEffect, useMemo, type ReactNode, type CSSProperties } from 'react'
 import { Clock, ChevronDown, ChevronUp, BarChart3, ChevronRight } from 'lucide-react'
 import { formatKstDateHeader, formatKstTime, formatKstDateKey, formatKstYear, parseKoreanMonthDayTime } from '@/lib/utils/format-date'
-import { goToLogin } from '@/lib/pendingAction'
+import { openLoginModal } from '@/lib/loginModalStore'
 
 type TimelineStage = '발단' | '전개' | '파생' | '진정' | '종결'
 type SortMode = 'latest' | 'oldest'
@@ -459,7 +459,7 @@ export default function TimelineSection({
                             </p>
                         </div>
                         <button
-                            onClick={() => goToLogin()}
+                            onClick={() => openLoginModal()}
                             className="w-full sm:w-auto shrink-0 px-5 py-2 rounded-full bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity"
                         >
                             로그인하기 →
