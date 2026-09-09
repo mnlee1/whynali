@@ -121,8 +121,10 @@
         @apply bg-surface rounded-xl border border-border shadow-card;
     }
 
+    /* 마우스 호버가 실제로 가능한 기기(pointer: fine)에서만 뜨는 효과 적용 —
+       모바일/태블릿(터치)에서는 탭 시 호버가 눌러붙는 문제를 피하기 위해 제외한다. */
     .card-hover {
-        @apply card hover:shadow-card-hover transition-shadow duration-150;
+        @apply card [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-card-hover [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1.5 transition-[box-shadow,transform] duration-300 ease-out;
     }
 
     /* 라운드 박스 안 textarea용 - 기본 스크롤바가 두꺼워서 둥근 모서리와 부딪히는 문제 방지 */
