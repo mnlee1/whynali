@@ -46,7 +46,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .single()
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('[PATCH /api/comments/:id] 댓글 수정 실패:', error)
+        return NextResponse.json({ error: '댓글을 수정하지 못했습니다.' }, { status: 500 })
     }
 
     if (pendingReview) {
@@ -109,7 +110,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('[DELETE /api/comments/:id] 댓글 삭제 실패:', error)
+        return NextResponse.json({ error: '댓글을 삭제하지 못했습니다.' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })

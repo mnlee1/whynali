@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('votes')
             .select('id, issue_id, title, phase, approval_status, issue_status_snapshot, started_at, ended_at, auto_end_date, is_ai_generated, created_at, issues(id, title, status), vote_choices(id, label, count)')
+            .is('deleted_at', null)
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
 
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
         let countQuery = supabaseAdmin
             .from('votes')
             .select('id', { count: 'exact', head: true })
+            .is('deleted_at', null)
 
         if (phase && ['대기', '진행중', '마감'].includes(phase)) {
             countQuery = countQuery.eq('phase', phase)

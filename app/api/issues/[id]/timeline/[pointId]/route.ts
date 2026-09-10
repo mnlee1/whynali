@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,9 @@ export async function DELETE(
     _request: NextRequest,
     context: { params: Promise<{ id: string; pointId: string }> }
 ) {
+    const auth = await requireAdmin()
+    if (auth.error) return auth.error
+
     const { id: issueId, pointId } = await context.params
 
     try {

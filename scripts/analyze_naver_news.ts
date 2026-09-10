@@ -1,7 +1,12 @@
 // 네이버 뉴스 API 실제 응답 분석
 
-const NAVER_CLIENT_ID = '3R2LcyDFmcC58BKqUNHI'
-const NAVER_CLIENT_SECRET = 'YsRvAIHP75'
+import { config } from 'dotenv'
+
+// .env.local에서 Naver 키 로드
+config({ path: '.env.local' })
+
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID!
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET!
 
 interface NaverNewsItem {
     title: string
