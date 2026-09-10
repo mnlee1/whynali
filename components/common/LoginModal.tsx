@@ -19,12 +19,14 @@ export default function LoginModal() {
     const [mounted, setMounted] = useState(false)
     const [isOpen, setIsOpen] = useState(false)
     const [next, setNext] = useState('/')
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         setMounted(true)
         return subscribeLoginModal((state) => {
             setIsOpen(state.isOpen)
             setNext(state.next)
+            setError(state.error)
         })
     }, [])
 
@@ -44,7 +46,7 @@ export default function LoginModal() {
             onClick={closeLoginModal}
         >
             <div
-                className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-[600px] px-8 py-10 sm:px-12"
+                className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto px-8 py-10 sm:px-12"
                 onClick={(e) => e.stopPropagation()}
             >
                 <button
@@ -55,7 +57,7 @@ export default function LoginModal() {
                 >
                     <X className="w-5 h-5" />
                 </button>
-                <LoginOptions next={next} />
+                <LoginOptions next={next} error={error} />
             </div>
         </div>,
         document.body

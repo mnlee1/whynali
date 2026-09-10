@@ -111,7 +111,7 @@ export default function VoteReminderBanner() {
     useEffect(() => {
         if (!vote) return
         if (isRecentlyDismissed(vote.id)) return
-        const timer = setTimeout(() => setVisible(true), 1500)
+        const timer = setTimeout(() => setVisible(true), 500)
         return () => clearTimeout(timer)
     }, [vote])
 
@@ -127,9 +127,13 @@ export default function VoteReminderBanner() {
         setVisible(false)
     }
 
+    // 이슈 상세 페이지는 모바일~xl 미만에서 화면 하단에 IssueActionBar가 떠 있어서
+    // 기본 bottom-20으로는 배너가 그 위에 거의 붙어버린다 — 그 페이지에서만 더 띄운다.
+    const isIssuePage = pathname.startsWith('/issue/')
+
     return (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-4 md:bottom-24 md:right-8 z-40 w-[calc(100%-2rem)] max-w-[320px]">
-            <div className="relative bg-white border border-border rounded-xl shadow-card-hover p-6 text-center animate-fade-in-slide">
+        <div className={`fixed ${isIssuePage ? 'bottom-24' : 'bottom-20'} left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-4 md:bottom-24 md:right-8 z-40 w-[calc(100%-2rem)] max-w-[280px] sm:max-w-[320px]`}>
+            <div className="relative bg-white border border-border rounded-xl shadow-card-hover p-[18px] sm:p-6 text-center animate-fade-in-slide">
                 <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-xs font-bold text-red-600">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -144,19 +148,33 @@ export default function VoteReminderBanner() {
                     </button>
                 </div>
 
-                <p className="mt-5 text-base font-bold text-content-primary leading-snug line-clamp-2">
+                {/* 모바일: 버튼 없이 제목+참여자 수 전체를 탭 영역으로 압축 */}
+                <Link href={`/issue/${vote.issues!.id}#section-vote`} className="sm:hidden block mt-3.5">
+                    <p className="text-base font-bold text-content-primary leading-snug line-clamp-2">
+                        🔥 {vote.title ?? '지금 이 이슈, 어떻게 생각해?'}
+                    </p>
+
+                    {totalCount > 0 && (
+                        <p className="mt-2 text-xs text-content-secondary">
+                            투표 <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중!
+                        </p>
+                    )}
+                </Link>
+
+                {/* PC: 기존 카드 구성(제목 + 투표하기 버튼 + 참여자 수) 유지 */}
+                <p className="hidden sm:block mt-5 text-base font-bold text-content-primary leading-snug line-clamp-2">
                     🔥 {vote.title ?? '지금 이 이슈, 어떻게 생각해?'}
                 </p>
 
                 <Link
                     href={`/issue/${vote.issues!.id}#section-vote`}
-                    className="btn-md btn-primary mt-5 w-full rounded-lg font-bold"
+                    className="hidden sm:block btn-md btn-primary mt-5 w-full rounded-lg font-bold"
                 >
                     투표하기
                 </Link>
 
                 {totalCount > 0 && (
-                    <p className="mt-3 text-xs text-content-secondary">
+                    <p className="hidden sm:block mt-3 text-xs text-content-secondary">
                         투표 <span className="font-bold text-primary">{totalCount.toLocaleString()}</span>명 참여 중!
                     </p>
                 )}

@@ -6,23 +6,23 @@
  * savePendingAction(lib/pendingAction.ts) + openLoginModal() 조합으로 이 모달을 띄운다.
  */
 
-type LoginModalState = { isOpen: boolean; next: string }
+type LoginModalState = { isOpen: boolean; next: string; error: string | null }
 type Listener = (state: LoginModalState) => void
 
-let state: LoginModalState = { isOpen: false, next: '/' }
+let state: LoginModalState = { isOpen: false, next: '/', error: null }
 const listeners = new Set<Listener>()
 
 function emit() {
     listeners.forEach((listener) => listener(state))
 }
 
-export function openLoginModal(next?: string) {
-    state = { isOpen: true, next: next ?? window.location.pathname }
+export function openLoginModal(next?: string, error?: string | null) {
+    state = { isOpen: true, next: next ?? window.location.pathname, error: error ?? null }
     emit()
 }
 
 export function closeLoginModal() {
-    state = { ...state, isOpen: false }
+    state = { ...state, isOpen: false, error: null }
     emit()
 }
 

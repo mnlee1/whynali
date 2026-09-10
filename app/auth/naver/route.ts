@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { getReturnTo } from '@/lib/auth/oauth-return'
 
 const NAVER_AUTH_URL = 'https://nid.naver.com/oauth2.0/authorize'
 
@@ -44,6 +45,15 @@ export async function GET(request: NextRequest) {
         path: '/',
     })
 
+    // 로그인을 시도한 페이지(모달이 떠 있던 페이지 등)를 기억해뒀다가,
+    // 콜백에서 에러가 나면 /login 풀페이지 대신 그 페이지로 되돌려 모달로 에러를 보여준다.
+    cookieStore.set('oauth_return_to', getReturnTo(request, origin), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 10,
+        path: '/',
+    })
     const params = new URLSearchParams({
         response_type: 'code',
         client_id: clientId,
