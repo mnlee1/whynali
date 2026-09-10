@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { buildOAuthErrorRedirect } from '@/lib/auth/oauth-return'
 
 const NAVER_TOKEN_URL = 'https://nid.naver.com/oauth2.0/token'
 const NAVER_PROFILE_URL = 'https://openapi.naver.com/v1/nid/me'
@@ -41,8 +42,9 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies()
     const next = cookieStore.get('naver_oauth_next')?.value ?? '/'
 
+    const returnTo = cookieStore.get('oauth_return_to')?.value || '/login'
     const redirectError = (message: string) =>
-        NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(message)}`, origin))
+        NextResponse.redirect(buildOAuthErrorRedirect(origin, returnTo, next, message))
 
     if (!code) {
         return redirectError('인증 코드가 없습니다.')
@@ -54,6 +56,7 @@ export async function GET(request: NextRequest) {
     }
     cookieStore.delete('naver_oauth_state')
     cookieStore.delete('naver_oauth_next')
+    cookieStore.delete('oauth_return_to')
 
     const clientId = process.env.NAVER_CLIENT_ID
     const clientSecret = process.env.NAVER_CLIENT_SECRET

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { getReturnTo } from '@/lib/auth/oauth-return'
 
 const KAKAO_AUTH_URL = 'https://kauth.kakao.com/oauth/authorize'
 
@@ -35,6 +36,14 @@ export async function GET(request: NextRequest) {
         path: '/',
     })
     cookieStore.set('kakao_oauth_next', next, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 10,
+        path: '/',
+    })
+
+    cookieStore.set('oauth_return_to', getReturnTo(request, origin), {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

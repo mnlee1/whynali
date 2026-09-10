@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { buildOAuthErrorRedirect } from '@/lib/auth/oauth-return'
 
 const KAKAO_TOKEN_URL = 'https://kauth.kakao.com/oauth/token'
 const KAKAO_PROFILE_URL = 'https://kapi.kakao.com/v2/user/me'
@@ -40,8 +41,9 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies()
     const next = cookieStore.get('kakao_oauth_next')?.value ?? '/'
 
+    const returnTo = cookieStore.get('oauth_return_to')?.value || '/login'
     const redirectError = (message: string) =>
-        NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(message)}`, origin))
+        NextResponse.redirect(buildOAuthErrorRedirect(origin, returnTo, next, message))
 
     if (!code) return redirectError('인증 코드가 없습니다.')
 
@@ -49,6 +51,7 @@ export async function GET(request: NextRequest) {
     if (savedState && state !== savedState) return redirectError('잘못된 요청입니다.')
     cookieStore.delete('kakao_oauth_state')
     cookieStore.delete('kakao_oauth_next')
+    cookieStore.delete('oauth_return_to')
 
     const clientId = process.env.NEXT_PUBLIC_KAKAO_CLIENT_ID
     const clientSecret = process.env.KAKAO_CLIENT_SECRET
