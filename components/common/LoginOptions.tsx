@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { AlertCircle } from 'lucide-react'
 import { getLastLoginProvider, setLastLoginProvider, type LoginProvider } from '@/lib/lastLoginProvider'
 
 interface LoginOptionsProps {
@@ -44,16 +45,17 @@ export default function LoginOptions({ next, error }: LoginOptionsProps) {
             </div>
 
             {error && (
-                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                <p className="w-full max-w-[320px] mx-auto mb-4 flex items-center justify-center gap-1 py-2 px-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center leading-tight">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
                     {error}
-                </div>
+                </p>
             )}
 
             <div className="space-y-3 flex flex-col items-center">
                 <Link
                     href={`/auth/kakao${nextParam}`}
                     onClick={() => setLastLoginProvider('kakao')}
-                    className="relative btn btn-lg w-[320px] gap-3 flex items-center justify-center bg-[#FEE500] text-gray-900 hover:bg-[#F6DC00]"
+                    className="relative btn btn-lg w-full max-w-[320px] gap-3 flex items-center justify-center bg-[#FEE500] text-gray-900 hover:bg-[#F6DC00]"
                 >
                     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.61 1.636 4.904 4.125 6.266-.182.676-.66 2.453-.757 2.833-.12.47.173.464.364.338.149-.098 2.367-1.605 3.324-2.255.629.09 1.277.138 1.944.138 5.523 0 10-3.477 10-7.78C21 6.477 17.523 3 12 3z" />
@@ -65,7 +67,7 @@ export default function LoginOptions({ next, error }: LoginOptionsProps) {
                 <Link
                     href={`/auth/naver${nextParam}`}
                     onClick={() => setLastLoginProvider('naver')}
-                    className="relative btn btn-lg w-[320px] gap-3 flex items-center justify-center bg-[#03C75A] text-white hover:bg-[#02b350]"
+                    className="relative btn btn-lg w-full max-w-[320px] gap-3 flex items-center justify-center bg-[#03C75A] text-white hover:bg-[#02b350]"
                 >
                     <span className="w-5 h-5 shrink-0 flex items-center justify-center rounded bg-white text-[#03C75A] font-bold text-xs">N</span>
                     네이버로 로그인
@@ -75,7 +77,7 @@ export default function LoginOptions({ next, error }: LoginOptionsProps) {
                 <Link
                     href={`/auth/google${nextParam}`}
                     onClick={() => setLastLoginProvider('google')}
-                    className="relative btn-neutral btn-lg w-[320px] gap-3 flex items-center justify-center"
+                    className="relative btn-neutral btn-lg w-full max-w-[320px] gap-3 flex items-center justify-center"
                 >
                     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                         <path

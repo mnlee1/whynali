@@ -15,6 +15,7 @@ import Footer from '@/components/layout/Footer'
 import ScrollToTopButton from '@/components/common/ScrollToTopButton'
 import VoteReminderBanner from '@/components/common/VoteReminderBanner'
 import LoginModal from '@/components/common/LoginModal'
+import LoginErrorListener from '@/components/common/LoginErrorListener'
 import NextTopLoader from 'nextjs-toploader'
 import PageTracker from '@/components/analytics/PageTracker'
 import {
@@ -132,6 +133,7 @@ export default function RootLayout({
                 <ScrollToTopButton />
                 <VoteReminderBanner />
                 <LoginModal />
+                <LoginErrorListener />
             </body>
         </html>
     )

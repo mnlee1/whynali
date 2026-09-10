@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { buildOAuthErrorRedirect } from '@/lib/auth/oauth-return'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
@@ -38,8 +39,9 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies()
     const next = cookieStore.get('google_oauth_next')?.value ?? '/'
 
+    const returnTo = cookieStore.get('oauth_return_to')?.value || '/login'
     const redirectError = (message: string) =>
-        NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(message)}`, origin))
+        NextResponse.redirect(buildOAuthErrorRedirect(origin, returnTo, next, message))
 
     if (!code) return redirectError('인증 코드가 없습니다.')
 
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
     if (savedState && state !== savedState) return redirectError('잘못된 요청입니다.')
     cookieStore.delete('google_oauth_state')
     cookieStore.delete('google_oauth_next')
+    cookieStore.delete('oauth_return_to')
 
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
