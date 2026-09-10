@@ -149,6 +149,6 @@ export function generateCollectionPageSchema(category: IssueCategory) {
  */
 export function createJsonLd(data: object) {
     return {
-        __html: JSON.stringify(data, null, 0),
+        __html: JSON.stringify(data, null, 0).replace(/</g, '\\u003c'),
     }
 }

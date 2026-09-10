@@ -22,7 +22,8 @@ export async function GET(request: NextRequest, { params }: Params) {
         .range(offset, offset + limit - 1)
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('[GET /api/discussions/:id/comments] 댓글 조회 실패:', error)
+        return NextResponse.json({ error: '댓글을 불러오지 못했습니다.' }, { status: 500 })
     }
 
     type Row = (typeof rawData)[number] & { users?: { display_name: string | null } | null }
@@ -79,7 +80,8 @@ export async function POST(request: NextRequest, { params }: Params) {
         .single()
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('[POST /api/discussions/:id/comments] 댓글 등록 실패:', error)
+        return NextResponse.json({ error: '댓글을 등록하지 못했습니다.' }, { status: 500 })
     }
 
     if (pendingReview) {

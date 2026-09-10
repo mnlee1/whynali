@@ -58,6 +58,7 @@ secrets.*
 *.csv
 *.xlsx
 *.sql
+!supabase/migrations/*.sql
 data/
 uploads/
 
