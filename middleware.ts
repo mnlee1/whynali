@@ -6,6 +6,7 @@
  * - /admin/login       : 누구나 접근 가능 (관리자 로그인 페이지)
  * - /admin/*           : @nhnad.com 세션 필요. 미인증 → /admin/login 리다이렉트
  * - /api/admin/*       : @nhnad.com 세션 필요. 미인증 → 401/403
+ * - /api/test/*        : @nhnad.com 세션 필요 (내부 테스트용 엔드포인트). 미인증 → 401/403
  * - PROTECTED_PATHS    : 로그인 필요 API (쓰기 전용). 비인증 → 401
  */
 
@@ -64,8 +65,14 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next()
     }
 
-    /* ── /admin/* 및 /api/admin/* 은 @nhnad.com 세션 필요 ── */
-    if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+    /* ── /admin/*, /api/admin/*, /api/test/* 는 @nhnad.com 세션 필요 ── */
+    if (
+        pathname.startsWith('/admin') ||
+        pathname.startsWith('/api/admin') ||
+        pathname.startsWith('/api/test')
+    ) {
+        const isApiPath = pathname.startsWith('/api/admin') || pathname.startsWith('/api/test')
+
         // CRON_SECRET Bearer 토큰이 있으면 세션 체크 없이 통과 (backfill 등 서버 작업용)
         const cronSecret = process.env.CRON_SECRET
         const authHeader = request.headers.get('authorization')
@@ -76,7 +83,7 @@ export async function middleware(request: NextRequest) {
         const { user, supabaseResponse } = await getSessionUser(request)
 
         if (!user) {
-            if (pathname.startsWith('/api/admin')) {
+            if (isApiPath) {
                 return NextResponse.json(
                     { error: 'UNAUTHORIZED', message: '관리자 로그인이 필요합니다.' },
                     { status: 401 }
@@ -86,7 +93,7 @@ export async function middleware(request: NextRequest) {
         }
 
         if (!isAdminUser(user)) {
-            if (pathname.startsWith('/api/admin')) {
+            if (isApiPath) {
                 return NextResponse.json(
                     { error: 'FORBIDDEN', message: '관리자 권한이 없습니다.' },
                     { status: 403 }

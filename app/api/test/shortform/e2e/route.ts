@@ -270,7 +270,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: false,
             error: error.message,
-            stack: error.stack,
             logs,
         }, { status: 500 })
     }

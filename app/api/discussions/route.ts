@@ -64,7 +64,8 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('[GET /api/discussions] 토론 목록 조회 실패:', error)
+        return NextResponse.json({ error: '토론 목록을 불러오지 못했습니다.' }, { status: 500 })
     }
 
     // 병합된 이슈에 연결된 토론 제외 (기존 병합 데이터 정합성 보완)
@@ -141,7 +142,8 @@ export async function POST(request: NextRequest) {
         .single()
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('[POST /api/discussions] 토론 등록 실패:', error)
+        return NextResponse.json({ error: '토론을 등록하지 못했습니다.' }, { status: 500 })
     }
 
     if (pendingReview) {

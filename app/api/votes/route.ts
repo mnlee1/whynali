@@ -9,26 +9,73 @@ export async function GET(request: NextRequest) {
     const limit = Number(request.nextUrl.searchParams.get('limit') ?? 0)
 
     const admin = createSupabaseAdminClient()
-    
-    let query = admin
-        .from('votes')
-        .select('id, title, phase, approval_status, is_ai_generated, issue_id, created_at, auto_end_date, issue_status_snapshot, vote_choices(*), issues(id, title, approval_status, visibility_status, category, topic_description, brief_summary, heat_index, thumbnail_urls, primary_thumbnail_index)')
-        .in('phase', ['진행중', '마감'])
-        .eq('approval_status', '승인')
-        .order('created_at', { ascending: false })
 
-    if (issue_id) {
-        query = query.eq('issue_id', issue_id)
-    }
+    const SELECT = 'id, title, phase, approval_status, is_ai_generated, issue_id, created_at, auto_end_date, issue_status_snapshot, vote_choices(*), issues(id, title, approval_status, visibility_status, category, topic_description, brief_summary, heat_index, thumbnail_urls, primary_thumbnail_index)'
 
-    if (limit > 0) {
-        query = query.limit(limit)
-    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let rawData: any[] = []
 
-    const { data: rawData, error } = await query
+    if (!issue_id && limit > 0) {
+        // 진행중/마감을 구분 없이 created_at으로만 정렬해 limit을 적용하면, 최근 생성된
+        // 마감 투표가 많을 때 마감 임박한 오래된 진행중 투표가 상위 결과에서 잘려나갈 수 있다.
+        // 진행중을 먼저 채우고 남는 자리만 마감 투표로 채워 이를 방지한다.
+        const { data: activeData, error: activeError } = await admin
+            .from('votes')
+            .select(SELECT)
+            .eq('phase', '진행중')
+            .eq('approval_status', '승인')
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(limit)
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        if (activeError) {
+            console.error('[GET /api/votes] 진행중 투표 조회 실패:', activeError)
+            return NextResponse.json({ error: '투표 목록을 불러오지 못했습니다.' }, { status: 500 })
+        }
+
+        const remaining = limit - (activeData?.length ?? 0)
+        let closedData: typeof activeData = []
+        if (remaining > 0) {
+            const { data, error: closedError } = await admin
+                .from('votes')
+                .select(SELECT)
+                .eq('phase', '마감')
+                .eq('approval_status', '승인')
+                .is('deleted_at', null)
+                .order('created_at', { ascending: false })
+                .limit(remaining)
+
+            if (closedError) {
+                console.error('[GET /api/votes] 마감 투표 조회 실패:', closedError)
+                return NextResponse.json({ error: '투표 목록을 불러오지 못했습니다.' }, { status: 500 })
+            }
+            closedData = data ?? []
+        }
+
+        rawData = [...(activeData ?? []), ...closedData]
+    } else {
+        let query = admin
+            .from('votes')
+            .select(SELECT)
+            .in('phase', ['진행중', '마감'])
+            .eq('approval_status', '승인')
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+
+        if (issue_id) {
+            query = query.eq('issue_id', issue_id)
+        }
+
+        if (limit > 0) {
+            query = query.limit(limit)
+        }
+
+        const { data, error } = await query
+        if (error) {
+            console.error('[GET /api/votes] 투표 조회 실패:', error)
+            return NextResponse.json({ error: '투표 목록을 불러오지 못했습니다.' }, { status: 500 })
+        }
+        rawData = data ?? []
     }
 
     /* issue_id가 있는 투표는 연결된 이슈가 승인·visible인 경우만 노출

@@ -1,95 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-server'
-
-export const dynamic = 'force-dynamic'
-
-export async function GET(
-    request: NextRequest,
-    context: { params: Promise<{ id: string }> }
-) {
-    const { id } = await context.params
-
-    try {
-        const { data, error } = await supabaseAdmin
-            .from('issues')
-            .select('*')
-            .eq('id', id)
-            .single()
-
-        if (error) throw error
-        if (!data) {
-            return NextResponse.json(
-                { error: 'NOT_FOUND', message: '이슈를 찾을 수 없습니다' },
-                { status: 404 }
-            )
-        }
-
-        return NextResponse.json({ data })
-    } catch (error) {
-        console.error('Issue fetch error:', error)
-        return NextResponse.json(
-            { error: 'FETCH_ERROR', message: '이슈 조회 실패' },
-            { status: 500 }
-        )
-    }
-}
-
-export async function PATCH(
-    request: NextRequest,
-    context: { params: Promise<{ id: string }> }
-) {
-    const { id } = await context.params
-
-    try {
-        const body = await request.json()
-        const allowed = ['title', 'status', 'category', 'heat_index', 'approval_status', 'approved_at']
-        const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-
-        for (const key of allowed) {
-            if (key in body) {
-                updates[key] = body[key]
-            }
-        }
-
-        const { data, error } = await supabaseAdmin
-            .from('issues')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single()
-
-        if (error) throw error
-
-        return NextResponse.json({ data })
-    } catch (error) {
-        console.error('Issue update error:', error)
-        return NextResponse.json(
-            { error: 'UPDATE_ERROR', message: '이슈 수정 실패' },
-            { status: 500 }
-        )
-    }
-}
-
-export async function DELETE(
-    request: NextRequest,
-    context: { params: Promise<{ id: string }> }
-) {
-    const { id } = await context.params
-
-    try {
-        const { error } = await supabaseAdmin
-            .from('issues')
-            .delete()
-            .eq('id', id)
-
-        if (error) throw error
-
-        return NextResponse.json({ success: true })
-    } catch (error) {
-        console.error('Issue delete error:', error)
-        return NextResponse.json(
-            { error: 'DELETE_ERROR', message: '이슈 삭제 실패' },
-            { status: 500 }
-        )
-    }
-}
+/**
+ * app/api/issues/[id]/route.ts
+ *
+ * 2026-09-10 보안 점검에서 제거됨: GET(승인/노출 필터 없이 전체 조회),
+ * PATCH·DELETE(인증 없이 아무나 이슈 수정/삭제 가능)가 프론트 어디에서도
+ * 호출되지 않는 상태로 방치되어 있어 제거함.
+ *
+ * 이슈 상세 조회는 app/issue/[id]/page.tsx가 자체 쿼리로 처리하고,
+ * 관리자 수정/삭제는 app/api/admin/issues/[id]/route.ts를 사용한다.
+ */

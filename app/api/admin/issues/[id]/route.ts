@@ -117,9 +117,11 @@ export async function DELETE(
             )
         }
 
+        // 소프트 삭제: 완전 삭제 대신 visibility_status만 'deleted'로 바꾸고 조회에서 제외한다
+        // (기존 공개 조회 코드가 전부 visibility_status === 'visible' 일치 조건이라 자동으로 제외됨)
         const { error } = await supabaseAdmin
             .from('issues')
-            .delete()
+            .update({ visibility_status: 'deleted' })
             .eq('id', id)
 
         if (error) throw error

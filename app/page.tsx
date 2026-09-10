@@ -99,6 +99,7 @@ async function fetchPageData() {
             .select('*, vote_choices(*), issues(id, title, approval_status, visibility_status, category, topic_description, brief_summary, heat_index, thumbnail_urls, primary_thumbnail_index)')
             .in('phase', ['진행중', '마감'])
             .eq('approval_status', '승인')
+            .is('deleted_at', null)
             .order('created_at', { ascending: false })
             .limit(50),
 

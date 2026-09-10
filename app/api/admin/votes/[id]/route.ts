@@ -34,16 +34,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
         )
     }
 
-    // 선택지 먼저 삭제 (외래키 제약)
-    await supabaseAdmin
-        .from('vote_choices')
-        .delete()
-        .eq('vote_id', id)
-
-    // 투표 삭제
+    // 소프트 삭제: 완전 삭제 대신 deleted_at만 기록하고 조회에서 제외한다 (되돌리기 위해 원본은 보존)
     const { error: deleteError } = await supabaseAdmin
         .from('votes')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id)
 
     if (deleteError) {
