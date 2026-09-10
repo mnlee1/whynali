@@ -41,3 +41,25 @@ output/
 CLAUDE.md
 .claude/
 .env*.local
+
+# 설정·비밀값
+.env.*
+!.env.example
+config.local.*
+secrets.*
+
+# 인증 파일
+*.pem
+*.key
+*.p12
+*-credentials.json
+
+# 실제 데이터
+*.csv
+*.xlsx
+*.sql
+data/
+uploads/
+
+# 로그
+logs/
