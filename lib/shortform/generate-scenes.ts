@@ -11,7 +11,7 @@ import sharp from 'sharp'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { downloadImage } from './fetch-stock-images'
-import { wordWrapLines, DESC_MAX_CHARS_PER_LINE, DESC_SAFE_MAX_LINES } from './text-wrap'
+import { wordWrapLines, wrapByWidth, DESC_MAX_CHARS_PER_LINE, DESC_SAFE_MAX_LINES } from './text-wrap'
 
 const WIDTH = 720
 const HEIGHT = 1280
@@ -37,6 +37,9 @@ const LOGO_H = 73
 const LOGO_TOP_Y = 93
 const TITLE_FONTSIZE = 72
 const TITLE_LINE_HEIGHT = 90
+// 타이틀 줄바꿈은 글자 수가 아닌 실제 렌더링 폭(px) 기준 — 좌우 여백 확보
+const TITLE_SIDE_MARGIN = 40
+const TITLE_MAX_WIDTH = WIDTH - TITLE_SIDE_MARGIN * 2
 
 const DESC_FONTSIZE = 48
 const DESC_LINE_HEIGHT = 72
@@ -290,9 +293,14 @@ export async function createTypingFrames(
     highlights: string[] = []
 ): Promise<{ buffer: Buffer; duration: number }[]> {
     const layout = computeLayout(title, desc, sceneNumber)
+    const font = getOTFont()
 
     // 씬1: 타이틀+설명 모두 애니메이션 / 씬2,3: 설명만 애니메이션 (타이틀은 정적 레이어)
-    const titleFinalLines = sceneNumber === 1 && title ? wordWrapLines(title, DESC_MAX_CHARS_PER_LINE) : []
+    const titleFinalLines = sceneNumber === 1 && title
+        ? (font
+            ? wrapByWidth(title, (s) => font.getAdvanceWidth(s, TITLE_FONTSIZE), TITLE_MAX_WIDTH)
+            : wordWrapLines(title, DESC_MAX_CHARS_PER_LINE))
+        : []
     const descFinalLines = desc ? wordWrapLines(desc, DESC_MAX_CHARS_PER_LINE) : []
 
     const titleWords = titleFinalLines.flatMap(l => l.split(' ').filter(Boolean))
@@ -542,7 +550,7 @@ export async function createSceneTextOverlay(
 
     // 타이틀 정적 렌더링 (씬2,3만 — 씬1은 타이핑 애니메이션으로 처리)
     if (font && title && sceneNumber !== 1) {
-        const titleLines = wordWrapLines(title, DESC_MAX_CHARS_PER_LINE)
+        const titleLines = wrapByWidth(title, (s) => font.getAdvanceWidth(s, TITLE_FONTSIZE), TITLE_MAX_WIDTH)
         const ascT = Math.round(font.ascender * TITLE_FONTSIZE / font.unitsPerEm)
         const titleHighlightBudget = buildHighlightBudget(highlights)
         for (let i = 0; i < titleLines.length; i++) {
