@@ -28,7 +28,9 @@ import type { Issue, IssueCategory } from '@/types/issue'
 import type { Vote, VoteChoice } from '@/types/index'
 import { generateWebSiteSchema, createJsonLd } from '@/lib/seo/schema'
 
-const TOPIC_CHANNEL_COUNT = 3
+// 매체별 토픽 큐레이션에 노출할 카테고리와 순서 고정 — 2행 x 3열(경제/기술/연예, 정치/사회/스포츠).
+// 화력 기반 동적 선정 대신 항상 이 6개(세계 제외)를 이 순서로 보여준다.
+const TOPIC_CHANNEL_CATEGORIES: IssueCategory[] = ['경제', '기술', '연예', '정치', '사회', '스포츠']
 const RECOMMEND_ITEM_COUNT = 3
 
 // 하단 큐레이션(토픽/추천) 선정용 최신순 가중치 — 화력(heat_index)이 비슷하거나 낮아도
@@ -151,9 +153,9 @@ async function fetchPageData() {
         ...votes.map(v => v.issues?.id).filter((id): id is string => !!id),
     ])
 
-    // ── 매체별 토픽 큐레이션: 화력 상위 카테고리 3개를 채널로 구성 (히어로 1 + 서브 3) ──
-    // 카테고리 선정 기준: 최상위 이슈 1개가 아니라, 채널을 채울 상위 4개 이슈의 화력 합계로 순위를 매긴다.
-    // (단발성으로 튄 이슈 하나보다, 꾸준히 화제인 카테고리가 우선되어 채널 자체가 알차진다.)
+    // ── 매체별 토픽 큐레이션: 카테고리 6개(세계 제외) 고정 순서로 채널 구성 (히어로 1 + 서브 3) ──
+    // 카테고리 자체는 화력과 무관하게 항상 TOPIC_CHANNEL_CATEGORIES 순서대로 보여주고,
+    // 카테고리 안에서 어떤 이슈를 히어로/서브로 뽑을지만 화력(가중 점수) 순으로 정한다.
     // 카테고리별로 아직 안 쓰인 이슈를 우선 채우고, 4개(히어로+서브3)가 안 모이면 랭킹/투표에 쓰인 이슈로 폴백해 채널을 완성한다.
     // 최신순 가중치 적용: 화력이 비슷해도 최근 생성된 이슈가 우선되도록 재정렬.
     // 단, 최소 화력(MIN_HEAT_FOR_CURATION) 미만인 노이즈성 이슈는 아무리 최신이어도 제외한다.
@@ -166,21 +168,18 @@ async function fetchPageData() {
         list.push(issue)
         byCategory.set(issue.category, list)
     }
-    const topCategoriesByHeat = Array.from(byCategory.entries())
-        .sort(([, a], [, b]) => {
-            const sumA = a.slice(0, 4).reduce((sum, i) => sum + weightedScore(i), 0)
-            const sumB = b.slice(0, 4).reduce((sum, i) => sum + weightedScore(i), 0)
-            return sumB - sumA
-        })
-        .slice(0, TOPIC_CHANNEL_COUNT)
-    const topicChannels: TopicChannel[] = topCategoriesByHeat
-        .map(([category, issues]) => {
+    const topicChannels: TopicChannel[] = TOPIC_CHANNEL_CATEGORIES
+        .map((category) => {
+            const issues = byCategory.get(category) ?? []
+            if (issues.length === 0) return null
             const preferred = issues.filter(i => !usedIds.has(i.id))
             const picks = preferred.length >= 4
                 ? preferred.slice(0, 4)
                 : [...preferred, ...issues.filter(i => usedIds.has(i.id))].slice(0, 4)
+            if (picks.length === 0) return null
             return { category, hero: picks[0], subs: picks.slice(1, 4) }
         })
+        .filter((ch): ch is TopicChannel => ch !== null)
     topicChannels.forEach(ch => {
         usedIds.add(ch.hero.id)
         ch.subs.forEach(s => usedIds.add(s.id))
@@ -271,10 +270,8 @@ export default async function HomePage() {
                 <PopularRanking initialIssues={surgingIssues} isSurging />
             </FadeInSection>
 
-            {/* 매체별 토픽 큐레이션 */}
-            <FadeInSection delay={0.15}>
-                <TopicCurationSection channels={topicChannels} />
-            </FadeInSection>
+            {/* 매체별 토픽 큐레이션 — 카드별로 자체 스크롤 페이드인 처리하므로 섹션 전체를 감싸지 않음 */}
+            <TopicCurationSection channels={topicChannels} />
 
             {/* 오늘의 난리 투표 — 위치는 임시, 추후 조정 예정 */}
             <FadeInSection>
