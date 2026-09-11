@@ -47,7 +47,7 @@ export default async function PoliticsPage() {
         supabaseAdmin.from('issues').select('*', { count: 'exact', head: true }).eq('approval_status', '승인').eq('visibility_status', 'visible').is('merged_into_id', null).eq('category', '정치').eq('status', '종결'),
     ])
 
-    const tabCounts = { '': count ?? 0, '점화': hotCount ?? 0, '논란중': controversialCount ?? 0, '종결': closedCount ?? 0 }
+    const tabCounts = { '': count ?? 0, '진행중': (hotCount ?? 0) + (controversialCount ?? 0), '점화': hotCount ?? 0, '논란중': controversialCount ?? 0, '종결': closedCount ?? 0 }
 
     return (
         <>

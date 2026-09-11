@@ -76,6 +76,20 @@ function formatDday(days: number): string {
     return days === 0 ? 'D-day' : `D-${days}`
 }
 
+// 카드 너비가 좁아지면 CSS 자동 줄바꿈만으로는 "어떻게" / "생각해?"처럼 절 중간에서
+// 끊기기 쉽다 — 쉼표가 있으면 그 지점에서 강제로 줄을 나눠 절 단위로 읽히게 한다.
+function renderTitleWithBreak(title: string) {
+    const commaIndex = title.indexOf(',')
+    if (commaIndex === -1) return title
+    return (
+        <>
+            {title.slice(0, commaIndex + 1)}
+            <br />
+            {title.slice(commaIndex + 1).trim()}
+        </>
+    )
+}
+
 export default function VoteReminderBanner() {
     const pathname = usePathname()
     const [vote, setVote] = useState<FeaturedVote | null>(null)
@@ -149,10 +163,13 @@ export default function VoteReminderBanner() {
                 </div>
 
                 {/* 모바일: 버튼 없이 제목+참여자 수 전체를 탭 영역으로 압축 */}
-                <Link href={`/issue/${vote.issues!.id}#section-vote`} className="sm:hidden block mt-3.5">
-                    <p className="text-base font-bold text-content-primary leading-snug line-clamp-2">
-                        🔥 {vote.title ?? '지금 이 이슈, 어떻게 생각해?'}
-                    </p>
+                <Link href={`/issue/${vote.issues!.id}#section-vote`} className="sm:hidden block text-center mt-3.5">
+                    <div className="relative inline-block max-w-full pl-6 text-center">
+                        <span className="absolute left-0 top-0 text-base" aria-hidden="true">🔥</span>
+                        <p className="text-base font-bold text-content-primary leading-snug line-clamp-2 break-keep">
+                            {renderTitleWithBreak(vote.title ?? '지금 이 이슈, 어떻게 생각해?')}
+                        </p>
+                    </div>
 
                     {totalCount > 0 && (
                         <p className="mt-2 text-xs text-content-secondary">
@@ -161,10 +178,16 @@ export default function VoteReminderBanner() {
                     )}
                 </Link>
 
-                {/* PC: 기존 카드 구성(제목 + 투표하기 버튼 + 참여자 수) 유지 */}
-                <p className="hidden sm:block mt-5 text-base font-bold text-content-primary leading-snug line-clamp-2">
-                    🔥 {vote.title ?? '지금 이 이슈, 어떻게 생각해?'}
-                </p>
+                {/* PC: 기존 카드 구성(제목 + 투표하기 버튼 + 참여자 수) 유지 — 카드 폭이 넉넉해 굳이
+                    쉼표에서 강제로 안 끊고, 한 줄에 들어가면 한 줄로 유동적으로 보여준다. */}
+                <div className="hidden sm:block text-center mt-5">
+                    <div className="relative inline-block max-w-full pl-6 text-center">
+                        <span className="absolute left-0 top-0 text-base" aria-hidden="true">🔥</span>
+                        <p className="text-base font-bold text-content-primary leading-snug line-clamp-2 break-keep">
+                            {vote.title ?? '지금 이 이슈, 어떻게 생각해?'}
+                        </p>
+                    </div>
+                </div>
 
                 <Link
                     href={`/issue/${vote.issues!.id}#section-vote`}
