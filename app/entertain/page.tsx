@@ -49,6 +49,7 @@ export default async function EntertainPage() {
 
     const tabCounts = {
         '': count ?? 0,
+        '진행중': (hotCount ?? 0) + (controversialCount ?? 0),
         '점화': hotCount ?? 0,
         '논란중': controversialCount ?? 0,
         '종결': closedCount ?? 0,

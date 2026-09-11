@@ -20,14 +20,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Bookmark } from 'lucide-react'
 import { decodeHtml } from '@/lib/utils/decode-html'
 import { formatDate } from '@/lib/utils/format-date'
-import { truncateToSentence } from '@/lib/utils/truncate-to-sentence'
 import type { Issue } from '@/types/issue'
 
 interface RecommendedCurationSectionProps {
     items: Issue[]
 }
-
-const HEADLINE_MAX_LENGTH = 42
 
 const ITEM_GRADIENTS: Record<string, string> = {
     연예: 'from-pink-500 to-violet-500',
@@ -82,7 +79,7 @@ export default function RecommendedCurationSection({ items }: RecommendedCuratio
     return (
         <section className="!mt-[72px]">
             <div className="mb-5">
-                <h2 className="text-[24px] font-bold text-content-primary">추천 큐레이션</h2>
+                <h2 className="text-2xl font-bold text-content-primary">추천 큐레이션</h2>
             </div>
 
             <div className="relative">
@@ -153,8 +150,8 @@ export default function RecommendedCurationSection({ items }: RecommendedCuratio
                                             )}
                                         </div>
                                         <div className="p-3.5">
-                                            <p className="text-[15.5px] font-bold text-content-primary leading-snug line-clamp-2 mb-5 group-hover:text-primary [.group:has(button:hover)_&]:!text-content-primary transition-colors">
-                                                {truncateToSentence(decodeHtml(item.topic_description ?? item.brief_summary?.intro ?? item.title), HEADLINE_MAX_LENGTH)}
+                                            <p className="text-[15.5px] font-bold text-content-primary leading-snug line-clamp-1 mb-5 group-hover:text-primary [.group:has(button:hover)_&]:!text-content-primary transition-colors">
+                                                {decodeHtml(item.title)}
                                             </p>
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs text-content-muted">

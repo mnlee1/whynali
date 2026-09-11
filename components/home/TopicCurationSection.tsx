@@ -16,13 +16,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { motion } from 'framer-motion'
 import { Bookmark } from 'lucide-react'
 import { formatDate } from '@/lib/utils/format-date'
 import { decodeHtml } from '@/lib/utils/decode-html'
-import { truncateToSentence } from '@/lib/utils/truncate-to-sentence'
 import type { Issue, IssueCategory } from '@/types/issue'
-
-const SUB_TEXT_MAX_LENGTH = 70
 
 export interface TopicChannel {
     category: IssueCategory
@@ -104,10 +102,119 @@ const ACCENT_COLOR: Record<IssueCategory, string> = {
     스포츠: '#1d4ed8',
 }
 
+function ChannelColumn({ category, hero, subs, failedImages, onImageError, bookmarked, onToggleBookmark }: TopicChannel & {
+    failedImages: Record<string, boolean>
+    onImageError: (id: string) => void
+    bookmarked: Set<string>
+    onToggleBookmark: (id: string) => void
+}) {
+    const meta = CHANNEL_META[category]
+    const rawImage = hero.thumbnail_urls?.[hero.primary_thumbnail_index ?? 0] ?? null
+    const heroImage = rawImage && !failedImages[hero.id] ? rawImage : null
+
+    return (
+        <div className="flex flex-col gap-3.5">
+            <Link href={`/${category === '기술' ? 'tech' : category === '세계' ? 'world' : category === '연예' ? 'entertain' : category === '스포츠' ? 'sports' : category === '정치' ? 'politics' : category === '경제' ? 'economy' : 'society'}`} className="flex items-center gap-2 group">
+                {meta.icon}
+                <span className="text-[17px] font-bold text-content-primary">{category}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="text-content-muted group-hover:text-content-primary transition-colors">
+                    <polyline points="9 6 15 12 9 18" />
+                </svg>
+            </Link>
+
+            {/* 히어로 카드 + 서브 아이템 — 에디토리얼 오버레이 스타일 */}
+            <div className="card-hover overflow-visible">
+                <div className={`aspect-[16/9] relative rounded-t-xl overflow-hidden group ${heroImage ? '' : `bg-gradient-to-br ${meta.gradient}`}`}>
+                    <Link href={`/issue/${hero.id}`} className="absolute inset-0 block">
+                        {heroImage && (
+                            <Image
+                                src={heroImage}
+                                alt=""
+                                fill
+                                className="object-cover"
+                                sizes="(min-width: 768px) 33vw, 100vw"
+                                onError={() => onImageError(hero.id)}
+                            />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+                        <div className="absolute inset-x-0 bottom-0 p-3.5">
+                            <h3 className="text-[19px] font-bold text-white leading-snug truncate mb-1">
+                                {decodeHtml(hero.title)}
+                            </h3>
+                            {(hero.topic_description || hero.brief_summary?.intro) && (
+                                <p className="text-[14px] text-white/80 leading-relaxed line-clamp-1 mb-1">
+                                    {hero.topic_description ?? hero.brief_summary!.intro}
+                                </p>
+                            )}
+                            <div className="flex items-center justify-between">
+                                <span className="text-[12px] text-white/60">{category} · {formatDate(hero.created_at)}</span>
+                                <span className="w-6 h-6 shrink-0" aria-hidden="true" />
+                            </div>
+                        </div>
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => onToggleBookmark(hero.id)}
+                        className={`absolute right-3.5 bottom-3.5 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${bookmarked.has(hero.id) ? 'text-primary' : 'text-white/70 hover:text-white'}`}
+                        aria-label="북마크"
+                    >
+                        <Bookmark className="w-4 h-4" fill={bookmarked.has(hero.id) ? 'currentColor' : 'none'} strokeWidth={2.2} />
+                    </button>
+                </div>
+
+                {/* 서브 아이템 — 채널 포인트 컬러 세로선을 아이템별로 끊어서 헤더와의 연결감을 표현 */}
+                {subs.length > 0 && (
+                    <div className="border-t border-border-muted px-4 pt-4 pb-4 flex flex-col">
+                        {subs.map((sub, i) => (
+                            <div
+                                key={sub.id}
+                                className={`relative group ${i > 0 ? 'mt-3 pt-3 border-t border-border-muted' : ''}`}
+                            >
+                                <Link href={`/issue/${sub.id}`} className="block">
+                                    <div className="relative pl-3 mb-5">
+                                        <span
+                                            className="absolute left-0 top-[7px] w-[5px] h-[5px] rounded-full"
+                                            style={{ backgroundColor: ACCENT_COLOR[category] }}
+                                        />
+                                        <h4 className="text-[16px] font-semibold text-content-primary leading-snug line-clamp-1 group-hover:text-primary [.group:has(button:hover)_&]:!text-content-primary transition-colors">
+                                            {decodeHtml(sub.title)}
+                                        </h4>
+                                    </div>
+                                    <div className="flex items-center justify-between pl-3">
+                                        <span className="text-[12.5px] text-content-muted">
+                                            <span className="text-content-secondary font-medium">{category}</span> · {formatDate(sub.created_at)}
+                                        </span>
+                                        <span className="w-6 h-6 shrink-0" aria-hidden="true" />
+                                    </div>
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={() => onToggleBookmark(sub.id)}
+                                    className={`absolute right-0 bottom-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${bookmarked.has(sub.id) ? 'text-primary' : 'text-content-muted hover:text-content-secondary'}`}
+                                    aria-label="북마크"
+                                >
+                                    <Bookmark className="w-4 h-4" fill={bookmarked.has(sub.id) ? 'currentColor' : 'none'} strokeWidth={2.2} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+const GRID_ANIMATION = {
+    initial: { opacity: 0, y: 24 },
+    whileInView: { opacity: 1, y: 0 },
+    viewport: { once: true, amount: 0.2 },
+    transition: { duration: 0.5, ease: 'easeOut' as const },
+}
+
 export default function TopicCurationSection({ channels }: TopicCurationSectionProps) {
     const [failedImages, setFailedImages] = useState<Record<string, boolean>>({})
     const [bookmarked, setBookmarked] = useState<Set<string>>(new Set())
-
+    const handleImageError = (id: string) => setFailedImages(prev => ({ ...prev, [id]: true }))
     const toggleBookmark = (id: string) => {
         setBookmarked(prev => {
             const next = new Set(prev)
@@ -119,110 +226,35 @@ export default function TopicCurationSection({ channels }: TopicCurationSectionP
 
     if (channels.length === 0) return null
 
+    // 1행(경제/기술/연예)은 타이틀과 함께 한 번에 나타나고, 2행(정치/사회/스포츠)은
+    // 별도로 스크롤해서 들어올 때 독립적으로 페이드인된다 — 해상도와 무관하게 항상
+    // 앞 3개/뒤 3개로 나뉘므로 모바일(1열)에서도 자연스럽게 이어진다.
+    const firstRow = channels.slice(0, 3)
+    const secondRow = channels.slice(3)
+
     return (
         <section className="!mt-[72px]">
-            <div className="mb-5">
-                <h2 className="text-[24px] font-bold text-content-primary mb-1">매체별 토픽 큐레이션</h2>
-                <p className="text-[14.5px] text-content-secondary">카테고리별로 지금 가장 화제인 이슈만 골랐어요</p>
-            </div>
+            {/* TOP5 랭킹 섹션이 먼저 등장을 마친 뒤 이어서 나오도록 약간의 지연을 둔다 */}
+            <motion.div {...GRID_ANIMATION} transition={{ ...GRID_ANIMATION.transition, delay: 0.15 }}>
+                <div className="mb-5">
+                    <h2 className="text-2xl font-bold text-content-primary mb-1">매체별 토픽 큐레이션</h2>
+                    <p className="text-[14.5px] text-content-secondary">카테고리별로 지금 가장 화제인 이슈만 골랐어요</p>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {channels.map(({ category, hero, subs }) => {
-                    const meta = CHANNEL_META[category]
-                    const rawImage = hero.thumbnail_urls?.[hero.primary_thumbnail_index ?? 0] ?? null
-                    const heroImage = rawImage && !failedImages[hero.id] ? rawImage : null
-                    return (
-                        <div key={category} className="flex flex-col gap-3.5">
-                            <Link href={`/${category === '기술' ? 'tech' : category === '세계' ? 'world' : category === '연예' ? 'entertain' : category === '스포츠' ? 'sports' : category === '정치' ? 'politics' : category === '경제' ? 'economy' : 'society'}`} className="flex items-center gap-2 group">
-                                {meta.icon}
-                                <span className="text-[17px] font-bold text-content-primary">{category}</span>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="text-content-muted group-hover:text-content-primary transition-colors">
-                                    <polyline points="9 6 15 12 9 18" />
-                                </svg>
-                            </Link>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {firstRow.map((channel) => (
+                        <ChannelColumn key={channel.category} {...channel} failedImages={failedImages} onImageError={handleImageError} bookmarked={bookmarked} onToggleBookmark={toggleBookmark} />
+                    ))}
+                </div>
+            </motion.div>
 
-                            {/* 히어로 카드 + 서브 아이템 — 에디토리얼 오버레이 스타일 */}
-                            <div className="card-hover overflow-visible">
-                                <div className={`aspect-[16/9] relative rounded-t-xl overflow-hidden group ${heroImage ? '' : `bg-gradient-to-br ${meta.gradient}`}`}>
-                                    <Link href={`/issue/${hero.id}`} className="absolute inset-0 block">
-                                        {heroImage && (
-                                            <Image
-                                                src={heroImage}
-                                                alt=""
-                                                fill
-                                                className="object-cover"
-                                                sizes="(min-width: 768px) 33vw, 100vw"
-                                                onError={() => setFailedImages(prev => ({ ...prev, [hero.id]: true }))}
-                                            />
-                                        )}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
-                                        <div className="absolute inset-x-0 bottom-0 p-3.5">
-                                            <h3 className="text-[19px] font-bold text-white leading-snug truncate mb-1">
-                                                {decodeHtml(hero.title)}
-                                            </h3>
-                                            {(hero.topic_description || hero.brief_summary?.intro) && (
-                                                <p className="text-[14px] text-white/80 leading-relaxed line-clamp-1 mb-1">
-                                                    {hero.topic_description ?? hero.brief_summary!.intro}
-                                                </p>
-                                            )}
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[12px] text-white/60">{category} · {formatDate(hero.created_at)}</span>
-                                                <span className="w-6 h-6 shrink-0" aria-hidden="true" />
-                                            </div>
-                                        </div>
-                                    </Link>
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleBookmark(hero.id)}
-                                        className={`absolute right-3.5 bottom-3.5 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${bookmarked.has(hero.id) ? 'text-primary' : 'text-white/70 hover:text-white'}`}
-                                        aria-label="북마크"
-                                    >
-                                        <Bookmark className="w-4 h-4" fill={bookmarked.has(hero.id) ? 'currentColor' : 'none'} strokeWidth={2.2} />
-                                    </button>
-                                </div>
-
-                                {/* 서브 아이템 — 채널 포인트 컬러 세로선을 아이템별로 끊어서 헤더와의 연결감을 표현 */}
-                                {subs.length > 0 && (
-                                    <div className="border-t border-border-muted px-4 pt-4 pb-4 flex flex-col">
-                                        {subs.map((sub, i) => (
-                                            <div
-                                                key={sub.id}
-                                                className={`relative group ${i > 0 ? 'mt-3 pt-3 border-t border-border-muted' : ''}`}
-                                            >
-                                                <Link href={`/issue/${sub.id}`} className="block">
-                                                    <div className="relative pl-3 mb-2 min-h-[44px]">
-                                                        <span
-                                                            className="absolute left-0 top-[7px] w-[5px] h-[5px] rounded-full"
-                                                            style={{ backgroundColor: ACCENT_COLOR[category] }}
-                                                        />
-                                                        <h4 className="text-[16px] font-semibold text-content-primary leading-snug line-clamp-2 group-hover:text-primary [.group:has(button:hover)_&]:!text-content-primary transition-colors">
-                                                            {truncateToSentence(decodeHtml(sub.topic_description ?? sub.brief_summary?.intro ?? sub.title), SUB_TEXT_MAX_LENGTH)}
-                                                        </h4>
-                                                    </div>
-                                                    <div className="flex items-center justify-between pl-3">
-                                                        <span className="text-[12.5px] text-content-muted">
-                                                            <span className="text-content-secondary font-medium">{category}</span> · {formatDate(sub.created_at)}
-                                                        </span>
-                                                        <span className="w-6 h-6 shrink-0" aria-hidden="true" />
-                                                    </div>
-                                                </Link>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleBookmark(sub.id)}
-                                                    className={`absolute right-0 bottom-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${bookmarked.has(sub.id) ? 'text-primary' : 'text-content-muted hover:text-content-secondary'}`}
-                                                    aria-label="북마크"
-                                                >
-                                                    <Bookmark className="w-4 h-4" fill={bookmarked.has(sub.id) ? 'currentColor' : 'none'} strokeWidth={2.2} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )
-                })}
-            </div>
+            {secondRow.length > 0 && (
+                <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8" {...GRID_ANIMATION}>
+                    {secondRow.map((channel) => (
+                        <ChannelColumn key={channel.category} {...channel} failedImages={failedImages} onImageError={handleImageError} bookmarked={bookmarked} onToggleBookmark={toggleBookmark} />
+                    ))}
+                </motion.div>
+            )}
         </section>
     )
 }
